@@ -120,7 +120,7 @@ kafka_2.13-4.3.0.tgz
 
 ### 필수 출제 토픽 체크리스트
 
-실전 출제 경향을 반영한 **24개 필수 토픽**을 `docs/CCDAK_TOPIC_CHECKLIST.md`에 정리했다.
+실전 출제 경향을 반영한 **25개 필수 토픽**을 `docs/CCDAK_TOPIC_CHECKLIST.md`에 정리했다.
 Producer 콜백 호출 시점, `assign()` vs `subscribe()`, 키 없는 메시지의 파티션 분배, Connect source/sink 오프셋 저장 위치의 비대칭, 409 에러 원인, SMT 특성, `isolation.level`, Streams 조인 co-partitioning 조건, stateless/stateful 연산 구분, Avro 호환성 모드별 배포 순서, `security.protocol=SASL_SSL`의 의도, 카프카 테스팅 도구, `kafka-reassign-partitions.sh`, `message.max.bytes` 기본 1MB 등.
 
 이 체크리스트는 **Wave 1(본문 커버리지) → Wave 2(문항 출제) → Wave 3(커버리지 감사)** 3단계에서 강제된다. 각 항목에 태그 슬러그가 부여되어 있어 커버리지를 자동 추적한다.
@@ -184,7 +184,7 @@ kafka-guide/
     ├── VERSION_POLICY.md          # 버전 기준·2.13 혼동·레거시 병기 규칙
     ├── DIAGRAM_CATALOG.md         # 다이어그램 83개 카탈로그 + 작성 규칙
     ├── QUESTION_SCHEMA.md         # 문제 JSON 스키마
-    ├── CCDAK_TOPIC_CHECKLIST.md   # 필수 출제 토픽 24개 + 태그 규약
+    ├── CCDAK_TOPIC_CHECKLIST.md   # 필수 출제 토픽 25개 + 태그 규약
     └── agent-prompts/             # 멀티에이전트 프롬프트 (본 계획의 실행 단위)
         ├── README.md              # 실행 순서·공통 프리앰블
         ├── wave0-foundation.md
@@ -548,7 +548,7 @@ Wave 4 · 통합                 [단독, 순차]        1 agent
 - [ ] 키보드만으로 퀴즈 응시 가능, 표에 `scope` 속성, 이미지 대체텍스트 존재
 - [ ] 확인되지 않은 시험 정보(문항 수·합격 점수)를 단정적으로 서술하지 않는다
 - [ ] 덤프 출처 문제 복제 0건, BY-NC-ND 저장소 문항의 복제·변형 0건
-- [ ] `docs/CCDAK_TOPIC_CHECKLIST.md`의 24개 토픽이 본문·문항 모두에서 커버된다
+- [ ] `docs/CCDAK_TOPIC_CHECKLIST.md`의 25개 토픽이 본문·문항 모두에서 커버된다
 - [ ] `kafka_2.13-4.3.0`의 2.13이 Scala 버전임이 ch01·부록·CLI 치트시트에 명시된다
 - [ ] 버전에 따라 동작이 다른 항목에 `.note--version` 병기가 되어 있다
 

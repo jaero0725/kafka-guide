@@ -215,8 +215,8 @@ bin/kafka-topics.sh --version</code></pre>
             <tr><th scope="row">진단</th><td>프로듀서 상태 보기</td><td><code>kafka-transactions.sh … describe-producers --topic T --partition 0</code></td><td>PID·시퀀스·epoch</td></tr>
 
             <tr><th scope="row">성능 측정</th><td>프로듀서 처리량 측정</td><td><code>kafka-producer-perf-test.sh --bootstrap-server $BS --topic T --num-records 100000 --record-size 1024 --throughput -1</code></td><td>설정 변경 전후 비교의 기준</td></tr>
-            <tr><th scope="row">성능 측정</th><td>컨슈머 처리량 측정</td><td><code>kafka-consumer-perf-test.sh --bootstrap-server $BS --topic T --messages 100000</code></td><td></td></tr>
-            <tr><th scope="row">성능 측정</th><td>Share Consumer 처리량 측정</td><td><code>kafka-share-consumer-perf-test.sh --bootstrap-server $BS --topic T --messages 100000</code></td><td>4.2+</td></tr>
+            <tr><th scope="row">성능 측정</th><td>컨슈머 처리량 측정</td><td><code>kafka-consumer-perf-test.sh --bootstrap-server $BS --topic T --num-records 100000</code></td><td><code>--messages</code>는 deprecated</td></tr>
+            <tr><th scope="row">성능 측정</th><td>Share Consumer 처리량 측정</td><td><code>kafka-share-consumer-perf-test.sh --bootstrap-server $BS --topic T --num-records 100000</code></td><td>4.2+. <code>--messages</code>는 deprecated</td></tr>
           </tbody>
         </table>
       </div>

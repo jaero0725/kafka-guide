@@ -43,7 +43,7 @@
 
   <rect class="dg-node dg-node--muted" x="258" y="132" width="204" height="30" rx="4"/>
   <text x="268" y="151" class="dg-fs-sm dg-muted">팔로워 <tspan class="dg-mono">broker-3</tspan> · LEO 88 (지연)</text>
-  <text x="258" y="172" class="dg-fs-sm dg-muted"><tspan class="dg-mono">replica.lag.time.max.ms</tspan> 초과 → ISR 제외</text>
+  <text x="258" y="172" class="dg-fs-sm dg-muted">→ <tspan class="dg-mono">replica.lag.time.max.ms</tspan> 초과</text>
 
   <text x="258" y="192" class="dg-fs-sm dg-bold">ISR = {1, 2} → 크기 2</text>
   <text x="258" y="208" class="dg-fs-sm dg-muted">2 ≥ 2 (경계, 충족)</text>
@@ -79,5 +79,5 @@
   <text x="8" y="304" class="dg-fs-sm"><tspan class="dg-bold">줄어드는 것은 ISR 집합입니다.</tspan> <tspan class="dg-mono">replication.factor</tspan> 는 계속 3 이고, 레플리카가 따라잡으면 ISR 에 다시 들어옵니다.</text>
   <text x="8" y="324" class="dg-fs-sm"><tspan class="dg-bold">거부되는 것은 쓰기뿐입니다.</tspan> 리더가 살아 있으므로 컨슈머는 high watermark 까지 계속 읽을 수 있습니다.</text>
   <text x="8" y="344" class="dg-fs-sm dg-muted">③ 을 피하려면 <tspan class="dg-mono">replication.factor=3</tspan> + <tspan class="dg-mono">min.insync.replicas=2</tspan> 조합으로 레플리카 1대 손실을 허용합니다.</text>
-  <text x="8" y="362" class="dg-fs-sm dg-muted">쓰기가 성공하려면 ISR 크기 ≥ <tspan class="dg-mono">min.insync.replicas</tspan> 이고, 그 ISR 전원이 응답해야 합니다.</text>
+  <text x="8" y="362" class="dg-fs-sm dg-muted">쓰기 성공 조건: ISR 크기 ≥ <tspan class="dg-mono">min.insync.replicas</tspan> 이고, 그 ISR 전원이 응답. 지연 판정 기준은 <tspan class="dg-mono">30000</tspan>ms 입니다.</text>
 </svg>

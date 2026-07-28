@@ -29,7 +29,7 @@ Application Development(28%) + Fundamentals(23%) = 51%에 자원이 집중된다
 1. PLAN.md                        — 전체 구조·CCDAK 우선순위·파일 소유권 표
 2. docs/CONTENT_STYLE_GUIDE.md    — HTML/톤/기술 기준 (계약서)
 3. docs/VERSION_POLICY.md         — 버전 기준·2.13 혼동·레거시 병기 규칙
-4. docs/CCDAK_TOPIC_CHECKLIST.md  — 필수 출제 토픽 24개 + 태그 규약
+4. docs/CCDAK_TOPIC_CHECKLIST.md  — 필수 출제 토픽 25개 + 태그 규약
 5. docs/DIAGRAM_CATALOG.md        — 다이어그램 83개 카탈로그·작성 규칙·분리 구조
 6. docs/FACT_SOURCES.md           — ★ 사실 확인 경로 (공식 문서 웹사이트가 차단됨)
 7. docs/WAVE0_CONTRACT.md         — ★★ Wave 0이 만든 기반의 실제 API·클래스·규약.

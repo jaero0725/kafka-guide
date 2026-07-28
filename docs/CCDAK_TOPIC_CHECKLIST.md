@@ -102,6 +102,7 @@
 ## 태그 규약
 
 각 항목에 대응하는 문항의 `tags`에 아래 슬러그를 포함시켜 커버리지를 자동 추적한다.
+**항목 수는 25개다** (A 6 + B 5 + C 3 + D 1 + E 4 + F 3 + G 1 + H 1 + I 1). 이전 표기 "24개"는 오류였다.
 
 ```
 A1 producer-callback   A2 idempotence-inflight  A3 retriable-errors

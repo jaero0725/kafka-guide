@@ -407,7 +407,7 @@ Wave 0의 반환 리포트나 flashcard.js 코드에서 실제 스키마를 읽�
      (삭제하면 60문항이 깨집니다).
 
 4. **커버리지 감사** — docs/CCDAK_TOPIC_CHECKLIST.md의 태그 규약 슬러그
-   (producer-callback ~ kafka-testing, 총 24개)가 각각 최소 1문항에
+   (producer-callback ~ kafka-testing, 총 25개)가 각각 최소 1문항에
    존재하는지 확인. 누락된 태그는 **CRITICAL로 리포트**하고,
    해당 도메인 파일에 문항을 직접 추가해 채우세요.
 

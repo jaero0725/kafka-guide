@@ -42,7 +42,7 @@
 
   <!-- 넘김 -->
   <line class="dg-edge dg-edge--accent dg-edge--dashed" x1="95" y1="102" x2="95" y2="188" marker-end="url(#d036-ah-accent)"/>
-  <text x="103" y="160" class="dg-fs-sm dg-muted">레코드를 배치 큐에 넣습니다</text>
+  <text x="103" y="184" class="dg-fs-sm dg-muted">레코드를 배치 큐에 넣습니다</text>
 
   <!-- ═══ 레인 B ═══ -->
   <rect class="dg-panel" x="8" y="150" width="704" height="124" rx="4"/>

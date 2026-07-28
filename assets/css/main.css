@@ -1433,6 +1433,18 @@ a.card:hover { border-color: var(--c-accent-border); background: var(--c-accent-
   a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.8em; color: #555; }
   figure.code, .note, table, figure.diagram, .quiz { break-inside: avoid; }
   h2, h3 { break-after: avoid; }
+
+  /* 인쇄에서는 가로 스크롤이 존재하지 않는다. overflow-x:auto 를 그대로 두면
+     넓은 표·코드·다이어그램의 잘린 부분이 종이에서 영구히 사라진다.
+     (A7이 ccdak/cram.html 인쇄 검증 중 발견) */
+  .table-scroll, .dg-scroll, pre { overflow-x: visible !important; }
+  .table-scroll table { min-width: 0; }
+  /* 표가 지면 폭을 넘으면 셀 내용을 접어서 보이게 한다 */
+  table { width: 100%; table-layout: auto; }
+  th, td { overflow-wrap: anywhere; word-break: break-word; }
+  pre, code { white-space: pre-wrap; overflow-wrap: anywhere; }
+  /* 넓은 다이어그램은 지면 폭에 맞춰 축소 */
+  .kg-diagram { max-width: 100% !important; height: auto; }
 }
 
 /* ==========================================================================

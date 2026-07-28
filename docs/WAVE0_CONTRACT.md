@@ -292,26 +292,38 @@ issues.apache.org     archive.apache.org
 **`raw.githubusercontent.com` 금지** — 학습자에게 부적절하다.
 검증은 소스로, 인용은 공식 문서 URL로 분리한다 (`docs/FACT_SOURCES.md` §5).
 
-### C-5. 플래시카드 JSON (B4)
+### C-5. 플래시카드 규약 (B4) — ⚠️ 실제 구현 확인분으로 교체됨
 
-```json
-// data/flashcards/index.json
-{ "generatedAt":"2026-07-28",
-  "decks":[{ "deckId":"ccdak-producer-defaults",
-             "file":"ccdak-producer-defaults.json",
-             "title":"Producer 설정 기본값", "exam":"CCDAK",
-             "chapter":"ch04", "count":24 }] }
+**마운트 셀렉터는 `#flashcard-app`이 아니라 `.flashcard-embed` 클래스다.**
+(초기 지시가 실제 `flashcard.js` 구현과 달랐다. A7이 소스 확인 + Playwright 검증.)
 
-// data/flashcards/{deckId}.json
-{ "deckId":"ccdak-producer-defaults", "title":"…", "exam":"CCDAK",
-  "kafkaVersion":"4.3",
-  "cards":[{ "id":"fc-prod-001", "deck":"ccdak-producer-defaults",
-             "front":"`acks` 의 기본값은?",
-             "back":"`all` — Kafka 3.0부터 기본값이 `1` 에서 바뀌었습니다.",
-             "tags":["acks","durability"], "chapter":"ch04" }] }
+```html
+<div class="flashcard-embed" data-exam="CCDAK" data-deck="all" data-shuffle="true"></div>
+<script src="../assets/js/flashcard.js" defer></script>   <!-- 6번째로 직접 로드 필요 -->
 ```
-`id` 전역 유일 (진도 저장 키). `front`/`back`에 백틱·`**굵게**`·개행 사용 가능.
-3연속 "알았음"이면 졸업.
+`app.js`가 `flashcard.js`를 로드하지 않으므로 **페이지가 직접 로드**해야 한다.
+
+| 속성 | 동작 |
+|---|---|
+| `data-decks="a,b"` | 이 deckId만 로드 (있으면 `data-exam` 무시) |
+| `data-exam="CCDAK"` | `index.json`에서 `deck.exam === "CCDAK"` 인 덱 전부 |
+| `data-deck` | 로드된 카드 중 `card.deck === 값` 만 표시. 기본 `"all"` |
+| `data-shuffle="false"` / `data-hide-graduated="true"` | 옵션 |
+
+**B4가 반드시 지킬 것**
+- **파일명 = `{deckId}.json`.** 엔진은 `index.json`의 `file` 필드를 **무시하고**
+  `data/flashcards/{deckId}.json` 으로 fetch한다. 불일치하면 404다.
+- `index.json`: `{ generatedAt, decks: [{deckId, file, title, exam, chapter, count}] }`
+- 카드: `{ id, deck, front, back, tags, chapter }`.
+  `deck` 생략 시 파일의 `deckId`가 자동 주입된다.
+- `front`/`back`에 백틱·`**굵게**`·`\n` 사용 가능 (`<code>`/`<strong>`/`<br>`로 렌더)
+- **`chapter`는 `ch01`~`ch11` 만.** `basics/{chapter}.html` 복습 링크 생성에 쓰인다
+  (`appendix-legacy`를 넣으면 링크가 깨진다)
+- `id` **전역 유일** (진도 저장 키). "알았음" 3연속 → 졸업
+- 덱이 2개 이상이면 엔진이 `<select>` 덱 선택 UI를 **자동 렌더링**한다.
+  그래서 `ccdak/flashcards.html`은 deckId를 하드코딩하지 않았다 —
+  **B4가 어떤 deckId를 쓰든 동작한다.**
+- 데이터가 없으면 "플래시카드 덱이 아직 없습니다" 안내가 에러 없이 표시된다
 
 ### C-6. A7이 만들 파일명 (하드코딩 링크 대상)
 

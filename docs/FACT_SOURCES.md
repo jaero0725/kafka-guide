@@ -177,6 +177,23 @@ Kafka **4.3** 소스에서 직접 확인했다.
 - 정적 vs 동적 컨트롤러 쿼럼 (KIP-853), `kafka-storage.sh` 포맷 3경로
   (`--standalone` / `--initial-controllers` / `--no-initial-controllers`)
 
+### 4.3에서 바뀐 CLI 옵션 (KIP-1147, A7 확인)
+기존 옵션은 **deprecated이며 5.0에서 제거 예정**이다. 시중 자료는 전부 구 옵션이다.
+
+| 도구 | 기존 (deprecated) | 4.3 신규 |
+|---|---|---|
+| `kafka-consumer-perf-test.sh` | `--messages` | **`--num-records`** |
+| `kafka-producer-perf-test.sh` | `--producer-props` | **`--command-property`** |
+| perf 공통 | `--producer.config` / `--consumer.config` | **`--command-config`** |
+
+추가된 옵션: `kafka-producer-perf-test.sh`에 `--bootstrap-server`·`--reporting-interval`,
+`kafka-consumer-perf-test.sh`에 `--include`.
+
+### 개수를 단정하지 말 것
+A3와 A7이 같은 대상을 다르게 셌다 (SMT 16 vs 15, Connect REST 26 vs 20).
+세는 기준(predicate 포함 여부, 내부 엔드포인트 포함 여부)이 달라서 생긴 차이다.
+**본문·문항에 개수를 쓰지 말고 목록만 실어라.** "SMT는 몇 종인가" 같은 문항도 만들지 말 것.
+
 ### ⚠️ 공식 문서에 없어서 쓰면 안 되는 것
 - **압축 코덱별 압축률·CPU·지연의 구체적 수치.** 공식 문서에 없다.
   상대 비교로만 서술하고, 필요하면 실측을 안내한다.
