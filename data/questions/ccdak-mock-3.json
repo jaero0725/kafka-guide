@@ -2514,7 +2514,7 @@
       "chapter": "ch07",
       "difficulty": "hard",
       "type": "single",
-      "question": "`max.partition.fetch.bytes` 기본값(1048576)보다 큰 레코드가 파티션에 들어 있다. 4.3 컨슈머의 동작으로 옳은 것은?",
+      "question": "어떤 파티션에 컨슈머의 파티션당 fetch 상한 기본값(1048576)보다 큰 레코드가 들어 있다. 4.3 컨슈머의 동작으로 옳은 것은?",
       "code": null,
       "choices": [
         {

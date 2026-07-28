@@ -561,7 +561,7 @@ done
               <td><code>1048576</code><br>(1 mebibyte)</td>
               <td><code>int</code><br>[0,...]</td>
               <td>파티션당 복제 fetch 최대 바이트</td>
-              <td><code>message.max.bytes</code>보다 작으면 큰 레코드가 영구히 복제되지 않습니다</td>
+              <td><strong>절대 상한이 아닙니다</strong> — 첫 배치가 더 커도 반환해 복제 진행을 보장합니다(<q>This is not an absolute maximum</q>). 작으면 처리량만 떨어집니다</td>
             </tr>
             <tr>
               <th scope="row"><code>message.max.bytes</code></th>

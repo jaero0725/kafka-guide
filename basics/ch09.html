@@ -614,7 +614,7 @@ value.converter.schemas.enable=false</code></pre>
 
       <div class="table-scroll">
         <table>
-          <caption>Apache Kafka 4.3에 포함된 SMT 16종. 클래스는 모두 <code>org.apache.kafka.connect.transforms</code> 패키지입니다.</caption>
+          <caption>Apache Kafka 4.3에 포함된 SMT. 클래스 목록으로 확인하세요 — 세는 기준(predicate 포함 여부 등)에 따라 개수가 달라집니다. 클래스는 모두 <code>org.apache.kafka.connect.transforms</code> 패키지입니다.</caption>
           <thead>
             <tr>
               <th scope="col">이름</th>
@@ -1333,7 +1333,7 @@ curl -s -X PUT $CONNECT/connectors/pg-source/resume</code></pre>
       <ul>
         <li><a href="https://kafka.apache.org/documentation/#connect" rel="noopener noreferrer">Kafka Connect — Overview</a> — Connect의 목적과 특징 6가지</li>
         <li><a href="https://kafka.apache.org/documentation/#connect_running" rel="noopener noreferrer">Running Kafka Connect</a> — standalone/distributed 차이, 워커 필수 설정, 내부 토픽 권장 구성, <code>producer.</code>/<code>consumer.</code> 접두어 규칙</li>
-        <li><a href="https://kafka.apache.org/documentation/#connect_transforms" rel="noopener noreferrer">Transformations</a> — SMT 16종 목록과 각 파라미터, predicate 3종, <code>negate</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_transforms" rel="noopener noreferrer">Transformations</a> — SMT 목록과 각 파라미터, predicate 3종, <code>negate</code></li>
         <li><a href="https://kafka.apache.org/documentation/#connect_rest" rel="noopener noreferrer">Connect REST API</a> — 엔드포인트 전체, <code>listeners</code> 기본값 <code>http://:8083</code>, <code>admin.listeners</code>, 오프셋 관리 엔드포인트(KIP-875)</li>
         <li><a href="https://kafka.apache.org/documentation/#connect_errorreporting" rel="noopener noreferrer">Error Reporting in Connect</a> — fail-fast 기본값 4개, DLQ 설정, <code>errors.log.include.messages</code>의 위험</li>
         <li><a href="https://kafka.apache.org/documentation/#connect_exactlyonce" rel="noopener noreferrer">Exactly-once support</a> — sink 0.11.0 / source 3.3.0, distributed 전용, <code>preparing</code> → <code>enabled</code> 2단계 롤링</li>

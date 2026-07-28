@@ -801,7 +801,7 @@ Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
               <td>브로커</td>
               <td>1048576</td>
               <td>파티션당 복제 fetch 응답 최대 크기</td>
-              <td><code>message.max.bytes</code>보다 작으면 큰 메시지가 <strong>영구히 복제되지 않습니다</strong></td>
+              <td><strong>절대 상한이 아닙니다</strong> — 첫 배치가 이 값보다 커도 그대로 반환해 복제 진행을 보장합니다(<q>This is not an absolute maximum</q>). 값이 작으면 배치가 잘게 쪼개져 <strong>복제 처리량이 떨어질</strong> 뿐 멈추지는 않습니다</td>
             </tr>
             <tr>
               <th scope="row"><code>offsets.topic.replication.factor</code></th>
@@ -1001,8 +1001,12 @@ max.in.flight.requests.per.connection=5</code></pre>
           운영 시나리오 문제는 대개 "<strong>어떤 설정 조합이 이 증상을 만들었는가</strong>"를 묻습니다.
           <code>min.insync.replicas</code> = RF인 토픽에서 롤링 재시작 중 쓰기 실패,
           <code>unclean.leader.election.enable=false</code>에서 파티션이 offline로 남는 현상,
-          <code>replica.fetch.max.bytes</code> &lt; <code>message.max.bytes</code>로
-          큰 메시지가 영구히 복제되지 않는 현상이 대표적입니다.
+          <code>message.max.bytes</code>와 <code>max.request.size</code>가 어긋나
+          큰 레코드가 브로커에서 거부되는 현상이 대표적입니다.
+          반대로 <code>replica.fetch.max.bytes</code>·<code>max.partition.fetch.bytes</code>·
+          <code>fetch.max.bytes</code> 세 fetch 설정은 <strong>절대 상한이 아니라</strong>
+          첫 배치를 그대로 반환해 진행을 보장하므로,
+          &ldquo;큰 레코드가 복제나 소비를 멈춘다&rdquo;는 서술은 <strong>틀린 선택지</strong>입니다.
         </p>
       </aside>
     </section>
