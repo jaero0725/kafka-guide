@@ -734,6 +734,77 @@ bin/kafka-acls.sh --bootstrap-server $BS $CC --add \
   --operation Alter --operation ClusterAction --cluster</code></pre>
       </figure>
 
+      <h3 id="acl-vocabulary">오퍼레이션 13종 · 리소스 타입 6종</h3>
+
+      <p>
+        ACL 하나는 <strong>(principal, host, operation, resource, permission)</strong> 조합입니다.
+        <code>--operation</code>에 쓸 수 있는 값과 리소스 타입은 아래가 전부입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-acl-ops">
+          <caption><code>--operation</code> 유효값 13종 — 공식 <code>kafka-acls.sh</code> 문서 기준</caption>
+          <thead>
+            <tr><th scope="col">Operation</th><th scope="col">대표 용도</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>Read</code></th><td>fetch, 오프셋 커밋, 그룹 조인·하트비트</td></tr>
+            <tr><th scope="row"><code>Write</code></th><td>produce, 트랜잭션 API</td></tr>
+            <tr><th scope="row"><code>Create</code></th><td>토픽 생성 (자동 생성 포함)</td></tr>
+            <tr><th scope="row"><code>Delete</code></th><td>토픽 삭제, 레코드 삭제</td></tr>
+            <tr><th scope="row"><code>Alter</code></th><td>파티션 추가, 재할당, ACL 변경</td></tr>
+            <tr><th scope="row"><code>Describe</code></th><td>메타데이터·오프셋·그룹 조회. <strong>없으면 리소스가 존재하지 않는 것처럼 보입니다</strong></td></tr>
+            <tr><th scope="row"><code>ClusterAction</code></th><td>브로커 간 동작(복제 fetch 등). <strong>브로커 principal에 필요</strong></td></tr>
+            <tr><th scope="row"><code>DescribeConfigs</code></th><td><code>kafka-configs --describe</code></td></tr>
+            <tr><th scope="row"><code>AlterConfigs</code></th><td><code>kafka-configs --alter</code></td></tr>
+            <tr><th scope="row"><code>IdempotentWrite</code></th><td>멱등 프로듀서 (Cluster 리소스에 부여)</td></tr>
+            <tr><th scope="row"><code>CreateTokens</code></th><td>위임 토큰 생성</td></tr>
+            <tr><th scope="row"><code>DescribeTokens</code></th><td>위임 토큰 조회</td></tr>
+            <tr><th scope="row"><code>All</code></th><td>위 전부. <strong>편하지만 최소 권한 원칙에 반합니다</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-acl-resources">
+          <caption>리소스 타입 6종 — <code>ResourceType.java</code> 확인 (<code>UNKNOWN</code>·<code>ANY</code> 제외)</caption>
+          <thead>
+            <tr><th scope="col">리소스</th><th scope="col"><code>kafka-acls.sh</code> 옵션</th><th scope="col">메모</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>TOPIC</code></th><td><code>--topic</code></td><td>가장 흔합니다</td></tr>
+            <tr><th scope="row"><code>GROUP</code></th><td><code>--group</code></td><td>컨슈머 그룹. <strong>토픽 권한과 별개로 반드시 필요</strong></td></tr>
+            <tr><th scope="row"><code>CLUSTER</code></th><td><code>--cluster</code></td><td>단일 리소스. 클러스터 전역 동작</td></tr>
+            <tr><th scope="row"><code>TRANSACTIONAL_ID</code></th><td><code>--transactional-id</code></td><td><code>*</code>는 모든 트랜잭션 ID</td></tr>
+            <tr><th scope="row"><code>DELEGATION_TOKEN</code></th><td><code>--delegation-token</code></td><td><code>*</code>는 모든 토큰</td></tr>
+            <tr><th scope="row"><code>USER</code></th><td><code>--user-principal</code></td><td>현재는 위임 토큰과 연계해 쓰입니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-acl-pattern">
+          <caption><code>--resource-pattern-type</code> — 패턴 매칭 방식</caption>
+          <thead>
+            <tr><th scope="col">값</th><th scope="col">의미</th><th scope="col">언제 쓰는가</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>literal</code></th><td>이름이 정확히 일치. <code>*</code>는 전체를 의미하는 특수값</td><td>기본. 개별 리소스</td></tr>
+            <tr><th scope="row"><code>prefixed</code></th><td>주어진 문자열로 <strong>시작</strong>하는 모든 리소스</td><td>팀·서비스별 네임스페이스. <strong>토픽이 늘어나도 재부여 불필요</strong></td></tr>
+            <tr><th scope="row"><code>match</code></th><td>주어진 이름에 매칭되는 <strong>모든 패턴</strong>을 찾습니다 (조회 전용)</td><td><code>--list</code>로 "이 토픽에 걸린 ACL 전부"를 볼 때</td></tr>
+            <tr><th scope="row"><code>any</code></th><td>모든 패턴 타입 (조회·삭제 필터)</td><td><code>--list</code> · <code>--remove</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="Deny 가 Allow 를 이깁니다">
+        <p>
+          같은 리소스에 Allow와 Deny가 함께 걸리면 <strong>Deny가 우선</strong>합니다.
+          그리고 <strong>super user는 ACL을 완전히 우회</strong>하므로
+          <code>super.users</code>에 있는 principal은 Deny로도 막을 수 없습니다.
+        </p>
+      </aside>
+
       <h3 id="acl-matrix">역할별 필요 권한</h3>
 
       <div class="toolbar">

@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>예제 9 · Kafka Streams 실시간 집계 — Kafka Guide</title>
+  <meta name="description" content="Kafka Streams 4.3으로 윈도우 집계 파이프라인을 만듭니다. TimeWindows.ofSizeAndGrace, suppress, 상태 저장소와 changelog, exactly_once_v2, 인터랙티브 쿼리까지 다룹니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="practice" data-page="ex09"></div>
+
+  <main id="main" class="page" data-page-id="practice/ex09">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="ex01.html">실무 예제</a></li>
+        <li><span aria-current="page">예제 9 · Streams 실시간 집계</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실무 예제 · 9</p>
+      <h1>Kafka Streams 실시간 집계</h1>
+      <p class="page__lead">
+        Kafka Streams는 별도 클러스터가 아니라 <strong>애플리케이션에 링크되는 라이브러리</strong>입니다.
+        컨슈머·프로듀서·로컬 상태 저장소를 하나로 묶어 주는 대신,
+        <strong>상태 저장소·changelog·윈도우 시간 개념</strong>을 이해하지 않으면
+        결과가 왜 그렇게 나오는지 설명할 수 없습니다.
+        이 예제는 <strong>1분 단위 클릭 집계</strong>를 만들면서 그 부분을 확인합니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>tumbling 윈도우 집계를 DSL로 작성하고 grace period가 늦은 이벤트에 어떻게 작용하는지 설명할 수 있습니다.</li>
+        <li>상태 저장소(RocksDB)와 changelog 토픽의 관계, 복구 절차를 알 수 있습니다.</li>
+        <li><code>suppress</code>로 중간 결과를 억제해 <strong>윈도우당 한 번만</strong> 결과를 내보낼 수 있습니다.</li>
+        <li><code>processing.guarantee=exactly_once_v2</code>가 바꾸는 설정과 트레이드오프를 알 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="scenario">
+      <h2 id="scenario">시나리오</h2>
+
+      <p>
+        커머스 사이트의 클릭 스트림을 실시간으로 집계해
+        <strong>상품별 1분간 클릭 수</strong>를 대시보드에 표시합니다.
+        피크 시 초당 8천 건, 상품은 12만 종입니다.
+      </p>
+      <p>
+        기존에는 5분마다 도는 배치가 전체를 다시 집계했습니다.
+        문제는 두 가지였습니다 — <strong>지연이 최대 5분</strong>이고,
+        <strong>모바일 앱의 오프라인 큐에서 늦게 도착하는 이벤트가 누락</strong>되었습니다.
+        어떤 이벤트는 30초, 어떤 이벤트는 3분 늦게 옵니다.
+      </p>
+      <p>
+        Streams로 옮기면서 <strong>늦게 온 이벤트를 어디까지 받아 줄지</strong>를
+        명시적인 설정(grace period)으로 정합니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="architecture">
+      <h2 id="architecture">아키텍처</h2>
+
+      <figure class="diagram" data-diagram="D-090">
+        <figcaption>
+          토폴로지 — source → 리파티션 → 윈도우 집계 → suppress → sink와 sub-topology 경계
+        </figcaption>
+      </figure>
+
+      <figure class="diagram" data-diagram="D-095">
+        <figcaption>
+          상태 저장소와 changelog — RocksDB 로컬 상태, changelog 토픽, standby replica로 복구하는 과정
+        </figcaption>
+      </figure>
+
+      <p>
+        집계는 <strong>상태</strong>를 필요로 합니다.
+        Streams는 그 상태를 <strong>로컬 RocksDB</strong>에 두고,
+        같은 내용을 <strong>changelog 토픽</strong>(<code>{application.id}-{store}-changelog</code>)에
+        compact 정책으로 복제합니다.
+        인스턴스가 죽으면 다른 인스턴스가 <strong>changelog를 재생해 상태를 복원</strong>합니다.
+      </p>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCDAK Kafka Streams">
+        <p>
+          <strong>병렬성의 단위는 태스크이고, 태스크 수는 입력 파티션 수로 결정됩니다.</strong>
+          <code>num.stream.threads</code>(기본값 <strong>1</strong>)는
+          한 인스턴스가 돌릴 스레드 수이고, 태스크는 인스턴스·스레드에 분배됩니다.
+          파티션 6개인 토픽을 처리하는 애플리케이션은 <strong>태스크가 6개</strong>이므로
+          인스턴스 × 스레드의 합이 6을 넘으면 나머지는 유휴 상태가 됩니다.
+        </p>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-096">
+        <figcaption>
+          태스크와 스레드 병렬성 — 파티션 수 = 태스크 수, <code>num.stream.threads</code>에 따른 배치
+        </figcaption>
+      </figure>
+
+      <figure class="diagram" data-diagram="D-092">
+        <figcaption>
+          윈도우 4종 비교 — 같은 이벤트 열에 tumbling / hopping / sliding / session 윈도우를 적용한 결과
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prerequisites">
+      <h2 id="prerequisites">사전 요구사항</h2>
+
+      <ul>
+        <li><a href="ex01.html">예제 1</a>의 3노드 KRaft 클러스터</li>
+        <li>토픽 <code>clickstream</code>(입력, 파티션 6·RF3), <code>clicks-per-minute</code>(출력, 파티션 6·RF3) — 예제 1의 <code>create-topics.sh</code>가 만듭니다</li>
+        <li><code>org.apache.kafka:kafka-streams</code> <strong>4.3.1</strong>, <strong>Java 17</strong> 이상</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="full-code">
+      <h2 id="full-code">전체 코드</h2>
+
+      <figure class="code">
+        <figcaption>디렉터리 구조</figcaption>
+        <pre><code class="lang-text">clicks-aggregator/
+├── pom.xml
+└── src/main/java/com/example/streams/
+    ├── ClickCountTopology.java   # 토폴로지 정의 (테스트 가능하게 분리)
+    ├── ClickTimestampExtractor.java # 이벤트 시각 추출
+    └── Main.java                 # 설정 + 기동 + 종료
+</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>clicks-aggregator/pom.xml</figcaption>
+        <pre><code class="lang-xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"&gt;
+  &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+  &lt;groupId&gt;com.example&lt;/groupId&gt;
+  &lt;artifactId&gt;clicks-aggregator&lt;/artifactId&gt;
+  &lt;version&gt;1.0.0&lt;/version&gt;
+
+  &lt;properties&gt;
+    &lt;maven.compiler.release&gt;17&lt;/maven.compiler.release&gt;
+    &lt;project.build.sourceEncoding&gt;UTF-8&lt;/project.build.sourceEncoding&gt;
+    &lt;kafka.version&gt;4.3.1&lt;/kafka.version&gt;
+    &lt;slf4j.version&gt;2.0.17&lt;/slf4j.version&gt;
+  &lt;/properties&gt;
+
+  &lt;dependencies&gt;
+    &lt;!-- kafka-streams 는 kafka-clients 를 전이 의존성으로 가져옵니다. --&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+      &lt;artifactId&gt;kafka-streams&lt;/artifactId&gt;
+      &lt;version&gt;${kafka.version}&lt;/version&gt;
+    &lt;/dependency&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.slf4j&lt;/groupId&gt;
+      &lt;artifactId&gt;slf4j-simple&lt;/artifactId&gt;
+      &lt;version&gt;${slf4j.version}&lt;/version&gt;
+    &lt;/dependency&gt;
+    &lt;!-- TopologyTestDriver: 브로커 없이 토폴로지를 단위 테스트합니다. --&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+      &lt;artifactId&gt;kafka-streams-test-utils&lt;/artifactId&gt;
+      &lt;version&gt;${kafka.version}&lt;/version&gt;
+      &lt;scope&gt;test&lt;/scope&gt;
+    &lt;/dependency&gt;
+  &lt;/dependencies&gt;
+
+  &lt;build&gt;
+    &lt;plugins&gt;
+      &lt;plugin&gt;
+        &lt;groupId&gt;org.codehaus.mojo&lt;/groupId&gt;
+        &lt;artifactId&gt;exec-maven-plugin&lt;/artifactId&gt;
+        &lt;version&gt;3.5.0&lt;/version&gt;
+        &lt;configuration&gt;
+          &lt;mainClass&gt;com.example.streams.Main&lt;/mainClass&gt;
+        &lt;/configuration&gt;
+      &lt;/plugin&gt;
+    &lt;/plugins&gt;
+  &lt;/build&gt;
+&lt;/project&gt;</code></pre>
+      </figure>
+
+      <h3 id="timestamp-extractor">이벤트 시각 추출</h3>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/streams/ClickTimestampExtractor.java</figcaption>
+        <pre><code class="lang-java">package com.example.streams;
+
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * 이벤트 페이로드의 clickedAt 필드를 이벤트 시각으로 씁니다.
+ *
+ * 기본 추출기는 레코드의 Kafka 타임스탬프를 쓰는데,
+ * 그것은 "프로듀서가 발행한 시각"(CreateTime) 또는
+ * "브로커가 기록한 시각"(LogAppendTime)입니다.
+ * 모바일 오프라인 큐처럼 발행이 늦어지는 경우
+ * 실제 클릭 시각과 크게 벌어지므로 페이로드에서 직접 꺼냅니다.
+ */
+public class ClickTimestampExtractor implements TimestampExtractor {
+
+    private static final Logger log = LoggerFactory.getLogger(ClickTimestampExtractor.class);
+    private static final Pattern CLICKED_AT = Pattern.compile("\"clickedAt\"\\s*:\\s*(\\d+)");
+
+    @Override
+    public long extract(ConsumerRecord&lt;Object, Object&gt; record, long partitionTime) {
+        Object value = record.value();
+        if (value instanceof String json) {
+            Matcher m = CLICKED_AT.matcher(json);
+            if (m.find()) {
+                return Long.parseLong(m.group(1));
+            }
+        }
+
+        // 추출 실패 시 음수를 반환하면 Streams 가 그 레코드를 버립니다.
+        // 여기서는 파티션의 현재 시각(스트림 시각)으로 대체해 유실을 막습니다.
+        // 어느 쪽이 맞는지는 도메인 판단입니다 — 조용히 버리면 원인을 못 찾습니다.
+        log.warn("clickedAt 추출 실패 — partitionTime 으로 대체합니다. topic={} offset={}",
+                record.topic(), record.offset());
+        return partitionTime &gt;= 0 ? partitionTime : record.timestamp();
+    }
+}</code></pre>
+      </figure>
+
+      <h3 id="topology">토폴로지</h3>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/streams/ClickCountTopology.java</figcaption>
+        <pre><code class="lang-java">package com.example.streams;
+
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Suppressed;
+import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+
+import java.time.Duration;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * 상품별 1분 클릭 수를 집계합니다.
+ *
+ * 토폴로지를 Main 에서 분리해 두면 TopologyTestDriver 로
+ * 브로커 없이 단위 테스트할 수 있습니다.
+ */
+public final class ClickCountTopology {
+
+    public static final String STORE_NAME = "clicks-per-minute-store";
+
+    private static final Pattern PRODUCT_ID = Pattern.compile("\"productId\"\\s*:\\s*\"([^\"]+)\"");
+
+    /** 윈도우 크기 — 1분 tumbling */
+    private static final Duration WINDOW_SIZE = Duration.ofMinutes(1);
+    /**
+     * grace period — 윈도우가 끝난 뒤에도 이만큼은 늦은 이벤트를 받아 줍니다.
+     * 시나리오의 "최대 3분 늦게 오는 모바일 이벤트" 를 근거로 3분을 줍니다.
+     * 이 값을 늘리면 정확도가 오르지만 결과 확정이 그만큼 늦어지고
+     * 상태 저장소가 커집니다. 정확도와 지연의 트레이드오프입니다.
+     */
+    private static final Duration GRACE = Duration.ofMinutes(3);
+
+    private ClickCountTopology() {
+    }
+
+    public static Topology build(String inputTopic, String outputTopic) {
+        StreamsBuilder builder = new StreamsBuilder();
+
+        Serde&lt;String&gt; stringSerde = Serdes.String();
+        Serde&lt;Long&gt; longSerde = Serdes.Long();
+
+        KStream&lt;String, String&gt; clicks = builder.stream(
+                inputTopic,
+                Consumed.with(stringSerde, stringSerde)
+                        // 이벤트 시각을 페이로드에서 꺼냅니다.
+                        .withTimestampExtractor(new ClickTimestampExtractor()));
+
+        // 상태 저장소를 명시적으로 만듭니다.
+        // 윈도우 저장소의 보관 기간은 최소한 (윈도우 크기 + grace) 이상이어야 합니다.
+        // 짧으면 grace 안에 도착한 이벤트를 받을 저장소가 이미 없어집니다.
+        WindowBytesStoreSupplier storeSupplier = Stores.persistentWindowStore(
+                STORE_NAME,
+                WINDOW_SIZE.plus(GRACE).plus(Duration.ofMinutes(1)),  // retention
+                WINDOW_SIZE,                                          // windowSize
+                false);                                               // retainDuplicates
+
+        clicks
+            // 키를 productId 로 다시 잡습니다.
+            // selectKey 는 "리파티션을 유발" 합니다 — 키가 바뀌면 파티션이 바뀌므로
+            // Streams 가 내부 리파티션 토픽을 자동으로 만듭니다.
+            // (mapValues 처럼 값만 바꾸는 연산은 리파티션을 유발하지 않습니다)
+            .selectKey((key, value) -&gt; extractProductId(value))
+            // 키가 null 인 레코드는 집계할 수 없으므로 걸러 냅니다.
+            // 걸러 내지 않으면 NullPointerException 으로 스트림 스레드가 죽습니다.
+            .filter((productId, value) -&gt; productId != null)
+            .groupByKey(Grouped.with("clicks-by-product", stringSerde, stringSerde))
+            // ofSizeAndGrace 가 4.x 의 표준 API 입니다.
+            // (구버전의 TimeWindows.of(...) + until(...) 조합은 제거되었습니다)
+            .windowedBy(TimeWindows.ofSizeAndGrace(WINDOW_SIZE, GRACE))
+            .count(Materialized.&lt;String, Long&gt;as(storeSupplier)
+                    .withKeySerde(stringSerde)
+                    .withValueSerde(longSerde))
+            // suppress: 윈도우가 닫힐 때까지 중간 결과를 내보내지 않습니다.
+            // 이것이 없으면 이벤트가 들어올 때마다 갱신된 카운트가 계속 발행되어
+            // 하류 대시보드가 1, 2, 3, 4 ... 를 모두 보게 됩니다.
+            // untilWindowCloses 는 StrictBufferConfig 만 받습니다 —
+            // 버퍼가 넘칠 때 결과를 조기 방출하면 "윈도우당 한 번" 보장이 깨지기 때문입니다.
+            .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+            .toStream()
+            // Windowed&lt;String&gt; 키를 "productId@윈도우시작시각" 문자열로 펼칩니다.
+            // 하류가 일반 컨슈머라면 윈도우 Serde 를 알 필요가 없어집니다.
+            .map((Windowed&lt;String&gt; windowedKey, Long count) -&gt; KeyValue.pair(
+                    windowedKey.key(),
+                    "{\"productId\":\"%s\",\"windowStart\":%d,\"windowEnd\":%d,\"clicks\":%d}"
+                            .formatted(windowedKey.key(),
+                                    windowedKey.window().start(),
+                                    windowedKey.window().end(),
+                                    count)))
+            .to(outputTopic, Produced.with(stringSerde, stringSerde));
+
+        return builder.build();
+    }
+
+    private static String extractProductId(String json) {
+        if (json == null) {
+            return null;
+        }
+        Matcher m = PRODUCT_ID.matcher(json);
+        return m.find() ? m.group(1) : null;
+    }
+}</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="suppress 의 대가">
+        <p>
+          <code>Suppressed.untilWindowCloses</code>는 <strong>윈도우당 정확히 한 번</strong>의
+          결과를 보장하지만, 결과가 나오는 시점이
+          <strong>윈도우 종료 + grace period 이후</strong>로 밀립니다.
+          이 예제는 1분 윈도우 + 3분 grace이므로
+          <strong>최대 4분 뒤에 결과가 나옵니다.</strong>
+        </p>
+        <p>
+          대시보드가 "대략적인 현재 값"을 실시간으로 보여 줘야 한다면
+          <code>suppress</code>를 빼고 중간 결과를 그대로 흘려보내거나,
+          <code>Suppressed.untilTimeLimit(Duration, BufferConfig)</code>로
+          <strong>일정 시간 안의 갱신만 묶는</strong> 절충안을 씁니다.
+        </p>
+        <p>
+          <code>BufferConfig.unbounded()</code>는 메모리를 무제한 씁니다.
+          키 카디널리티가 큰 경우(이 시나리오는 상품 12만 종)
+          <strong>힙 사용량을 실측</strong>하고
+          <code>BufferConfig.maxBytes(...)</code>·<code>maxRecords(...)</code>를 검토하세요.
+          단 이 두 개는 <code>EagerBufferConfig</code>이므로
+          <code>untilWindowCloses</code>에는 넣을 수 없습니다.
+        </p>
+      </aside>
+
+      <h3 id="main">설정과 기동</h3>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/streams/Main.java</figcaption>
+        <pre><code class="lang-java">package com.example.streams;
+
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+
+public final class Main {
+
+    private static final Logger log = LoggerFactory.getLogger(Main.class);
+
+    private static final String BOOTSTRAP =
+            "localhost:29092,localhost:39092,localhost:49092";
+    private static final String INPUT = "clickstream";
+    private static final String OUTPUT = "clicks-per-minute";
+
+    public static void main(String[] args) {
+        boolean eos = args.length &gt; 0 &amp;&amp; "eos".equals(args[0]);
+
+        Properties p = new Properties();
+
+        // application.id 는 이 Streams 애플리케이션의 정체성입니다.
+        //   - 컨슈머 그룹 ID 가 됩니다.
+        //   - 내부 토픽(changelog, repartition) 이름의 접두어가 됩니다.
+        //   - 로컬 상태 디렉터리 경로에 들어갑니다.
+        // 바꾸면 완전히 새 애플리케이션이 되어 상태를 처음부터 다시 만듭니다.
+        p.put(StreamsConfig.APPLICATION_ID_CONFIG, "clicks-aggregator");
+        p.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP);
+
+        p.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        p.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+
+        // 한 인스턴스가 돌릴 스트림 스레드 수. 기본값은 1 입니다.
+        // 태스크 수(=입력 파티션 수 6)를 넘기면 남는 스레드는 유휴 상태가 됩니다.
+        p.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
+
+        // 내부 토픽(changelog, repartition)의 복제 계수.
+        // 기본값은 -1 로 "브로커 기본값을 따름" 을 의미하며,
+        // 브로커 default.replication.factor 가 1 이면 상태가 단일 사본이 됩니다.
+        // 반드시 명시하세요.
+        p.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
+
+        // 로컬 상태 디렉터리. 컨테이너에서는 반드시 영속 볼륨을 마운트해야 합니다.
+        // 휘발성이면 재시작마다 changelog 전체를 재생해 복구가 오래 걸립니다.
+        p.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/kafka-streams");
+
+        // standby replica: 다른 인스턴스가 상태 사본을 미리 따라 만들어 둡니다.
+        // 기본값 0. 1 이상으로 두면 인스턴스 장애 시 복구가 훨씬 빠릅니다.
+        // 대가는 changelog 재생 트래픽과 디스크입니다.
+        p.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+
+        if (eos) {
+            // processing.guarantee 의 기본값은 at_least_once 이고,
+            // 유효값은 at_least_once / exactly_once_v2 두 개뿐입니다
+            // (exactly_once 와 exactly_once_beta 는 4.0 에서 제거되었습니다).
+            //
+            // 켜면 commit.interval.ms 기본값이 30000 -> 100 으로 바뀝니다.
+            // 커밋이 잦아져 처리량이 떨어지고 브로커 요청이 늘어나는 대신,
+            // 입력 오프셋과 출력·상태 갱신이 원자적으로 커밋됩니다.
+            p.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+            log.info("processing.guarantee = exactly_once_v2");
+        } else {
+            p.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE);
+            // at_least_once 의 기본 커밋 주기는 30000 입니다.
+            // 대시보드 지연을 줄이려고 짧게 둡니다.
+            p.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5_000);
+        }
+
+        Topology topology = ClickCountTopology.build(INPUT, OUTPUT);
+        // 토폴로지를 로그로 남기면 리파티션 토픽이 어디 생기는지 눈으로 확인할 수 있습니다.
+        log.info("토폴로지:\n{}", topology.describe());
+
+        KafkaStreams streams = new KafkaStreams(topology, p);
+
+        // 스트림 스레드에서 잡히지 않은 예외가 났을 때의 동작을 정합니다.
+        // 기본 동작은 스레드 종료이며, 모든 스레드가 죽으면 애플리케이션이 멈춥니다.
+        streams.setUncaughtExceptionHandler((Throwable e) -&gt; {
+            log.error("스트림 스레드에서 처리되지 않은 예외", e);
+            // REPLACE_THREAD        : 그 스레드만 교체하고 계속 처리합니다.
+            // SHUTDOWN_CLIENT       : 이 인스턴스만 종료합니다.
+            // SHUTDOWN_APPLICATION  : 같은 application.id 의 모든 인스턴스를 종료합니다.
+            //
+            // 데이터 오류로 인한 예외를 REPLACE_THREAD 로 두면
+            // 같은 레코드에서 무한히 실패하는 루프가 됩니다.
+            // 원인을 구분할 수 없다면 SHUTDOWN_CLIENT 가 안전합니다.
+            return StreamsUncaughtExceptionHandler
+                    .StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+        });
+
+        streams.setStateListener((newState, oldState) -&gt;
+                log.info("상태 전이 {} → {}", oldState, newState));
+
+        CountDownLatch latch = new CountDownLatch(1);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -&gt; {
+            log.info("SIGTERM 수신 — Streams 를 정상 종료합니다");
+            // close(Duration) 은 진행 중인 처리를 마치고 오프셋을 커밋한 뒤 닫습니다.
+            // 타임아웃 없이 kill 되면 changelog 재생이 필요한 상태로 남습니다.
+            streams.close(Duration.ofSeconds(60));
+            latch.countDown();
+        }, "streams-shutdown-hook"));
+
+        try {
+            streams.start();
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException e) {
+            log.error("Streams 기동 실패", e);
+            System.exit(1);
+        }
+        log.info("정상 종료");
+    }
+}</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="how-to-run">
+      <h2 id="how-to-run">실행 방법</h2>
+
+      <figure class="code">
+        <figcaption>순서대로 실행</figcaption>
+        <pre><code class="lang-bash"># 0. 예제 1의 클러스터와 토픽
+cd kafka-lab &amp;&amp; docker compose ps
+./kcli kafka-topics.sh --describe --topic clickstream | head -2
+
+# 1. 빌드 후 기동 (at_least_once)
+cd ../clicks-aggregator
+mvn -q clean package
+mvn -q exec:java
+
+# 2. 다른 터미널에서 클릭 이벤트를 넣습니다.
+#    clickedAt 을 "지금" 으로 넣어야 윈도우가 정상 동작합니다.
+cd kafka-lab
+NOW=$(date +%s000)
+for i in $(seq 1 30); do
+  PID="P-$((i % 3 + 1))"
+  echo "$PID:{\"productId\":\"$PID\",\"userId\":\"U-$i\",\"clickedAt\":$NOW}"
+done | ./kcli kafka-console-producer.sh --topic clickstream \
+        --property parse.key=true --property key.separator=:
+
+# 3. 결과를 봅니다. 윈도우가 닫히고 grace(3분)가 지난 뒤에 나옵니다.
+./kcli kafka-console-consumer.sh --topic clicks-per-minute --from-beginning \
+  --property print.key=true</code></pre>
+      </figure>
+
+      <aside class="note" data-label="결과가 바로 안 나옵니다">
+        <p>
+          <code>suppress(untilWindowCloses)</code> + grace 3분 때문에
+          <strong>결과는 최대 4분 뒤에 나옵니다.</strong> 정상입니다.
+          그리고 Streams는 <strong>스트림 시각(이벤트 시각의 진행)</strong>으로 윈도우 종료를 판단하므로,
+          <strong>새 이벤트가 들어와 시각이 전진해야</strong> 윈도우가 닫힙니다.
+          이벤트를 한 번만 넣고 기다리면 결과가 나오지 않습니다 —
+          <strong>이후 시각의 이벤트를 하나 더 넣어</strong> 시각을 전진시키세요.
+        </p>
+        <figure class="code">
+          <figcaption>스트림 시각을 전진시켜 윈도우를 닫습니다</figcaption>
+          <pre><code class="lang-bash"># 5분 뒤 시각의 이벤트를 하나 넣으면 앞선 윈도우가 닫힙니다.
+FUTURE=$(( $(date +%s) * 1000 + 300000 ))
+echo "P-1:{\"productId\":\"P-1\",\"userId\":\"U-999\",\"clickedAt\":$FUTURE}" \
+  | ./kcli kafka-console-producer.sh --topic clickstream \
+      --property parse.key=true --property key.separator=:</code></pre>
+        </figure>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="verification">
+      <h2 id="verification">검증 방법</h2>
+
+      <h3 id="verify-internal-topics">1. 내부 토픽이 만들어졌는가</h3>
+
+      <figure class="code">
+        <figcaption>changelog와 repartition 토픽 확인</figcaption>
+        <pre><code class="lang-bash">./kcli kafka-topics.sh --list | grep clicks-aggregator</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 출력</figcaption>
+        <pre><code class="lang-text">clicks-aggregator-clicks-by-product-repartition
+clicks-aggregator-clicks-per-minute-store-changelog</code></pre>
+      </figure>
+
+      <p>
+        <strong>repartition 토픽</strong>은 <code>selectKey</code>로 키를 바꿨기 때문에 생겼습니다.
+        <code>mapValues</code>처럼 값만 바꾸는 연산으로는 생기지 않습니다.
+        <strong>changelog 토픽</strong>은 상태 저장소의 백업이며 <code>compact</code> 정책입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>changelog 정책 확인 — <code>compact</code>여야 합니다</figcaption>
+        <pre><code class="lang-bash">./kcli kafka-topics.sh --describe \
+  --topic clicks-aggregator-clicks-per-minute-store-changelog</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 출력</figcaption>
+        <pre><code class="lang-text">Topic: clicks-aggregator-clicks-per-minute-store-changelog  PartitionCount: 6  ReplicationFactor: 3
+	Configs: cleanup.policy=compact,delete,min.insync.replicas=2,retention.ms=...</code></pre>
+      </figure>
+
+      <p>
+        윈도우 저장소의 changelog는 <code>compact,delete</code> 조합을 씁니다 —
+        키별 최신값을 유지하면서 <strong>보관 기간이 지난 윈도우는 삭제</strong>합니다.
+        <code>ReplicationFactor: 3</code>이 나오는 것은
+        <code>StreamsConfig.REPLICATION_FACTOR_CONFIG=3</code>을 명시했기 때문입니다.
+        명시하지 않으면 브로커 <code>default.replication.factor</code>(기본 <strong>1</strong>)를 따릅니다.
+      </p>
+
+      <h3 id="verify-result">2. 집계 결과가 맞는가</h3>
+
+      <figure class="code">
+        <figcaption>기대 출력</figcaption>
+        <pre><code class="lang-json">P-1	{"productId":"P-1","windowStart":1785024000000,"windowEnd":1785024060000,"clicks":10}
+P-2	{"productId":"P-2","windowStart":1785024000000,"windowEnd":1785024060000,"clicks":10}
+P-3	{"productId":"P-3","windowStart":1785024000000,"windowEnd":1785024060000,"clicks":10}
+</code></pre>
+      </figure>
+
+      <p>
+        30건을 3개 상품에 나눠 넣었으므로 각 10이 나옵니다.
+        <strong><code>windowStart</code>가 분 경계(00초)에 정렬</strong>되어 있는지 확인하세요 —
+        tumbling 윈도우는 epoch 기준으로 정렬되며,
+        이벤트가 들어온 시각이 아니라 <strong>고정된 경계</strong>를 씁니다.
+      </p>
+
+      <h3 id="verify-late">3. grace period가 늦은 이벤트를 받아 주는가</h3>
+
+      <figure class="code">
+        <figcaption>2분 전 시각의 이벤트를 넣습니다 (grace 3분 안)</figcaption>
+        <pre><code class="lang-bash">LATE=$(( $(date +%s) * 1000 - 120000 ))
+echo "P-1:{\"productId\":\"P-1\",\"userId\":\"U-LATE\",\"clickedAt\":$LATE}" \
+  | ./kcli kafka-console-producer.sh --topic clickstream \
+      --property parse.key=true --property key.separator=:
+
+# grace 를 넘는 5분 전 이벤트 — 버려집니다.
+TOO_LATE=$(( $(date +%s) * 1000 - 300000 ))
+echo "P-1:{\"productId\":\"P-1\",\"userId\":\"U-TOOLATE\",\"clickedAt\":$TOO_LATE}" \
+  | ./kcli kafka-console-producer.sh --topic clickstream \
+      --property parse.key=true --property key.separator=:</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>버려진 이벤트는 메트릭으로 드러납니다</figcaption>
+        <pre><code class="lang-text">kafka.streams:type=stream-task-metrics,thread-id=*,task-id=*
+  Attribute: dropped-records-total
+  Attribute: dropped-records-rate</code></pre>
+      </figure>
+
+      <p>
+        <strong><code>dropped-records-total</code>이 증가하면 grace period가 짧다는 신호입니다.</strong>
+        이 메트릭에 알림을 걸어 두지 않으면
+        "집계가 조금씩 부족한데 이유를 모르겠다"는 상태가 됩니다.
+        늦은 이벤트는 <strong>에러 없이 조용히 버려집니다.</strong>
+      </p>
+
+      <h3 id="verify-recovery">4. 상태 복구가 동작하는가</h3>
+
+      <figure class="code">
+        <figcaption>상태 디렉터리를 지우고 재시작</figcaption>
+        <pre><code class="lang-bash"># 애플리케이션을 정상 종료한 뒤 로컬 상태를 지웁니다.
+pkill -f 'com.example.streams.Main'
+rm -rf /tmp/kafka-streams/clicks-aggregator
+
+# 재시작하면 changelog 를 재생해 상태를 복원합니다.
+cd ../clicks-aggregator &amp;&amp; mvn -q exec:java</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 로그 — 복구 과정이 상태 전이로 드러납니다</figcaption>
+        <pre><code class="lang-text">INFO com.example.streams.Main - 상태 전이 CREATED → REBALANCING
+INFO o.a.k.s.p.internals.StoreChangelogReader - stream-thread [...] Restoration in progress for 6 partitions.
+INFO o.a.k.s.p.internals.StoreChangelogReader - stream-thread [...] Finished restoring changelog clicks-aggregator-clicks-per-minute-store-changelog-0
+INFO com.example.streams.Main - 상태 전이 REBALANCING → RUNNING</code></pre>
+      </figure>
+
+      <p>
+        <code>REBALANCING</code>에 머무는 시간이 <strong>복구에 걸리는 시간</strong>입니다.
+        상태가 크면 이 시간이 수십 분까지 늘어납니다 —
+        <code>num.standby.replicas</code>를 1 이상으로 두면
+        다른 인스턴스가 미리 상태를 따라 만들어 두므로 <strong>이 시간이 크게 줄어듭니다.</strong>
+      </p>
+
+      <h3 id="verify-eos">5. <code>exactly_once_v2</code>가 커밋 주기를 바꾸는가</h3>
+
+      <figure class="code">
+        <figcaption>EOS 모드로 실행</figcaption>
+        <pre><code class="lang-bash">mvn -q exec:java -Dexec.args="eos"</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기동 로그에서 확인 — <code>commit.interval.ms</code>가 100으로 바뀝니다</figcaption>
+        <pre><code class="lang-text">INFO o.a.k.streams.StreamsConfig - StreamsConfig values:
+	commit.interval.ms = 100
+	processing.guarantee = exactly_once_v2
+	...
+INFO o.a.k.c.p.internals.TransactionManager - [Producer clientId=clicks-aggregator-...] ProducerId set to 7000 with epoch 0</code></pre>
+      </figure>
+
+      <p>
+        <code>ProducerId set to ...</code> 로그가 나오면 트랜잭션 프로듀서가 쓰이는 것입니다.
+        <code>transactional.id</code>는 Streams가 <code>application.id</code>와 태스크에서 자동으로 만들므로
+        직접 정하지 않습니다.
+        하류에서 이 결과를 읽는 컨슈머는 <strong><code>isolation.level=read_committed</code></strong>여야
+        EOS가 완성됩니다(<a href="ex05.html">예제 5</a>).
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="config-table">
+      <h2 id="config-table">이 예제에서 쓴 Streams 설정</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Apache Kafka 4.3 <code>StreamsConfig</code></caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">이 예제 값</th><th scope="col">이유</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>application.id</code></th><td>필수</td><td><code>clicks-aggregator</code></td><td>컨슈머 그룹 ID, 내부 토픽 접두어, 상태 디렉터리 이름이 됩니다. 바꾸면 새 애플리케이션입니다</td></tr>
+            <tr><th scope="row"><code>num.stream.threads</code></th><td><strong><code>1</code></strong></td><td><code>3</code></td><td>기본값이 1이라는 점에 주의. 파티션 수(6)가 상한입니다</td></tr>
+            <tr><th scope="row"><code>processing.guarantee</code></th><td><code>at_least_once</code></td><td>인자로 선택</td><td>유효값은 <code>at_least_once</code> / <code>exactly_once_v2</code> 두 개뿐입니다</td></tr>
+            <tr><th scope="row"><code>commit.interval.ms</code></th><td><code>30000</code><br>(EOS일 때 <strong><code>100</code></strong>)</td><td><code>5000</code> (ALO)</td><td>EOS를 켜면 기본값이 자동으로 100으로 바뀝니다</td></tr>
+            <tr><th scope="row"><code>replication.factor</code></th><td><code>-1</code> (브로커 기본값)</td><td><code>3</code></td><td><strong>명시하지 않으면 브로커 <code>default.replication.factor</code>(기본 1)를 따라 상태가 단일 사본이 됩니다</strong></td></tr>
+            <tr><th scope="row"><code>num.standby.replicas</code></th><td><code>0</code></td><td><code>1</code></td><td>장애 복구 시간을 줄입니다. 대가는 changelog 재생 트래픽과 디스크</td></tr>
+            <tr><th scope="row"><code>state.dir</code></th><td><code>/tmp/kafka-streams</code></td><td>동일</td><td><strong><code>/tmp</code>는 재부팅 시 사라집니다.</strong> 프로덕션에서는 영속 경로로 바꾸세요</td></tr>
+            <tr><th scope="row"><code>default.timestamp.extractor</code></th><td>레코드 타임스탬프 사용</td><td>커스텀</td><td>발행 지연이 큰 소스는 페이로드의 이벤트 시각을 써야 윈도우가 맞습니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="diagram" data-diagram="D-094">
+        <figcaption>
+          stateless / stateful / 리파티션 유발 연산 구분 —
+          <code>selectKey</code>·<code>map</code>은 리파티션을 유발하고 <code>mapValues</code>는 유발하지 않습니다
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="production">
+      <h2 id="production">프로덕션 고려사항</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>로컬 예제와 프로덕션의 차이</caption>
+          <thead><tr><th scope="col">항목</th><th scope="col">이 예제</th><th scope="col">프로덕션</th></tr></thead>
+          <tbody>
+            <tr>
+              <th scope="row">상태 디렉터리</th>
+              <td><code>/tmp/kafka-streams</code></td>
+              <td><strong>영속 볼륨</strong>(K8s라면 StatefulSet + PVC). 휘발성이면 배포마다 changelog 전체를 재생해 복구가 수십 분 걸립니다</td>
+            </tr>
+            <tr>
+              <th scope="row">인스턴스 식별</th>
+              <td>없음</td>
+              <td><code>group.instance.id</code>(static membership)로 재시작 시 리밸런스를 회피합니다. 상태가 큰 애플리케이션에서 효과가 가장 큽니다</td>
+            </tr>
+            <tr>
+              <th scope="row">직렬화</th>
+              <td><code>Serdes.String()</code> + 정규식 파싱</td>
+              <td>Avro/Protobuf Serde. 정규식 파싱은 스키마 변경에 조용히 깨집니다(<a href="ex07.html">예제 7</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">버려진 레코드</th>
+              <td>메트릭만 존재</td>
+              <td><code>dropped-records-total</code>에 <strong>알림을 걸어야</strong> 합니다. grace를 넘긴 이벤트는 에러 없이 사라집니다</td>
+            </tr>
+            <tr>
+              <th scope="row">예외 처리</th>
+              <td><code>SHUTDOWN_CLIENT</code></td>
+              <td>역직렬화 오류는 <code>default.deserialization.exception.handler</code>로, 처리 오류는 <code>default.processing.exception.handler</code>로 분리해 <strong>데이터 오류와 인프라 오류를 다르게</strong> 다룹니다</td>
+            </tr>
+            <tr>
+              <th scope="row">RocksDB 튜닝</th>
+              <td>기본값</td>
+              <td>상태가 크면 블록 캐시·write buffer를 <code>RocksDBConfigSetter</code>로 조정합니다. <strong>RocksDB는 힙 밖 메모리를 쓰므로</strong> 컨테이너 메모리 한계 계산에 반드시 포함해야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">내부 토픽</th>
+              <td>자동 생성</td>
+              <td>자동 생성되지만 <strong>RF는 <code>replication.factor</code> 설정을 따릅니다.</strong> 명시하지 않으면 브로커 기본값(1)이 되어 상태가 단일 사본이 됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row">EOS</th>
+              <td>인자로 선택</td>
+              <td>켜면 처리량이 떨어집니다. <strong>하류 컨슈머가 <code>read_committed</code>가 아니면 의미가 없습니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">토폴로지 변경</th>
+              <td>자유롭게</td>
+              <td>토폴로지를 바꾸면 <strong>내부 토픽 이름과 태스크 배정이 달라져</strong> 호환되지 않는 경우가 있습니다. 그때는 <code>application.id</code>를 바꾸고 상태를 새로 만드는 것이 안전합니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">자주 하는 실수</h2>
+
+      <aside class="note note--warn" data-label="실수 1 · replication.factor 를 명시하지 않는다">
+        <p>
+          <code>StreamsConfig.REPLICATION_FACTOR_CONFIG</code>의 기본값은 <strong><code>-1</code></strong>이며
+          "브로커 기본값을 따름"을 뜻합니다.
+          브로커의 <code>default.replication.factor</code> 기본값은 <strong>1</strong>이므로,
+          <strong>changelog와 repartition 토픽이 단일 사본으로 만들어집니다.</strong>
+          그 브로커 한 대가 죽으면 <strong>상태를 복구할 수 없습니다.</strong>
+          내부 토픽은 자동 생성되기 때문에 이 문제가 조용히 지나갑니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 2 · state.dir 을 /tmp 에 둔 채 컨테이너로 배포한다">
+        <p>
+          기본값이 <code>/tmp/kafka-streams</code>입니다.
+          컨테이너를 재생성하면 로컬 상태가 사라지고
+          <strong>changelog 전체를 재생</strong>해야 합니다.
+          상태가 수백 GB면 복구에 수십 분이 걸리고, 그동안 처리가 멈춥니다.
+          영속 볼륨 + <code>num.standby.replicas ≥ 1</code>을 함께 쓰세요.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 3 · 리파티션 유발 연산을 모른 채 쓴다">
+        <p>
+          <code>selectKey</code>·<code>map</code>·<code>flatMap</code>·<code>groupBy</code>는
+          <strong>키를 바꿀 수 있으므로 리파티션을 유발</strong>합니다.
+          Streams가 내부 토픽을 만들어 데이터를 한 번 더 브로커로 왕복시킵니다 —
+          <strong>네트워크와 디스크 비용이 두 배</strong>가 됩니다.
+        </p>
+        <p>
+          값만 바꾸면 되는 경우에는 <code>mapValues</code>·<code>flatMapValues</code>를 쓰세요.
+          키가 바뀌지 않으므로 리파티션이 없습니다.
+          어디에 리파티션 토픽이 생기는지는 <code>topology.describe()</code> 출력으로 확인할 수 있습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 4 · 윈도우 저장소 retention 을 grace 보다 짧게 둔다">
+        <p>
+          윈도우 저장소의 보관 기간이 <strong>(윈도우 크기 + grace period)보다 짧으면</strong>,
+          grace 안에 도착한 이벤트를 담을 저장소가 이미 없습니다.
+          결과적으로 grace 설정이 무의미해지고 이벤트가 조용히 버려집니다.
+          이 예제는 <code>WINDOW_SIZE + GRACE + 1분</code>으로 여유를 두었습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 5 · 스트림 시각이 전진하지 않는데 결과를 기다린다">
+        <p>
+          Streams의 윈도우는 <strong>벽시계가 아니라 이벤트 시각</strong>으로 닫힙니다.
+          입력이 멈추면 스트림 시각도 멈추므로 <strong>윈도우가 영원히 닫히지 않습니다.</strong>
+          테스트할 때 "결과가 안 나온다"의 대부분이 이 원인입니다.
+          <strong>이후 시각의 이벤트를 하나 더 넣어</strong> 시각을 전진시키세요.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 6 · REPLACE_THREAD 를 기본으로 쓴다">
+        <p>
+          <code>StreamThreadExceptionResponse.REPLACE_THREAD</code>는
+          <strong>인프라 오류(일시적 네트워크 문제)에 적합</strong>합니다.
+          데이터 오류(파싱 실패 등)에 쓰면 교체된 스레드가 같은 레코드에서 다시 실패해
+          <strong>무한 루프</strong>가 됩니다. CPU만 태우고 lag은 줄지 않습니다.
+          역직렬화·처리 예외는 전용 핸들러
+          (<code>default.deserialization.exception.handler</code>,
+          <code>default.processing.exception.handler</code>)로 분리하세요.
+        </p>
+      </aside>
+
+      <h3 id="related-cases">관련 케이스 스터디</h3>
+      <ul>
+        <li><a href="../cases/case08.html">케이스 8</a> — <code>cleanup.policy</code>를 잘못 두어 상태 토픽이 사라진 사고. changelog 토픽에 그대로 적용됩니다.</li>
+        <li><a href="../cases/case05.html">케이스 5</a> — 파티션 수 증가의 비용. 태스크 수가 곧 파티션 수라는 점과 직결됩니다.</li>
+        <li><a href="../cases/case02.html">케이스 2</a> — 리밸런스 반복. 상태 복구 시간이 길면 같은 증상이 나타납니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="next">
+      <h2 id="next">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch10.html">
+          <span class="card__title">10장 · Kafka Streams와 ksqlDB</span>
+          <span class="card__desc">KStream/KTable, 조인 매트릭스, co-partitioning을 원리부터.</span>
+          <span class="card__meta">CCDAK Streams</span>
+        </a></li>
+        <li><a class="card" href="ex05.html">
+          <span class="card__title">예제 5 · Exactly-Once 파이프라인</span>
+          <span class="card__desc">같은 보장을 클라이언트 API로 직접 구현하면 어떤 코드가 되는지.</span>
+          <span class="card__meta">CCDAK App Dev</span>
+        </a></li>
+        <li><a class="card" href="ex10.html">
+          <span class="card__title">예제 10 · 컨슈머 Lag 모니터링</span>
+          <span class="card__desc">Streams 애플리케이션의 lag과 상태 복구를 관측합니다.</span>
+          <span class="card__meta">실무</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/streams.html">
+          <span class="card__title">Streams 치트시트</span>
+          <span class="card__desc">DSL 연산자별 리파티션 유발 여부와 윈도우 비교표.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" rel="noopener noreferrer">Kafka Streams Configs</a> — <code>num.stream.threads</code>=<code>1</code>, <code>processing.guarantee</code>=<code>at_least_once</code>(유효값 <code>at_least_once</code>/<code>exactly_once_v2</code>), <code>commit.interval.ms</code>=<code>30000</code>이며 EOS일 때 <code>100</code>, <code>replication.factor</code>=<code>-1</code>, <code>num.standby.replicas</code>=<code>0</code>, <code>state.dir</code></li>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" rel="noopener noreferrer">Streams DSL</a> — <code>TimeWindows.ofSizeAndGrace</code> / <code>ofSizeWithNoGrace</code>, <code>Suppressed.untilWindowCloses</code>(<code>StrictBufferConfig</code>만 허용), <code>Suppressed.untilTimeLimit</code>, <code>BufferConfig.unbounded()</code>/<code>maxRecords</code>/<code>maxBytes</code>, 리파티션 유발 연산 목록</li>
+        <li><a href="https://kafka.apache.org/documentation/streams/architecture" rel="noopener noreferrer">Streams Architecture</a> — 태스크 수 = 입력 파티션 수, 스레드에 태스크가 배분되는 모델, 상태 저장소와 changelog</li>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/manage-topics.html" rel="noopener noreferrer">Managing Streams Application Topics</a> — 내부 토픽 명명 규칙(<code>{application.id}-{store}-changelog</code>, <code>-repartition</code>)과 정책</li>
+        <li><a href="https://kafka.apache.org/documentation/#kafka_streams_task_monitoring" rel="noopener noreferrer">Streams Task Metrics</a> — <code>dropped-records-total</code> / <code>dropped-records-rate</code></li>
+        <li><a href="https://kafka.apache.org/40/javadoc/org/apache/kafka/streams/errors/StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.html" rel="noopener noreferrer">StreamThreadExceptionResponse</a> — <code>REPLACE_THREAD</code> / <code>SHUTDOWN_CLIENT</code> / <code>SHUTDOWN_APPLICATION</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> — <code>default.replication.factor</code>=<code>1</code></li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

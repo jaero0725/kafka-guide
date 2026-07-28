@@ -493,6 +493,176 @@ bin/kafka-reassign-partitions.sh --bootstrap-server $BS \
           <code>kafka-configs.sh --describe --entity-type topics --entity-name T</code>로 확인하세요.
         </p>
       </aside>
+
+      <h3 id="reassign-options"><code>kafka-reassign-partitions.sh</code> 옵션 전체</h3>
+
+      <p>옵션은 4.3 소스의 <code>ReassignPartitionsCommandOptions.java</code>에서 확인했습니다.</p>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-reassign">
+          <caption><code>kafka-reassign-partitions.sh</code> 옵션 (18개)</caption>
+          <thead>
+            <tr><th scope="col">옵션</th><th scope="col">용도</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>--generate</code></th><td>재할당 계획 생성. 현재 배치와 제안 배치를 함께 출력합니다</td></tr>
+            <tr><th scope="row"><code>--execute</code></th><td>계획 실행</td></tr>
+            <tr><th scope="row"><code>--verify</code></th><td>진행 상황 확인. <strong>완료 시 throttle 설정을 제거합니다</strong></td></tr>
+            <tr><th scope="row"><code>--cancel</code></th><td><strong>진행 중인 재할당 취소.</strong> 클러스터가 흔들릴 때의 탈출구입니다</td></tr>
+            <tr><th scope="row"><code>--list</code></th><td>진행 중인 재할당 목록 조회</td></tr>
+            <tr><th scope="row"><code>--additional</code></th><td>기존 재할당에 <strong>덧붙여</strong> 실행 (취소하지 않고 추가)</td></tr>
+            <tr><th scope="row"><code>--preserve-throttles</code></th><td><code>--verify</code> 시 throttle 설정을 <strong>제거하지 않고 유지</strong>합니다. 여러 단계로 나눠 진행할 때</td></tr>
+            <tr><th scope="row"><code>--throttle</code></th><td>복제 대역폭 상한 (bytes/sec). <strong>지정하지 않으면 클러스터가 복제 트래픽에 잠깁니다</strong></td></tr>
+            <tr><th scope="row"><code>--replica-alter-log-dirs-throttle</code></th><td>브로커 내부 로그 디렉터리 간 이동 대역폭 상한</td></tr>
+            <tr><th scope="row"><code>--reassignment-json-file</code></th><td>재할당 계획 JSON 파일 (<code>--execute</code>·<code>--verify</code>·<code>--cancel</code>)</td></tr>
+            <tr><th scope="row"><code>--topics-to-move-json-file</code></th><td>옮길 토픽 목록 JSON (<code>--generate</code>)</td></tr>
+            <tr><th scope="row"><code>--broker-list</code></th><td>대상 브로커 ID 목록 (<code>--generate</code>)</td></tr>
+            <tr><th scope="row"><code>--disable-rack-aware</code></th><td>랙 인식 배치를 끕니다</td></tr>
+            <tr><th scope="row"><code>--disallow-replication-factor-change</code></th><td>복제 계수 변경을 금지합니다 (의도치 않은 RF 변경 방지)</td></tr>
+            <tr><th scope="row"><code>--timeout</code></th><td>명령 타임아웃</td></tr>
+            <tr><th scope="row"><code>--bootstrap-server</code></th><td>브로커 엔드포인트</td></tr>
+            <tr><th scope="row"><code>--bootstrap-controller</code></th><td>컨트롤러 엔드포인트</td></tr>
+            <tr><th scope="row"><code>--command-config</code></th><td>Admin 클라이언트 프로퍼티 파일</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>
+          재할당으로 <strong>복제 계수(RF)는 변경할 수 있습니다</strong> —
+          계획 JSON의 <code>replicas</code> 배열 길이를 바꾸면 됩니다.
+          그러나 <strong>파티션 수는 재할당으로 바꿀 수 없습니다.</strong>
+          파티션 수는 <code>kafka-topics.sh --alter --partitions</code>로만 <strong>늘릴 수</strong> 있고
+          <strong>줄일 수는 없습니다.</strong>
+        </p>
+        <p>
+          "브로커를 추가했는데 기존 파티션이 새 브로커로 옮겨가지 않는다"의 답도 여기 있습니다 —
+          Kafka는 <strong>자동으로 재배치하지 않습니다.</strong>
+          <code>kafka-reassign-partitions.sh</code>를 직접 실행해야 합니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>RF를 3으로 올리는 계획 JSON — <code>replicas</code> 배열에 브로커를 추가합니다</figcaption>
+        <pre><code class="lang-json">{
+  "version": 1,
+  "partitions": [
+    { "topic": "orders", "partition": 0, "replicas": [1, 2, 3] },
+    { "topic": "orders", "partition": 1, "replicas": [2, 3, 1] },
+    { "topic": "orders", "partition": 2, "replicas": [3, 1, 2] }
+  ]
+}</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>재할당이 클러스터를 흔들 때 — 취소와 조회</figcaption>
+        <pre><code class="lang-bash"># 진행 중인 재할당 목록
+bin/kafka-reassign-partitions.sh --bootstrap-server $BS --list
+
+# 취소 — 계획 파일이 필요합니다
+bin/kafka-reassign-partitions.sh --bootstrap-server $BS \
+  --reassignment-json-file reassignment.json --cancel
+
+# 여러 단계로 나눠 진행할 때는 throttle 을 유지합니다
+bin/kafka-reassign-partitions.sh --bootstrap-server $BS \
+  --reassignment-json-file reassignment.json --verify --preserve-throttles</code></pre>
+      </figure>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="share-groups">
+      <h2 id="share-groups">Share Groups (4.2+)</h2>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          Share Group은 <strong>Kafka 4.1에서 preview, 4.2에서 production-ready</strong>가 되었습니다.
+          컨슈머 그룹과 달리 <strong>한 파티션을 여러 컨슈머가 함께 소비</strong>할 수 있고,
+          컨슈머 수가 파티션 수를 넘어설 수 있으며, <strong>레코드 단위로 ack</strong>합니다.
+          브로커의 <code>group.coordinator.rebalance.protocols</code>에 <code>share</code>가 있어야 동작합니다.
+        </p>
+      </aside>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-ack">
+          <caption>ack 타입 4종 — <code>AcknowledgeType.java</code> 확인 (괄호는 프로토콜 값)</caption>
+          <thead>
+            <tr><th scope="col">타입</th><th scope="col">의미</th><th scope="col">전달 시도 카운트</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>ACCEPT</code> (1)</th>
+              <td>정상 처리 완료. 레코드가 확정됩니다</td>
+              <td>더 이상 전달되지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>RELEASE</code> (2)</th>
+              <td>처리하지 못했으니 <strong>다시 전달해 달라</strong>는 뜻</td>
+              <td><strong>증가합니다.</strong> <code>group.share.delivery.count.limit</code>(기본 5)에 도달하면 아카이브됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>REJECT</code> (3)</th>
+              <td>이 레코드는 <strong>처리할 수 없다</strong>는 뜻. 재전달하지 않습니다</td>
+              <td>재전달 없음 — 포이즌 메시지 처리에 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>RENEW</code> (4)</th>
+              <td>처리 중이니 <strong>잠금을 연장</strong>해 달라는 뜻</td>
+              <td>증가하지 않습니다. 처리 시간이 <code>group.share.record.lock.duration.ms</code>보다 긴 경우</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-share-config">
+          <caption>Share Group 그룹 설정 — <code>kafka-configs.sh</code>로 그룹별 오버라이드 가능</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">역할</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>share.record.lock.duration.ms</code></th><td><code>30000</code></td><td>획득한 레코드의 잠금 유지 시간. 초과하면 다른 컨슈머에게 재배달됩니다</td></tr>
+            <tr><th scope="row"><code>share.delivery.count.limit</code></th><td><code>5</code></td><td>한 레코드의 최대 전달 시도 횟수. 초과 시 아카이브 — <strong>DLQ 대체 설계의 핵심 값</strong></td></tr>
+            <tr><th scope="row"><code>share.partition.max.record.locks</code></th><td><code>2000</code></td><td>파티션당 동시 잠금 가능한 레코드 수</td></tr>
+            <tr><th scope="row"><code>share.session.timeout.ms</code></th><td><code>45000</code></td><td>Share Group 멤버의 세션 타임아웃</td></tr>
+            <tr><th scope="row"><code>share.heartbeat.interval.ms</code></th><td><code>5000</code></td><td>하트비트 간격</td></tr>
+            <tr><th scope="row"><code>share.auto.offset.reset</code></th><td><code>latest</code></td><td>share group의 시작 위치</td></tr>
+            <tr><th scope="row"><code>share.isolation.level</code></th><td><code>read_uncommitted</code></td><td>트랜잭션 레코드 가시성</td></tr>
+            <tr><th scope="row"><code>share.renew.acknowledge.enable</code></th><td><code>true</code></td><td><code>RENEW</code> ack(잠금 연장)을 허용할지</td></tr>
+            <tr><th scope="row"><code>share.assignment.interval.ms</code></th><td><code>1000</code></td><td>브로커가 할당을 재계산하는 주기</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="code">
+        <figcaption>Share Group 운영</figcaption>
+        <pre><code class="lang-bash"># 목록·상세·상태
+bin/kafka-share-groups.sh --bootstrap-server $BS --list
+bin/kafka-share-groups.sh --bootstrap-server $BS --describe --group my-share-group
+bin/kafka-share-groups.sh --bootstrap-server $BS --describe --group my-share-group --members
+bin/kafka-share-groups.sh --bootstrap-server $BS --describe --group my-share-group --state
+
+# 콘솔로 소비해 보기
+bin/kafka-console-share-consumer.sh --bootstrap-server $BS --topic orders
+
+# 그룹 설정을 그룹 단위로 오버라이드 (GROUP 리소스 타입)
+bin/kafka-configs.sh --bootstrap-server $BS --alter \
+  --entity-type groups --entity-name my-share-group \
+  --add-config share.delivery.count.limit=3
+
+# 오프셋 리셋
+bin/kafka-share-groups.sh --bootstrap-server $BS --reset-offsets \
+  --group my-share-group --topic orders --to-latest --execute</code></pre>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>
+          컨슈머 그룹은 <strong>파티션을 배타적으로 할당</strong>하므로
+          컨슈머 수가 파티션 수를 넘으면 남는 컨슈머가 유휴 상태가 됩니다.
+          Share Group은 <strong>그 제약이 없습니다</strong> —
+          처리 시간 편차가 큰 작업 큐 워크로드에 씁니다.
+          대신 <strong>파티션 단위 순서 보장이 없습니다.</strong>
+        </p>
+      </aside>
     </section>
 
     <!-- ============================================================== -->
@@ -500,6 +670,17 @@ bin/kafka-reassign-partitions.sh --bootstrap-server $BS \
       <h2 id="tool-index">도구 색인</h2>
 
       <p>도구 이름을 이미 아는 경우 여기서 시작하세요.</p>
+
+      <aside class="note" data-label="확인 방법">
+        <p>
+          아래 도구는 모두 <strong>Apache Kafka 4.3 배포판의 <code>bin/</code> 디렉터리에 실제로 존재함을 확인</strong>했습니다.
+          <code>kafka-log-dirs.sh</code>·<code>kafka-get-offsets.sh</code>·<code>kafka-delete-records.sh</code>는
+          공식 <strong>산문 문서에는 예시가 없지만</strong> 스크립트와 옵션 정의
+          (<code>LogDirsCommand.java</code>, <code>GetOffsetShell.java</code>,
+          <code>DeleteRecordsCommand.java</code>)가 4.3에 존재하므로 포함했습니다.
+          이 표의 옵션은 그 소스에서 확인한 것입니다.
+        </p>
+      </aside>
 
       <div class="toolbar">
         <div class="field">

@@ -365,6 +365,22 @@ offsets.topic.replication.factor=1</code></pre>
         </p>
       </aside>
 
+      <aside class="note note--exam" data-label="시험 포인트 · Application Testing">
+        <p>
+          <strong>"통합 테스트에서 Docker를 쓸 수 없다. 무엇을 쓰는가?"</strong>
+          → <strong>같은 JVM에서 브로커를 띄우는 방식</strong>(<code>EmbeddedKafkaCluster</code>,
+          Spring <code>@EmbeddedKafka</code>)입니다. Testcontainers는 Docker가 전제입니다.
+        </p>
+        <p>
+          그리고 통합 테스트를 <strong>반복 실행</strong>할 때 결과가 달라지는 원인은
+          <strong>남아 있는 상태</strong>입니다 — <code>__consumer_offsets</code>의 커밋 오프셋,
+          로컬 <code>state.dir</code>, changelog·repartition 토픽.
+          Streams 애플리케이션은 <strong><code>kafka-streams-application-reset.sh</code></strong>와
+          <code>KafkaStreams#cleanUp()</code>으로 초기화합니다.
+          "테스트 순서를 바꾸면 통과한다"는 증상은 거의 항상 이 문제입니다.
+        </p>
+      </aside>
+
       <h3 id="testable-design">테스트 가능한 설계 원칙</h3>
       <ul>
         <li><strong>클라이언트를 직접 <code>new</code>하지 말고 인터페이스로 주입</strong>하세요.

@@ -1100,6 +1100,21 @@ curl -s "$CW/connectors/mysql-source/offsets" | jq</code></pre>
         </table>
       </div>
 
+      <aside class="note note--version" data-label="버전 노트">
+        <p>Connect 기능의 도입 버전입니다. 구버전 문서·블로그를 따라갈 때 확인하세요.</p>
+        <div class="table-scroll">
+          <table class="config-table config-table--plain">
+            <tbody>
+              <tr><th scope="row">증분 협력적 리밸런스</th><td><strong>2.3부터.</strong> 이전에는 리밸런스마다 전체 태스크가 멈췄습니다</td></tr>
+              <tr><th scope="row">source 커넥터 EOS</th><td><strong>3.3부터.</strong> <code>exactly.once.source.support</code>. 전체 워커를 2단계 롤링으로 켜야 합니다</td></tr>
+              <tr><th scope="row"><code>stop</code> API</th><td><strong>3.5부터.</strong> 이전에는 <code>pause</code>만 있어 자원을 반납할 수 없었습니다</td></tr>
+              <tr><th scope="row"><code>plugin.discovery</code></th><td><strong>3.6부터.</strong> 기본값 <code>hybrid_warn</code></td></tr>
+              <tr><th scope="row">활성 토픽 추적</th><td><strong>2.5부터.</strong> <code>status.storage.topic</code>에 함께 저장됩니다</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </aside>
+
       <aside class="note note--warn" data-label="워커 1대라도 distributed 를 쓰세요">
         <p>
           워커가 한 대뿐이어도 <strong>distributed 모드가 권장됩니다.</strong>
@@ -1150,10 +1165,20 @@ curl -s "$CW/connectors/mysql-source/offsets" | jq</code></pre>
       <aside class="note note--warn" data-label="함정 5">
         <p>
           <strong>JSON 컨버터에서 스키마 관련 오류가 납니다.</strong>
-          <code>JsonConverter</code>는 기본적으로 <code>schema</code>+<code>payload</code> 봉투를 기대합니다.
+          <code>JsonConverter</code>의 <code>schemas.enable</code> <strong>기본값은 <code>true</code></strong>이므로
+          (<code>JsonConverterConfig.java</code> 확인)
+          <code>{"schema": …, "payload": …}</code> 봉투를 기대합니다.
           평범한 JSON을 다루려면
           <code>key.converter.schemas.enable=false</code>와
-          <code>value.converter.schemas.enable=false</code>를 함께 설정해야 합니다.
+          <code>value.converter.schemas.enable=false</code>를 <strong>함께</strong> 설정해야 합니다.
+          한쪽만 끄면 다른 쪽에서 계속 실패합니다.
+        </p>
+        <p>
+          그리고 내장 컨버터 클래스는 <strong><code>connect-runtime</code> 아티팩트</strong>에 있습니다
+          (<code>org.apache.kafka.connect.converters.*</code>,
+          <code>org.apache.kafka.connect.json.JsonConverter</code>).
+          <code>connect-api</code>에 있다고 오해해 의존성만 <code>connect-api</code>로 두면
+          클래스를 찾지 못합니다.
         </p>
       </aside>
 

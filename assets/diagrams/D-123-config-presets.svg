@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 360" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 460" role="img" class="kg-diagram"
      aria-labelledby="d123-title d123-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d123-title">설정 프리셋 3종 비교 — 처리량 우선, 지연 우선, 내구성 우선</title>
   <desc id="d123-desc">세 가지 목표에 따른 설정 출발점을 나란히 비교합니다. 처리량 우선은 batch.size 를 262144 로 키우고 linger.ms 를 50에서 100 사이로 두며 lz4 나 zstd 압축을 켜고 fetch.min.bytes 와 max.poll.records 를 올립니다. 대신 지연이 늘어납니다. 지연 우선은 linger.ms 를 0 으로 두고 batch.size 는 기본값을 쓰며 압축을 끄거나 lz4 만 쓰고 fetch.min.bytes 를 1 로 두어 대기를 없앱니다. 대신 처리량과 압축률을 포기하고 acks 를 1 로 내리면 유실을 감수합니다. 내구성 우선은 acks=all, enable.idempotence=true, replication.factor 3, min.insync.replicas 2, unclean.leader.election.enable=false 조합으로, 대부분 Kafka 4.3 의 기본값과 같습니다. 세 목표는 서로를 깎아 먹으므로 동시에 만족할 수 없습니다.</desc>
@@ -12,59 +12,60 @@
 </defs>
 <text class="dg-fs-md dg-bold" x="8" y="20">설정 프리셋 3종 — 무엇을 포기할지 먼저 정합니다</text>
 <text class="dg-fs-sm dg-muted" x="8" y="40">값은 출발점 예시입니다. 실제 값은 측정한 뒤 조정하세요. 기본값과 다른 항목만 적었습니다.</text>
-<rect class="dg-node dg-node--accent" x="8" y="54" width="228" height="216" rx="4"/>
+<rect class="dg-node dg-node--accent" x="8" y="54" width="228" height="296" rx="4"/>
 <text class="dg-fs-md dg-bold" x="20" y="76">처리량 우선</text>
 <text class="dg-fs-sm dg-muted" x="20" y="94">지연을 조금 포기합니다</text>
-<text class="dg-fs-sm dg-mono" x="20" y="120">batch.size</text>
-<text class="dg-fs-sm" x="224" y="120" text-anchor="end">262144</text>
-<text class="dg-fs-sm dg-mono" x="20" y="142">linger.ms</text>
-<text class="dg-fs-sm" x="224" y="142" text-anchor="end">50 ~ 100</text>
-<text class="dg-fs-sm dg-mono" x="20" y="164">compression.type</text>
-<text class="dg-fs-sm" x="224" y="164" text-anchor="end">lz4 또는 zstd</text>
-<text class="dg-fs-sm dg-mono" x="20" y="186">buffer.memory</text>
-<text class="dg-fs-sm" x="224" y="186" text-anchor="end">더 크게</text>
-<text class="dg-fs-sm dg-mono" x="20" y="208">fetch.min.bytes</text>
-<text class="dg-fs-sm" x="224" y="208" text-anchor="end">수십 KB</text>
-<text class="dg-fs-sm dg-mono" x="20" y="230">max.poll.records</text>
-<text class="dg-fs-sm" x="224" y="230" text-anchor="end">크게</text>
-<text class="dg-fs-sm dg-mono" x="20" y="252">acks</text>
-<text class="dg-fs-sm" x="224" y="252" text-anchor="end">all 유지 권장</text>
-<rect class="dg-node dg-node--ok" x="244" y="54" width="228" height="216" rx="4"/>
+<text class="dg-fs-sm dg-mono" x="20" y="118">batch.size</text>
+<text class="dg-fs-sm dg-bold" x="224" y="134" text-anchor="end">→ 262144</text>
+<text class="dg-fs-sm dg-mono" x="20" y="152">linger.ms</text>
+<text class="dg-fs-sm dg-bold" x="224" y="168" text-anchor="end">→ 50 ~ 100</text>
+<text class="dg-fs-sm dg-mono" x="20" y="186">compression.type</text>
+<text class="dg-fs-sm dg-bold" x="224" y="202" text-anchor="end">→ lz4 또는 zstd</text>
+<text class="dg-fs-sm dg-mono" x="20" y="220">buffer.memory</text>
+<text class="dg-fs-sm dg-bold" x="224" y="236" text-anchor="end">→ 더 크게</text>
+<text class="dg-fs-sm dg-mono" x="20" y="254">fetch.min.bytes</text>
+<text class="dg-fs-sm dg-bold" x="224" y="270" text-anchor="end">→ 수십 KB</text>
+<text class="dg-fs-sm dg-mono" x="20" y="288">max.poll.records</text>
+<text class="dg-fs-sm dg-bold" x="224" y="304" text-anchor="end">→ 크게</text>
+<text class="dg-fs-sm dg-mono" x="20" y="322">acks</text>
+<text class="dg-fs-sm dg-bold" x="224" y="338" text-anchor="end">→ all 유지 권장</text>
+<rect class="dg-node dg-node--ok" x="244" y="54" width="228" height="296" rx="4"/>
 <text class="dg-fs-md dg-bold" x="256" y="76">지연 우선</text>
 <text class="dg-fs-sm dg-muted" x="256" y="94">처리량과 압축률을 포기합니다</text>
-<text class="dg-fs-sm dg-mono" x="256" y="120">linger.ms</text>
-<text class="dg-fs-sm" x="460" y="120" text-anchor="end">0</text>
-<text class="dg-fs-sm dg-mono" x="256" y="142">batch.size</text>
-<text class="dg-fs-sm" x="460" y="142" text-anchor="end">기본 16384</text>
-<text class="dg-fs-sm dg-mono" x="256" y="164">compression.type</text>
-<text class="dg-fs-sm" x="460" y="164" text-anchor="end">none 또는 lz4</text>
-<text class="dg-fs-sm dg-mono" x="256" y="186">fetch.min.bytes</text>
-<text class="dg-fs-sm" x="460" y="186" text-anchor="end">1 (기본)</text>
-<text class="dg-fs-sm dg-mono" x="256" y="208">fetch.max.wait.ms</text>
-<text class="dg-fs-sm" x="460" y="208" text-anchor="end">작게</text>
-<text class="dg-fs-sm dg-mono" x="256" y="230">max.poll.records</text>
-<text class="dg-fs-sm" x="460" y="230" text-anchor="end">작게</text>
-<text class="dg-fs-sm dg-mono" x="256" y="252">acks</text>
-<text class="dg-fs-sm" x="460" y="252" text-anchor="end">1 (유실 위험 감수)</text>
-<rect class="dg-node dg-node--danger" x="480" y="54" width="228" height="216" rx="4"/>
+<text class="dg-fs-sm dg-mono" x="256" y="118">linger.ms</text>
+<text class="dg-fs-sm dg-bold" x="460" y="134" text-anchor="end">→ 0</text>
+<text class="dg-fs-sm dg-mono" x="256" y="152">batch.size</text>
+<text class="dg-fs-sm dg-bold" x="460" y="168" text-anchor="end">→ 기본 16384</text>
+<text class="dg-fs-sm dg-mono" x="256" y="186">compression.type</text>
+<text class="dg-fs-sm dg-bold" x="460" y="202" text-anchor="end">→ none 또는 lz4</text>
+<text class="dg-fs-sm dg-mono" x="256" y="220">fetch.min.bytes</text>
+<text class="dg-fs-sm dg-bold" x="460" y="236" text-anchor="end">→ 1 (기본)</text>
+<text class="dg-fs-sm dg-mono" x="256" y="254">fetch.max.wait.ms</text>
+<text class="dg-fs-sm dg-bold" x="460" y="270" text-anchor="end">→ 작게</text>
+<text class="dg-fs-sm dg-mono" x="256" y="288">max.poll.records</text>
+<text class="dg-fs-sm dg-bold" x="460" y="304" text-anchor="end">→ 작게</text>
+<text class="dg-fs-sm dg-mono" x="256" y="322">acks</text>
+<text class="dg-fs-sm dg-bold" x="460" y="338" text-anchor="end">→ 1 (유실 위험 감수)</text>
+<rect class="dg-node dg-node--danger" x="480" y="54" width="228" height="296" rx="4"/>
 <text class="dg-fs-md dg-bold" x="492" y="76">내구성 우선</text>
 <text class="dg-fs-sm dg-muted" x="492" y="94">지연과 가용성을 포기합니다</text>
-<text class="dg-fs-sm dg-mono" x="492" y="120">acks</text>
-<text class="dg-fs-sm" x="696" y="120" text-anchor="end">all (기본)</text>
-<text class="dg-fs-sm dg-mono" x="492" y="142">enable.idempotence</text>
-<text class="dg-fs-sm" x="696" y="142" text-anchor="end">true (기본)</text>
-<text class="dg-fs-sm dg-mono" x="492" y="164">replication.factor</text>
-<text class="dg-fs-sm" x="696" y="164" text-anchor="end">3</text>
-<text class="dg-fs-sm dg-mono" x="492" y="186">min.insync.replicas</text>
-<text class="dg-fs-sm" x="696" y="186" text-anchor="end">2</text>
-<text class="dg-fs-sm dg-mono" x="492" y="208">unclean.leader.election.enable</text>
-<text class="dg-fs-sm" x="696" y="208" text-anchor="end">false (기본)</text>
-<text class="dg-fs-sm dg-mono" x="492" y="230">delivery.timeout.ms</text>
-<text class="dg-fs-sm" x="696" y="230" text-anchor="end">넉넉하게</text>
-<text class="dg-fs-sm dg-mono" x="492" y="252">retries</text>
-<text class="dg-fs-sm" x="696" y="252" text-anchor="end">기본값 유지</text>
-<line class="dg-grid" x1="8" y1="286" x2="712" y2="286"/>
-<text class="dg-fs-sm dg-bold" x="8" y="308">세 프리셋은 동시에 만족할 수 없습니다 — 처리량·지연·내구성은 서로를 깎아 먹습니다.</text>
-<text class="dg-fs-sm" x="8" y="328">내구성 우선은 대부분 4.3 기본값과 같습니다. 기본값을 흔들기 전에 정말 필요한지 확인하세요.</text>
-<text class="dg-fs-sm" x="8" y="348">acks 를 1 로 내리는 선택은 유실을 허용한다는 뜻입니다 — 로그·지표성 데이터에만 쓰세요.</text>
+<text class="dg-fs-sm dg-mono" x="492" y="118">acks</text>
+<text class="dg-fs-sm dg-bold" x="696" y="134" text-anchor="end">→ all (기본)</text>
+<text class="dg-fs-sm dg-mono" x="492" y="152">enable.idempotence</text>
+<text class="dg-fs-sm dg-bold" x="696" y="168" text-anchor="end">→ true (기본)</text>
+<text class="dg-fs-sm dg-mono" x="492" y="186">replication.factor</text>
+<text class="dg-fs-sm dg-bold" x="696" y="202" text-anchor="end">→ 3</text>
+<text class="dg-fs-sm dg-mono" x="492" y="220">min.insync.replicas</text>
+<text class="dg-fs-sm dg-bold" x="696" y="236" text-anchor="end">→ 2</text>
+<text class="dg-fs-sm dg-mono" x="492" y="254">delivery.timeout.ms</text>
+<text class="dg-fs-sm dg-bold" x="696" y="270" text-anchor="end">→ 넉넉하게</text>
+<text class="dg-fs-sm dg-mono" x="492" y="288">retries</text>
+<text class="dg-fs-sm dg-bold" x="696" y="304" text-anchor="end">→ 기본값 유지</text>
+<text class="dg-fs-sm dg-mono" x="492" y="322">max.in.flight.requests</text>
+<text class="dg-fs-sm dg-bold" x="696" y="338" text-anchor="end">→ 5 이하 (기본)</text>
+<line class="dg-grid" x1="8" y1="366" x2="712" y2="366"/>
+<text class="dg-fs-sm dg-bold" x="8" y="388">세 프리셋은 동시에 만족할 수 없습니다 — 처리량·지연·내구성은 서로를 깎아 먹습니다.</text>
+<text class="dg-fs-sm" x="8" y="408">내구성 우선은 대부분 4.3 기본값과 같습니다. 기본값을 흔들기 전에 정말 필요한지 확인하세요.</text>
+<text class="dg-fs-sm" x="8" y="428">acks 를 1 로 내리면 유실을 허용한다는 뜻입니다 — 로그·지표성 데이터에만 쓰세요.</text>
+<text class="dg-fs-sm" x="8" y="448">내구성 우선은 unclean.leader.election.enable=false(기본)를 반드시 유지합니다.</text>
 </svg>

@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 420" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 428" role="img" class="kg-diagram"
      aria-labelledby="d048-title d048-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d048-title">컨슈머 lag 의 정확한 정의 — 무엇에서 무엇을 빼는가</title>
   <desc id="d048-desc">파티션 하나의 로그를 12칸으로 그리고 네 지점을 표시했습니다.
@@ -44,15 +44,15 @@
 
   <!-- 지점 마커 -->
   <line class="dg-edge dg-edge--warn" x1="256" y1="96" x2="256" y2="112"/>
-  <rect class="dg-node dg-node--warn" x="180" y="112" width="152" height="22" rx="3"/>
-  <text x="188" y="128" class="dg-fs-sm dg-bold">커밋 4 · CURRENT-OFFSET</text>
+  <rect class="dg-node dg-node--warn" x="150" y="112" width="204" height="22" rx="3"/>
+  <text x="158" y="128" class="dg-fs-sm dg-bold">커밋 4 = CURRENT-OFFSET</text>
   <line class="dg-edge dg-edge--accent" x1="376" y1="96" x2="376" y2="142"/>
-  <rect class="dg-node dg-node--accent" x="340" y="142" width="152" height="22" rx="3"/>
-  <text x="348" y="158" class="dg-fs-sm dg-bold">현재 위치 7 · position</text>
+  <rect class="dg-node dg-node--accent" x="330" y="142" width="166" height="22" rx="3"/>
+  <text x="338" y="158" class="dg-fs-sm dg-bold">현재 위치 7 = position</text>
 
   <line class="dg-edge dg-edge--accent dg-edge--dashed" x1="496" y1="96" x2="496" y2="172"/>
-  <rect class="dg-node dg-node--accent" x="440" y="172" width="196" height="22" rx="3"/>
-  <text x="448" y="188" class="dg-fs-sm dg-bold">HW 10 · LOG-END-OFFSET</text>
+  <rect class="dg-node dg-node--accent" x="430" y="172" width="212" height="22" rx="3"/>
+  <text x="438" y="188" class="dg-fs-sm dg-bold">HW 10 = LOG-END-OFFSET</text>
 
   <line class="dg-edge dg-edge--muted dg-edge--dotted" x1="576" y1="96" x2="576" y2="202"/>
   <rect class="dg-node dg-node--muted" x="500" y="202" width="160" height="22" rx="3"/>
@@ -69,15 +69,12 @@
   <text x="384" y="297" class="dg-fs-sm dg-bold">records-lag = 3</text>
   <text x="504" y="297" class="dg-fs-sm dg-mono">HW(10) − position(7)</text>
 
-  <rect class="dg-node--empty" x="496" y="308" width="80" height="20" rx="3"/>
-  <text x="8" y="323" class="dg-fs-sm dg-muted">복제 미완 구간(10~11)은 어느 lag 에도 들어가지 않습니다</text>
-
-  <rect class="dg-node dg-node--warn" x="256" y="334" width="120" height="20" rx="3"/>
-  <text x="8" y="349" class="dg-fs-sm dg-muted">차이(3건)는 처리했지만 아직 커밋하지 않은 구간입니다 →</text>
+  <text x="8" y="326" class="dg-fs-sm dg-muted">복제 미완 구간(10~11)은 어느 lag 에도 들어가지 않습니다 — 조회 자체가 HW 까지만 됩니다.</text>
+  <text x="8" y="344" class="dg-fs-sm dg-muted">두 값의 차이 3건 = 이미 처리했지만 아직 커밋하지 않은 구간입니다.</text>
 
   <!-- 정리 -->
-  <line class="dg-grid" x1="8" y1="366" x2="712" y2="366"/>
-  <text x="8" y="384" class="dg-fs-sm"><tspan class="dg-bold">CLI 의 <tspan class="dg-mono">LOG-END-OFFSET</tspan> 은 리더의 LEO 가 아니라 high watermark 입니다</tspan> (<tspan class="dg-mono">read_uncommitted</tspan> 기준).</text>
+  <line class="dg-grid" x1="8" y1="362" x2="712" y2="362"/>
+  <text x="8" y="382" class="dg-fs-sm"><tspan class="dg-bold">CLI 의 <tspan class="dg-mono">LOG-END-OFFSET</tspan> 은 리더의 LEO 가 아니라 high watermark 입니다</tspan> (<tspan class="dg-mono">read_uncommitted</tspan> 기준).</text>
   <text x="8" y="402" class="dg-fs-sm"><tspan class="dg-mono">read_committed</tspan> 컨슈머는 이 값이 LSO(last stable offset)가 되고 lag 도 LSO 기준으로 바뀝니다.</text>
-  <text x="8" y="418" class="dg-fs-sm dg-muted">커밋을 자주 하지 않으면 실제 처리는 따라가고 있는데도 CLI 의 LAG 이 크게 보입니다.</text>
+  <text x="8" y="422" class="dg-fs-sm dg-muted">커밋을 자주 하지 않으면 실제 처리는 따라가고 있는데도 CLI 의 LAG 이 크게 보입니다.</text>
 </svg>
