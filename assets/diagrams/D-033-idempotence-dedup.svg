@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 418" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 456" role="img" class="kg-diagram"
      aria-labelledby="d033-title d033-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d033-title">멱등성 중복 판별 — PID 와 파티션별 시퀀스 번호로 브로커가 중복을 폐기</title>
   <desc id="d033-desc">프로듀서와 브로커 두 개의 생명선을 가진 시퀀스 그림입니다.
@@ -90,6 +90,8 @@
   <line class="dg-grid" x1="8" y1="340" x2="712" y2="340"/>
   <text x="8" y="358" class="dg-fs-sm">시퀀스는 <tspan class="dg-bold">(PID, epoch, 파티션)</tspan> 조합별로 따로 관리됩니다. 파티션이 다르면 시퀀스도 따로 셉니다.</text>
   <text x="8" y="376" class="dg-fs-sm">기대보다 큰 seq 가 오면 브로커가 <tspan class="dg-mono">OUT_OF_ORDER_SEQUENCE_NUMBER</tspan> 로 거부합니다.</text>
-  <text x="8" y="394" class="dg-fs-sm dg-muted"><tspan class="dg-mono">enable.idempotence=true</tspan>(기본) 는 <tspan class="dg-mono">acks=all</tspan>, <tspan class="dg-mono">retries&gt;0</tspan>, <tspan class="dg-mono">max.in.flight…≤5</tspan> 를 요구합니다.</text>
-  <text x="8" y="410" class="dg-fs-sm dg-muted">막아 주는 것은 <tspan class="dg-bold">재시도로 생기는 중복</tspan> 뿐입니다. 애플리케이션이 <tspan class="dg-mono">send()</tspan> 를 두 번 부르면 2건이 남습니다.</text>
+  <text x="8" y="394" class="dg-fs-sm">기본값 <tspan class="dg-mono">enable.idempotence=true</tspan> 는 <tspan class="dg-mono">acks=all</tspan> · <tspan class="dg-mono">retries&gt;0</tspan> · <tspan class="dg-mono">max.in.flight≤5</tspan> 를 요구합니다.</text>
+  <text x="8" y="412" class="dg-fs-sm">막아 주는 것은 <tspan class="dg-bold">재시도로 생기는 중복</tspan> 뿐입니다. <tspan class="dg-mono">send()</tspan> 를 두 번 부르면 2건이 남습니다.</text>
+  <text x="8" y="430" class="dg-fs-sm dg-muted"><tspan class="dg-mono">max.in.flight…</tspan> 를 6 이상으로 <tspan class="dg-bold">명시</tspan> 하면 <tspan class="dg-mono">ConfigException</tspan>. 다른 설정 충돌은 <tspan class="dg-bold">조용히 비활성화</tspan> 됩니다.</text>
+  <text x="8" y="448" class="dg-fs-sm dg-muted">상한이 5인 이유: 브로커가 파티션별로 최근 배치 5개의 시퀀스만 보관합니다.</text>
 </svg>

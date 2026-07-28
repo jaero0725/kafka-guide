@@ -104,6 +104,6 @@
   <!-- ============ 정리 ============ -->
   <line class="dg-grid" x1="8" y1="356" x2="712" y2="356"/>
   <text x="8" y="376" class="dg-fs-sm"><tspan class="dg-bold">콜백은 레인 B(Sender 스레드)에서 실행됩니다.</tspan> 애플리케이션 스레드로 돌아오지 않습니다 — 가장 자주 틀립니다.</text>
-  <text x="8" y="394" class="dg-fs-sm dg-muted">직렬화 실패처럼 <tspan class="dg-mono">send()</tspan> 안에서 즉시 드러난 오류만 예외적으로 호출 스레드에서 콜백이 실행됩니다.</text>
+  <text x="8" y="394" class="dg-fs-sm dg-muted">증거: 콜백 안에서 <tspan class="dg-mono">flush()</tspan> 를 부르면 <tspan class="dg-mono">KafkaException</tspan> 이 납니다 — Sender 스레드라서 교착되기 때문입니다.</text>
   <text x="8" y="410" class="dg-fs-sm dg-muted">버퍼 총량은 <tspan class="dg-mono">buffer.memory=33554432</tspan>. 가득 차면 <tspan class="dg-mono">send()</tspan> 가 <tspan class="dg-mono">max.block.ms=60000</tspan> 까지 블록됩니다.</text>
 </svg>

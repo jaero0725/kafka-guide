@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>케이스 5 · 파티션을 1000개로 늘렸더니 더 느려졌다 — Kafka Guide</title>
+  <meta name="description" content="처리량을 올리려고 파티션을 24개에서 1000개로 늘렸다가 지연이 20배 늘어난 사고. 파일 디스크립터, vm.max_map_count, 프로듀서 배치 효율, 리밸런스 시간, 브로커 재시작 시간까지 파티션 증설의 실제 비용을 정리합니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="cases" data-page="case05"></div>
+
+  <main id="main" class="page" data-page-id="cases/case05">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="case01.html">실수 케이스</a></li>
+        <li><span aria-current="page">케이스 5 · 파티션 과다</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실수 케이스 · 5</p>
+      <h1>파티션을 1000개로 늘렸더니 더 느려졌다</h1>
+      <p class="page__lead">
+        "파티션이 병렬성이니까 늘리면 빨라진다"는 판단으로 파티션을 24개에서 1000개로 늘렸습니다.
+        결과는 <strong>프로듀서 p99 지연 12ms → 240ms, 브로커 재시작 시간 3분 → 40분</strong>이었고,
+        마지막에는 브로커가 <code>Too many open files</code>로 죽었습니다.
+        되돌릴 수도 없었습니다. <strong>파티션 수는 줄일 수 없습니다.</strong>
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 케이스에서 얻어 갈 것</h2>
+      <ul>
+        <li>파티션 하나가 소비하는 자원을 <strong>파일 디스크립터·메모리 맵·메모리·스레드</strong> 단위로 계산할 수 있습니다.</li>
+        <li>파티션을 늘리면 <strong>왜 end-to-end 지연이 늘어나는지</strong> 배치 관점에서 설명할 수 있습니다.</li>
+        <li>리밸런스 시간과 브로커 재시작·리더 선출 시간이 파티션 수에 어떻게 비례하는지 압니다.</li>
+        <li>필요한 파티션 수를 처리량과 컨슈머 처리 능력으로 <strong>계산</strong>할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="situation">
+      <h2 id="situation">상황</h2>
+
+      <p>
+        클릭스트림 수집 파이프라인입니다. <code>page-view</code> 토픽은 원래
+        <strong>파티션 24개, 복제 계수 3</strong>, 브로커 3대에서 <strong>일 4000만 건</strong>(피크 초당 1,200건)을 받았습니다.
+        평균 레코드 크기는 900바이트입니다.
+      </p>
+      <p>
+        분기 프로모션을 앞두고 트래픽이 3배로 늘 것으로 예상되어 용량 계획을 세웠습니다.
+        컨슈머 파드를 늘리려면 파티션이 더 필요했고, 여기서 판단이 어긋났습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>실행된 변경 — "여유 있게 잡아 두자"</figcaption>
+        <pre><code class="lang-bash"># 컨슈머 파드를 최대 200개까지 늘릴 수 있게, 여유를 5배로 잡아 1000개로
+kafka-topics.sh --bootstrap-server kafka-1:9092 \
+  --alter --topic page-view --partitions 1000</code></pre>
+      </figure>
+
+      <p>
+        같은 클러스터에는 다른 토픽도 34개 있었고, 파티션 총합은 이미 620개였습니다.
+        <code>page-view</code>를 1000개로 늘린 뒤 클러스터 전체 파티션은
+        <strong>1,596개 × 복제 계수 3 = 레플리카 4,788개</strong>가 되었고,
+        브로커 3대이므로 <strong>브로커 한 대가 약 1,600개의 레플리카</strong>를 담당하게 됐습니다.
+      </p>
+
+      <p>
+        변경 직후에는 아무 일도 없었습니다. 문제는 세 단계로 나타났습니다.
+      </p>
+      <ol>
+        <li><strong>+30분</strong>: 프로듀서 p99 지연이 12ms에서 90ms로 상승. 처리량은 오히려 감소.</li>
+        <li><strong>+6시간</strong>: 컨슈머 파드를 재배포했더니 리밸런스가 90초 넘게 걸리기 시작. 그 시간 동안 처리량 0.</li>
+        <li><strong>+2일</strong>: 브로커 한 대를 정기 패치로 재시작했는데 기동에 <strong>40분</strong>이 걸렸고,
+          그 사이 다른 브로커가 <code>Too many open files</code>로 죽었습니다.</li>
+      </ol>
+
+      <aside class="note note--danger" data-label="가장 나쁜 사실">
+        <p>
+          <strong>파티션 수는 줄일 수 없습니다.</strong> 공식 문서가 명시합니다 —
+          "Kafka does not currently support reducing the number of partitions for a topic."
+        </p>
+        <p>
+          되돌리려면 <strong>새 토픽을 만들어 데이터를 옮기고 프로듀서·컨슈머를 전환</strong>해야 합니다.
+          이 사고의 복구에 3주가 걸렸습니다.
+          <strong>파티션 증설은 사실상 되돌릴 수 없는 결정</strong>이라고 생각하고 접근하세요.
+        </p>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-114">
+        <figcaption>
+          파티션 수 증가가 비용으로 바뀌는 경로 —
+          정상 규모에서의 자원 사용, 증설 후 브로커당 레플리카·파일 핸들·메모리 맵 증가,
+          그리고 프로듀서 배치 효율 저하로 지연이 늘어나는 지점
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="symptoms">
+      <h2 id="symptoms">관측된 증상</h2>
+
+      <h3 id="metrics-shape">메트릭이 어떻게 보였는가</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>파티션 24개 시절과 1000개 이후의 실측 비교 (같은 트래픽, 같은 하드웨어)</caption>
+          <thead>
+            <tr>
+              <th scope="col">지표</th>
+              <th scope="col">파티션 24개</th>
+              <th scope="col">파티션 1000개</th>
+              <th scope="col">변화</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">프로듀서 p99 지연</th>
+              <td>12ms</td>
+              <td>240ms</td>
+              <td>20배 악화</td>
+            </tr>
+            <tr>
+              <th scope="row">프로듀서 <code>batch-size-avg</code></th>
+              <td>14,900바이트</td>
+              <td>1,100바이트</td>
+              <td>배치가 거의 형성되지 않음</td>
+            </tr>
+            <tr>
+              <th scope="row">브로커 네트워크 요청 수</th>
+              <td>초당 1,900</td>
+              <td>초당 24,000</td>
+              <td>작은 요청이 폭증</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>RequestHandlerAvgIdlePercent</code></th>
+              <td>0.82</td>
+              <td>0.11</td>
+              <td>핸들러 스레드 포화</td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머 리밸런스 시간</th>
+              <td>2초</td>
+              <td>90초 이상</td>
+              <td>재배포마다 처리 정지</td>
+            </tr>
+            <tr>
+              <th scope="row">브로커 재시작 시간</th>
+              <td>3분</td>
+              <td>40분</td>
+              <td>로그 복구 시간이 파티션 수에 비례</td>
+            </tr>
+            <tr>
+              <th scope="row">브로커 프로세스 열린 파일 수</th>
+              <td>약 9,000</td>
+              <td>약 68,000</td>
+              <td>OS 한계(65,536)에 도달</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="broker-log">브로커 로그 — 자원 한계</h3>
+      <p>
+        <code>Too many open files</code>는 Kafka가 만드는 메시지가 아니라
+        <strong>OS가 반환하는 <code>EMFILE</code>이 JVM 예외 메시지에 실려 나오는 것</strong>입니다.
+        따라서 나타나는 위치는 상황에 따라 다릅니다. 다음과 같은 형태로 보입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>kafka-2 server.log — OS 자원 고갈</figcaption>
+        <pre><code class="lang-bash">ERROR Error while accepting connection (kafka.network.Acceptor)
+java.io.IOException: Too many open files
+	at sun.nio.ch.ServerSocketChannelImpl.accept0(Native Method)
+	...
+
+ERROR Failed to clean up log for __consumer_offsets-17 in dir /var/lib/kafka/data due to IOException
+java.io.FileNotFoundException: /var/lib/kafka/data/page-view-843/00000000000000000000.index (Too many open files)</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="확인 수준">
+        <p>
+          위 스택 트레이스는 <strong>형태만 재현</strong>한 것입니다.
+          <code>Too many open files</code>와 <code>OutOfMemoryError: Map failed</code>는 JVM·OS 레벨 메시지이며,
+          Kafka 소스의 특정 <code>log.error()</code> 문자열이 아닙니다.
+          다만 <strong>공식 운영 문서가 이 두 증상을 파티션 수와 직접 연결해 경고</strong>하고 있으므로
+          원인 판단의 근거로는 충분합니다.
+        </p>
+      </aside>
+
+      <p>
+        메모리 맵 한계에 먼저 부딪히는 경우도 있습니다.
+        공식 문서는 <code>vm.max_map_count</code>를 <strong>파티션 수 상한을 고려할 때 주의할 OS 속성</strong>으로 명시합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>메모리 맵 한계에 걸린 경우의 형태</figcaption>
+        <pre><code class="lang-bash">java.lang.OutOfMemoryError: Map failed
+	at sun.nio.ch.FileChannelImpl.map0(Native Method)
+	at sun.nio.ch.FileChannelImpl.map(FileChannelImpl.java:...)</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="root-cause">
+      <h2 id="root-cause">원인 분석</h2>
+
+      <h3 id="cost1-fd">비용 1 — 파일 디스크립터</h3>
+      <p>
+        공식 하드웨어·OS 문서는 파일 디스크립터 소요량을 다음 식으로 제시합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>공식 문서의 파일 디스크립터 계산식</figcaption>
+        <pre><code class="lang-text">필요 FD 최소치 = (파티션 수) × (파티션 크기 / 세그먼트 크기) + 연결 수
+
+권고: 브로커 프로세스에 최소 100,000개의 파일 디스크립터를 허용할 것 (출발점)</code></pre>
+      </figure>
+
+      <p>이 사고의 숫자를 넣어 보면 이유가 분명해집니다.</p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>브로커 1대 기준 파일 디스크립터 소요 추정 (파티션 크기 4GiB, <code>segment.bytes</code> 기본 1GiB)</caption>
+          <thead>
+            <tr>
+              <th scope="col">항목</th>
+              <th scope="col">파티션 24개 시절</th>
+              <th scope="col">파티션 1000개 이후</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">브로커당 레플리카 수</th>
+              <td>약 240</td>
+              <td>약 1,600</td>
+            </tr>
+            <tr>
+              <th scope="row">레플리카당 세그먼트 수 (4GiB / 1GiB)</th>
+              <td>4</td>
+              <td>4</td>
+            </tr>
+            <tr>
+              <th scope="row">세그먼트당 파일 (<code>.log</code> + <code>.index</code> + <code>.timeindex</code>)</th>
+              <td>3</td>
+              <td>3</td>
+            </tr>
+            <tr>
+              <th scope="row">로그 파일 FD 합계</th>
+              <td>약 2,880</td>
+              <td>약 19,200</td>
+            </tr>
+            <tr>
+              <th scope="row">클라이언트·복제 연결</th>
+              <td>약 6,000</td>
+              <td>약 6,000</td>
+            </tr>
+            <tr>
+              <th scope="row">합계 (여유 없음)</th>
+              <td>약 9,000</td>
+              <td><strong>약 25,000 이상</strong> — 실측 68,000까지 상승</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="mmap 이 FD 를 붙잡아 둡니다">
+        <p>
+          공식 문서는 <code>mmap()</code>이 파일 디스크립터에 <strong>추가 참조를 만들며,
+          이 참조는 그 디스크립터에 대한 <code>close()</code>로 제거되지 않는다</strong>고 명시합니다.
+          해당 파일에 대한 매핑이 모두 없어질 때 제거됩니다.
+          Kafka는 인덱스 파일을 mmap으로 다루므로, 실제 FD 사용량은 단순 계산보다 오래 유지됩니다.
+        </p>
+      </aside>
+
+      <h3 id="cost2-mmap">비용 2 — 메모리 맵 영역 (<code>vm.max_map_count</code>)</h3>
+      <aside class="note note--danger" data-label="공식 문서가 명시하는 계산">
+        <p>공식 하드웨어·OS 문서를 그대로 옮기면 다음과 같습니다.</p>
+        <ul>
+          <li>많은 Linux 시스템에서 <code>vm.max_map_count</code> 기본값은 <strong>약 65,535</strong>입니다.</li>
+          <li>파티션마다 할당되는 <strong>각 로그 세그먼트는 index / timeindex 파일 쌍</strong>을 필요로 하고,
+            <strong>각 파일이 1개의 맵 영역</strong>을 씁니다. 즉 <strong>세그먼트 하나가 맵 영역 2개</strong>를 씁니다.</li>
+          <li>따라서 <strong>파티션 하나는 최소 맵 영역 2개</strong>를 씁니다(세그먼트가 1개일 때).</li>
+          <li>브로커에 <strong>파티션 50,000개를 만들면 맵 영역 100,000개</strong>가 필요하고,
+            기본 <code>vm.max_map_count</code> 환경에서는
+            <strong><code>OutOfMemoryError (Map failed)</code>로 브로커가 죽을 가능성이 큽니다.</strong></li>
+          <li>세그먼트 수는 세그먼트 크기·부하·리텐션 정책에 따라 달라지며 <strong>보통 1개보다 많습니다.</strong></li>
+        </ul>
+      </aside>
+
+      <p>
+        여기서 중요한 것은 <strong>세그먼트 수가 곱해진다</strong>는 점입니다.
+        <code>segment.bytes</code>(기본 1073741824 = 1GiB)나 <code>segment.ms</code>(기본 604800000 = 7일)를
+        작게 설정한 토픽이 있으면 세그먼트가 훨씬 많아지고, 맵 영역과 FD 소요가 함께 늘어납니다.
+        세그먼트 설정과 리텐션의 관계는 <a href="../basics/ch07.html">7장 스토리지·리텐션·컴팩션</a>에서 다룹니다.
+      </p>
+
+      <h3 id="cost3-producer">비용 3 — 프로듀서 배치 효율 붕괴 (지연이 늘어나는 진짜 이유)</h3>
+      <p>
+        이것이 이 사고에서 가장 직관에 반하는 부분입니다.
+        <strong>파티션을 늘렸는데 지연이 늘어난 이유는 배치가 형성되지 못했기 때문입니다.</strong>
+      </p>
+      <p>
+        프로듀서는 <strong>파티션마다 별도의 배치 버퍼</strong>를 유지합니다.
+        배치는 <code>batch.size</code>(기본 16384바이트)만큼 채워지거나
+        <code>linger.ms</code>(4.0부터 기본 <strong>5</strong>)가 지나면 전송됩니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>같은 초당 1,200건 · 레코드 900바이트에서 파티션 수가 배치에 미치는 영향</caption>
+          <thead>
+            <tr>
+              <th scope="col">항목</th>
+              <th scope="col">파티션 24개</th>
+              <th scope="col">파티션 1000개</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">파티션당 초당 레코드</th>
+              <td>50건</td>
+              <td>1.2건</td>
+            </tr>
+            <tr>
+              <th scope="row">파티션당 초당 바이트</th>
+              <td>45,000</td>
+              <td>1,080</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>batch.size</code>(16384) 채우는 시간</th>
+              <td>약 360ms</td>
+              <td>약 15초</td>
+            </tr>
+            <tr>
+              <th scope="row">실제 전송 트리거</th>
+              <td><code>batch.size</code> 도달 또는 <code>linger.ms</code></td>
+              <td>거의 항상 <code>linger.ms</code>(5ms) — <strong>배치가 1~2건</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">초당 produce 요청 수</th>
+              <td>수백 건</td>
+              <td><strong>수만 건</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">압축 효율</th>
+              <td>배치가 커서 좋음</td>
+              <td>배치가 작아 <strong>거의 압축되지 않음</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="핵심 인과">
+        <p>
+          파티션이 많아지면 파티션당 유입이 줄어 <strong>배치가 채워지지 않습니다.</strong>
+          그러면 프로듀서는 <code>linger.ms</code>만 보고 작은 배치를 계속 보냅니다.
+          브로커는 <strong>같은 데이터를 훨씬 많은 요청으로</strong> 받게 되고,
+          요청 핸들러 스레드가 포화되어 <strong>큐 대기 시간이 지연으로 나타납니다.</strong>
+        </p>
+        <p>
+          공식 문서는 <code>compression.type</code> 설명에서
+          <strong>"압축은 데이터 배치 전체 단위로 이루어지므로 배치 효율이 압축률에 영향을 준다 —
+          배치가 클수록 압축이 잘 된다"</strong>고 명시합니다.
+          배치가 작아지면 압축률도 같이 나빠져 네트워크·디스크 사용량이 늘어납니다.
+        </p>
+      </aside>
+
+      <p>
+        프로듀서 메모리도 문제입니다. <code>buffer.memory</code> 기본값은 <strong>33554432</strong>(32MiB)인데,
+        1000개 파티션이 각각 <code>batch.size</code>(16384) 하나씩만 잡아도 약 16MiB입니다.
+        재시도 중인 배치까지 겹치면 버퍼가 고갈되고, 그러면 <code>send()</code>가
+        <code>max.block.ms</code>(기본 60000) 동안 블로킹된 뒤 예외로 실패합니다.
+      </p>
+
+      <h3 id="cost4-consumer">비용 4 — 컨슈머 메모리와 fetch</h3>
+      <p>
+        컨슈머의 <code>max.partition.fetch.bytes</code> 기본값은 <strong>1048576</strong>(1MiB),
+        <code>fetch.max.bytes</code> 기본값은 <strong>52428800</strong>(50MiB)입니다.
+        파티션 200개를 할당받은 컨슈머는 이론상 200MiB를 요청할 수 있지만
+        <code>fetch.max.bytes</code>가 상한을 잡습니다.
+        문제는 그 반대 방향입니다 — <strong>파티션이 많으면 파티션당 실제로 받는 양이 줄어들어</strong>
+        같은 데이터를 더 많은 fetch 요청으로 나눠 받습니다.
+        이 설정들의 상호작용은 <a href="case10.html">케이스 10</a>에서 자세히 다룹니다.
+      </p>
+
+      <h3 id="cost5-rebalance">비용 5 — 리밸런스 시간</h3>
+      <p>
+        리밸런스에서 오가는 정보량은 <strong>파티션 수에 비례</strong>합니다.
+        JoinGroup·SyncGroup 요청에 담기는 할당 정보가 커지고, 할당 계산 비용도 커집니다.
+        eager 리밸런스(기본 할당 전략 목록의 앞쪽인 <code>RangeAssignor</code>)에서는
+        <strong>모든 멤버가 모든 파티션을 반납하고 다시 받으므로</strong> 그 시간 동안 처리량이 0입니다.
+      </p>
+      <p>
+        완화 수단은 세 가지입니다. <code>CooperativeStickyAssignor</code>,
+        <code>group.instance.id</code>(정적 멤버십), 그리고
+        <code>group.protocol=consumer</code>(KIP-848, 4.0 GA — <strong>기본값은 <code>classic</code></strong>).
+        상세는 <a href="case02.html">케이스 2</a>와 <a href="../basics/ch05.html">5장</a>에 있습니다.
+      </p>
+
+      <h3 id="cost6-recovery">비용 6 — 브로커 재시작과 리더 선출</h3>
+      <p>
+        브로커가 기동할 때 각 로그 디렉터리의 세그먼트를 검사·복구합니다.
+        이 작업의 병렬도는 <code>num.recovery.threads.per.data.dir</code>(기본 <strong>2</strong>)이 결정합니다.
+        레플리카가 1,600개면 이 단계가 수십 분이 됩니다.
+      </p>
+      <p>
+        리더 선출은 그보다 낫습니다. 공식 설계 문서는
+        <strong>KRaft 컨트롤러가 리더십 변경 통지를 배치로 묶어 처리</strong>하므로
+        "파티션이 많을 때 선출 과정이 훨씬 저렴하고 빠르다"고 설명합니다.
+        그래도 <strong>공짜는 아닙니다</strong> — 브로커 1대 손실 시 컨트롤러가 처리해야 할
+        파티션 수가 그만큼 늘어납니다. KRaft 아키텍처는 <a href="../basics/ch03.html">3장</a>에서 다룹니다.
+      </p>
+
+      <aside class="note note--warn" data-label="공식 문서가 전제하는 상한">
+        <p>
+          공식 운영 문서는 토픽 이름 길이 제약을 설명하면서
+          <strong>"파티션 수가 100,000을 넘지 않는다고 가정한다"</strong>고 명시합니다
+          (디렉터리 이름이 <code>{topic}-{partitionId}</code>이고 255자 제한이 있어 토픽 이름이 249자로 제한되는 이유).
+          이것은 클러스터 전체 파티션 수의 <strong>구조적 상한</strong>이며 권장치가 아닙니다.
+          실제 권장 규모는 브로커 사양과 워크로드에 따라 훨씬 작습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="reproduce">
+      <h2 id="reproduce">재현 방법</h2>
+
+      <p>
+        노트북에서 브로커를 죽일 필요는 없습니다.
+        <strong>배치 효율 붕괴</strong>는 파티션 200개 정도로도 수치로 재현됩니다.
+        아래 compose는 Apache Kafka의 공식 단일 노드 예제입니다
+        (3노드 구성은 <a href="../practice/ex01.html">예제 1</a>).
+      </p>
+
+      <figure class="code">
+        <figcaption>docker-compose.yml — 단일 노드 KRaft, FD 한계를 낮춰 재현하기 쉽게</figcaption>
+        <pre><code class="lang-yaml">services:
+  broker:
+    image: apache/kafka:4.3.1
+    hostname: broker
+    container_name: broker
+    ports:
+      - '9092:9092'
+    # 재현 포인트 — FD 한계를 일부러 낮춥니다. 운영에서는 100000 이상을 권장합니다.
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_LISTENERS: 'CONTROLLER://:29093,PLAINTEXT://:19092,PLAINTEXT_HOST://:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:19092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      # 세그먼트를 작게 만들어 파일 수를 늘립니다 (재현 전용)
+      KAFKA_LOG_SEGMENT_BYTES: 1048576</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>재현 절차 — 같은 데이터로 배치 크기와 요청 수를 비교합니다</figcaption>
+        <pre><code class="lang-bash">docker compose up -d
+K=/opt/kafka/bin
+
+# 1. 파티션 4개 토픽과 400개 토픽을 나란히 만든다
+docker exec -it broker $K/kafka-topics.sh --create --topic few-parts \
+  --partitions 4 --replication-factor 1 --bootstrap-server localhost:9092
+docker exec -it broker $K/kafka-topics.sh --create --topic many-parts \
+  --partitions 400 --replication-factor 1 --bootstrap-server localhost:9092
+
+# 2. 같은 조건으로 부하를 준다. 처리량을 제한해 "파티션당 유입 감소"를 만듭니다.
+#    --print-metrics 로 batch-size-avg / request-rate 를 함께 봅니다.
+docker exec -it broker $K/kafka-producer-perf-test.sh \
+  --topic few-parts --num-records 200000 --record-size 900 --throughput 2000 \
+  --producer-props bootstrap.servers=localhost:9092 linger.ms=5 batch.size=16384 \
+  --print-metrics 2>&1 | grep -E 'batch-size-avg|request-rate|records/sec'
+
+docker exec -it broker $K/kafka-producer-perf-test.sh \
+  --topic many-parts --num-records 200000 --record-size 900 --throughput 2000 \
+  --producer-props bootstrap.servers=localhost:9092 linger.ms=5 batch.size=16384 \
+  --print-metrics 2>&1 | grep -E 'batch-size-avg|request-rate|records/sec'
+
+# → many-parts 쪽에서 batch-size-avg 가 크게 줄고 request-rate 가 크게 늡니다.
+#   이것이 지연 증가의 직접 원인입니다.</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>파일 수와 메모리 맵을 직접 세어 봅니다</figcaption>
+        <pre><code class="lang-bash"># 브로커 프로세스가 연 파일 수
+docker exec broker sh -c 'ls /proc/1/fd | wc -l'
+
+# 메모리 맵 영역 수 (세그먼트당 2개씩 늘어납니다)
+docker exec broker sh -c 'wc -l < /proc/1/maps'
+
+# 파티션 400개 × 세그먼트 파일들 — 디렉터리 수를 확인
+docker exec broker sh -c 'ls -d /tmp/kraft-combined-logs/many-parts-* | wc -l'
+docker exec broker sh -c 'ls /tmp/kraft-combined-logs/many-parts-0/'
+#   → 00000000000000000000.log / .index / .timeindex / leader-epoch-checkpoint ...
+
+# 호스트의 현재 vm.max_map_count 확인 (공식 문서가 주의하라고 한 값)
+sysctl vm.max_map_count</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>리밸런스 시간 비교 — 파티션 수에 비례해 늘어납니다</figcaption>
+        <pre><code class="lang-bash"># 컨슈머 2개를 붙였다 떼면서 상태 전이를 관찰합니다
+docker exec -it broker $K/kafka-console-consumer.sh --topic many-parts \
+  --group rb-test --from-beginning --bootstrap-server localhost:9092 &amp;
+sleep 5
+docker exec -it broker $K/kafka-console-consumer.sh --topic many-parts \
+  --group rb-test --from-beginning --bootstrap-server localhost:9092 &amp;
+
+watch -n 1 'docker exec -it broker /opt/kafka/bin/kafka-consumer-groups.sh \
+  --describe --group rb-test --state --bootstrap-server localhost:9092'
+#   → PreparingRebalance / CompletingRebalance 에 머무는 시간을
+#     few-parts 로 같은 실험을 했을 때와 비교합니다.</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="fix">
+      <h2 id="fix">해결</h2>
+
+      <h3 id="immediate">즉시 조치 — 파티션은 못 줄이므로 주변을 조정한다</h3>
+      <p>
+        파티션 수를 되돌릴 수 없으므로, 당장은 <strong>배치가 다시 형성되게</strong> 만들고
+        OS 한계를 올리는 것이 유일한 완화책입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>즉시 조치 1 — <code>linger.ms</code>를 올려 배치를 다시 만든다</figcaption>
+        <pre><code class="lang-properties"># 파티션당 유입이 적으므로 더 기다려야 배치가 찹니다.
+# 지연 예산이 허용하는 한도까지 올립니다.
+linger.ms=50
+batch.size=32768
+compression.type=lz4          # 배치가 커지면 압축 효과가 돌아옵니다
+buffer.memory=134217728       # 파티션이 많으면 버퍼도 늘려야 합니다 (기본 33554432)</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>즉시 조치 2 — OS 한계를 공식 권고치로 올린다</figcaption>
+        <pre><code class="lang-bash"># 파일 디스크립터 — 공식 문서 권고: 브로커 프로세스에 최소 100000
+ulimit -n            # 현재 값 확인
+# /etc/security/limits.d/kafka.conf
+#   kafka soft nofile 200000
+#   kafka hard nofile 200000
+
+# systemd 유닛이라면
+#   [Service]
+#   LimitNOFILE=200000
+
+# 메모리 맵 영역 — 세그먼트당 2개씩 필요합니다
+sysctl -w vm.max_map_count=262144
+echo 'vm.max_map_count=262144' >> /etc/sysctl.d/99-kafka.conf</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>즉시 조치 3 — 세그먼트를 크게 유지해 파일 수를 줄인다</figcaption>
+        <pre><code class="lang-bash"># segment.bytes 를 작게 설정한 토픽이 있으면 파일 수가 급증합니다.
+# 기본값은 1073741824(1GiB)입니다. 작게 바꾼 토픽을 찾아 되돌립니다.
+for t in $(kafka-topics.sh --bootstrap-server kafka-1:9092 --list); do
+  kafka-configs.sh --bootstrap-server kafka-1:9092 \
+    --entity-type topics --entity-name "$t" --describe | grep -q segment.bytes \
+    && echo "== $t" \
+    && kafka-configs.sh --bootstrap-server kafka-1:9092 \
+         --entity-type topics --entity-name "$t" --describe
+done</code></pre>
+      </figure>
+
+      <h3 id="root-fix">근본 해결 — 파티션 수를 계산해서 정한다</h3>
+
+      <div class="diff">
+        <div class="diff__before">
+          <p>
+            "여유 있게"라는 근거로 정했습니다.
+            컨슈머 파드 상한을 파티션 수로 잡았지만, 그 파드가 실제로 필요한지 계산하지 않았습니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 전 — 근거 없는 여유</figcaption>
+            <pre><code class="lang-bash">--partitions 1000     # "컨슈머 200개까지 늘릴 수 있게 5배 여유"</code></pre>
+          </figure>
+        </div>
+        <div class="diff__after">
+          <p>
+            <strong>목표 처리량 ÷ 파티션 하나가 낼 수 있는 처리량</strong>으로 계산하고,
+            증설 여유는 2배 이내로 둡니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 후 — 계산으로 정한 값</figcaption>
+            <pre><code class="lang-text">목표 유입      = 초당 3,600건 (피크 3배 반영)
+컨슈머 1스레드 = 초당 300건 처리 (실측)
+필요 병렬도    = 3,600 / 300 = 12
+증설 여유 2배  = 24
+브로커 3대 정합 = 24 (브로커당 8 리더)
+
+→ --partitions 24. 기존 값과 같습니다. 애초에 증설이 필요하지 않았습니다.</code></pre>
+          </figure>
+        </div>
+      </div>
+
+      <aside class="note note--ok" data-label="파티션 수를 정하는 순서">
+        <ol>
+          <li><strong>컨슈머 1스레드의 실측 처리량</strong>을 구합니다. 추정하지 말고 측정합니다.</li>
+          <li><strong>목표 유입 ÷ 스레드 처리량</strong> = 최소 파티션 수.</li>
+          <li>프로듀서 쪽 상한도 확인합니다 — 파티션 하나가 받을 수 있는 쓰기 처리량.</li>
+          <li>증설 여유는 <strong>2배 이내</strong>. 파티션은 나중에 늘릴 수 있고, 줄일 수는 없습니다.</li>
+          <li><strong>브로커 수의 배수</strong>로 맞춥니다. 리더가 고르게 분산됩니다.</li>
+          <li>클러스터 <strong>전체</strong> 레플리카 수를 계산합니다. 토픽 하나가 아니라 브로커당 총량이 자원을 결정합니다.</li>
+        </ol>
+      </aside>
+
+      <h3 id="alternatives">파티션을 늘리지 않고 병렬성을 얻는 방법</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>"컨슈머를 더 늘리고 싶다"에 대한 대안</caption>
+          <thead>
+            <tr>
+              <th scope="col">방법</th>
+              <th scope="col">내용</th>
+              <th scope="col">주의</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">컨슈머 내부 병렬화</th>
+              <td>파티션은 그대로 두고 워커 풀로 처리 (<a href="case02.html">케이스 2</a>)</td>
+              <td>파티션 내 순서가 깨짐 (<a href="case04.html">케이스 4</a>). 같은 키는 같은 워커로.</td>
+            </tr>
+            <tr>
+              <th scope="row">Share Groups (KIP-932)</th>
+              <td><strong>4.2에서 production-ready.</strong> 한 파티션을 여러 컨슈머가 함께 소비하고 레코드 단위로 ack</td>
+              <td>순서 있는 스트림이 아니라 <strong>작업 큐</strong> 성격 워크로드용. <a href="../basics/ch11.html">11장</a> 참조</td>
+            </tr>
+            <tr>
+              <th scope="row">처리 로직 최적화</th>
+              <td>건당 처리 시간을 줄이면 필요한 파티션 수가 그대로 줄어듦</td>
+              <td>가장 저렴한 해결책인데 가장 늦게 검토됨</td>
+            </tr>
+            <tr>
+              <th scope="row">토픽 분할</th>
+              <td>우선순위·테넌트별로 토픽을 나눠 독립적으로 확장</td>
+              <td>토픽 수도 자원을 씁니다. 파티션 총합으로 판단하세요</td>
+            </tr>
+            <tr>
+              <th scope="row">브로커 증설</th>
+              <td>브로커를 늘려 브로커당 레플리카 수를 낮춤</td>
+              <td>파티션 재배치(<code>kafka-reassign-partitions</code>) 필요. 네트워크 부하 주의</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="migration">이미 늘려 버렸다면 — 새 토픽으로 이관</h3>
+      <figure class="code">
+        <figcaption>복구 절차 개요</figcaption>
+        <pre><code class="lang-bash"># 1. 계산으로 정한 파티션 수로 새 토픽을 만든다
+kafka-topics.sh --bootstrap-server kafka-1:9092 --create \
+  --topic page-view-v2 --partitions 24 --replication-factor 3 \
+  --config min.insync.replicas=2
+
+# 2. 프로듀서를 새 토픽으로 전환한다 (양쪽에 쓰는 기간을 두면 무중단 전환 가능)
+# 3. 컨슈머가 두 토픽을 함께 구독하게 하고, 기존 토픽 lag 이 0이 되면 구독 해제
+# 4. 기존 토픽의 리텐션이 지난 뒤 삭제
+kafka-topics.sh --bootstrap-server kafka-1:9092 --delete --topic page-view</code></pre>
+      </figure>
+      <p>
+        키가 있는 토픽이라면 이관 과정에서 <strong>키 배치가 바뀌므로 순서 경계가 생깁니다.</strong>
+        <a href="case04.html">케이스 4</a>의 마이그레이션 전략 표를 함께 보세요.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prevention">
+      <h2 id="prevention">예방 체크리스트</h2>
+
+      <ul>
+        <li><label><input type="checkbox"> 파티션 수를 <strong>계산</strong>으로 정했다 (목표 유입 ÷ 컨슈머 스레드 실측 처리량)</label></li>
+        <li><label><input type="checkbox"> 컨슈머 1스레드 처리량을 <strong>측정</strong>했다 (추정 아님)</label></li>
+        <li><label><input type="checkbox"> 증설 여유가 2배 이내다</label></li>
+        <li><label><input type="checkbox"> <strong>클러스터 전체 레플리카 수</strong>(모든 토픽 파티션 합 × RF)와 브로커당 부담을 계산했다</label></li>
+        <li><label><input type="checkbox"> 브로커의 파일 디스크립터 한계가 <strong>100,000 이상</strong>이다 (공식 권고 출발점)</label></li>
+        <li><label><input type="checkbox"> <code>vm.max_map_count</code>를 확인했다 (세그먼트당 맵 영역 2개 소요)</label></li>
+        <li><label><input type="checkbox"> <code>segment.bytes</code>를 기본값(1GiB)보다 작게 설정한 토픽이 없거나, 그 이유가 문서화되어 있다</label></li>
+        <li><label><input type="checkbox"> 증설 전에 <strong>파티션당 유입량이 배치를 채울 수 있는지</strong> 계산했다 (<code>batch.size</code> / <code>linger.ms</code>)</label></li>
+        <li><label><input type="checkbox"> 증설이 <strong>키 배치 변경</strong>과 <code>auto.offset.reset=latest</code> 컨슈머 누락을 유발할지 검토했다</label></li>
+        <li><label><input type="checkbox"> 브로커 재시작 시간을 <strong>변경 후에 실제로 측정</strong>할 계획이 있다</label></li>
+        <li><label><input type="checkbox"> <strong>파티션은 줄일 수 없다</strong>는 것을 의사결정에 참여한 모두가 알고 있다</label></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트</h2>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <ul>
+          <li>
+            <strong>파티션은 늘릴 수만 있고 줄일 수 없습니다.</strong> 단답으로 자주 나옵니다.
+          </li>
+          <li>
+            "파티션을 늘리면 항상 처리량이 올라간다"는 <strong>오답</strong>입니다.
+            증가하는 비용으로 <strong>파일 디스크립터·메모리 맵·브로커 메모리·리밸런스 시간·복구 시간·요청 수</strong>를 들 수 있어야 합니다.
+          </li>
+          <li>
+            <strong>컨슈머 그룹 내에서 한 파티션은 한 컨슈머에게만 할당</strong>됩니다.
+            따라서 그룹 내 유효 컨슈머 수의 상한이 파티션 수입니다.
+            파티션보다 컨슈머가 많으면 남는 컨슈머는 유휴 상태가 됩니다
+            (Share Groups는 이 제약이 없습니다 — 4.2 GA).
+          </li>
+          <li>
+            파티션 증설의 부작용 4가지: <strong>키 분배 변화 / <code>auto.offset.reset=latest</code> 누락 /
+            메타데이터 전파 지연 / 내부 토픽 금지.</strong>
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Deployment Architecture / Cluster Configuration">
+        <ul>
+          <li>
+            파일 디스크립터 권고치 <strong>100,000 이상</strong>과 계산식
+            <code>(파티션 수) × (파티션 크기 / 세그먼트 크기) + 연결 수</code>.
+          </li>
+          <li>
+            <code>vm.max_map_count</code>: 많은 Linux에서 기본 약 <strong>65,535</strong>,
+            <strong>세그먼트 하나당 맵 영역 2개</strong>(index + timeindex),
+            한계 초과 시 <code>OutOfMemoryError (Map failed)</code>.
+          </li>
+          <li>
+            <code>num.recovery.threads.per.data.dir</code> 기본값 <strong>2</strong> —
+            브로커 기동 시 로그 복구 병렬도.
+          </li>
+          <li>
+            <code>segment.bytes</code> 기본값 <strong>1073741824</strong>(1GiB),
+            <code>segment.ms</code> 기본값 <strong>604800000</strong>(7일).
+            삭제·컴팩션은 <strong>세그먼트 단위</strong>로 일어납니다.
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development (배치)">
+        <p>
+          <code>linger.ms</code> 기본값은 <strong>5</strong>입니다
+          (Kafka 4.0에서 <code>0</code>에서 변경). 시중 자료 대부분이 <code>0</code>으로 적혀 있으니 주의하세요.
+          <code>batch.size</code> 기본값은 <strong>16384</strong>, <code>buffer.memory</code>는 <strong>33554432</strong>,
+          <code>max.block.ms</code>는 <strong>60000</strong>입니다.
+        </p>
+        <p>
+          "파티션이 많은데 지연이 늘었다"의 인과를 묻는 문항에서는
+          <strong>배치가 채워지지 않아 작은 요청이 늘고 요청 핸들러가 포화된다</strong>는 설명이 정답 방향입니다.
+          압축은 <strong>배치 전체 단위</strong>로 이루어지므로 배치가 작으면 압축률도 나빠집니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch07.html">
+          <span class="card__title">7장 · 스토리지·리텐션·컴팩션</span>
+          <span class="card__desc">세그먼트 물리 구조와 디스크 사용량 산정 공식.</span>
+          <span class="card__meta">CCDAK Fundamentals</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch11.html">
+          <span class="card__title">11장 · 운영 기초</span>
+          <span class="card__desc">용량 산정, 성능 튜닝, Share Groups.</span>
+          <span class="card__meta">CCAAK</span>
+        </a></li>
+        <li><a class="card" href="case04.html">
+          <span class="card__title">케이스 4 · 상태가 뒤바뀌어 저장됐다</span>
+          <span class="card__desc">파티션 증설이 키 배치와 순서 보장을 어떻게 끊는가.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="case10.html">
+          <span class="card__title">케이스 10 · 큰 메시지가 무한 재시도로 쌓였다</span>
+          <span class="card__desc">fetch·request 크기 설정의 상호작용.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/metrics.html">
+          <span class="card__title">JMX 메트릭 치트시트</span>
+          <span class="card__desc"><code>RequestHandlerAvgIdlePercent</code> 등 포화 지표.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc">처리량 우선 / 지연 우선 / 내구성 우선 프리셋.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#os" rel="noopener noreferrer">Operations — OS-level tuning</a> — 파일 디스크립터 계산식과 100,000 권고, <code>mmap()</code> 참조 특성, <code>vm.max_map_count</code>와 세그먼트당 맵 영역 2개, <code>OutOfMemoryError (Map failed)</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops_modify_topic" rel="noopener noreferrer">Operations — Modifying topics</a> — 파티션 증설 부작용 4가지, 파티션 축소 불가, 파티션 수 100,000 가정과 토픽 이름 249자 제한</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_linger.ms" rel="noopener noreferrer">Producer Configs — <code>linger.ms</code> · <code>batch.size</code> · <code>buffer.memory</code></a> — 기본값 5 / 16384 / 33554432, 4.0에서 <code>linger.ms</code> 변경 사실</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_compression.type" rel="noopener noreferrer">Producer Configs — <code>compression.type</code></a> — 압축은 배치 전체 단위, 배치가 클수록 압축률 향상</li>
+        <li><a href="https://kafka.apache.org/documentation/#consumerconfigs_fetch.max.bytes" rel="noopener noreferrer">Consumer Configs — <code>fetch.max.bytes</code> · <code>max.partition.fetch.bytes</code></a> — 기본값 52428800 / 1048576</li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs_num.recovery.threads.per.data.dir" rel="noopener noreferrer">Broker Configs — <code>num.recovery.threads.per.data.dir</code></a> — 기본값 2</li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs_segment.bytes" rel="noopener noreferrer">Topic Configs — <code>segment.bytes</code> · <code>segment.ms</code></a> — 기본값 1073741824 / 604800000</li>
+        <li><a href="https://kafka.apache.org/documentation/#design_replicatedlog" rel="noopener noreferrer">Design — Replication</a> — 컨트롤러가 리더십 변경 통지를 배치로 묶어 선출 비용을 낮추는 구조</li>
+        <li><a href="https://kafka.apache.org/documentation/#monitoring" rel="noopener noreferrer">Monitoring</a> — <code>RequestHandlerAvgIdlePercent</code></li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

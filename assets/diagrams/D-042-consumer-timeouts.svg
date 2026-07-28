@@ -1,0 +1,118 @@
+<svg viewBox="0 0 720 496" role="img" class="kg-diagram"
+     aria-labelledby="d042-title d042-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d042-title">타임아웃 4종 타임라인 — 하트비트 축과 poll 축은 별개입니다</title>
+  <desc id="d042-desc">두 시나리오를 각각 두 개의 수평 레인으로 그린 그림입니다.
+    위 레인은 백그라운드 스레드가 보내는 하트비트 축이고, 아래 레인은 애플리케이션 스레드가 도는 poll 축입니다.
+    두 축은 서로 독립이며 감시하는 값도 다릅니다. 하트비트 축은 session.timeout.ms 45000 밀리초를 감시하고,
+    poll 축은 max.poll.interval.ms 300000 밀리초를 감시합니다.
+    시나리오 1 은 정상입니다. 하트비트가 3000 밀리초마다 도착해 session 예산이 계속 초기화되고,
+    poll 도 자주 불려 max.poll.interval 예산이 소진되지 않습니다.
+    시나리오 2 는 한 번의 처리가 너무 오래 걸리는 경우입니다.
+    백그라운드 스레드는 처리 중에도 하트비트를 계속 보내므로 session.timeout.ms 는 만료되지 않습니다.
+    대신 poll 이 300000 밀리초 안에 다시 불리지 않아 max.poll.interval.ms 가 초과되고,
+    컨슈머가 스스로 그룹을 떠나 리밸런스가 일어납니다.
+    즉 처리가 길어질 때 터지는 것은 session.timeout.ms 가 아니라 max.poll.interval.ms 입니다.
+    한 번에 처리할 양은 max.poll.records 500 이 정하므로, 이 값을 줄이는 것이 가장 직접적인 대응입니다.
+    heartbeat.interval.ms 와 session.timeout.ms 는 group.protocol 이 classic 인 경우의 클라이언트 설정입니다.</desc>
+
+  <defs>
+    <marker id="d042-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+    <marker id="d042-ah-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker--danger" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+  </defs>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">하트비트는 백그라운드 스레드, <tspan class="dg-mono">poll</tspan> 은 애플리케이션 스레드 — 감시 대상이 다릅니다</text>
+
+  <!-- ════════════ 시나리오 1 : 정상 ════════════ -->
+  <text x="8" y="46" class="dg-fs-sm dg-bold">① 정상 — 처리가 짧아 두 예산 모두 여유</text>
+
+  <!-- 기준선 -->
+  <line class="dg-grid" x1="193" y1="54" x2="193" y2="200"/>
+  <line class="dg-grid" x1="603" y1="54" x2="603" y2="200"/>
+
+  <!-- 하트비트 레인 -->
+  <text x="8" y="72" class="dg-fs-sm dg-bold">하트비트 축</text>
+  <text x="8" y="88" class="dg-fs-sm dg-muted">백그라운드</text>
+  <line class="dg-edge dg-edge--muted" x1="120" y1="80" x2="700" y2="80"/>
+  <line class="dg-edge dg-edge--ok" x1="120" y1="72" x2="120" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="168" y1="72" x2="168" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="216" y1="72" x2="216" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="264" y1="72" x2="264" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="312" y1="72" x2="312" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="360" y1="72" x2="360" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="408" y1="72" x2="408" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="456" y1="72" x2="456" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="504" y1="72" x2="504" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="552" y1="72" x2="552" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="600" y1="72" x2="600" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="648" y1="72" x2="648" y2="88"/>
+  <line class="dg-edge dg-edge--ok" x1="696" y1="72" x2="696" y2="88"/>
+  <text x="120" y="106" class="dg-fs-sm dg-muted"><tspan class="dg-mono">heartbeat.interval.ms=3000</tspan> 간격 (그림은 30초마다 하나만 표시)</text>
+  <line class="dg-edge dg-edge--accent" x1="120" y1="120" x2="193" y2="120"/>
+  <line class="dg-edge dg-edge--accent" x1="120" y1="116" x2="120" y2="124"/>
+  <line class="dg-edge dg-edge--accent" x1="193" y1="116" x2="193" y2="124"/>
+  <text x="201" y="124" class="dg-fs-sm"><tspan class="dg-mono">session.timeout.ms=45000</tspan> — 하트비트가 올 때마다 다시 채워집니다</text>
+
+  <!-- poll 레인 -->
+  <text x="8" y="150" class="dg-fs-sm dg-bold">poll 축</text>
+  <text x="8" y="166" class="dg-fs-sm dg-muted">앱 스레드</text>
+  <rect class="dg-node dg-node--ok" x="120" y="140" width="88" height="26" rx="3"/>
+  <text x="128" y="158" class="dg-fs-sm">처리</text>
+  <rect class="dg-node dg-node--ok" x="216" y="140" width="88" height="26" rx="3"/>
+  <text x="224" y="158" class="dg-fs-sm">처리</text>
+  <rect class="dg-node dg-node--ok" x="312" y="140" width="88" height="26" rx="3"/>
+  <text x="320" y="158" class="dg-fs-sm">처리</text>
+  <rect class="dg-node dg-node--ok" x="408" y="140" width="88" height="26" rx="3"/>
+  <text x="416" y="158" class="dg-fs-sm">처리</text>
+  <rect class="dg-node dg-node--ok" x="504" y="140" width="88" height="26" rx="3"/>
+  <text x="512" y="158" class="dg-fs-sm">처리</text>
+  <rect class="dg-node dg-node--ok" x="600" y="140" width="88" height="26" rx="3"/>
+  <text x="608" y="158" class="dg-fs-sm">처리</text>
+  <text x="120" y="184" class="dg-fs-sm dg-muted">처리 사이마다 <tspan class="dg-mono">poll()</tspan> 이 불립니다 → <tspan class="dg-mono">max.poll.interval.ms</tspan> 예산이 매번 초기화</text>
+  <rect class="dg-node dg-node--ok" x="8" y="192" width="704" height="24" rx="3"/>
+  <text x="18" y="209" class="dg-fs-sm dg-bold">결과: 어느 예산도 소진되지 않습니다 — 리밸런스 없음</text>
+
+  <!-- ════════════ 시나리오 2 : 처리 지연 ════════════ -->
+  <text x="8" y="252" class="dg-fs-sm dg-bold">② 처리 지연 — 한 번의 처리가 <tspan class="dg-mono">max.poll.interval.ms</tspan> 를 넘김</text>
+
+  <line class="dg-grid" x1="193" y1="260" x2="193" y2="406"/>
+  <line class="dg-edge dg-edge--danger dg-edge--dashed" x1="603" y1="260" x2="603" y2="406"/>
+
+  <text x="8" y="278" class="dg-fs-sm dg-bold">하트비트 축</text>
+  <text x="8" y="294" class="dg-fs-sm dg-muted">백그라운드</text>
+  <line class="dg-edge dg-edge--muted" x1="120" y1="286" x2="700" y2="286"/>
+  <line class="dg-edge dg-edge--ok" x1="120" y1="278" x2="120" y2="294"/>
+  <line class="dg-edge dg-edge--ok" x1="168" y1="278" x2="168" y2="294"/>
+  <line class="dg-edge dg-edge--ok" x1="216" y1="278" x2="216" y2="294"/>
+  <line class="dg-edge dg-edge--ok" x1="264" y1="278" x2="264" y2="294"/>
+  <line class="dg-edge dg-edge--ok" x1="312" y1="278" x2="312" y2="294"/>
+  <line class="dg-edge dg-edge--ok" x1="360" y1="278" x2="360" y2="294"/>
+  <line class="dg-edge dg-edge--ok" x1="408" y1="278" x2="408" y2="294"/>
+  <line class="dg-edge dg-edge--ok" x1="456" y1="278" x2="456" y2="294"/>
+  <line class="dg-edge dg-edge--ok" x1="504" y1="278" x2="504" y2="294"/>
+  <line class="dg-edge dg-edge--ok" x1="552" y1="278" x2="552" y2="294"/>
+  <line class="dg-edge dg-edge--ok" x1="600" y1="278" x2="600" y2="294"/>
+  <line class="dg-edge dg-edge--ok" x1="648" y1="278" x2="648" y2="294"/>
+  <rect class="dg-node dg-node--ok" x="120" y="302" width="580" height="24" rx="3"/>
+  <text x="130" y="319" class="dg-fs-sm dg-bold">처리 중에도 하트비트는 계속 갑니다 → <tspan class="dg-mono">session.timeout.ms</tspan> 는 만료되지 않습니다</text>
+
+  <text x="8" y="356" class="dg-fs-sm dg-bold">poll 축</text>
+  <text x="8" y="372" class="dg-fs-sm dg-muted">앱 스레드</text>
+  <rect class="dg-node dg-node--danger" x="120" y="346" width="540" height="26" rx="3"/>
+  <text x="130" y="364" class="dg-fs-sm dg-bold">처리 한 건이 계속 진행 중 — <tspan class="dg-mono">poll()</tspan> 이 다시 불리지 않습니다</text>
+  <path class="dg-x" d="M597,350 L609,368 M609,350 L597,368"/>
+  <text x="380" y="392" class="dg-fs-sm dg-bold" text-anchor="end"><tspan class="dg-mono">max.poll.interval.ms=300000</tspan> 초과 →</text>
+  <text x="611" y="392" class="dg-fs-sm dg-bold">여기서 터집니다</text>
+
+  <rect class="dg-node dg-node--danger" x="8" y="398" width="704" height="46" rx="3"/>
+  <text x="18" y="416" class="dg-fs-sm dg-bold">결과: 컨슈머가 스스로 그룹을 떠나고 리밸런스가 시작됩니다</text>
+  <text x="18" y="434" class="dg-fs-sm">그 파티션은 다른 컨슈머에게 재할당되고, 커밋하지 않은 구간은 다시 처리됩니다</text>
+
+  <!-- 정리 -->
+  <line class="dg-grid" x1="8" y1="458" x2="712" y2="458"/>
+  <text x="8" y="476" class="dg-fs-sm"><tspan class="dg-bold">처리가 길어질 때 터지는 것은 <tspan class="dg-mono">session.timeout.ms</tspan> 가 아니라 <tspan class="dg-mono">max.poll.interval.ms</tspan> 입니다.</tspan></text>
+  <text x="8" y="492" class="dg-fs-sm dg-muted">대응 순서: <tspan class="dg-mono">max.poll.records</tspan>(500) 줄이기 → 처리 최적화 → 그래도 부족하면 <tspan class="dg-mono">max.poll.interval.ms</tspan> 올리기</text>
+</svg>

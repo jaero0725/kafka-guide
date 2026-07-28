@@ -699,6 +699,104 @@
     apply(ctrl.values());
   });
 
+  /* --------------------------------------------------------------------------
+     D-133 — 설정값 관계도 (V3)
+     --------------------------------------------------------------------------
+     SVG(assets/diagrams/D-133-ccdak-config-graph.svg)가 제공하는 훅:
+       data-dg="n-{slug}"  설정 노드 <g>  (+ data-n 설정명 / data-o 소속 / data-v 기본값)
+       data-dg="edge"      간선 <g>       (+ data-a / data-b — 양 끝 노드의 slug)
+     인접 관계는 DOM 의 간선에서 읽으므로 JS 쪽에 관계를 중복 정의하지 않는다.
+     -------------------------------------------------------------------------- */
+  register('D-133', function (ctx) {
+    var nodes = ctx.qsa('[data-dg^="n-"]');
+    var edges = ctx.qsa('[data-dg="edge"]');
+    if (!nodes.length) return;
+
+    var slugOf = function (n) { return (n.getAttribute('data-dg') || '').slice(2); };
+    var nameOf = function (n) { return n.getAttribute('data-n') || slugOf(n); };
+    var byId = Object.create(null);
+    nodes.forEach(function (n) { byId[slugOf(n)] = n; });
+
+    var adj = Object.create(null);
+    edges.forEach(function (e) {
+      var a = e.getAttribute('data-a'), b = e.getAttribute('data-b');
+      if (!a || !b) return;
+      (adj[a] || (adj[a] = [])).push(b);
+      (adj[b] || (adj[b] = [])).push(a);
+    });
+
+    var options = [{ value: '', label: '전체 보기 (강조 없음)' }];
+    nodes.forEach(function (n) { options.push({ value: slugOf(n), label: nameOf(n) }); });
+
+    var ctrl = ctx.bindControls({
+      items: [
+        { type: 'select', name: 'sel', label: '설정 고르기 (연관 설정만 강조)',
+          options: options, value: '' },
+        { type: 'reset', label: '전체 보기' }
+      ],
+      onChange: function (v) { apply(v.sel); }
+    });
+
+    function clear() {
+      nodes.forEach(function (n) { n.removeAttribute('data-state'); });
+      edges.forEach(function (e) { e.removeAttribute('data-state'); });
+      ctx.readout([{ label: '선택', value: '없음 — 23개 설정 전체' },
+                   { label: '간선', value: edges.length + '개' }]);
+      ctrl.announce('강조를 해제했습니다. 설정 ' + nodes.length + '개와 관계 ' +
+                    edges.length + '개가 모두 보입니다.');
+    }
+
+    function apply(slug) {
+      if (!slug || !byId[slug]) { clear(); return; }
+      var rel = adj[slug] || [];
+      nodes.forEach(function (n) {
+        var s = slugOf(n);
+        if (s === slug) n.setAttribute('data-state', 'active');
+        else if (rel.indexOf(s) >= 0) n.removeAttribute('data-state');
+        else n.setAttribute('data-state', 'off');
+      });
+      edges.forEach(function (e) {
+        var on = e.getAttribute('data-a') === slug || e.getAttribute('data-b') === slug;
+        e.setAttribute('data-state', on ? 'active' : 'off');
+      });
+      var el = byId[slug];
+      var relNames = rel.map(function (s) { return byId[s] ? nameOf(byId[s]) : s; });
+      ctx.readout([
+        { label: '선택', value: nameOf(el) },
+        { label: '소속', value: el.getAttribute('data-o') || '—' },
+        { label: '기본값', value: el.getAttribute('data-v') || '—' },
+        { label: '직접 연결', value: rel.length + '개' }
+      ]);
+      ctrl.announce(nameOf(el) + ' 은 ' + (el.getAttribute('data-o') || '') +
+        ' 설정이고 기본값은 ' + (el.getAttribute('data-v') || '') + ' 입니다. 직접 연결된 설정: ' +
+        (relNames.length ? relNames.join(', ') : '없음'));
+    }
+
+    /* 노드를 마우스·키보드 양쪽에서 고를 수 있게 한다.
+       (JS 가 없으면 tabindex 가 붙지 않아 헛도는 포커스가 생기지 않는다) */
+    nodes.forEach(function (n) {
+      var slug = slugOf(n);
+      n.setAttribute('tabindex', '0');
+      n.setAttribute('role', 'button');
+      n.setAttribute('aria-label', nameOf(n) + ' — 연관 설정만 강조');
+      n.style.cursor = 'pointer';
+      var pick = function () {
+        var cur = ctrl.get('sel') === slug ? '' : slug;
+        ctrl.set('sel', cur);
+        apply(cur);
+      };
+      n.addEventListener('click', pick);
+      n.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar') {
+          ev.preventDefault();
+          pick();
+        }
+      });
+    });
+
+    clear();
+  });
+
   /* ---------- 자동 마운트 ------------------------------------------------- */
   if (global.document) {
     var boot = function () { mountAll(global.document); };

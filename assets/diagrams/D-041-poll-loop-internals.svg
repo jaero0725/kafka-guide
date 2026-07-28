@@ -99,5 +99,5 @@
   <line class="dg-grid" x1="8" y1="370" x2="712" y2="370"/>
   <text x="8" y="388" class="dg-fs-sm"><tspan class="dg-bold"><tspan class="dg-mono">max.poll.records</tspan> 는 fetch 크기를 바꾸지 않습니다.</tspan> 받아 둔 레코드를 몇 건씩 나눠 줄지만 정합니다.</text>
   <text x="8" y="406" class="dg-fs-sm">그래서 이 값을 줄여도 네트워크 사용량은 그대로이고, 한 번의 처리 시간만 짧아집니다.</text>
-  <text x="8" y="424" class="dg-fs-sm dg-muted">한 번에 받아오는 양은 <tspan class="dg-mono">fetch.max.bytes=52428800</tspan>, 파티션별 <tspan class="dg-mono">max.partition.fetch.bytes=1048576</tspan> 가 정합니다.</text>
+  <text x="8" y="424" class="dg-fs-sm dg-muted">받아오는 양은 <tspan class="dg-mono">fetch.max.bytes=52428800</tspan> 과 <tspan class="dg-mono">max.partition.fetch.bytes=1048576</tspan> 가 정합니다.</text>
 </svg>

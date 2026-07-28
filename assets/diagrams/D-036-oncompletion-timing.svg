@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 392" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 410" role="img" class="kg-diagram"
      aria-labelledby="d036-title d036-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d036-title">onCompletion() 호출 시점 — 콜백은 Sender 스레드에서 실행됩니다</title>
   <desc id="d036-desc">시간이 왼쪽에서 오른쪽으로 흐르는 두 개의 수평 레인입니다.
@@ -9,7 +9,7 @@
     세로 파선이 콜백 실행 시점이며, 그 시점에 애플리케이션 스레드는 이미 다른 일을 하고 있습니다.
     즉 콜백은 애플리케이션 스레드로 돌아오지 않고 Sender 스레드에서 실행됩니다.
     따라서 콜백 안에서 오래 걸리는 작업을 하면 Sender 스레드가 막혀 프로듀서 전체 전송이 느려집니다.
-    동기 전송이 필요하면 send() 가 돌려준 Future 의 get() 을 호출해야 하고, 그때 블록되는 것은 애플리케이션 스레드입니다.</desc>
+    동기 전송이 필요하면 send() 가 돌려준 Future 의 get() 을 호출해야 하고, 그때 블록되는 것은 애플리케이션 스레드입니다. 전송이 실패하면 콜백이 받는 metadata 의 모든 필드는 -1 이며, 직렬화 실패는 콜백이 아니라 send() 가 예외로 바로 던집니다. Kafka 4.3 에서는 콜백 안에서 flush() 를 부르면 KafkaException 이 발생합니다.</desc>
 
   <defs>
     <marker id="d036-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -79,5 +79,6 @@
   <line class="dg-grid" x1="8" y1="326" x2="712" y2="326"/>
   <text x="8" y="344" class="dg-fs-sm"><tspan class="dg-bold">콜백은 Sender 스레드에서 실행됩니다.</tspan> 애플리케이션 스레드로 돌아오지 않습니다.</text>
   <text x="8" y="362" class="dg-fs-sm">동기 전송이 필요하면 <tspan class="dg-mono">send(...).get()</tspan> 을 호출합니다. 이때 블록되는 것은 애플리케이션 스레드입니다.</text>
-  <text x="8" y="380" class="dg-fs-sm dg-muted">직렬화 실패처럼 <tspan class="dg-mono">send()</tspan> 안에서 즉시 드러난 오류만 예외적으로 호출 스레드에서 콜백이 실행됩니다.</text>
+  <text x="8" y="380" class="dg-fs-sm dg-muted">실패 시 콜백의 <tspan class="dg-mono">metadata</tspan> 는 모든 필드가 <tspan class="dg-mono">-1</tspan> 입니다(null 아님). 같은 파티션의 콜백 순서는 보장됩니다.</text>
+  <text x="8" y="398" class="dg-fs-sm dg-muted"><tspan class="dg-mono">SerializationException</tspan> 은 콜백이 아니라 <tspan class="dg-mono">send()</tspan> 가 바로 던집니다. 콜백 안에서 <tspan class="dg-mono">flush()</tspan> 는 금지입니다.</text>
 </svg>

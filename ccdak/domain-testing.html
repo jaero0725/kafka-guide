@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Application Testing (8%) — Kafka Guide</title>
+  <meta name="description" content="CCDAK Application Testing(8%) 압축 정리. TopologyTestDriver와 TestInputTopic/TestOutputTopic, MockProducer/MockConsumer, Testcontainers와 임베디드 클러스터, kafka-producer-perf-test/kafka-consumer-perf-test 옵션(4.3 KIP-1147 변경 포함), 도구 선택 기준표.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccdak" data-page="domain-testing"></div>
+
+  <main id="main" class="page" data-page-id="ccdak/domain-testing">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCDAK</a></li>
+        <li><span aria-current="page">Application Testing</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCDAK 도메인 · 가중치 8%</p>
+      <h1>Application Testing</h1>
+      <p class="page__lead">
+        가장 작은 도메인이지만 <strong>가성비가 가장 높습니다.</strong>
+        범위가 좁고 출제 형태가 뻔합니다 —
+        <strong>"이 상황에서 어떤 테스트 도구를 쓰는가"</strong>와
+        <strong>"이 도구는 브로커가 필요한가"</strong>.
+        아래 선택 기준표 하나를 확실히 외우면 이 도메인은 거의 끝납니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 도메인의 학습 목표</h2>
+      <ul>
+        <li>Kafka 테스트 도구를 <strong>단위 / 통합 / 성능 / 데이터 생성</strong> 네 갈래로 분류할 수 있습니다.</li>
+        <li><code>TopologyTestDriver</code>가 왜 브로커 없이 동작하는지 설명할 수 있습니다.</li>
+        <li><code>MockProducer</code> / <code>MockConsumer</code>의 용도와 한계를 알 수 있습니다.</li>
+        <li>성능 측정 스크립트 이름과 주요 옵션을 말할 수 있습니다 (4.3에서 바뀐 옵션 포함).</li>
+        <li>테스트 가능한 Kafka 코드로 설계하는 원칙을 적용할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="what-this-domain-asks">
+      <h2 id="what-this-domain-asks">이 도메인이 묻는 것</h2>
+      <p>
+        출제 형태는 사실상 두 가지입니다.
+      </p>
+      <ol>
+        <li><strong>도구 선택</strong> — "Streams 토폴로지 로직만 빠르게 검증하려면?", "실제 브로커 동작까지 확인하려면?"
+          → matching 유형(도구 ↔ 용도)으로도 자주 나옵니다.</li>
+        <li><strong>도구의 성질</strong> — 브로커가 필요한지, 시간을 제어할 수 있는지, 무엇을 검증할 수 없는지.</li>
+      </ol>
+      <p>
+        참고 챕터는 <a href="../basics/ch10.html">10장</a>의 테스트 유틸 절과
+        <a href="../practice/ex09.html">예제 9</a>·<a href="../practice/ex12.html">예제 12</a>입니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="tool-matrix">
+      <h2 id="tool-matrix">핵심 개념 (1) 도구 선택 기준표</h2>
+
+      <p><strong>이 표가 이 도메인의 전부입니다.</strong> 다른 것을 못 외웠어도 이건 외우세요.</p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Kafka 테스트 도구 — 무엇을 검증하는가, 브로커가 필요한가</caption>
+          <thead>
+            <tr>
+              <th scope="col">도구</th>
+              <th scope="col">분류</th>
+              <th scope="col">브로커</th>
+              <th scope="col">무엇을 검증하는가</th>
+              <th scope="col">속도</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>TopologyTestDriver</code><br><span class="badge">kafka-streams-test-utils</span></th>
+              <td>단위</td>
+              <td class="mark-no"><strong>불필요</strong></td>
+              <td><strong>Streams 토폴로지 로직</strong> — 입력을 넣고 출력·상태 저장소를 확인</td>
+              <td>매우 빠름 (밀리초)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>MockProducer</code><br><span class="badge">kafka-clients</span></th>
+              <td>단위</td>
+              <td class="mark-no">불필요</td>
+              <td>"이 코드가 <strong>어떤 레코드를 보냈는가</strong>" — 전송 목록을 검사</td>
+              <td>매우 빠름</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>MockConsumer</code><br><span class="badge">kafka-clients</span></th>
+              <td>단위</td>
+              <td class="mark-no">불필요</td>
+              <td>"레코드가 주어졌을 때 <strong>처리 로직이 맞는가</strong>" — 레코드를 주입</td>
+              <td>매우 빠름</td>
+            </tr>
+            <tr>
+              <th scope="row">Testcontainers<br>(Kafka 컨테이너)</th>
+              <td>통합</td>
+              <td class="mark-ok"><strong>필요</strong> (컨테이너)</td>
+              <td><strong>실제 브로커와의 상호작용</strong> — 직렬화, 리밸런스, 트랜잭션, ACL</td>
+              <td>느림 (수 초~수십 초)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>EmbeddedKafkaCluster</code><br>(Streams 통합 테스트 유틸)</th>
+              <td>통합</td>
+              <td class="mark-ok">필요 (JVM 내부)</td>
+              <td>같은 JVM에서 브로커를 띄워 통합 검증</td>
+              <td>보통</td>
+            </tr>
+            <tr>
+              <th scope="row">Spring <code>@EmbeddedKafka</code><br><span class="badge">spring-kafka-test</span></th>
+              <td>통합</td>
+              <td class="mark-ok">필요 (JVM 내부)</td>
+              <td>Spring 컨텍스트와 함께 리스너·템플릿 검증</td>
+              <td>보통</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka-producer-perf-test.sh</code></th>
+              <td>성능</td>
+              <td class="mark-ok">필요</td>
+              <td><strong>쓰기 처리량과 지연 분포</strong></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka-consumer-perf-test.sh</code></th>
+              <td>성능</td>
+              <td class="mark-ok">필요</td>
+              <td><strong>읽기 처리량</strong></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka-e2e-latency.sh</code></th>
+              <td>성능</td>
+              <td class="mark-ok">필요</td>
+              <td><strong>end-to-end 지연</strong> (쓰기 → 읽기 왕복)</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka-verifiable-producer.sh</code> ·<br><code>kafka-verifiable-consumer.sh</code></th>
+              <td>정합성</td>
+              <td class="mark-ok">필요</td>
+              <td>유실·중복 없이 전달되었는지 (장애 주입 테스트에 씀)</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row">Datagen 커넥터 · ksqlDB datagen</th>
+              <td>데이터 생성</td>
+              <td class="mark-ok">필요</td>
+              <td>스키마 기반 <strong>목 데이터 대량 생성</strong></td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Testing">
+        <p>
+          <strong>"브로커 없이 Kafka Streams 토폴로지를 테스트하는 도구는?"</strong>
+          → <code>TopologyTestDriver</code>입니다. 이 문항이 이 도메인에서 가장 자주 나옵니다.
+        </p>
+        <p>
+          함정 선택지는 <em><code>EmbeddedKafkaCluster</code></em>와 <em>Testcontainers</em>입니다.
+          둘은 <strong>실제 브로커를 띄웁니다</strong> — 통합 테스트용이지 단위 테스트용이 아닙니다.
+          <code>MockProducer</code>/<code>MockConsumer</code>도 브로커가 필요 없지만
+          <strong>Streams 토폴로지를 실행할 수는 없습니다.</strong>
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="topology-test-driver">
+      <h2 id="topology-test-driver">핵심 개념 (2) <code>TopologyTestDriver</code></h2>
+
+      <p>
+        <code>kafka-streams-test-utils</code> 아티팩트에 들어 있습니다.
+        <strong>Streams 런타임을 시뮬레이션</strong>해서, 실제 브로커·컨슈머·프로듀서 없이
+        토폴로지를 그대로 통과시켜 봅니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>pom.xml — 테스트 스코프로 추가</figcaption>
+        <pre><code class="lang-xml">&lt;dependency&gt;
+  &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+  &lt;artifactId&gt;kafka-streams-test-utils&lt;/artifactId&gt;
+  &lt;version&gt;4.3.0&lt;/version&gt;
+  &lt;scope&gt;test&lt;/scope&gt;
+&lt;/dependency&gt;</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>WordCountTest.java — 전체 흐름</figcaption>
+        <pre><code class="lang-java">// 1. 토폴로지를 만든다 (프로덕션 코드와 같은 빌더를 쓴다)
+StreamsBuilder builder = new StreamsBuilder();
+builder.stream("input-topic")
+       .filter((k, v) -> v != null)
+       .to("output-topic");
+Topology topology = builder.build();
+
+// 2. 테스트 드라이버 생성
+TopologyTestDriver testDriver = new TopologyTestDriver(topology);
+
+// 3. 입력 토픽 — 직렬화기(serializer)를 준다
+TestInputTopic&lt;String, Long&gt; inputTopic =
+    testDriver.createInputTopic("input-topic",
+        Serdes.String().serializer(), Serdes.Long().serializer());
+
+// 4. 출력 토픽 — 역직렬화기(deserializer)를 준다
+TestOutputTopic&lt;String, Long&gt; outputTopic =
+    testDriver.createOutputTopic("output-topic",
+        Serdes.String().deserializer(), Serdes.Long().deserializer());
+
+// 5. 데이터를 넣고 결과를 검증
+inputTopic.pipeInput("key", 42L);
+assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("key", 42L)));
+
+// 6. 상태 저장소를 직접 열어 확인할 수 있다
+KeyValueStore&lt;String, Long&gt; store = testDriver.getKeyValueStore("counts-store");
+assertThat(store.get("key"), equalTo(1L));
+
+// 7. 벽시계 시각을 전진시켜 punctuation 을 발동시킨다
+testDriver.advanceWallClockTime(Duration.ofSeconds(20));
+
+// 8. 반드시 닫는다 (리소스 해제)
+testDriver.close();</code></pre>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Testing">
+        <p><code>TopologyTestDriver</code>의 성질 네 가지가 그대로 출제됩니다.</p>
+        <ul>
+          <li><strong>브로커가 필요 없습니다.</strong> 그래서 CI에서 초 단위로 돌립니다.</li>
+          <li><code>createInputTopic</code>에는 <strong>serializer</strong>,
+            <code>createOutputTopic</code>에는 <strong>deserializer</strong>를 줍니다. 방향을 바꿔 놓은 선택지가 나옵니다.</li>
+          <li><strong>event-time punctuation은 레코드 타임스탬프로 자동</strong> 발동하고,
+            <strong>wall-clock punctuation은 <code>advanceWallClockTime()</code></strong>으로 직접 전진시켜야 발동합니다.</li>
+          <li><strong>상태 저장소를 테스트 전에 미리 채우거나(pre-populate) 후에 검증</strong>할 수 있습니다.</li>
+        </ul>
+        <p>
+          검증할 수 <strong>없는</strong> 것도 알아 두세요 —
+          실제 리밸런스, 실제 파티션 할당, 브로커 장애, 네트워크 지연, 다중 인스턴스 병렬성입니다.
+          이런 것은 통합 테스트로 가야 합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="mock-clients">
+      <h2 id="mock-clients">핵심 개념 (3) <code>MockProducer</code> · <code>MockConsumer</code></h2>
+
+      <p>
+        둘 다 <code>kafka-clients</code>에 포함되어 있고
+        각각 <code>Producer</code> / <code>Consumer</code> 인터페이스의 구현체입니다.
+        따라서 <strong>프로덕션 코드가 인터페이스에 의존해야</strong> 갈아끼울 수 있습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>MockProducer — "무엇을 보냈는가"를 검사</figcaption>
+        <pre><code class="lang-java">// autoComplete=true 면 send() 가 즉시 성공 처리된다
+MockProducer&lt;String, String&gt; producer =
+    new MockProducer&lt;&gt;(true, new StringSerializer(), new StringSerializer());
+
+OrderPublisher publisher = new OrderPublisher(producer);   // 인터페이스 주입
+publisher.publish(new Order("order-42", 19900));
+
+List&lt;ProducerRecord&lt;String, String&gt;&gt; sent = producer.history();
+assertThat(sent, hasSize(1));
+assertThat(sent.get(0).topic(), equalTo("orders"));
+assertThat(sent.get(0).key(),   equalTo("order-42"));   // 키를 지정했는지 검증
+
+// 실패 경로도 테스트할 수 있다
+MockProducer&lt;String, String&gt; failing =
+    new MockProducer&lt;&gt;(false, new StringSerializer(), new StringSerializer());
+// … publish 호출 후
+failing.errorNext(new org.apache.kafka.common.errors.TimeoutException("boom"));</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>MockConsumer — 레코드를 주입해 처리 로직을 검증</figcaption>
+        <pre><code class="lang-java">MockConsumer&lt;String, String&gt; consumer =
+    new MockConsumer&lt;&gt;(AutoOffsetResetStrategy.EARLIEST.name());
+
+TopicPartition tp = new TopicPartition("orders", 0);
+consumer.assign(List.of(tp));                       // assign 으로 파티션 고정
+consumer.updateBeginningOffsets(Map.of(tp, 0L));    // 시작 오프셋을 알려 줘야 한다
+
+consumer.addRecord(new ConsumerRecord&lt;&gt;("orders", 0, 0L, "order-42", "CREATED"));
+consumer.addRecord(new ConsumerRecord&lt;&gt;("orders", 0, 1L, "order-42", "PAID"));
+
+new OrderProcessor(consumer, sink).pollOnce();
+assertThat(sink.processed(), hasSize(2));</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="Mock 클라이언트의 한계">
+        <p>
+          Mock은 <strong>인메모리 시뮬레이션</strong>입니다. 다음을 검증할 수 없습니다.
+        </p>
+        <ul>
+          <li>실제 <strong>직렬화 호환성</strong>과 Schema Registry 연동</li>
+          <li><strong>리밸런스</strong>와 <code>ConsumerRebalanceListener</code> 동작 (수동으로 흉내낼 수는 있음)</li>
+          <li><code>acks</code> · <code>min.insync.replicas</code>처럼 <strong>브로커가 판정하는 것</strong></li>
+          <li>배치·압축·<code>linger.ms</code> 같은 <strong>실제 전송 파이프라인 동작</strong></li>
+        </ul>
+        <p>
+          <code>MockConsumer</code>는 <strong><code>updateBeginningOffsets()</code>(또는 <code>updateEndOffsets()</code>)를
+          호출하지 않으면 poll이 동작하지 않습니다</strong> — 이 점이 실습형 함정으로 나옵니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="integration-testing">
+      <h2 id="integration-testing">핵심 개념 (4) 통합 테스트</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>통합 테스트 선택지</caption>
+          <thead>
+            <tr><th scope="col">방법</th><th scope="col">특징</th><th scope="col">언제 쓰나</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Testcontainers</th>
+              <td>Docker로 <strong>실제 브로커 이미지</strong>를 띄움. 프로덕션과 가장 가까움.
+                Schema Registry·Connect도 함께 띄울 수 있음</td>
+              <td>직렬화·트랜잭션·보안·리밸런스까지 확인해야 할 때</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>EmbeddedKafkaCluster</code></th>
+              <td>같은 JVM에서 브로커를 기동. Docker 불필요.
+                Apache Kafka의 Streams 통합 테스트에서 쓰는 유틸리티</td>
+              <td>Docker를 쓸 수 없는 CI, Streams 통합 테스트</td>
+            </tr>
+            <tr>
+              <th scope="row">Spring <code>@EmbeddedKafka</code></th>
+              <td><code>spring-kafka-test</code>가 제공. 테스트 클래스에 애노테이션 하나로 브로커 기동</td>
+              <td>Spring Boot 애플리케이션의 리스너·템플릿 검증</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="통합 테스트에서 반드시 챙길 설정">
+        <p>
+          <strong>단일 브로커 테스트 환경에서는 아래를 낮춰야 트랜잭션·EOS가 동작합니다.</strong>
+          기본값이 각각 3과 2이기 때문입니다.
+        </p>
+        <figure class="code">
+          <figcaption>테스트 브로커 설정</figcaption>
+          <pre><code class="lang-properties">transaction.state.log.replication.factor=1
+transaction.state.log.min.isr=1
+offsets.topic.replication.factor=1</code></pre>
+        </figure>
+        <p>
+          "테스트에서만 EOS가 실패한다"의 원인이 거의 항상 이것입니다.
+          <a href="domain-streams.html#code-3">Streams 도메인의 같은 함정</a>과 이어집니다.
+        </p>
+      </aside>
+
+      <h3 id="testable-design">테스트 가능한 설계 원칙</h3>
+      <ul>
+        <li><strong>클라이언트를 직접 <code>new</code>하지 말고 인터페이스로 주입</strong>하세요.
+          <code>Producer&lt;K,V&gt;</code> / <code>Consumer&lt;K,V&gt;</code> 타입을 받으면 Mock으로 교체할 수 있습니다.</li>
+        <li><strong>poll 루프와 처리 로직을 분리</strong>하세요.
+          처리 함수를 따로 두면 Kafka 없이 순수 단위 테스트가 됩니다.</li>
+        <li><strong>토폴로지 구성 코드를 재사용 가능한 메서드로</strong> 빼세요.
+          <code>TopologyTestDriver</code>가 프로덕션과 같은 토폴로지를 테스트할 수 있습니다.</li>
+        <li><strong>테스트 피라미드를 지키세요.</strong>
+          단위(빠름, 다수) → 통합(느림, 소수) → 성능(별도 파이프라인). 통합 테스트로 전부 덮으려 하면 CI가 무너집니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="perf-testing">
+      <h2 id="perf-testing">핵심 개념 (5) 성능 측정 스크립트</h2>
+
+      <figure class="code">
+        <figcaption>프로듀서 성능 측정</figcaption>
+        <pre><code class="lang-bash">bin/kafka-producer-perf-test.sh \
+  --topic perf-test \
+  --num-records 1000000 \
+  --record-size 1024 \
+  --throughput -1 \
+  --bootstrap-server localhost:9092 \
+  --command-property acks=all \
+  --command-property linger.ms=5</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>컨슈머 성능 측정</figcaption>
+        <pre><code class="lang-bash">bin/kafka-consumer-perf-test.sh \
+  --topic perf-test \
+  --num-records 1000000 \
+  --bootstrap-server localhost:9092 \
+  --group perf-consumer</code></pre>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>주요 옵션과 출력 해석</caption>
+          <thead>
+            <tr><th scope="col">항목</th><th scope="col">의미</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>--num-records</code></th><td>보낼(읽을) 레코드 수</td></tr>
+            <tr><th scope="row"><code>--record-size</code></th><td>레코드 크기(바이트). <code>--payload-file</code>과 배타적</td></tr>
+            <tr><th scope="row"><code>--throughput</code></th><td>초당 레코드 상한. <strong><code>-1</code>이면 제한 없음(최대 처리량 측정)</strong></td></tr>
+            <tr><th scope="row"><code>--command-property</code></th><td>클라이언트 설정을 커맨드라인에 직접 지정</td></tr>
+            <tr><th scope="row"><code>--command-config</code></th><td>설정 파일로 지정</td></tr>
+            <tr><th scope="row">출력 <code>records/sec</code>, <code>MB/sec</code></th><td>처리량</td></tr>
+            <tr><th scope="row">출력 <code>avg latency</code>, <code>max latency</code></th><td>평균·최대 지연 (프로듀서)</td></tr>
+            <tr><th scope="row">출력 <code>95th</code>, <code>99th</code>, <code>99.9th</code></th><td><strong>지연 백분위.</strong> 평균보다 이게 중요합니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--version" data-label="버전 노트 · 4.3에서 옵션 이름이 통일되었습니다 (KIP-1147)">
+        <p>
+          커맨드라인 도구의 인자 이름 일관성이 개선되었습니다.
+          <strong>기존 옵션은 아직 동작하지만 deprecated이며 Kafka 5.0에서 제거될 예정</strong>입니다.
+        </p>
+        <div class="table-scroll">
+          <table class="config-table">
+            <thead>
+              <tr><th scope="col">도구</th><th scope="col">deprecated</th><th scope="col">권장</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>kafka-producer-perf-test.sh</code></th>
+                <td><code>--producer-props</code></td>
+                <td><code>--command-property</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>kafka-consumer-perf-test.sh</code></th>
+                <td><code>--messages</code></td>
+                <td><code>--num-records</code></td>
+              </tr>
+              <tr>
+                <th scope="row">perf 도구 공통</th>
+                <td><code>--producer.config</code> · <code>--consumer.config</code></td>
+                <td><code>--command-config</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>kafka-console-consumer.sh</code></th>
+                <td><code>--consumer-property</code>, 포맷터용 <code>--property</code></td>
+                <td><code>--command-property</code>, <code>--formatter-property</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>kafka-console-producer.sh</code></th>
+                <td><code>--producer-property</code>, 리더용 <code>--property</code></td>
+                <td><code>--command-property</code>, <code>--reader-property</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          <code>kafka-producer-perf-test.sh</code>에는 <code>--bootstrap-server</code>와
+          <code>--reporting-interval</code> 옵션이 새로 추가되었습니다.
+          <code>kafka-consumer-perf-test.sh</code>에는 <code>--topic</code> 대신
+          정규식으로 여러 토픽을 지정하는 <code>--include</code> 옵션이 추가되었습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Testing">
+        <p>
+          성능 측정에서 자주 나오는 판단 문항입니다.
+        </p>
+        <ul>
+          <li><strong><code>--throughput -1</code>로 최대 처리량을 재고, 값을 지정해 지연을 재는 것</strong>이 정석입니다.
+            무제한으로 돌리면서 지연을 측정하면 큐 대기 시간이 섞여 의미가 없습니다.</li>
+          <li><strong>지연은 평균이 아니라 99th·99.9th 백분위</strong>로 판단합니다.</li>
+          <li>단일 노드에서 프로듀서와 브로커를 같이 돌리면 <strong>CPU·디스크 경쟁으로 수치가 왜곡</strong>됩니다.</li>
+          <li>end-to-end 지연은 <code>kafka-e2e-latency.sh</code>로 재며,
+            프로듀서 지연 + 복제 + 컨슈머 지연이 모두 포함됩니다.</li>
+        </ul>
+      </aside>
+
+      <h3 id="mock-data">목 데이터 생성</h3>
+      <ul>
+        <li><strong>Datagen 소스 커넥터</strong> — Confluent가 제공하는 <code>kafka-connect-datagen</code>.
+          Avro 스키마 정의로 임의 데이터를 지속 생성합니다. Connect 워커에 올려서 씁니다.</li>
+        <li><strong>ksqlDB의 datagen</strong> — 같은 목적의 ksqlDB 쪽 도구입니다.</li>
+        <li><strong><code>kafka-verifiable-producer.sh</code> / <code>kafka-verifiable-consumer.sh</code></strong> —
+          Apache Kafka에 포함. 순번이 있는 레코드를 보내고 받아서
+          <strong>유실·중복·순서 이탈을 검증</strong>합니다. 장애 주입 테스트와 함께 씁니다.</li>
+      </ul>
+      <aside class="note" data-label="출처 구분">
+        <p>
+          Datagen 커넥터와 ksqlDB는 <strong>Confluent 생태계 도구</strong>이고,
+          <code>kafka-verifiable-*</code>는 <strong>Apache Kafka 배포판에 포함</strong>된 스크립트입니다.
+          시험에서 "Apache Kafka가 제공하는 것"과 "Confluent가 제공하는 것"을 구분해 묻는 경우가 있습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="must-memorize">
+      <h2 id="must-memorize">반드시 외워야 할 이름과 값</h2>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>클래스·아티팩트·스크립트 이름 (matching 유형 대비)</caption>
+          <thead>
+            <tr><th scope="col">이름</th><th scope="col">어디에 있는가</th><th scope="col">용도</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>TopologyTestDriver</code></th><td><code>kafka-streams-test-utils</code></td><td>브로커 없이 토폴로지 실행</td></tr>
+            <tr><th scope="row"><code>TestInputTopic</code></th><td><code>kafka-streams-test-utils</code></td><td><code>pipeInput()</code>으로 입력 주입 (serializer 필요)</td></tr>
+            <tr><th scope="row"><code>TestOutputTopic</code></th><td><code>kafka-streams-test-utils</code></td><td><code>readKeyValue()</code>로 출력 검증 (deserializer 필요)</td></tr>
+            <tr><th scope="row"><code>MockProducer</code></th><td><code>kafka-clients</code></td><td><code>history()</code>로 전송 레코드 확인</td></tr>
+            <tr><th scope="row"><code>MockConsumer</code></th><td><code>kafka-clients</code></td><td><code>addRecord()</code>로 레코드 주입</td></tr>
+            <tr><th scope="row"><code>EmbeddedKafkaCluster</code></th><td>Streams 통합 테스트 유틸</td><td>JVM 내부 브로커</td></tr>
+            <tr><th scope="row"><code>@EmbeddedKafka</code></th><td><code>spring-kafka-test</code></td><td>Spring 통합 테스트</td></tr>
+            <tr><th scope="row"><code>kafka-producer-perf-test.sh</code></th><td>Kafka <code>bin/</code></td><td>쓰기 성능</td></tr>
+            <tr><th scope="row"><code>kafka-consumer-perf-test.sh</code></th><td>Kafka <code>bin/</code></td><td>읽기 성능</td></tr>
+            <tr><th scope="row"><code>kafka-e2e-latency.sh</code></th><td>Kafka <code>bin/</code></td><td>end-to-end 지연</td></tr>
+            <tr><th scope="row"><code>kafka-verifiable-producer.sh</code></th><td>Kafka <code>bin/</code></td><td>정합성 검증</td></tr>
+            <tr><th scope="row"><code>kafka-streams-application-reset.sh</code></th><td>Kafka <code>bin/</code></td><td><strong>Streams 앱의 오프셋·내부 토픽 초기화</strong> (테스트 반복 실행에 필수)</td></tr>
+            <tr><th scope="row"><code>transaction.state.log.replication.factor</code></th><td>브로커 · 기본 3</td><td>테스트 환경에서 1로</td></tr>
+            <tr><th scope="row"><code>transaction.state.log.min.isr</code></th><td>브로커 · 기본 2</td><td>테스트 환경에서 1로</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="common-traps">
+      <h2 id="common-traps">자주 나오는 함정</h2>
+
+      <h3 id="trap-driver-vs-container">함정 1 — <code>TopologyTestDriver</code> vs Testcontainers</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>둘 다 "Streams를 테스트한다"지만 층위가 다릅니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col"><code>TopologyTestDriver</code></th><th scope="col">Testcontainers</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>토폴로지 시뮬레이터</td><td>실제 브로커를 띄우는 컨테이너 도구</td></tr>
+            <tr><th scope="row">브로커</th><td class="mark-no">없음</td><td class="mark-ok">있음 (Docker)</td></tr>
+            <tr><th scope="row">언제 발동</th><td><code>pipeInput()</code> 호출 시 동기 처리</td><td>실제 비동기 처리 — <strong>대기(await)가 필요</strong></td></tr>
+            <tr><th scope="row">검증 불가</th><td>리밸런스, 다중 인스턴스, 브로커 장애</td><td>(대부분 가능하나 느림)</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"CI에서 매 커밋마다 돌릴 토폴로지 테스트는?" → <code>TopologyTestDriver</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-mock-vs-driver">함정 2 — <code>MockProducer</code> vs <code>TopologyTestDriver</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>둘 다 브로커가 없지만 대상이 다릅니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col"><code>MockProducer</code>/<code>MockConsumer</code></th><th scope="col"><code>TopologyTestDriver</code></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">대상</th><td>직접 작성한 <strong>프로듀서·컨슈머 코드</strong></td><td><strong>Streams 토폴로지</strong></td></tr>
+            <tr><th scope="row">아티팩트</th><td><code>kafka-clients</code></td><td><code>kafka-streams-test-utils</code></td></tr>
+            <tr><th scope="row">상태 저장소 검증</th><td class="mark-no">불가</td><td class="mark-ok"><code>getKeyValueStore()</code></td></tr>
+            <tr><th scope="row">시간 제어</th><td class="mark-no">없음</td><td class="mark-ok"><code>advanceWallClockTime()</code></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"프로듀서가 키를 지정했는지 검증하려면?" → <code>MockProducer.history()</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-serde-direction">함정 3 — serializer vs deserializer 방향</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>입력에는 직렬화기, 출력에는 역직렬화기</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col"><code>createInputTopic</code></th><th scope="col"><code>createOutputTopic</code></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">필요한 것</th><td><strong>serializer</strong> (<code>Serdes.String().serializer()</code>)</td><td><strong>deserializer</strong></td></tr>
+            <tr><th scope="row">이유</th><td>Java 객체 → 바이트 (프로듀서 역할)</td><td>바이트 → Java 객체 (컨슈머 역할)</td></tr>
+            <tr><th scope="row">주요 메서드</th><td><code>pipeInput</code>, <code>pipeKeyValueList</code></td><td><code>readValue</code>, <code>readKeyValue</code>, <code>readRecordsToList</code></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">컴파일 오류 또는 런타임 <code>ClassCastException</code></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">코드 스니펫에서 바꿔치기한 인자를 찾는 문항</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-perf-opts">함정 4 — <code>--throughput -1</code> vs 값 지정</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>측정 목적에 따라 반대로 씁니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col"><code>--throughput -1</code></th><th scope="col"><code>--throughput 10000</code></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">측정 목적</th><td><strong>최대 처리량</strong></td><td><strong>목표 부하에서의 지연</strong></td></tr>
+            <tr><th scope="row">지연 수치의 의미</th><td>큐 대기가 섞여 <strong>해석 불가</strong></td><td>실제 서비스 지연에 근사</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">무제한 부하에서 잰 지연을 SLA 근거로 쓰면 과대 추정</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"지연 SLA를 검증하려면 어떤 옵션?" → 목표 값 지정</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-eos-test">함정 5 — 테스트 환경에서만 실패하는 EOS</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>클라이언트 설정이 아니라 브로커 설정 문제입니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col">프로덕션 (브로커 3대)</th><th scope="col">테스트 (브로커 1대)</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>transaction.state.log.replication.factor</code></th><td>3 (기본값 그대로)</td><td><strong>1로 낮춰야 함</strong></td></tr>
+            <tr><th scope="row"><code>transaction.state.log.min.isr</code></th><td>2 (기본값 그대로)</td><td><strong>1로 낮춰야 함</strong></td></tr>
+            <tr><th scope="row">증상</th><td>정상</td><td>트랜잭션 초기화 또는 토픽 생성 실패</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">클라이언트 설정을 계속 고치며 시간을 낭비합니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"단일 브로커에서 <code>exactly_once_v2</code>가 실패하는 이유는?"</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-reset">함정 6 — 테스트 반복 실행 시 상태가 남는 문제</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Streams 통합 테스트를 두 번 돌리면 결과가 달라지는 이유</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col">남는 것</th><th scope="col">지우는 방법</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">컨슈머 오프셋</th><td><code>__consumer_offsets</code>의 <code>application.id</code> 그룹</td><td><code>kafka-streams-application-reset.sh</code></td></tr>
+            <tr><th scope="row">로컬 상태 저장소</th><td><code>state.dir</code> 아래 RocksDB 파일</td><td><code>KafkaStreams.cleanUp()</code> 또는 디렉터리 삭제</td></tr>
+            <tr><th scope="row">내부 토픽</th><td>changelog · repartition 토픽</td><td>reset 도구가 repartition 토픽을 정리</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">"로컬에서는 통과하는데 CI에서 실패" 또는 반대 현상</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"Streams 앱을 처음부터 다시 처리시키는 도구는?"</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="code-reading">
+      <h2 id="code-reading">코드 읽기 문제 대비</h2>
+
+      <h3 id="code-1">스니펫 1 — 이 테스트는 무엇을 놓치는가</h3>
+      <figure class="code">
+        <figcaption>OrderPublisherTest.java</figcaption>
+        <pre><code class="lang-java">MockProducer&lt;String, Order&gt; producer =
+    new MockProducer&lt;&gt;(true, new StringSerializer(), new OrderAvroSerializer());
+
+new OrderPublisher(producer).publish(new Order("order-42", 19900));
+assertThat(producer.history(), hasSize(1));</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <p>
+          <strong>Schema Registry 연동과 스키마 호환성을 검증하지 못합니다.</strong>
+          <code>MockProducer</code>는 브로커에도, 레지스트리에도 붙지 않습니다.
+          Avro 직렬화기가 실제로 스키마를 등록하고 id를 붙이는 경로는 통합 테스트에서만 검증됩니다.
+          또한 <code>autoComplete=true</code>이므로 <strong>재시도·타임아웃 경로도 검증되지 않습니다</strong>
+          (<code>false</code>로 만들고 <code>errorNext()</code>를 써야 합니다).
+        </p>
+      </aside>
+
+      <h3 id="code-2">스니펫 2 — 이 테스트가 실패하는 이유</h3>
+      <figure class="code">
+        <figcaption>WindowedCountTest.java</figcaption>
+        <pre><code class="lang-java">// 5분 tumbling 윈도우로 집계하는 토폴로지
+TopologyTestDriver driver = new TopologyTestDriver(topology);
+TestInputTopic&lt;String, String&gt; in = driver.createInputTopic("events",
+    Serdes.String().serializer(), Serdes.String().serializer());
+
+in.pipeInput("user-1", "click");
+in.pipeInput("user-1", "click");
+in.pipeInput("user-1", "click");
+
+// 윈도우 집계 결과를 기대하지만 아무것도 읽히지 않는다
+assertThat(outputTopic.readKeyValue().value, equalTo(3L));</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <p>
+          세 레코드가 <strong>같은 타임스탬프(테스트 드라이버의 기본 시각)로 들어가</strong>
+          윈도우가 아직 닫히지 않았거나, 캐시 때문에 중간 결과가 하위로 흐르지 않은 상태입니다.
+          해결은 두 가지입니다.
+        </p>
+        <ul>
+          <li><code>pipeInput(key, value, timestamp)</code>로 <strong>타임스탬프를 명시</strong>해
+            윈도우를 넘기는 이벤트를 하나 더 넣습니다.</li>
+          <li><code>statestore.cache.max.bytes=0</code>으로 두어 <strong>모든 갱신이 즉시 흐르게</strong> 합니다
+            (테스트에서 흔히 쓰는 방법).</li>
+        </ul>
+        <p>
+          <strong><code>advanceWallClockTime()</code>은 event-time 윈도우를 닫아 주지 않습니다</strong> —
+          그것은 wall-clock punctuation 전용입니다. 이 구분이 함정입니다.
+        </p>
+      </aside>
+
+      <h3 id="code-3">스니펫 3 — 이 성능 측정의 문제</h3>
+      <figure class="code">
+        <figcaption>측정 명령과 결과</figcaption>
+        <pre><code class="lang-bash">$ bin/kafka-producer-perf-test.sh --topic t --num-records 5000000 \
+    --record-size 1024 --throughput -1 \
+    --bootstrap-server localhost:9092 --command-property acks=all
+
+5000000 records sent, 412300 records/sec (402.6 MB/sec),
+  1842.11 ms avg latency, 5231.00 ms max latency,
+  1701 ms 50th, 4102 ms 95th, 4980 ms 99th, 5180 ms 99.9th</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <p>
+          <strong>이 지연 수치를 SLA 근거로 쓸 수 없습니다.</strong>
+          <code>--throughput -1</code>로 무제한 부하를 걸었으므로,
+          평균 1.8초라는 값은 대부분 <strong>프로듀서 버퍼 대기 시간</strong>입니다.
+          최대 처리량(412K records/sec)만 유효한 정보입니다.
+        </p>
+        <p>
+          지연을 재려면 예상 부하(예: <code>--throughput 100000</code>)를 지정해 다시 측정해야 합니다.
+          또한 <code>localhost</code>이므로 <strong>프로듀서와 브로커가 자원을 다투는 환경</strong>이고,
+          실제 네트워크 왕복이 빠져 있습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch10.html">
+          <span class="card__title">10장 · Kafka Streams와 ksqlDB</span>
+          <span class="card__desc">토폴로지 구성과 테스트 유틸리티.</span>
+          <span class="card__meta">기본개념</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex09.html">
+          <span class="card__title">예제 9 · Streams 실시간 집계</span>
+          <span class="card__desc">토폴로지와 <code>TopologyTestDriver</code> 테스트 코드.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex12.html">
+          <span class="card__title">예제 12 · Python / Node 클라이언트</span>
+          <span class="card__desc">다른 언어 클라이언트의 테스트 접근법.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="domain-streams.html">
+          <span class="card__title">Kafka Streams</span>
+          <span class="card__desc">테스트 대상이 되는 토폴로지 개념.</span>
+          <span class="card__meta">CCDAK 12%</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/cli.html">
+          <span class="card__title">CLI 치트시트</span>
+          <span class="card__desc">perf 도구와 verifiable 도구의 전체 옵션.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="cram.html">
+          <span class="card__title">벼락치기 요약</span>
+          <span class="card__desc">이 도메인은 표 하나로 압축되어 있습니다.</span>
+          <span class="card__meta">CCDAK 도구</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="mini-quiz">
+      <h2 id="mini-quiz">도메인 미니 퀴즈</h2>
+      <div class="quiz-embed" data-set="ccdak-testing" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/testing.html" rel="noopener noreferrer">Testing a Streams Application</a> — <code>kafka-streams-test-utils</code>, <code>TopologyTestDriver</code>, <code>TestInputTopic</code>/<code>TestOutputTopic</code>, <code>advanceWallClockTime</code>, <code>getKeyValueStore</code>, <code>close()</code></li>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/app-reset-tool.html" rel="noopener noreferrer">Application Reset Tool</a> — <code>kafka-streams-application-reset.sh</code>와 <code>KafkaStreams#cleanUp()</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#upgrade" rel="noopener noreferrer">Upgrading Apache Kafka (4.3 Notable Changes)</a> — KIP-1147 커맨드라인 옵션 통일, perf 도구의 <code>--command-property</code>/<code>--command-config</code>/<code>--num-records</code>/<code>--include</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs_transaction.state.log.replication.factor" rel="noopener noreferrer">Broker Configs — transaction.state.log.replication.factor</a> — 기본값 3</li>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/memory-mgmt.html" rel="noopener noreferrer">Streams Memory Management</a> — 캐시를 0으로 두면 모든 갱신이 즉시 전파됨</li>
+      </ul>
+      <aside class="note note--warn" data-label="확인 범위">
+        <p>
+          <code>TopologyTestDriver</code>·<code>TestInputTopic</code>·<code>MockProducer</code>·
+          <code>MockConsumer</code>·<code>EmbeddedKafkaCluster</code>와
+          <code>bin/</code> 아래 스크립트 이름은 <strong>Apache Kafka 4.3에서 존재를 확인</strong>했습니다.
+        </p>
+        <p>
+          반면 <strong>Testcontainers와 Spring <code>@EmbeddedKafka</code>는 Apache Kafka 외부 프로젝트</strong>입니다.
+          이 사이트를 만든 환경에서 해당 문서를 확인할 수 없었으므로
+          <strong>버전 번호와 클래스 시그니처를 적지 않았습니다.</strong>
+          코드를 쓸 때는 각 프로젝트 문서의 최신 API를 확인하세요.
+          Datagen 커넥터·ksqlDB도 Confluent 컴포넌트로, 이름과 용도까지만 서술했습니다.
+        </p>
+      </aside>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

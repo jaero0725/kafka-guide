@@ -1,0 +1,78 @@
+<svg viewBox="0 0 720 344" role="img" class="kg-diagram"
+     aria-labelledby="d074-title d074-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d074-title">subject naming strategy — Topic · Record · TopicRecord</title>
+  <desc id="d074-desc">Schema Registry 가 스키마를 등록할 subject 이름을 정하는 세 가지 전략을 비교한 표입니다.
+    예시는 토픽 orders 와 레코드 타입 com.ex.OrderCreated, com.ex.OrderCancelled 입니다.
+    TopicNameStrategy 는 기본 동작으로 subject 가 토픽 이름에 -key 또는 -value 를 붙인 형태입니다.
+    예를 들어 orders-value 가 되며, 한 토픽의 value 에는 사실상 스키마 하나만 둘 수 있습니다.
+    RecordNameStrategy 는 subject 가 레코드의 전체 이름입니다.
+    예를 들어 com.ex.OrderCreated 가 되며, 여러 토픽이 같은 스키마를 공유하고 토픽과 무관하게 전역으로 진화합니다.
+    TopicRecordNameStrategy 는 subject 가 토픽 이름과 레코드 전체 이름을 이은 형태입니다.
+    예를 들어 orders-com.ex.OrderCreated 가 되며, 한 토픽에 여러 이벤트 타입을 담으면서
+    토픽별로 독립적으로 진화시킬 수 있습니다.
+    설정 키는 key.subject.name.strategy 와 value.subject.name.strategy 입니다.
+    호환성 검사는 subject 단위로 이루어지므로 전략을 바꾸면 subject 이름이 바뀌어 기존 진화 이력과 끊깁니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">subject naming strategy — 호환성 검사는 <tspan class="dg-bold">subject 단위</tspan>로 이루어집니다</text>
+  <text x="12" y="38" class="dg-fs-sm">예시 — 토픽 <tspan class="dg-mono">orders</tspan> · 레코드 타입 <tspan class="dg-mono">com.ex.OrderCreated</tspan>, <tspan class="dg-mono">com.ex.OrderCancelled</tspan></text>
+
+  <!-- 헤더 -->
+  <rect class="dg-node dg-node--alt" x="12" y="48" width="696" height="24" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="20" y="65">전략</text>
+  <text class="dg-fs-sm dg-bold" x="196" y="65">subject 이름</text>
+  <text class="dg-fs-sm dg-bold" x="436" y="65">언제 쓰는가</text>
+
+  <line class="dg-grid" x1="12" y1="72" x2="708" y2="72"/>
+  <line class="dg-grid" x1="12" y1="136" x2="708" y2="136"/>
+  <line class="dg-grid" x1="12" y1="200" x2="708" y2="200"/>
+  <line class="dg-grid" x1="12" y1="264" x2="708" y2="264"/>
+  <line class="dg-grid" x1="188" y1="48" x2="188" y2="264"/>
+  <line class="dg-grid" x1="428" y1="48" x2="428" y2="264"/>
+
+  <!-- 1. TopicNameStrategy (기본 · 강조) -->
+  <rect class="dg-node dg-node--accent" x="12" y="72" width="696" height="64" rx="4"/>
+  <g data-dg="row-topic">
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="94">TopicName</text>
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="110">Strategy</text>
+    <text class="dg-fs-sm dg-bold" x="20" y="128">기본 동작</text>
+    <text class="dg-fs-sm dg-mono" x="196" y="94">{topic}-key</text>
+    <text class="dg-fs-sm dg-mono" x="196" y="110">{topic}-value</text>
+    <text class="dg-fs-sm dg-mono dg-bold" x="196" y="128">→ orders-value</text>
+    <text class="dg-fs-sm" x="436" y="94">한 토픽 = 한 스키마.</text>
+    <text class="dg-fs-sm" x="436" y="110">대부분의 경우 이걸로 충분합니다.</text>
+    <text class="dg-fs-sm dg-muted" x="436" y="128">한 토픽에 여러 타입을 섞기 어렵습니다.</text>
+  </g>
+
+  <!-- 2. RecordNameStrategy -->
+  <g data-dg="row-record">
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="158">RecordName</text>
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="174">Strategy</text>
+    <text class="dg-fs-sm dg-mono" x="196" y="158">{레코드 전체 이름}</text>
+    <text class="dg-fs-sm dg-mono dg-bold" x="196" y="176">→ com.ex.OrderCreated</text>
+    <text class="dg-fs-sm dg-muted" x="196" y="192">토픽 이름이 들어가지 않습니다</text>
+    <text class="dg-fs-sm" x="436" y="158">여러 토픽이 같은 스키마를 공유할 때.</text>
+    <text class="dg-fs-sm" x="436" y="174">타입 단위로 <tspan class="dg-bold">전역 진화</tspan>합니다.</text>
+    <text class="dg-fs-sm dg-muted" x="436" y="192">한 토픽에 여러 타입을 담을 수 있습니다.</text>
+  </g>
+
+  <!-- 3. TopicRecordNameStrategy -->
+  <g data-dg="row-topicrecord">
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="222">TopicRecord</text>
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="238">NameStrategy</text>
+    <text class="dg-fs-sm dg-mono" x="196" y="222">{topic}-{레코드 이름}</text>
+    <text class="dg-fs-sm dg-mono dg-bold" x="196" y="240">→ orders-com.ex.</text>
+    <text class="dg-fs-sm dg-mono dg-bold" x="196" y="256">   OrderCreated</text>
+    <text class="dg-fs-sm" x="436" y="222">한 토픽에 여러 이벤트 타입을 담고</text>
+    <text class="dg-fs-sm" x="436" y="238"><tspan class="dg-bold">토픽별로 독립 진화</tspan>시킬 때.</text>
+    <text class="dg-fs-sm dg-muted" x="436" y="256">가장 유연하지만 subject 수가 늘어납니다.</text>
+  </g>
+
+  <!-- 설정 -->
+  <rect class="dg-node dg-node--alt" x="12" y="276" width="696" height="42" rx="4"/>
+  <text class="dg-fs-sm dg-mono" x="22" y="294">key.subject.name.strategy</text>
+  <text class="dg-fs-sm dg-mono" x="240" y="294">value.subject.name.strategy</text>
+  <text class="dg-fs-sm dg-bold" x="470" y="294">기본: <tspan class="dg-mono">{topic}-value</tspan></text>
+  <text class="dg-fs-sm" x="22" y="311">전략을 바꾸면 subject 이름이 바뀌어 <tspan class="dg-bold">기존 진화 이력과 끊깁니다</tspan> — 운영 중 변경은 신중히.</text>
+
+  <text class="dg-fs-sm dg-muted" x="12" y="336">클래스 이름은 Schema Registry 버전에 따라 다를 수 있습니다. 최신 배포판의 기본 클래스는 조회 결과가 없으면 TopicNameStrategy 로 동작합니다.</text>
+</svg>
