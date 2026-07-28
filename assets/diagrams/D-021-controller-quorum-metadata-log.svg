@@ -1,0 +1,89 @@
+<svg viewBox="0 0 720 386" role="img" class="kg-diagram"
+     aria-labelledby="d021-title d021-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d021-title">컨트롤러 쿼럼과 메타데이터 로그 — Raft 복제와 스냅샷</title>
+  <desc id="d021-desc">컨트롤러 3대가 쿼럼을 이루고 그중 하나가 액티브 컨트롤러이자 Raft 리더입니다. 각 컨트롤러는 __cluster_metadata 파티션 0 의 복제본을 가지며, 쓰기는 항상 액티브 컨트롤러가 수행하고 팔로워가 복제합니다. 레코드는 과반이 복제하면 커밋됩니다. 로그가 무한정 길어지지 않도록 스냅샷으로 상태를 저장하고 앞부분을 잘라내므로 재시작 시 스냅샷과 이후 로그만 재생하면 됩니다. 브로커는 투표에 참여하지 않는 옵서버로서 메타데이터 로그만 복제해 캐시하므로 컨트롤러가 잠시 멈춰도 이미 아는 메타데이터로 읽기와 쓰기를 계속할 수 있습니다. 쿼럼 크기는 3 또는 5 를 권장하며 3대면 1대, 5대면 2대 장애까지 견딥니다. 주소는 controller.quorum.bootstrap.servers 로 지정하고 상태는 kafka-metadata-quorum.sh 로 확인합니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">컨트롤러 쿼럼과 __cluster_metadata — 메타데이터가 복제되는 방식</text>
+<rect class="dg-panel" x="8" y="32" width="704" height="176" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="18" y="49">컨트롤러 쿼럼 (voter) — 과반이 살아 있어야 메타데이터 쓰기가 가능합니다</text>
+<g>
+<rect class="dg-node dg-node--accent" x="24" y="56" width="212" height="40" rx="4"/>
+<text class="dg-fs-sm" x="130" y="72.5" text-anchor="middle">controller-1</text>
+<text class="dg-fs-sm" x="130" y="88.5" text-anchor="middle">액티브 · Raft 리더</text>
+</g>
+<rect class="dg-node dg-node--alt" x="24" y="104" width="212" height="62" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="34" y="122">__cluster_metadata-0</text>
+<rect class="dg-node dg-node--done" x="34" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="50" y="147.5" text-anchor="middle">1</text>
+<rect class="dg-node dg-node--done" x="66" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="82" y="147.5" text-anchor="middle">2</text>
+<rect class="dg-node dg-node--done" x="98" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="114" y="147.5" text-anchor="middle">3</text>
+<rect class="dg-node dg-node--done" x="130" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="146" y="147.5" text-anchor="middle">4</text>
+<rect class="dg-node dg-node--done" x="162" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="178" y="147.5" text-anchor="middle">5</text>
+<g>
+<rect class="dg-node" x="252" y="56" width="212" height="40" rx="4"/>
+<text class="dg-fs-sm" x="358" y="72.5" text-anchor="middle">controller-2</text>
+<text class="dg-fs-sm" x="358" y="88.5" text-anchor="middle">팔로워 (voter)</text>
+</g>
+<rect class="dg-node dg-node--alt" x="252" y="104" width="212" height="62" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="262" y="122">__cluster_metadata-0</text>
+<rect class="dg-node dg-node--done" x="262" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="278" y="147.5" text-anchor="middle">1</text>
+<rect class="dg-node dg-node--done" x="294" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="310" y="147.5" text-anchor="middle">2</text>
+<rect class="dg-node dg-node--done" x="326" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="342" y="147.5" text-anchor="middle">3</text>
+<rect class="dg-node dg-node--done" x="358" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="374" y="147.5" text-anchor="middle">4</text>
+<rect class="dg-node dg-node--done" x="390" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="406" y="147.5" text-anchor="middle">5</text>
+<g>
+<rect class="dg-node" x="480" y="56" width="212" height="40" rx="4"/>
+<text class="dg-fs-sm" x="586" y="72.5" text-anchor="middle">controller-3</text>
+<text class="dg-fs-sm" x="586" y="88.5" text-anchor="middle">팔로워 (voter)</text>
+</g>
+<rect class="dg-node dg-node--alt" x="480" y="104" width="212" height="62" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="490" y="122">__cluster_metadata-0</text>
+<rect class="dg-node dg-node--done" x="490" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="506" y="147.5" text-anchor="middle">1</text>
+<rect class="dg-node dg-node--done" x="522" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="538" y="147.5" text-anchor="middle">2</text>
+<rect class="dg-node dg-node--done" x="554" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="570" y="147.5" text-anchor="middle">3</text>
+<rect class="dg-node dg-node--done" x="586" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="602" y="147.5" text-anchor="middle">4</text>
+<rect class="dg-node" x="618" y="130" width="32" height="26" rx="2"/>
+<text class="dg-fs-sm dg-num" x="634" y="147.5" text-anchor="middle">5</text>
+<path class="dg-edge dg-edge--accent" d="M236,132 L248,132" marker-end="url(#mk-arrow-accent)"/>
+<path class="dg-edge dg-edge--accent" d="M464,132 L476,132" marker-end="url(#mk-arrow-accent)"/>
+<text class="dg-fs-sm" x="24" y="194">쓰기는 항상 액티브 컨트롤러가 하고, 팔로워는 그 로그를 복제합니다 (Raft). 레코드는 과반 복제되면 커밋됩니다.</text>
+<g>
+<rect class="dg-node" x="8" y="224" width="344" height="84" rx="4"/>
+<text class="dg-fs-sm" x="20" y="246.6" text-anchor="start">스냅샷</text>
+<text class="dg-fs-sm" x="20" y="262.6" text-anchor="start">로그가 계속 길어지지 않도록 상태를 스냅샷으로 저장하고</text>
+<text class="dg-fs-sm" x="20" y="278.6" text-anchor="start">앞부분을 잘라냅니다. 재시작 시 스냅샷 + 이후 로그만</text>
+<text class="dg-fs-sm" x="20" y="294.6" text-anchor="start">재생하면 되므로 복구가 빠릅니다.</text>
+</g>
+<g>
+<rect class="dg-node dg-node--ok" x="368" y="224" width="344" height="84" rx="4"/>
+<text class="dg-fs-sm" x="380" y="246.6" text-anchor="start">브로커 = 옵서버 (voter 아님)</text>
+<text class="dg-fs-sm" x="380" y="262.6" text-anchor="start">브로커는 쿼럼 투표에 참여하지 않고 메타데이터 로그만</text>
+<text class="dg-fs-sm" x="380" y="278.6" text-anchor="start">복제해 캐시합니다. 그래서 컨트롤러가 잠시 멈춰도</text>
+<text class="dg-fs-sm" x="380" y="294.6" text-anchor="start">이미 아는 메타데이터로 읽기·쓰기를 계속할 수 있습니다.</text>
+</g>
+<text class="dg-fs-sm dg-bold" x="8" y="334">쿼럼 크기는 3 또는 5 를 권장합니다 — 3대면 1대 장애, 5대면 2대 장애까지 견딥니다.</text>
+<text class="dg-fs-sm" x="8" y="354">주소 지정은 controller.quorum.bootstrap.servers 를 씁니다 (controller.quorum.voters 는 KRaft version 1 에서 deprecated).</text>
+<text class="dg-fs-sm dg-bold" x="8" y="374">상태 확인</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="76" y="374">kafka-metadata-quorum.sh --bootstrap-controller :9093 describe --status</text>
+</svg>

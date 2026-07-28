@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CCDAK 시험 당일 전략 — Kafka Guide</title>
+  <meta name="description" content="CCDAK 시험 당일 체크리스트, 프록터링 환경 준비, 90분 시간 배분, multiple-choice·matching·list order 세 유형별 접근법, 문제 유형 패턴 분석과 오답 유도 패턴.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccdak" data-page="exam-tips"></div>
+
+  <main id="main" class="page" data-page-id="ccdak/exam-tips">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCDAK</a></li>
+        <li><span aria-current="page">시험 당일 전략</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCDAK</p>
+      <h1>시험 당일 전략</h1>
+      <p class="page__lead">
+        지식이 충분해도 시험장에서 잃는 점수가 있습니다.
+        프록터링 준비를 안 해서 시작이 지연되거나, matching 유형을 처음 보고 당황하거나,
+        한 문제에 10분을 쓰고 뒤쪽을 못 푸는 경우입니다.
+        이 페이지는 <strong>지식 외의 변수를 없애는 것</strong>을 목표로 합니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 페이지의 목표</h2>
+      <ul>
+        <li>프록터링 환경을 시험 전날 완비할 수 있습니다.</li>
+        <li>세 가지 문항 유형별로 다른 전략을 적용할 수 있습니다.</li>
+        <li>90분 안에 전 문항을 검토까지 마치는 페이스를 만들 수 있습니다.</li>
+        <li>선택지 문장만 보고 <strong>함정 후보를 먼저 배제</strong>할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="day-before">
+      <h2 id="day-before">시험 전날 체크리스트</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>D-1에 확인할 것 — 환경과 학습을 분리해 정리했습니다</caption>
+          <thead>
+            <tr><th scope="col">구분</th><th scope="col">항목</th><th scope="col">비고</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row" rowspan="7">프록터링 환경</th>
+              <td>웹캠·마이크 동작 확인</td>
+              <td>브라우저 권한까지 실제로 허용해 두기</td>
+            </tr>
+            <tr><td>업로드·다운로드 대역폭과 안정성</td><td>유선 연결이 가장 안전합니다</td></tr>
+            <tr><td>시험 플랫폼이 요구하는 브라우저·확장 프로그램</td><td>확장 프로그램 충돌로 실행이 막히는 사례가 있습니다</td></tr>
+            <tr><td>책상 위를 비우고 주변을 정리</td><td>방을 카메라로 비춰 보여 주는 절차가 있습니다</td></tr>
+            <tr><td>모니터 <strong>1개</strong>만 연결</td><td>듀얼 모니터는 보통 허용되지 않습니다</td></tr>
+            <tr><td>신분증 (영문 이름이 신청 정보와 일치)</td><td>불일치는 응시 거부 사유입니다</td></tr>
+            <tr><td>90분간 방해받지 않는 조용한 공간</td><td>사람이 들어오면 중단될 수 있습니다</td></tr>
+            <tr>
+              <th scope="row" rowspan="4">학습</th>
+              <td><a href="cram.html">벼락치기 요약</a> 1회 통독</td>
+              <td>새 내용을 넣지 않습니다</td>
+            </tr>
+            <tr><td><a href="traps.html">함정 사전 40쌍</a> 1회 통독</td><td>가장 효율이 높은 마지막 복습</td></tr>
+            <tr><td><a href="flashcards.html">플래시카드</a> 설정 기본값 덱</td><td>숫자 암기는 반복 노출이 유일한 방법입니다</td></tr>
+            <tr><td>새 모의고사를 풀지 <strong>않습니다</strong></td><td>낮은 점수가 자신감만 깎습니다. 오답 노트만 보세요</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="확인 불가 항목">
+        <p>
+          프록터링 플랫폼의 구체적 요구사항(허용 브라우저, 설치 프로그램, 화면 공유 방식)은
+          이 사이트를 만든 환경에서 Confluent 도메인에 접근할 수 없어 확인하지 못했습니다.
+          위 항목은 <strong>온라인 프록터링 시험의 일반적인 요구사항</strong>이며,
+          <strong>실제 요구사항은 응시 안내 메일과 공식 페이지를 반드시 따르세요.</strong>
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="question-types">
+      <h2 id="question-types">문항 유형 3종 — 각각 다른 전략</h2>
+
+      <p>
+        Confluent는 자격증 시험을
+        <em>"90 minute proctored exams. Question types vary, and include multiple-choice, matching, list order."</em>
+        라고 안내합니다. <strong>객관식만 준비하면 안 됩니다.</strong>
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>유형별 채점 방식과 전략</caption>
+          <thead>
+            <tr>
+              <th scope="col">유형</th>
+              <th scope="col">채점</th>
+              <th scope="col">전략</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">multiple-choice<br>(단일 정답)</th>
+              <td>정답 1개 일치</td>
+              <td>
+                <strong>선택지를 먼저 읽고 배제</strong>합니다.
+                절대적 표현이 들어간 선택지, 설정의 소속을 바꿔 놓은 선택지를 먼저 지우면
+                보통 2개로 좁혀집니다.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">multiple-choice<br>(복수 정답)</th>
+              <td><strong>전부 일치</strong> (부분 점수 없음)</td>
+              <td>
+                "몇 개를 고르라"는 지시를 반드시 확인합니다.
+                <strong>확실한 것부터 체크</strong>하고, 애매한 것은 "이것이 없으면 요구사항이 성립하는가"로 판단합니다.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">matching<br>(연결형)</th>
+              <td><strong>모든 쌍 일치</strong></td>
+              <td>
+                <strong>확실한 쌍을 먼저 확정</strong>해 후보를 줄입니다(제거법).
+                오답 후보(extra)가 섞여 있을 수 있으니 "남은 것을 억지로 짝지어야 한다"고 가정하지 않습니다.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">list order<br>(순서 배열)</th>
+              <td><strong>순서 완전 일치</strong></td>
+              <td>
+                <strong>첫 단계와 마지막 단계를 먼저 고정</strong>하고 가운데를 채웁니다.
+                "초기화는 한 번만", "검증은 마지막" 같은 원칙이 대개 답을 결정합니다.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="matching으로 나오기 쉬운 소재 — 미리 짝지어 외우세요">
+        <ul>
+          <li><strong>설정명 ↔ 기본값</strong> — <code>linger.ms</code>=5, <code>session.timeout.ms</code>=45000,
+            <code>max.poll.records</code>=500, <code>fetch.max.bytes</code>=52428800 …</li>
+          <li><strong>설정명 ↔ 소속</strong> — <code>max.request.size</code>(프로듀서) /
+            <code>message.max.bytes</code>(브로커) / <code>max.message.bytes</code>(토픽) /
+            <code>fetch.max.bytes</code>(컨슈머) / <code>replica.fetch.max.bytes</code>(브로커)</li>
+          <li><strong>예외 클래스 ↔ 원인</strong> — <code>RecordTooLargeException</code>,
+            <code>NotEnoughReplicasException</code>, <code>IllegalStateException</code>(assign+subscribe),
+            <code>ConfigException</code>(멱등성+in-flight&gt;5), <code>TopologyBuilderException</code>(파티션 수 불일치)</li>
+          <li><strong>SMT ↔ 용도</strong> — <code>ValueToKey</code>, <code>MaskField</code>,
+            <code>RegexRouter</code>, <code>TimestampConverter</code> …</li>
+          <li><strong>호환성 모드 ↔ 배포 순서</strong> — BACKWARD=컨슈머 먼저 / FORWARD=프로듀서 먼저</li>
+          <li><strong>Streams 연산 ↔ stateless·stateful·리파티션</strong></li>
+          <li><strong>메트릭 ↔ 의미</strong> — <code>records-lag-max</code>,
+            <code>record-error-rate</code>, <code>UnderMinIsrPartitionCount</code> …</li>
+          <li><strong>테스트 도구 ↔ 브로커 필요 여부</strong></li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="list order로 나오기 쉬운 소재 — 순서를 소리 내어 외우세요">
+        <ul>
+          <li><strong>트랜잭션</strong> — <code>initTransactions</code>(1회) → <code>beginTransaction</code> →
+            <code>send</code> → <code>sendOffsetsToTransaction</code> → <code>commitTransaction</code>
+            (실패 시 <code>abortTransaction</code>)</li>
+          <li><strong>Producer 전송 파이프라인</strong> — 직렬화 → 파티셔너 → RecordAccumulator(배치) →
+            Sender 스레드 → 브로커 응답 → 콜백</li>
+          <li><strong>파티션 재할당</strong> — <code>--generate</code> → <code>--execute</code> → <code>--verify</code></li>
+          <li><strong>KRaft 부트스트랩</strong> — <code>random-uuid</code> → <code>format</code> → 기동 → 토픽 생성</li>
+          <li><strong>큰 메시지 허용</strong> — 토픽 <code>max.message.bytes</code> → 프로듀서 <code>max.request.size</code> →
+            컨슈머 <code>max.partition.fetch.bytes</code> → 브로커 <code>replica.fetch.max.bytes</code></li>
+          <li><strong>스키마 진화 배포</strong> — BACKWARD면 컨슈머 배포 → 스키마 등록 → 프로듀서 배포</li>
+          <li><strong>Connect 실패 조사</strong> — <code>GET /status</code> → <code>worker_id</code> 확인 →
+            해당 노드 로그 → 로그 레벨 상향 → 수정 → <code>restart</code></li>
+          <li><strong>업그레이드 경로</strong> — 2.x → 3.9 → KRaft 마이그레이션 → 4.x</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="content-patterns">
+      <h2 id="content-patterns">문제 내용 패턴 4가지</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>내용 기준 분류와 접근법</caption>
+          <thead>
+            <tr><th scope="col">패턴</th><th scope="col">예시</th><th scope="col">접근법</th><th scope="col">목표 시간</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">① 설정값 묻기</th>
+              <td>"4.x에서 <code>linger.ms</code>의 기본값은?"</td>
+              <td><strong>알면 즉답, 모르면 즉시 표시하고 넘김.</strong> 고민해서 나오는 답이 아닙니다</td>
+              <td class="t-center">20초</td>
+            </tr>
+            <tr>
+              <th scope="row">② 시나리오 판단</th>
+              <td>"컨슈머가 반복 리밸런스한다. 1차 처방은?"</td>
+              <td><strong>증상 → 원인 축(하트비트/poll/ISR/크기) → 처방</strong> 순으로 좁힙니다.
+                "가장 적절한"이면 <strong>최소 변경으로 원인을 제거하는 것</strong>을 고릅니다</td>
+              <td class="t-center">1분 30초</td>
+            </tr>
+            <tr>
+              <th scope="row">③ 코드·설정 판독</th>
+              <td>10~20줄 Java 또는 properties</td>
+              <td><strong>먼저 문제가 무엇을 묻는지 읽고</strong> 코드로 갑니다.
+                코드를 먼저 정독하면 시간이 녹습니다. 키 지정 여부, 커밋 위치, in-flight 값,
+                <code>isolation.level</code>을 먼저 스캔합니다</td>
+              <td class="t-center">2분</td>
+            </tr>
+            <tr>
+              <th scope="row">④ 계산</th>
+              <td>lag, 디스크 용량, 태스크 수, 윈도우 개수</td>
+              <td><strong>공식을 먼저 쓰고 숫자를 넣습니다.</strong>
+                lag은 high watermark 기준, 디스크는 RF를 곱하고, 태스크는 파티션 수가 상한입니다</td>
+              <td class="t-center">1분 30초</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--ok" data-label="계산 문항 공식 4개">
+        <figure class="code">
+          <figcaption>외워 두면 계산 문항이 30초 안에 끝납니다</figcaption>
+          <pre><code class="lang-text">consumer lag        = high watermark − committed offset
+필요 디스크          = 일일 유입량 × 보관 일수 × RF × (1 − 압축률) × 여유
+쓰기 가능 장애 대수   = replication.factor − min.insync.replicas
+Streams 태스크 수    = 입력 토픽의 파티션 수 (sub-topology 별)
+hopping 윈도우 중복  = window size ÷ advance</code></pre>
+        </figure>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="time-strategy">
+      <h2 id="time-strategy">90분 시간 배분</h2>
+
+      <p>
+        실제 문항 수는 공개되지 않습니다. 아래는 이 사이트의 모의고사 벤치마크인
+        <strong>60문항 / 90분</strong>을 기준으로 한 페이스입니다.
+        문항 수가 다르면 비율만 유지하면 됩니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>3라운드 전략 — 60문항 기준</caption>
+          <thead>
+            <tr><th scope="col">라운드</th><th scope="col">시간</th><th scope="col">할 일</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">1라운드<br>1회독</th>
+              <td>60분<br>(문항당 평균 <strong>60초</strong>)</td>
+              <td>
+                <strong>아는 것만 확정하고 나머지는 표시(flag)하고 넘깁니다.</strong>
+                90초를 넘기면 무조건 표시하고 이동합니다.
+                코드 판독 문항은 여기서 다 풀려고 하지 마세요.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">2라운드<br>표시 문항</th>
+              <td>20분</td>
+              <td>
+                표시한 문항만 다시 봅니다.
+                1라운드에서 본 다른 문항이 힌트를 주는 경우가 많습니다
+                (같은 설정을 다른 각도로 묻는 문항이 섞여 있습니다).
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">3라운드<br>검토</th>
+              <td>10분</td>
+              <td>
+                <strong>복수 선택 문항의 개수 조건</strong>과
+                <strong>matching·ordering의 빈칸</strong>을 확인합니다.
+                여기서 발견되는 실수가 가장 아깝습니다.
+                <strong>단일 선택 문항의 첫 직감을 바꾸는 것은 신중히</strong> 하세요.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="시간을 잃는 3가지 행동">
+        <ol>
+          <li><strong>모르는 설정값 문항을 오래 붙잡기</strong> — 기억에 없으면 1분을 더 써도 안 나옵니다.</li>
+          <li><strong>코드를 먼저 정독하기</strong> — 질문을 먼저 읽으면 볼 곳이 3줄로 줄어듭니다.</li>
+          <li><strong>이미 확정한 답을 반복해서 다시 보기</strong> — 표시하지 않은 문항은 3라운드에서 건드리지 않습니다.</li>
+        </ol>
+        <p>
+          그리고 <strong>빈칸으로 남기지 마세요.</strong> 오답 감점이 있다는 근거는 없습니다.
+          모르면 함정 패턴을 배제한 뒤 남은 것 중 하나를 고르는 것이 항상 낫습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="distractor-patterns">
+      <h2 id="distractor-patterns">오답 유도 패턴 6가지</h2>
+
+      <p>
+        선택지 문장의 <strong>형태</strong>만 보고 함정 후보를 좁힐 수 있습니다.
+        더 자세한 분석은 <a href="traps.html#distractor-analysis">함정 사전의 오답 유도 패턴 절</a>에 있습니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>함정 선택지의 형태별 특징</caption>
+          <thead>
+            <tr><th scope="col">패턴</th><th scope="col">신호</th><th scope="col">판단</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">① 절대적 표현</th>
+              <td>"항상", "절대", "모든 경우에", "무조건", "완전히 보장한다"</td>
+              <td>
+                Kafka에는 조건 없는 보장이 거의 없습니다.
+                <strong>대개 오답</strong>입니다. 단 "오프셋은 파티션 안에서만 의미가 있다"처럼
+                <em>범위를 한정하는</em> 단정은 정답일 수 있습니다.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">② 소속 바꿔치기</th>
+              <td>"프로듀서의 <code>fetch.max.bytes</code>", "컨슈머의 <code>acks</code>",
+                "브로커의 <code>isolation.level</code>"</td>
+              <td>
+                <strong>설정 이름은 맞고 소속이 틀린</strong> 형태입니다.
+                가장 흔한 함정이므로 <strong>설정을 볼 때 소속을 먼저 확인</strong>하는 습관을 들이세요.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">③ 기본값 미묘 변형</th>
+              <td><code>linger.ms=0</code>, <code>session.timeout.ms=10000</code>,
+                <code>message.max.bytes=1048576</code>, <code>group.protocol=consumer</code></td>
+              <td>
+                <strong>3.x 기준 값이거나 12바이트만 다른 값</strong>입니다.
+                4.x에서 바뀐 5개(<code>linger.ms</code>, <code>acks</code>, <code>enable.idempotence</code>,
+                <code>session.timeout.ms</code>, 메타데이터 저장소)를 특히 조심하세요.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">④ 옳지만 답이 아닌 것</th>
+              <td>"<code>acks=all</code>로 설정한다" (질문은 순서 보장에 대한 것)</td>
+              <td>
+                <strong>사실은 맞지만 질문에 답하지 않는</strong> 선택지입니다.
+                "가장 적절한"류 문항에서 주로 쓰입니다.
+                <strong>질문의 목적어를 다시 읽으세요.</strong>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">⑤ 과잉 조치</th>
+              <td>"토픽을 삭제하고 다시 만든다", "커넥터를 지우고 재생성한다",
+                "<code>unclean.leader.election.enable=true</code>로 켠다"</td>
+              <td>
+                <strong>증상은 사라지지만 데이터 유실·부작용이 큰</strong> 선택지입니다.
+                시험은 <strong>최소 변경으로 원인을 제거하는 답</strong>을 정답으로 둡니다.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">⑥ 층위 혼동</th>
+              <td>"EOS를 켜면 외부 DB 중복도 막힌다", "컴팩션은 중복을 즉시 제거한다",
+                "<code>tasks.max</code>를 올리면 항상 빨라진다"</td>
+              <td>
+                <strong>보장의 경계나 동작 시점을 넓혀 놓은</strong> 선택지입니다.
+                "어디까지"와 "언제"를 확인하면 걸러집니다.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="버전에 따라 답이 달라지는 문항 식별법">
+        <p>
+          문제문에 버전이 없는데 선택지에 <strong><code>0</code>과 <code>5</code></strong>,
+          <strong><code>1</code>과 <code>all</code></strong>,
+          <strong><code>false</code>와 <code>true</code></strong>가 함께 있으면
+          <strong>3.x와 4.x의 기본값 차이를 묻는 문항</strong>입니다.
+          이 사이트의 기준은 4.3이므로 <strong>새 값</strong>을 고릅니다.
+        </p>
+        <p>
+          반대로 ZooKeeper·<code>--zookeeper</code>가 등장하는 선택지는
+          <strong>4.0에서 제거된 것</strong>이므로 현행 기준에서는 오답입니다.
+          "2.13"이 Kafka 버전으로 서술된 선택지도 오답입니다 —
+          그것은 <strong>Scala 버전</strong>입니다
+          (<a href="../basics/appendix-legacy.html">레거시 부록</a>).
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="last-mile">
+      <h2 id="last-mile">마지막 10분에 확인할 20개</h2>
+
+      <p>
+        시험 직전에 눈으로 훑는 목록입니다. 전체는 <a href="cram.html">벼락치기 요약</a>에 있습니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table config-table--plain">
+          <caption>가장 자주 나오면서 가장 자주 틀리는 20개</caption>
+          <tbody>
+            <tr><th scope="row">1</th><td><code>linger.ms</code> 기본값은 <strong>5</strong> (4.0에서 0→5)</td></tr>
+            <tr><th scope="row">2</th><td><code>acks=all</code>, <code>enable.idempotence=true</code>가 기본값 (3.0부터)</td></tr>
+            <tr><th scope="row">3</th><td><code>group.protocol</code> 기본값은 <strong><code>classic</code></strong> (KIP-848은 GA지만 기본값 아님)</td></tr>
+            <tr><th scope="row">4</th><td>멱등성 켜면 in-flight <strong>≤ 5</strong>, 초과하면 <code>ConfigException</code></td></tr>
+            <tr><th scope="row">5</th><td><code>onCompletion()</code>은 <strong>Sender 스레드</strong>에서 실행</td></tr>
+            <tr><th scope="row">6</th><td>실질 재시도 상한은 <code>retries</code>가 아니라 <code>delivery.timeout.ms</code>(120000)</td></tr>
+            <tr><th scope="row">7</th><td><code>session.timeout.ms</code>(45000)는 하트비트, <code>max.poll.interval.ms</code>(300000)는 poll</td></tr>
+            <tr><th scope="row">8</th><td>poll 초과의 1차 처방은 <code>max.poll.records</code>(500) 축소</td></tr>
+            <tr><th scope="row">9</th><td><code>assign()</code>+<code>subscribe()</code> 혼용은 <code>IllegalStateException</code></td></tr>
+            <tr><th scope="row">10</th><td><code>auto.offset.reset</code>(<code>latest</code>)는 <strong>커밋 오프셋이 없거나 범위 밖일 때만</strong></td></tr>
+            <tr><th scope="row">11</th><td><code>isolation.level</code> 기본값은 <code>read_uncommitted</code> — <strong>컨슈머 설정</strong></td></tr>
+            <tr><th scope="row">12</th><td>EOS는 <strong>Kafka 경계 안에서만</strong>. 외부 DB·API에는 적용 안 됨</td></tr>
+            <tr><th scope="row">13</th><td><code>message.max.bytes</code>=<strong>1048588</strong>, <code>max.request.size</code>=1048576</td></tr>
+            <tr><th scope="row">14</th><td><code>min.insync.replicas</code>는 <code>acks=all</code>과만 상호작용. 기본값 1</td></tr>
+            <tr><th scope="row">15</th><td>컴팩션은 <strong>활성 세그먼트를 제외</strong>하고 즉시가 아니라 백그라운드로</td></tr>
+            <tr><th scope="row">16</th><td>BACKWARD=<strong>컨슈머 먼저</strong>, FORWARD=<strong>프로듀서 먼저</strong></td></tr>
+            <tr><th scope="row">17</th><td>sink 오프셋은 <code>__consumer_offsets</code>, source 오프셋은 <code>offset.storage.topic</code></td></tr>
+            <tr><th scope="row">18</th><td>DLQ는 <code>errors.tolerance=all</code> + 토픽 이름 지정 + sink 전용</td></tr>
+            <tr><th scope="row">19</th><td><code>map</code>은 리파티션 표시, <code>mapValues</code>는 아님</td></tr>
+            <tr><th scope="row">20</th><td><code>TopologyTestDriver</code>는 <strong>브로커 없이</strong> 동작. <code>processing.guarantee</code> 기본은 <code>at_least_once</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="practice-path">
+      <h2 id="practice-path">여기서 이어지는 연습</h2>
+
+      <ul class="card-grid">
+        <li><a class="card" href="../quiz/diagnostic.html">
+          <span class="card__title">진단 테스트 (30문항)</span>
+          <span class="card__desc">6개 도메인 × 5문항. 결과에 따라 학습 순서를 자동 생성합니다.</span>
+          <span class="card__meta">가장 먼저</span>
+        </a></li>
+        <li><a class="card" href="../quiz/index.html">
+          <span class="card__title">모의고사 4세트</span>
+          <span class="card__desc">60문항 / 90분 시험 모드. 4세트 모두 서로 중복되지 않습니다.</span>
+          <span class="card__meta">실전 훈련</span>
+        </a></li>
+        <li><a class="card" href="../quiz/review.html">
+          <span class="card__title">오답 노트</span>
+          <span class="card__desc">틀린 문항만 다시. 3회 연속 정답이면 졸업합니다.</span>
+          <span class="card__meta">매일</span>
+        </a></li>
+        <li><a class="card" href="traps.html">
+          <span class="card__title">함정 사전 40쌍</span>
+          <span class="card__desc">오답 유도 패턴의 상세 분석과 40개 비교표.</span>
+          <span class="card__meta">D-3 반복</span>
+        </a></li>
+        <li><a class="card" href="cram.html">
+          <span class="card__title">벼락치기 요약</span>
+          <span class="card__desc">인쇄해서 시험장 가는 길에 볼 단일 페이지.</span>
+          <span class="card__meta">D-1</span>
+        </a></li>
+        <li><a class="card" href="flashcards.html">
+          <span class="card__title">플래시카드</span>
+          <span class="card__desc">설정 기본값·예외 클래스 암기. 간격 반복.</span>
+          <span class="card__meta">매일 10분</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">출처와 확인 범위</h2>
+      <ul>
+        <li><strong>시험 형식</strong> — 90분 프록터링, multiple-choice · matching · list order 3종:
+          Confluent 공식 문구에서 확인했습니다.</li>
+        <li><strong>문항 수 · 합격 점수</strong> — <strong>Confluent 미공개.</strong>
+          이 페이지의 "60문항 / 90분"은 이 사이트의 연습용 벤치마크입니다.</li>
+        <li><strong>프록터링 세부 요구사항</strong> — 확인하지 못했습니다 (Confluent 도메인 접근 불가).
+          일반적인 온라인 프록터링 요구사항으로 서술했습니다.</li>
+        <li><strong>기술 사실과 설정 기본값</strong> —
+          <a href="https://kafka.apache.org/documentation/" rel="noopener noreferrer">Apache Kafka 4.3 공식 문서</a>
+          (<a href="https://kafka.apache.org/documentation/#producerconfigs" rel="noopener noreferrer">Producer Configs</a>,
+          <a href="https://kafka.apache.org/documentation/#consumerconfigs" rel="noopener noreferrer">Consumer Configs</a>,
+          <a href="https://kafka.apache.org/documentation/#topicconfigs" rel="noopener noreferrer">Topic Configs</a>,
+          <a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a>).</li>
+        <li><strong>오답 감점 여부</strong> — 공개된 근거가 없습니다.
+          "빈칸으로 두지 말라"는 조언은 <strong>감점이 없다는 확인이 아니라
+          정보가 없을 때의 기대값 판단</strong>입니다.</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

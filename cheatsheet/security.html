@@ -1,0 +1,1000 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>보안 치트시트 — Kafka Guide</title>
+  <meta name="description" content="Apache Kafka 4.3 보안 설정 치트시트. SSL(단방향·양방향) · SASL_PLAINTEXT · SASL_SSL 복붙 가능 스니펫, SCRAM 사용자 생성, ACL 부여 명령, listeners와 advertised.listeners 조합 패턴 5가지(내부·외부·Docker·K8s), 인증 실패 로그 읽는 법.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="cheatsheet" data-page="security"></div>
+
+  <main id="main" class="page page--wide" data-page-id="cheatsheet/security">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="cli.html">빠른참조</a></li>
+        <li><span aria-current="page">보안</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">빠른참조 · 보안</p>
+      <h1>보안 치트시트</h1>
+      <p class="page__lead">
+        복사해서 값만 바꾸면 동작하는 설정 스니펫과, 운영자가 가장 많이 틀리는
+        <code>listeners</code> / <code>advertised.listeners</code> /
+        <code>listener.security.protocol.map</code> 조합 패턴 5가지를 정리했습니다.
+        KRaft 기준이며 모든 설정명·기본값은 Apache Kafka 4.3.1 공식 문서에서 확인했습니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">4계층으로 나눠 생각하세요</h2>
+      <ul>
+        <li><strong>암호화</strong> — 전송 구간 TLS. <code>SSL</code> 또는 <code>SASL_SSL</code>.</li>
+        <li><strong>인증(authentication)</strong> — 누구인가. mTLS 인증서 또는 SASL.</li>
+        <li><strong>인가(authorization)</strong> — 무엇을 할 수 있는가. ACL.</li>
+        <li><strong>감사</strong> — 누가 무엇을 했는가. <code>kafka-authorizer.log</code>.</li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="protocol-matrix">
+      <h2 id="protocol-matrix">보안 프로토콜 4종</h2>
+
+      <p>
+        <code>listener.security.protocol.map</code>에 쓸 수 있는 값은 아래 4개뿐입니다
+        (대소문자 구분 없음). 브로커의 기본
+        <code>listener.security.protocol.map</code> 값은
+        <code>SASL_SSL:SASL_SSL,PLAINTEXT:PLAINTEXT,SSL:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT</code>이므로,
+        리스너 이름을 프로토콜 이름과 같게 지으면 이 설정을 생략할 수 있습니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>보안 프로토콜 비교</caption>
+          <thead>
+            <tr>
+              <th scope="col">프로토콜</th>
+              <th scope="col">암호화</th>
+              <th scope="col">인증 주체</th>
+              <th scope="col">Principal 결정</th>
+              <th scope="col">언제 쓰는가</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>PLAINTEXT</code></th>
+              <td><span class="mark-no">없음</span></td>
+              <td>없음 — 누구나 접속</td>
+              <td><code>ANONYMOUS</code></td>
+              <td>로컬 개발 전용. 운영에서 절대 노출하지 마세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SSL</code></th>
+              <td><span class="mark-ok">TLS</span></td>
+              <td>클라이언트 인증서 (mTLS). <code>ssl.client.auth</code>가 <code>required</code>일 때</td>
+              <td>인증서 DN → <code>ssl.principal.mapping.rules</code></td>
+              <td>인증서 관리 체계가 이미 있는 조직</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SASL_PLAINTEXT</code></th>
+              <td><span class="mark-no">없음</span></td>
+              <td>SASL (SCRAM · GSSAPI 등)</td>
+              <td>SASL 사용자명</td>
+              <td>사설망 내부 구간에서만. <strong>PLAIN 메커니즘과 조합하면 비밀번호가 평문으로 흐릅니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SASL_SSL</code></th>
+              <td><span class="mark-ok">TLS</span></td>
+              <td>SASL</td>
+              <td>SASL 사용자명</td>
+              <td><strong>운영 기본 선택.</strong> 암호화 + 사용자 단위 인증</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>SASL 메커니즘 5종 — Apache Kafka 4.3이 지원하는 전부</caption>
+          <thead>
+            <tr>
+              <th scope="col">메커니즘</th>
+              <th scope="col">자격 증명 저장 위치</th>
+              <th scope="col">TLS 필요성</th>
+              <th scope="col">선택 기준</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>PLAIN</code></th>
+              <td>브로커 JAAS 설정 (또는 커스텀 콜백 핸들러)</td>
+              <td><strong>필수.</strong> 공식 문서가 "SSL과만 함께 쓸 것"을 명시합니다</td>
+              <td>가장 단순하지만 사용자 추가에 브로커 재시작이 필요합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SCRAM-SHA-256</code></th>
+              <td><strong>메타데이터 로그</strong> (KRaft)</td>
+              <td>필수 (교환 가로채기 방지)</td>
+              <td>사용자를 <strong>동적으로 추가·변경</strong>할 수 있습니다. 외부 IdP가 없을 때의 기본 선택</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SCRAM-SHA-512</code></th>
+              <td>메타데이터 로그</td>
+              <td>필수</td>
+              <td>SHA-256과 동일. 더 강한 해시</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>GSSAPI</code> (Kerberos)</th>
+              <td>KDC · keytab</td>
+              <td>권장</td>
+              <td>이미 AD/Kerberos를 쓰는 조직. <strong><code>sasl.mechanism</code>의 기본값이 이것</strong>이라 실수로 남는 경우가 많습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>OAUTHBEARER</code></th>
+              <td>외부 OAuth 2.0 IdP</td>
+              <td>필수</td>
+              <td>기본 구현은 <strong>서명 없는 JWT</strong>라 비운영 전용입니다. 운영에는 IdP 연동 구현을 씁니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="가장 흔한 실수">
+        <p>
+          클라이언트의 <code>sasl.mechanism</code> <strong>기본값은 <code>GSSAPI</code></strong>입니다.
+          브로커 <code>sasl.enabled.mechanisms</code>의 기본값도 <code>GSSAPI</code>입니다.
+          SCRAM이나 PLAIN을 쓰려면 <strong>양쪽 모두 명시</strong>해야 합니다.
+          명시하지 않으면 <code>UnsupportedSaslMechanismException</code> 또는
+          Kerberos 설정을 찾지 못해 실패합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="ssl-snippets">
+      <h2 id="ssl-snippets">TLS (SSL) 설정</h2>
+
+      <h3 id="ssl-one-way">단방향 TLS — 암호화만, 클라이언트 인증 없음</h3>
+
+      <figure class="code">
+        <figcaption>server.properties — 브로커</figcaption>
+        <pre><code class="lang-properties">process.roles=broker,controller
+node.id=1
+
+listeners=CLIENT://:9092,CONTROLLER://:9093
+advertised.listeners=CLIENT://kafka-1.example.com:9092
+listener.security.protocol.map=CLIENT:SSL,CONTROLLER:SSL
+inter.broker.listener.name=CLIENT
+controller.listener.names=CONTROLLER
+controller.quorum.bootstrap.servers=kafka-1.example.com:9093
+
+# 브로커 자신의 인증서
+ssl.keystore.location=/var/private/ssl/server.keystore.jks
+ssl.keystore.password=changeit
+ssl.key.password=changeit
+
+# 클라이언트 인증서를 요구하지 않습니다 (기본값이 none 입니다)
+ssl.client.auth=none
+
+# 브로커 간 통신은 서로의 인증서를 검증하므로 truststore 가 필요합니다
+ssl.truststore.location=/var/private/ssl/server.truststore.jks
+ssl.truststore.password=changeit</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>client.properties — 클라이언트</figcaption>
+        <pre><code class="lang-properties">security.protocol=SSL
+ssl.truststore.location=/var/private/ssl/client.truststore.jks
+ssl.truststore.password=changeit
+
+# 기본값이 https 입니다. 호스트명 검증을 켜 두세요.
+# advertised.listeners 의 호스트명이 인증서 SAN 과 일치해야 합니다.
+ssl.endpoint.identification.algorithm=https</code></pre>
+      </figure>
+
+      <h3 id="ssl-mutual">양방향 TLS (mTLS) — 인증서로 인증까지</h3>
+
+      <figure class="code">
+        <figcaption>server.properties — 위 설정에서 이 부분만 변경</figcaption>
+        <pre><code class="lang-properties"># required: 인증서 없는 클라이언트는 거부됩니다.
+# requested 는 공식 문서가 "false sense of security" 라며 권장하지 않습니다
+# (잘못 설정된 클라이언트가 그냥 접속됩니다).
+ssl.client.auth=required
+
+# 클라이언트 인증서를 서명한 CA 를 truststore 에 넣어야 합니다
+ssl.truststore.location=/var/private/ssl/server.truststore.jks
+ssl.truststore.password=changeit
+
+# 인증서 DN 을 어떤 Principal 로 매핑할지.
+# 기본값 DEFAULT 는 전체 DN 을 그대로 Principal 로 씁니다:
+#   User:CN=alice,OU=eng,O=example,L=Seoul,ST=Seoul,C=KR
+# CN 만 쓰고 싶으면 규칙을 지정합니다.
+ssl.principal.mapping.rules=RULE:^CN=(.*?),.*$/$1/,DEFAULT</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>client.properties — 클라이언트 인증서 추가</figcaption>
+        <pre><code class="lang-properties">security.protocol=SSL
+ssl.truststore.location=/var/private/ssl/client.truststore.jks
+ssl.truststore.password=changeit
+
+# 클라이언트 자신의 인증서 (mTLS 에서만 필요)
+ssl.keystore.location=/var/private/ssl/client.keystore.jks
+ssl.keystore.password=changeit
+ssl.key.password=changeit</code></pre>
+      </figure>
+
+      <aside class="note" data-label="PEM 을 쓰는 경우">
+        <p>
+          JKS 대신 PEM을 쓸 수 있습니다. 이 경우
+          <code>ssl.keystore.password</code>와 <code>ssl.truststore.password</code>는
+          <strong>사용되지 않습니다.</strong> 개인키가 암호화되어 있다면
+          <code>ssl.key.password</code>에만 비밀번호를 줍니다.
+          문자열로 직접 넣으려면 <code>ssl.keystore.key</code>,
+          <code>ssl.keystore.certificate.chain</code>,
+          <code>ssl.truststore.certificates</code>를 씁니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="sasl-snippets">
+      <h2 id="sasl-snippets">SASL 설정</h2>
+
+      <h3 id="sasl-scram-ssl">SASL_SSL + SCRAM-SHA-512 (운영 권장)</h3>
+
+      <figure class="code">
+        <figcaption>1단계 — 포맷 시점에 브로커 간 인증용 자격 증명 심기</figcaption>
+        <pre><code class="lang-bash"># 브로커 간 통신에 쓰는 자격 증명은 브로커가 기동하기 "전에" 존재해야 합니다.
+# KRaft 에서는 kafka-storage.sh 로 메타데이터 로그에 직접 심습니다.
+KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"
+
+bin/kafka-storage.sh format -t "$KAFKA_CLUSTER_ID" -c config/server.properties \
+  --add-scram 'SCRAM-SHA-512=[name="admin",password="admin-secret"]'</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>2단계 — server.properties</figcaption>
+        <pre><code class="lang-properties">process.roles=broker,controller
+node.id=1
+
+listeners=CLIENT://:9092,CONTROLLER://:9093
+advertised.listeners=CLIENT://kafka-1.example.com:9092
+listener.security.protocol.map=CLIENT:SASL_SSL,CONTROLLER:SASL_SSL
+inter.broker.listener.name=CLIENT
+controller.listener.names=CONTROLLER
+controller.quorum.bootstrap.servers=kafka-1.example.com:9093
+
+# 기본값이 GSSAPI 이므로 반드시 명시해야 합니다
+sasl.enabled.mechanisms=SCRAM-SHA-512
+sasl.mechanism.inter.broker.protocol=SCRAM-SHA-512
+sasl.mechanism.controller.protocol=SCRAM-SHA-512
+
+# 브로커가 다른 브로커에 접속할 때 쓰는 자격 증명
+listener.name.client.scram-sha-512.sasl.jaas.config=\
+  org.apache.kafka.common.security.scram.ScramLoginModule required \
+  username="admin" \
+  password="admin-secret";
+listener.name.controller.scram-sha-512.sasl.jaas.config=\
+  org.apache.kafka.common.security.scram.ScramLoginModule required \
+  username="admin" \
+  password="admin-secret";
+
+# TLS
+ssl.keystore.location=/var/private/ssl/server.keystore.jks
+ssl.keystore.password=changeit
+ssl.key.password=changeit
+ssl.truststore.location=/var/private/ssl/server.truststore.jks
+ssl.truststore.password=changeit
+
+# 인가
+authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+super.users=User:admin</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>3단계 — 기동 후 애플리케이션 사용자 동적 생성</figcaption>
+        <pre><code class="lang-bash"># 기본 iteration count 는 4096 입니다. 지정하지 않으면 이 값이 쓰입니다.
+bin/kafka-configs.sh --bootstrap-server kafka-1.example.com:9092 \
+  --command-config admin.properties --alter \
+  --add-config 'SCRAM-SHA-512=[iterations=8192,password=alice-secret]' \
+  --entity-type users --entity-name alice
+
+# 확인 (salt · iterations · StoredKey · ServerKey 가 메타데이터 로그에 저장됩니다)
+bin/kafka-configs.sh --bootstrap-server kafka-1.example.com:9092 \
+  --command-config admin.properties --describe \
+  --entity-type users --entity-name alice
+
+# 삭제
+bin/kafka-configs.sh --bootstrap-server kafka-1.example.com:9092 \
+  --command-config admin.properties --alter \
+  --delete-config 'SCRAM-SHA-512' \
+  --entity-type users --entity-name alice</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>4단계 — client.properties</figcaption>
+        <pre><code class="lang-properties">security.protocol=SASL_SSL
+sasl.mechanism=SCRAM-SHA-512
+sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+  username="alice" \
+  password="alice-secret";
+ssl.truststore.location=/var/private/ssl/client.truststore.jks
+ssl.truststore.password=changeit</code></pre>
+      </figure>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          Kafka 4.x의 SCRAM 자격 증명은 <strong>메타데이터 로그(KRaft)</strong>에 저장됩니다.
+          3.x 이전 ZooKeeper 모드에서는 ZooKeeper에 저장되었고
+          <code>--zookeeper</code> 옵션으로 조작했습니다 —
+          그 옵션은 <strong>4.0에서 제거</strong>되었으므로 옛 문서의 명령은 동작하지 않습니다.
+          공식 문서는 이 저장 방식이 "KRaft 컨트롤러가 안전하고 사설망에 있는 설치 환경"에
+          적합하다고 명시합니다.
+        </p>
+      </aside>
+
+      <h3 id="sasl-plaintext">SASL_PLAINTEXT + SCRAM (내부망 전용)</h3>
+
+      <figure class="code">
+        <figcaption>server.properties — TLS 없이 SASL만</figcaption>
+        <pre><code class="lang-properties">listeners=INTERNAL://:9092,CONTROLLER://:9093
+advertised.listeners=INTERNAL://kafka-1.internal:9092
+listener.security.protocol.map=INTERNAL:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT
+inter.broker.listener.name=INTERNAL
+controller.listener.names=CONTROLLER
+controller.quorum.bootstrap.servers=kafka-1.internal:9093
+
+sasl.enabled.mechanisms=SCRAM-SHA-512
+sasl.mechanism.inter.broker.protocol=SCRAM-SHA-512
+sasl.mechanism.controller.protocol=SCRAM-SHA-512
+
+listener.name.internal.scram-sha-512.sasl.jaas.config=\
+  org.apache.kafka.common.security.scram.ScramLoginModule required \
+  username="admin" password="admin-secret";
+listener.name.controller.scram-sha-512.sasl.jaas.config=\
+  org.apache.kafka.common.security.scram.ScramLoginModule required \
+  username="admin" password="admin-secret";</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>client.properties</figcaption>
+        <pre><code class="lang-properties">security.protocol=SASL_PLAINTEXT
+sasl.mechanism=SCRAM-SHA-512
+sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+  username="alice" password="alice-secret";</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="언제 허용되는가">
+        <p>
+          SCRAM은 비밀번호를 평문으로 보내지 않으므로 TLS 없이도 비밀번호 자체는 노출되지 않습니다.
+          하지만 <strong>메시지 본문은 평문으로 흐릅니다.</strong>
+          그리고 공식 문서는 SCRAM 교환 가로채기(dictionary·brute force) 방지를 위해
+          <strong>TLS와 함께 쓸 것을 권고</strong>합니다.
+          <code>PLAIN</code> 메커니즘을 <code>SASL_PLAINTEXT</code>와 조합하면
+          <strong>비밀번호가 그대로 네트워크를 흐릅니다</strong> — 절대 하지 마세요.
+        </p>
+      </aside>
+
+      <h3 id="sasl-plain">SASL_SSL + PLAIN</h3>
+
+      <figure class="code">
+        <figcaption>server.properties — 사용자를 브로커 설정에 나열</figcaption>
+        <pre><code class="lang-properties">listeners=CLIENT://:9092,CONTROLLER://:9093
+listener.security.protocol.map=CLIENT:SASL_SSL,CONTROLLER:SASL_SSL
+inter.broker.listener.name=CLIENT
+controller.listener.names=CONTROLLER
+
+sasl.enabled.mechanisms=PLAIN
+sasl.mechanism.inter.broker.protocol=PLAIN
+
+# username/password 는 브로커가 "다른 브로커에 접속할 때" 쓰는 자격 증명
+# user_{이름}={비밀번호} 는 이 브로커가 "받아들일" 사용자 목록
+listener.name.client.plain.sasl.jaas.config=\
+  org.apache.kafka.common.security.plain.PlainLoginModule required \
+  username="admin" \
+  password="admin-secret" \
+  user_admin="admin-secret" \
+  user_alice="alice-secret";</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="PLAIN 의 한계">
+        <p>
+          사용자를 추가하려면 <strong>브로커 설정을 바꾸고 재시작</strong>해야 합니다.
+          동적 사용자 관리가 필요하면 SCRAM을 쓰거나
+          <code>sasl.server.callback.handler.class</code>로 외부 인증 서버를 연결해야 합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="listener-patterns">
+      <h2 id="listener-patterns">리스너 조합 패턴 5가지</h2>
+
+      <p>
+        운영자가 가장 많이 틀리는 부분입니다. 세 설정의 역할을 먼저 분리하세요.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>세 설정의 역할</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">누가 쓰는가</th><th scope="col">무엇을 정하는가</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>listeners</code></th>
+              <td>브로커 자신</td>
+              <td><strong>어디에 바인딩</strong>할지. <code>이름://호스트:포트</code>. 호스트를 비우면 모든 인터페이스</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>advertised.listeners</code></th>
+              <td>클라이언트</td>
+              <td>메타데이터 응답으로 <strong>클라이언트에게 알릴 주소</strong>. 클라이언트가 실제로 접속할 주소여야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>listener.security.protocol.map</code></th>
+              <td>브로커</td>
+              <td>리스너 <strong>이름 → 보안 프로토콜</strong> 매핑. 이름을 프로토콜과 다르게 지었으면 필수</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="접속 실패의 원인 1위">
+        <p>
+          클라이언트는 <code>bootstrap.servers</code>로 <strong>한 번</strong> 연결하고,
+          그 다음부터는 <strong>메타데이터로 받은 <code>advertised.listeners</code> 주소</strong>로 접속합니다.
+          Docker·K8s에서 컨테이너 내부 주소가 광고되면
+          <strong>부트스트랩은 성공하고 실제 produce/fetch만 실패</strong>합니다.
+          "연결은 되는데 타임아웃이 난다"의 거의 모든 원인이 이것입니다.
+        </p>
+      </aside>
+
+      <h3 id="pattern-1">패턴 1 — 단일 리스너 (로컬 개발)</h3>
+
+      <figure class="code">
+        <figcaption>server.properties</figcaption>
+        <pre><code class="lang-properties">process.roles=broker,controller
+node.id=1
+
+# 리스너 이름을 프로토콜 이름과 같게 지으면
+# listener.security.protocol.map 을 생략할 수 있습니다.
+listeners=PLAINTEXT://:9092,CONTROLLER://:9093
+listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+inter.broker.listener.name=PLAINTEXT
+controller.listener.names=CONTROLLER
+controller.quorum.bootstrap.servers=localhost:9093
+
+# 생략하면 listeners 값이 그대로 광고됩니다.
+# localhost 로 접속하는 로컬 개발에서는 이대로도 동작합니다.
+advertised.listeners=PLAINTEXT://localhost:9092</code></pre>
+      </figure>
+
+      <h3 id="pattern-2">패턴 2 — 내부 / 외부 분리 (사내망 + 외부 클라이언트)</h3>
+
+      <figure class="code">
+        <figcaption>server.properties — 두 개의 클라이언트 리스너</figcaption>
+        <pre><code class="lang-properties">process.roles=broker
+node.id=1
+
+# INTERNAL: 브로커 간 복제 + 사내 클라이언트 (사설 IP)
+# EXTERNAL: 외부 클라이언트 (공인 도메인, 인증 강제)
+# CONTROLLER: 컨트롤러 통신 — listeners 에 없어도 반드시 "정의"해야 합니다
+listeners=INTERNAL://:9092,EXTERNAL://:9094
+advertised.listeners=INTERNAL://kafka-1.internal:9092,EXTERNAL://kafka-1.example.com:9094
+listener.security.protocol.map=INTERNAL:SASL_PLAINTEXT,EXTERNAL:SASL_SSL,CONTROLLER:SASL_SSL
+
+inter.broker.listener.name=INTERNAL
+controller.listener.names=CONTROLLER
+controller.quorum.bootstrap.servers=controller-1.internal:9093,controller-2.internal:9093,controller-3.internal:9093
+
+sasl.enabled.mechanisms=SCRAM-SHA-512
+sasl.mechanism.inter.broker.protocol=SCRAM-SHA-512
+sasl.mechanism.controller.protocol=SCRAM-SHA-512</code></pre>
+      </figure>
+
+      <aside class="note" data-label="리스너별로 다른 설정을 주기">
+        <p>
+          <code>listener.name.{리스너이름소문자}.{설정}</code> 형태로
+          리스너마다 다른 값을 줄 수 있습니다. 예를 들어 외부 리스너만 mTLS를 요구하려면
+          <code>listener.name.external.ssl.client.auth=required</code>를 씁니다.
+        </p>
+      </aside>
+
+      <h3 id="pattern-3">패턴 3 — 브로커 전용 노드 (역할 분리)</h3>
+
+      <figure class="code">
+        <figcaption>server.properties — <code>process.roles=broker</code></figcaption>
+        <pre><code class="lang-properties">process.roles=broker
+node.id=11
+
+# 컨트롤러 역할이 없으므로 CONTROLLER 를 listeners 에 넣지 않습니다.
+# 브로커가 컨트롤러 리스너를 "노출"하지는 않기 때문입니다.
+listeners=BROKER://:9092
+advertised.listeners=BROKER://kafka-1.internal:9092
+inter.broker.listener.name=BROKER
+
+# 하지만 컨트롤러에 "접속"해야 하므로 리스너 이름과 보안 설정은 정의해야 합니다.
+# 포트는 controller.quorum.bootstrap.servers 에서 옵니다.
+controller.listener.names=CONTROLLER
+controller.quorum.bootstrap.servers=controller-1.internal:9093,controller-2.internal:9093,controller-3.internal:9093
+listener.security.protocol.map=BROKER:SASL_SSL,CONTROLLER:SASL_SSL</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>controller.properties — <code>process.roles=controller</code></figcaption>
+        <pre><code class="lang-properties">process.roles=controller
+node.id=1
+
+# 컨트롤러는 컨트롤러 리스너를 실제로 노출합니다.
+listeners=CONTROLLER://:9093
+controller.listener.names=CONTROLLER
+controller.quorum.bootstrap.servers=controller-1.internal:9093,controller-2.internal:9093,controller-3.internal:9093
+listener.security.protocol.map=CONTROLLER:SASL_SSL
+
+# 컨트롤러 전용 노드는 advertised.listeners 를 쓰지 않습니다
+# (클라이언트가 붙는 대상이 아닙니다).</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="자주 틀리는 지점">
+        <p>
+          <code>controller.listener.names</code>는
+          <strong><code>inter.broker.listener.name</code>과 같은 값을 쓸 수 없습니다.</strong>
+          그리고 <code>controller.quorum.bootstrap.servers</code>의 호스트·포트는
+          실제로 노출된 컨트롤러 리스너로 <strong>라우팅되어야</strong> 합니다.
+        </p>
+      </aside>
+
+      <h3 id="pattern-4">패턴 4 — Docker Compose</h3>
+
+      <figure class="code">
+        <figcaption>docker-compose.yml — 컨테이너 내부와 호스트 양쪽에서 접속</figcaption>
+        <pre><code class="lang-yaml">services:
+  kafka-1:
+    image: apache/kafka:4.3.1
+    hostname: kafka-1
+    ports:
+      - "19092:19092"          # 호스트에서 접속할 포트
+    environment:
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+
+      # DOCKER  : 컨테이너 네트워크 내부에서 서비스명으로 접속 (다른 컨테이너용)
+      # HOST    : 호스트 머신에서 localhost 로 접속 (개발자 노트북용)
+      # CONTROLLER: 컨트롤러 쿼럼
+      KAFKA_LISTENERS: DOCKER://:9092,HOST://:19092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: DOCKER://kafka-1:9092,HOST://localhost:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: DOCKER:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_BOOTSTRAP_SERVERS: kafka-1:9093
+
+      # 단일 노드에서는 내부 토픽 RF 를 1 로 낮춰야 기동합니다
+      # (기본값 3 이라 브로커 1대에서는 InvalidReplicationFactorException)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1</code></pre>
+      </figure>
+
+      <aside class="note" data-label="왜 리스너가 두 개 필요한가">
+        <p>
+          컨테이너 안의 클라이언트는 <code>kafka-1:9092</code>로 접속해야 하고,
+          호스트의 클라이언트는 <code>localhost:19092</code>로 접속해야 합니다.
+          <strong>하나의 <code>advertised.listeners</code> 값으로 둘을 만족시킬 수 없습니다.</strong>
+          그래서 리스너를 두 개 두고 각각 다른 주소를 광고합니다.
+          동작하는 3노드 구성은 <a href="../practice/ex01.html">예제 1</a>에 있습니다.
+        </p>
+      </aside>
+
+      <h3 id="pattern-5">패턴 5 — Kubernetes (StatefulSet + 파드별 외부 노출)</h3>
+
+      <figure class="code">
+        <figcaption>브로커 컨테이너 진입 스크립트 — 파드 서수로 주소를 계산</figcaption>
+        <pre><code class="lang-bash">#!/usr/bin/env bash
+set -euo pipefail
+
+# StatefulSet 의 파드 이름은 kafka-0, kafka-1, … 형태로 안정적입니다.
+ORDINAL="${HOSTNAME##*-}"
+NODE_ID=$((ORDINAL + 1))
+
+# INTERNAL : 클러스터 내부 — headless Service 의 안정적 DNS 이름
+# EXTERNAL : 클러스터 외부 — 파드별 LoadBalancer/NodePort 도메인
+#            파드마다 값이 달라야 하므로 여기서 계산합니다.
+INTERNAL_HOST="${HOSTNAME}.kafka-headless.${POD_NAMESPACE}.svc.cluster.local"
+EXTERNAL_HOST="kafka-${ORDINAL}.${EXTERNAL_DOMAIN}"
+
+exec /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties \
+  --override node.id="${NODE_ID}" \
+  --override listeners="INTERNAL://:9092,EXTERNAL://:9094" \
+  --override advertised.listeners="INTERNAL://${INTERNAL_HOST}:9092,EXTERNAL://${EXTERNAL_HOST}:9094" \
+  --override listener.security.protocol.map="INTERNAL:SASL_SSL,EXTERNAL:SASL_SSL,CONTROLLER:SASL_SSL" \
+  --override inter.broker.listener.name="INTERNAL" \
+  --override controller.listener.names="CONTROLLER" \
+  --override controller.quorum.bootstrap.servers="kafka-controller-0.kafka-controller-headless.${POD_NAMESPACE}.svc.cluster.local:9093"</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="K8s 에서 반드시 확인할 것">
+        <p>
+          <strong>단일 <code>Service</code>로 모든 브로커를 노출하면 동작하지 않습니다.</strong>
+          클라이언트는 특정 파티션의 <strong>리더 브로커에 직접</strong> 접속해야 하는데,
+          로드밸런서가 임의의 브로커로 보내면 <code>NotLeaderOrFollowerException</code>이
+          반복됩니다. 브로커마다 개별 주소가 필요합니다
+          (파드별 Service, 또는 브로커 ID를 SNI/포트로 구분).
+        </p>
+        <p>
+          그리고 TLS 인증서의 SAN에 <strong>광고하는 모든 호스트명</strong>이 들어가야 합니다.
+          내부 DNS 이름과 외부 도메인을 함께 광고하면 둘 다 필요합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="acl">
+      <h2 id="acl">ACL</h2>
+
+      <h3 id="acl-setup">Authorizer 켜기</h3>
+
+      <figure class="code">
+        <figcaption>server.properties — 모든 노드(브로커·컨트롤러·combined)에 적용</figcaption>
+        <pre><code class="lang-properties"># KRaft 는 ACL 을 클러스터 메타데이터(KRaft 메타데이터 로그)에 저장합니다
+authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+
+# 구분자는 세미콜론입니다 (SSL DN 에 콤마가 들어갈 수 있으므로).
+# PrincipalType 문자열 "User" 는 대소문자를 구분합니다.
+super.users=User:admin;User:kafka-operator
+
+# ACL 이 없는 리소스는 기본적으로 거부됩니다 (super user 만 접근 가능).
+# 아래를 true 로 두면 ACL 이 "하나도 없는" 리소스만 모두에게 열립니다.
+# ACL 이 하나라도 있으면 이 설정과 무관하게 ACL 이 적용됩니다.
+#allow.everyone.if.no.acl.found=true</code></pre>
+      </figure>
+
+      <aside class="note" data-label="기본값 확인 메모">
+        <p>
+          <code>super.users</code>와 <code>allow.everyone.if.no.acl.found</code>는
+          브로커 <code>ConfigDef</code>가 아니라 <strong>Authorizer 구현이 읽는 설정</strong>이라
+          공식 설정 표에 기본값이 실려 있지 않습니다.
+          <code>StandardAuthorizer</code> 소스 확인 결과
+          <code>super.users</code>는 미설정 시 <strong>빈 집합</strong>,
+          <code>allow.everyone.if.no.acl.found</code>는 미설정 시
+          <strong><code>DENIED</code></strong>(=<code>false</code>와 동일)입니다.
+        </p>
+      </aside>
+
+      <h3 id="acl-commands">자주 쓰는 ACL 명령</h3>
+
+      <figure class="code">
+        <figcaption>편의 옵션 — 이것부터 쓰세요</figcaption>
+        <pre><code class="lang-bash">export BS=localhost:9092
+CC="--command-config admin.properties"
+
+# 프로듀서 역할: 토픽에 WRITE, DESCRIBE, CREATE 를 한 번에 부여
+bin/kafka-acls.sh --bootstrap-server $BS $CC --add \
+  --allow-principal User:Bob --producer --topic orders
+
+# 멱등 프로듀서라면 --idempotent 를 함께 (Cluster IdempotentWrite)
+bin/kafka-acls.sh --bootstrap-server $BS $CC --add \
+  --allow-principal User:Bob --producer --idempotent --topic orders
+
+# 컨슈머 역할: 토픽에 READ·DESCRIBE + 그룹에 READ
+# 그룹 권한을 빼먹는 것이 가장 흔한 실수입니다
+bin/kafka-acls.sh --bootstrap-server $BS $CC --add \
+  --allow-principal User:Bob --consumer --topic orders --group order-processor
+
+# 접두어 기반 — 토픽이 늘어나도 재부여가 필요 없습니다
+bin/kafka-acls.sh --bootstrap-server $BS $CC --add \
+  --allow-principal User:Jane --producer \
+  --topic "order-" --resource-pattern-type prefixed
+
+# 조회
+bin/kafka-acls.sh --bootstrap-server $BS $CC --list --topic orders
+
+# 특정 토픽에 매칭되는 모든 패턴(literal + prefixed + wildcard)을 함께 보기
+bin/kafka-acls.sh --bootstrap-server $BS $CC --list \
+  --topic orders --resource-pattern-type match
+
+# 제거 — 부여할 때와 같은 인자로
+bin/kafka-acls.sh --bootstrap-server $BS $CC --remove \
+  --allow-principal User:Bob --producer --topic orders --force</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>세밀한 제어 — 오퍼레이션을 직접 지정</figcaption>
+        <pre><code class="lang-bash"># 여러 principal · 여러 host · 여러 operation 을 한 번에
+bin/kafka-acls.sh --bootstrap-server $BS $CC --add \
+  --allow-principal User:Bob --allow-principal User:Alice \
+  --allow-host 198.51.100.0 --allow-host 198.51.100.1 \
+  --operation Read --operation Write \
+  --topic orders
+
+# Deny 는 Allow 를 이깁니다. 특정 principal 만 차단할 때 씁니다.
+bin/kafka-acls.sh --bootstrap-server $BS $CC --add \
+  --allow-principal User:'*' --allow-host '*' \
+  --deny-principal User:BadBob --deny-host 198.51.100.3 \
+  --operation Read --topic orders
+
+# 트랜잭션 프로듀서
+bin/kafka-acls.sh --bootstrap-server $BS $CC --add \
+  --allow-principal User:Bob \
+  --operation Write --operation Describe \
+  --transactional-id order-tx-
+
+# 클러스터 레벨 (재할당·브로커 설정 변경 등)
+bin/kafka-acls.sh --bootstrap-server $BS $CC --add \
+  --allow-principal User:kafka-operator \
+  --operation Alter --operation ClusterAction --cluster</code></pre>
+      </figure>
+
+      <h3 id="acl-matrix">역할별 필요 권한</h3>
+
+      <div class="toolbar">
+        <div class="field">
+          <label for="f-acl">권한 검색</label>
+          <input class="cheat-filter" id="f-acl" data-target="#t-acl" type="search"
+                 placeholder="설정명으로 검색 (예: Read, Group, Transactional)" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-acl">
+          <caption>역할별 필요 ACL — 공식 문서의 오퍼레이션·리소스 매핑 기준</caption>
+          <thead>
+            <tr>
+              <th scope="col">하려는 일</th>
+              <th scope="col">Operation</th>
+              <th scope="col">Resource</th>
+              <th scope="col">메모</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">일반 produce</th><td><code>Write</code></td><td>Topic</td><td></td></tr>
+            <tr><th scope="row">멱등 produce</th><td><code>IdempotentWrite</code></td><td>Cluster</td><td>4.x는 멱등성이 기본 <code>true</code></td></tr>
+            <tr><th scope="row">트랜잭션 produce</th><td><code>Write</code></td><td>TransactionalId</td><td><code>transactional.id</code>를 설정한 프로듀서</td></tr>
+            <tr><th scope="row">일반 consume (fetch)</th><td><code>Read</code></td><td>Topic</td><td>파티션마다 필요합니다</td></tr>
+            <tr><th scope="row">오프셋 커밋</th><td><code>Read</code></td><td>Group <strong>+</strong> Topic</td><td><strong>둘 다</strong> 필요합니다. 그룹 권한 누락이 가장 흔한 실수</td></tr>
+            <tr><th scope="row">오프셋 조회</th><td><code>Describe</code></td><td>Group + Topic</td><td></td></tr>
+            <tr><th scope="row">그룹 조인 · 하트비트 · 리브 · 동기화</th><td><code>Read</code></td><td>Group</td><td>JOIN_GROUP / HEARTBEAT / LEAVE_GROUP / SYNC_GROUP</td></tr>
+            <tr><th scope="row">그룹 상세 조회</th><td><code>Describe</code></td><td>Group</td><td></td></tr>
+            <tr><th scope="row">그룹 목록 조회</th><td><code>Describe</code></td><td>Cluster 또는 Group</td><td>클러스터 권한이 없으면 권한 있는 그룹만 반환됩니다</td></tr>
+            <tr><th scope="row">코디네이터 찾기 (컨슈머)</th><td><code>Describe</code></td><td>Group</td><td>FIND_COORDINATOR</td></tr>
+            <tr><th scope="row">코디네이터 찾기 (트랜잭션)</th><td><code>Describe</code></td><td>TransactionalId</td><td></td></tr>
+            <tr><th scope="row">메타데이터 조회</th><td><code>Describe</code></td><td>Topic</td><td>이것이 없으면 토픽이 존재하지 않는 것처럼 보입니다</td></tr>
+            <tr><th scope="row">토픽 자동 생성</th><td><code>Create</code></td><td>Cluster 또는 Topic</td><td>클러스터 권한을 먼저 확인하고, 없으면 토픽 레벨로 폴백합니다</td></tr>
+            <tr><th scope="row">토픽 생성 (명시)</th><td><code>Create</code></td><td>Cluster 또는 Topic</td><td>클러스터 권한이 없으면 <code>CLUSTER_AUTHORIZATION_FAILED</code>가 아니라 토픽 권한으로 폴백합니다</td></tr>
+            <tr><th scope="row">토픽 삭제</th><td><code>Delete</code></td><td>Topic</td><td></td></tr>
+            <tr><th scope="row">레코드 삭제</th><td><code>Delete</code></td><td>Topic</td><td><code>kafka-delete-records.sh</code></td></tr>
+            <tr><th scope="row">오프셋 조회 (LIST_OFFSETS)</th><td><code>Describe</code></td><td>Topic</td><td><code>kafka-get-offsets.sh</code></td></tr>
+            <tr><th scope="row">producer ID 초기화</th><td><code>Write</code> / <code>IdempotentWrite</code></td><td>TransactionalId / Cluster</td><td>INIT_PRODUCER_ID</td></tr>
+            <tr><th scope="row">트랜잭션 오프셋 커밋</th><td><code>Write</code> + <code>Read</code></td><td>TransactionalId + Group</td><td>TXN_OFFSET_COMMIT</td></tr>
+            <tr><th scope="row">팔로워 복제 (브로커 간)</th><td><code>ClusterAction</code></td><td>Cluster</td><td>브로커 principal에 필요합니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals · Security">
+        <p>
+          <strong>인증(authentication)과 인가(authorization)를 구분</strong>하는 문항이 반복됩니다.
+          접속은 되는데 특정 작업만 실패하면 <strong>인가(ACL)</strong> 문제입니다.
+          접속 자체가 안 되면 인증 또는 TLS 문제입니다.
+        </p>
+        <p>
+          그리고 컨슈머에게 <strong>토픽 READ만 주고 그룹 READ를 빼먹으면</strong>
+          <code>GroupAuthorizationException</code>이 발생합니다.
+          <code>--consumer</code> 편의 옵션은 이 둘을 함께 부여하므로
+          "가장 적절한 명령"을 고르는 문항에서 정답이 되기 쉽습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="tls-troubleshooting">
+      <h2 id="tls-troubleshooting">인증 실패 로그 읽는 법</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>증상별 원인과 확인 방법</caption>
+          <thead>
+            <tr><th scope="col">증상</th><th scope="col">가장 흔한 원인</th><th scope="col">확인</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>SaslAuthenticationException</code>: Authentication failed</th>
+              <td>사용자명·비밀번호 오류, 또는 SCRAM 자격 증명이 아직 생성되지 않음</td>
+              <td><code>kafka-configs.sh --describe --entity-type users --entity-name alice</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>UnsupportedSaslMechanismException</code></th>
+              <td>클라이언트 <code>sasl.mechanism</code>이 브로커 <code>sasl.enabled.mechanisms</code>에 없음</td>
+              <td>양쪽 설정 비교. 클라이언트 기본값은 <code>GSSAPI</code>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SslAuthenticationException</code>: certificate_unknown</th>
+              <td>브로커 인증서를 서명한 CA가 클라이언트 truststore에 없음</td>
+              <td><code>keytool -list -v -keystore client.truststore.jks</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SslAuthenticationException</code>: bad_certificate</th>
+              <td>mTLS인데 클라이언트 인증서가 없거나 브로커 truststore가 서명자를 모름</td>
+              <td>브로커 <code>ssl.client.auth</code> 값과 브로커 truststore 확인</td>
+            </tr>
+            <tr>
+              <th scope="row">호스트명 검증 실패 (No subject alternative names)</th>
+              <td><code>advertised.listeners</code>의 호스트명이 인증서 SAN에 없음</td>
+              <td><code>openssl x509 -in server.crt -noout -text | grep -A1 "Subject Alternative Name"</code></td>
+            </tr>
+            <tr>
+              <th scope="row">CLI가 아무 메시지 없이 타임아웃</th>
+              <td><code>--command-config</code> 누락. 인증 실패가 타임아웃으로 보입니다</td>
+              <td>프로퍼티 파일을 넘기고 다시 실행</td>
+            </tr>
+            <tr>
+              <th scope="row">부트스트랩은 되는데 produce/fetch만 타임아웃</th>
+              <td><code>advertised.listeners</code>가 클라이언트가 도달할 수 없는 주소</td>
+              <td><code>kafka-broker-api-versions.sh --bootstrap-server …</code> 출력의 호스트명 확인</td>
+            </tr>
+            <tr>
+              <th scope="row">인증은 되는데 특정 작업만 거부</th>
+              <td>ACL 누락</td>
+              <td><code>kafka-authorizer.log</code>에 거부 이유가 남습니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="code">
+        <figcaption>TLS 핸드셰이크를 클라이언트에서 직접 보기</figcaption>
+        <pre><code class="lang-bash"># 1) JVM TLS 디버그 — 가장 정확합니다
+KAFKA_OPTS="-Djavax.net.debug=ssl:handshake" \
+  bin/kafka-topics.sh --bootstrap-server kafka-1.example.com:9093 \
+  --command-config client.properties --list 2&gt;&amp;1 | head -80
+
+# 2) 브로커가 실제로 제시하는 인증서 체인 확인
+openssl s_client -connect kafka-1.example.com:9093 -showcerts &lt;/dev/null
+
+# 3) SAN 확인 — advertised.listeners 의 호스트명이 여기 있어야 합니다
+openssl s_client -connect kafka-1.example.com:9093 &lt;/dev/null 2&gt;/dev/null \
+  | openssl x509 -noout -text | grep -A1 "Subject Alternative Name"
+
+# 4) truststore 내용 확인
+keytool -list -v -keystore client.truststore.jks -storepass changeit | grep -E "Alias|Owner|Valid"</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>ACL 거부 이유를 로그에서 찾기 (재시작 없이)</figcaption>
+        <pre><code class="lang-bash"># Authorizer 로거를 DEBUG 로
+bin/kafka-configs.sh --bootstrap-server $BS --command-config admin.properties --alter \
+  --entity-type broker-loggers --entity-name 1 \
+  --add-config org.apache.kafka.metadata.authorizer.StandardAuthorizer=DEBUG
+
+# 문제를 재현한 뒤 로그 확인
+tail -f /var/log/kafka/kafka-authorizer.log
+
+# 조사가 끝나면 반드시 되돌립니다 (DEBUG 를 켜 두면 디스크가 빠르게 찹니다)
+bin/kafka-configs.sh --bootstrap-server $BS --command-config admin.properties --alter \
+  --entity-type broker-loggers --entity-name 1 \
+  --add-config org.apache.kafka.metadata.authorizer.StandardAuthorizer=INFO</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="호스트명 검증을 끄고 싶을 때">
+        <p>
+          <code>ssl.endpoint.identification.algorithm</code>의 기본값은 <code>https</code>이고,
+          <strong>빈 문자열로 두면 검증을 끕니다.</strong>
+          공식 문서에도 이 방법이 나오지만, 이는 <strong>중간자 공격을 허용</strong>하는 것입니다.
+          운영에서 이 값을 비우기 전에 인증서 SAN을 고치는 쪽을 먼저 검토하세요.
+        </p>
+        <figure class="code">
+          <figcaption>브로커 리스너별로 동적 변경 (긴급 시)</figcaption>
+          <pre><code class="lang-bash">bin/kafka-configs.sh --bootstrap-server localhost:9093 \
+  --entity-type brokers --entity-name 0 --alter \
+  --add-config "listener.name.internal.ssl.endpoint.identification.algorithm="</code></pre>
+        </figure>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="security-checklist">
+      <h2 id="security-checklist">운영 전환 체크리스트</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>PLAINTEXT 개발 클러스터를 운영으로 올릴 때</caption>
+          <thead>
+            <tr><th scope="col">항목</th><th scope="col">확인 방법</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>PLAINTEXT</code> 리스너가 외부에 노출되어 있지 않은가</th><td><code>advertised.listeners</code>와 방화벽 규칙 확인</td></tr>
+            <tr><th scope="row"><code>authorizer.class.name</code>이 설정되어 있는가</th><td>미설정이면 <strong>인가를 전혀 하지 않습니다</strong></td></tr>
+            <tr><th scope="row"><code>super.users</code>가 최소 인원인가</th><td>super user는 ACL을 우회합니다</td></tr>
+            <tr><th scope="row"><code>allow.everyone.if.no.acl.found</code>가 켜져 있지 않은가</th><td>기본은 거부입니다. 켜면 ACL 없는 리소스가 전부 열립니다</td></tr>
+            <tr><th scope="row"><code>ssl.endpoint.identification.algorithm</code>이 비어 있지 않은가</th><td>빈 값이면 호스트명 검증이 꺼집니다</td></tr>
+            <tr><th scope="row"><code>ssl.client.auth</code>가 <code>requested</code>가 아닌가</th><td>공식 문서가 권장하지 않는 값입니다. <code>required</code> 또는 <code>none</code></td></tr>
+            <tr><th scope="row">JMX 원격 포트에 인증이 걸려 있는가</th><td>Kafka는 JMX 인증을 기본적으로 켜지 않습니다</td></tr>
+            <tr><th scope="row">인증서 만료일을 모니터링하는가</th><td>만료 시 전면 장애가 됩니다</td></tr>
+            <tr><th scope="row"><code>auto.create.topics.enable</code>이 꺼져 있는가</th><td>켜져 있으면 Topic <code>Create</code> 권한 설계가 무의미해집니다</td></tr>
+            <tr><th scope="row">브로커 간 통신도 암호화·인증되는가</th><td><code>inter.broker.listener.name</code>의 프로토콜 확인</td></tr>
+            <tr><th scope="row">컨트롤러 리스너도 보호되는가</th><td><code>controller.listener.names</code>의 프로토콜 확인. 여기에 ACL이 없으면 메타데이터가 노출됩니다</td></tr>
+            <tr><th scope="row">평문 비밀번호가 설정 파일에 남아 있지 않은가</th><td>Configuration Provider 또는 시크릿 관리 도구 사용</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="cli.html">
+          <span class="card__title">CLI 치트시트</span>
+          <span class="card__desc"><code>--command-config</code> 사용법과 ACL·SCRAM 명령 색인.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc"><code>ssl.*</code>·<code>sasl.*</code>·<code>listener.*</code> 기본값.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="troubleshooting.html">
+          <span class="card__title">트러블슈팅 치트시트</span>
+          <span class="card__desc">인증·인가 예외의 원인과 대응.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch11.html">
+          <span class="card__title">11장 · 운영 기초</span>
+          <span class="card__desc">보안 4계층의 배경과 SASL 메커니즘 선택 기준.</span>
+          <span class="card__meta">기본개념</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex01.html">
+          <span class="card__title">예제 1 · 로컬 KRaft 클러스터</span>
+          <span class="card__desc">리스너 조합이 실제로 동작하는 compose 구성.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="../ccaak/index.html">
+          <span class="card__title">CCAAK 개요</span>
+          <span class="card__desc">Security 도메인은 실수가 가장 많은 영역입니다.</span>
+          <span class="card__meta">자격증</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>
+        설정명·기본값·명령 형태는 Apache Kafka 4.3.1 공식 문서에서 확인했습니다.
+        <code>super.users</code>와 <code>allow.everyone.if.no.acl.found</code>의 기본 동작은
+        설정 표에 없어 <code>StandardAuthorizer</code> 소스로 확인했습니다.
+        리스너 패턴 4·5(Docker · Kubernetes)의 구성은 공식 문서의 설정 규칙을 적용한
+        이 가이드의 구성이며, 공식 문서가 제시한 예시가 아닙니다.
+      </p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#security" rel="noopener noreferrer">Security</a> — 전체 개요</li>
+        <li><a href="https://kafka.apache.org/documentation/#listener_configuration" rel="noopener noreferrer">Listener Configuration</a> — <code>listeners</code> · <code>listener.security.protocol.map</code> · <code>controller.listener.names</code>, 브로커 전용/combined 노드 예시</li>
+        <li><a href="https://kafka.apache.org/documentation/#security_ssl" rel="noopener noreferrer">Encryption and Authentication using SSL</a> — <code>ssl.client.auth</code>, PEM 사용 시 주의, 호스트명 검증 끄기</li>
+        <li><a href="https://kafka.apache.org/documentation/#security_sasl" rel="noopener noreferrer">Authentication using SASL</a> — 메커니즘 5종, JAAS 우선순위, 리스너별 JAAS 설정</li>
+        <li><a href="https://kafka.apache.org/documentation/#security_sasl_scram" rel="noopener noreferrer">Authentication using SASL/SCRAM</a> — <code>kafka-storage.sh --add-scram</code>, 동적 자격 증명 관리, 기본 iteration 4096</li>
+        <li><a href="https://kafka.apache.org/documentation/#security_sasl_plain" rel="noopener noreferrer">Authentication using SASL/PLAIN</a> — <code>user_{name}</code> 형식과 운영 시 주의</li>
+        <li><a href="https://kafka.apache.org/documentation/#security_authz" rel="noopener noreferrer">Authorization and ACLs</a> — <code>StandardAuthorizer</code>, <code>super.users</code> 구분자, 프로토콜별 필요 권한 표, <code>kafka-acls.sh</code> 옵션</li>
+        <li><a href="https://kafka.apache.org/documentation/#security_delegation_token" rel="noopener noreferrer">Delegation Tokens</a></li>
+        <li><a href="https://github.com/apache/kafka/blob/4.3/metadata/src/main/java/org/apache/kafka/metadata/authorizer/StandardAuthorizer.java" rel="noopener noreferrer">apache/kafka 4.3 — <code>StandardAuthorizer.java</code></a> — <code>super.users</code> · <code>allow.everyone.if.no.acl.found</code> 미설정 시 동작</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

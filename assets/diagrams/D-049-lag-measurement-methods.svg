@@ -1,0 +1,95 @@
+<svg viewBox="0 0 720 430" role="img" class="kg-diagram"
+     aria-labelledby="d049-title d049-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d049-title">컨슈머 lag 측정 3가지 방법 — 무엇을 재고 어떤 함정이 있는가</title>
+  <desc id="d049-desc">컨슈머 lag 을 확인하는 세 가지 경로를 비교합니다.
+    첫째는 CLI 입니다. kafka-consumer-groups 명령의 describe 로 CURRENT-OFFSET, LOG-END-OFFSET, LAG 열을 봅니다.
+    커밋된 오프셋을 기준으로 하므로 커밋 주기가 길면 실제보다 크게 보이고, 실행한 순간의 값만 알 수 있어 추세를 볼 수 없습니다.
+    둘째는 클라이언트 메트릭입니다. consumer-fetch-manager-metrics 의 records-lag, records-lag-max, records-lag-avg 를 봅니다.
+    공식 문서가 명시하듯 이 값은 커밋 오프셋이 아니라 현재 위치를 기준으로 하며, 컨슈머 프로세스가 발행하므로
+    컨슈머가 죽으면 값 자체가 사라져 가장 위험한 상황에서 아무것도 보이지 않습니다.
+    셋째는 브로커 메트릭입니다. 브로커에는 컨슈머 lag 메트릭이 없습니다.
+    이름이 ConsumerLag 인 FetcherLagMetrics 는 팔로워 레플리카의 복제 lag 이며 컨슈머와 무관합니다.
+    브로커 쪽에서 보려면 __consumer_offsets 와 로그 끝 오프셋을 읽어 계산하는 외부 exporter 가 필요합니다.
+    결론은 클라이언트 메트릭으로 상시 감시하고, 컨슈머가 죽은 경우를 대비해 외부 exporter 를 함께 두는 것입니다.</desc>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">세 방법이 <tspan class="dg-bold">서로 다른 값</tspan> 을 봅니다. 어느 것 하나로는 부족합니다.</text>
+
+  <!-- ═══ 1. CLI ═══ -->
+  <rect class="dg-node dg-node--accent" x="8" y="32" width="228" height="26" rx="3"/>
+  <text x="18" y="50" class="dg-fs-sm dg-bold">① CLI</text>
+
+  <rect class="dg-node" x="8" y="64" width="228" height="76" rx="4"/>
+  <text x="18" y="82" class="dg-fs-sm dg-bold">명령</text>
+  <text x="18" y="100" class="dg-fs-sm dg-mono">kafka-consumer-groups.sh</text>
+  <text x="18" y="116" class="dg-fs-sm dg-mono">--describe --group my-group</text>
+  <text x="18" y="133" class="dg-fs-sm dg-muted">AdminClient 로 조회합니다</text>
+
+  <rect class="dg-node dg-node--ok" x="8" y="148" width="228" height="72" rx="4"/>
+  <text x="18" y="166" class="dg-fs-sm dg-bold">무엇을 재는가</text>
+  <text x="18" y="184" class="dg-fs-sm dg-mono">LOG-END-OFFSET</text>
+  <text x="18" y="200" class="dg-fs-sm dg-mono">− CURRENT-OFFSET</text>
+  <text x="18" y="215" class="dg-fs-sm dg-bold">= 커밋 기준</text>
+
+  <rect class="dg-node dg-node--danger" x="8" y="228" width="228" height="112" rx="4"/>
+  <text x="18" y="246" class="dg-fs-sm dg-bold">함정</text>
+  <text x="18" y="264" class="dg-fs-sm">커밋 주기가 길면 실제보다</text>
+  <text x="18" y="280" class="dg-fs-sm">크게 보입니다</text>
+  <text x="18" y="300" class="dg-fs-sm">실행한 순간의 스냅샷 —</text>
+  <text x="18" y="316" class="dg-fs-sm">추세를 볼 수 없습니다</text>
+  <text x="18" y="334" class="dg-fs-sm dg-muted">멤버가 없으면 열이 비어 보임</text>
+
+  <!-- ═══ 2. 클라이언트 메트릭 ═══ -->
+  <rect class="dg-node dg-node--accent" x="246" y="32" width="228" height="26" rx="3"/>
+  <text x="256" y="50" class="dg-fs-sm dg-bold">② 클라이언트 메트릭 (권장)</text>
+
+  <rect class="dg-node" x="246" y="64" width="228" height="76" rx="4"/>
+  <text x="256" y="82" class="dg-fs-sm dg-bold">메트릭</text>
+  <text x="256" y="100" class="dg-fs-sm dg-mono">records-lag</text>
+  <text x="256" y="116" class="dg-fs-sm dg-mono">records-lag-max / -avg</text>
+  <text x="256" y="133" class="dg-fs-sm dg-muted">consumer-fetch-manager-metrics</text>
+
+  <rect class="dg-node dg-node--ok" x="246" y="148" width="228" height="72" rx="4"/>
+  <text x="256" y="166" class="dg-fs-sm dg-bold">무엇을 재는가</text>
+  <text x="256" y="184" class="dg-fs-sm">로그 끝 − <tspan class="dg-bold">현재 위치</tspan></text>
+  <text x="256" y="202" class="dg-fs-sm dg-bold">= 커밋이 아니라 position</text>
+  <text x="256" y="216" class="dg-fs-sm dg-muted">공식 문서에 명시된 주의사항</text>
+
+  <rect class="dg-node dg-node--danger" x="246" y="228" width="228" height="112" rx="4"/>
+  <text x="256" y="246" class="dg-fs-sm dg-bold">함정</text>
+  <text x="256" y="264" class="dg-fs-sm dg-bold">컨슈머가 죽으면 값이</text>
+  <text x="256" y="280" class="dg-fs-sm dg-bold">아예 사라집니다</text>
+  <text x="256" y="300" class="dg-fs-sm">가장 위험한 순간에</text>
+  <text x="256" y="316" class="dg-fs-sm">아무것도 안 보입니다</text>
+  <text x="256" y="334" class="dg-fs-sm dg-muted">fetch 가 없으면 갱신되지 않음</text>
+
+  <!-- ═══ 3. 브로커 메트릭 ═══ -->
+  <rect class="dg-node dg-node--warn" x="484" y="32" width="228" height="26" rx="3"/>
+  <text x="494" y="50" class="dg-fs-sm dg-bold">③ 브로커 메트릭 — 없습니다</text>
+
+  <rect class="dg-node dg-node--muted" x="484" y="64" width="228" height="76" rx="4"/>
+  <text x="494" y="82" class="dg-fs-sm dg-bold">브로커가 제공하는 것</text>
+  <text x="494" y="100" class="dg-fs-sm">컨슈머 lag 메트릭은</text>
+  <text x="494" y="116" class="dg-fs-sm dg-bold">브로커에 없습니다</text>
+  <text x="494" y="133" class="dg-fs-sm dg-muted">컨슈머가 직접 발행합니다</text>
+
+  <rect class="dg-node dg-node--danger" x="484" y="148" width="228" height="72" rx="4"/>
+  <text x="494" y="166" class="dg-fs-sm dg-bold">이름에 속지 마세요</text>
+  <text x="494" y="184" class="dg-fs-sm dg-mono">FetcherLagMetrics</text>
+  <text x="494" y="200" class="dg-fs-sm dg-mono">name=ConsumerLag</text>
+  <text x="494" y="215" class="dg-fs-sm dg-bold">= 팔로워 복제 lag 입니다</text>
+
+  <rect class="dg-node dg-node--ok" x="484" y="228" width="228" height="112" rx="4"/>
+  <text x="494" y="246" class="dg-fs-sm dg-bold">대안</text>
+  <text x="494" y="264" class="dg-fs-sm dg-mono">__consumer_offsets</text>
+  <text x="494" y="280" class="dg-fs-sm">와 로그 끝을 읽어 계산하는</text>
+  <text x="494" y="296" class="dg-fs-sm">외부 exporter 를 둡니다</text>
+  <text x="494" y="316" class="dg-fs-sm">컨슈머가 죽어도 계속</text>
+  <text x="494" y="332" class="dg-fs-sm">측정됩니다</text>
+
+  <!-- 정리 -->
+  <line class="dg-grid" x1="8" y1="356" x2="712" y2="356"/>
+  <text x="8" y="374" class="dg-fs-sm"><tspan class="dg-bold">②로 상시 감시하고 ③(외부 exporter)로 보완합니다.</tspan> ②만 두면 컨슈머가 죽은 순간을 놓칩니다.</text>
+  <text x="8" y="392" class="dg-fs-sm">①과 ②의 값이 다른 것은 정상입니다 — ①은 커밋 기준, ②는 현재 위치 기준입니다 (D-048 참고).</text>
+  <text x="8" y="410" class="dg-fs-sm dg-muted">lag 을 건수로만 보지 말고 <tspan class="dg-bold">시간</tspan> 으로도 보세요. 초당 처리량이 다르면 같은 건수라도 심각도가 다릅니다.</text>
+  <text x="8" y="426" class="dg-fs-sm dg-muted">lag 이 계속 늘면 컨슈머 수를 늘리거나(파티션 수 상한까지) 처리를 최적화합니다.</text>
+</svg>

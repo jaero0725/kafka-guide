@@ -312,6 +312,23 @@ bin/kafka-dump-log.sh --cluster-metadata-decoder \
         </p>
       </aside>
 
+      <aside class="note" data-label="정확히 짚어 둘 예외">
+        <p>
+          토픽 설정 문서에는 <code>retention.ms</code>가
+          <strong>"<code>segment.ms</code>·<code>segment.bytes</code>와 독립적으로 동작하며,
+          조건이 충족되면 새 세그먼트의 롤을 유발한다"</strong>는 서술이 있습니다.
+          문장만 읽으면 "리텐션이 알아서 활성 세그먼트를 롤해 준다"로 읽히지만,
+          <strong>구현에서 이 롤은 그 로그에 tiered storage가 활성화된 경우에만 일어납니다</strong>
+          (<code>UnifiedLog</code>의 삭제 후보 계산에서 <code>remoteLogEnabled()</code> 조건이 붙어 있고,
+          로그에는 <em>"Rolling the active segment to make it eligible for deletion"</em>이 남습니다).
+        </p>
+        <p>
+          따라서 <strong>일반(비-tiered) 토픽에서는 리텐션이 활성 세그먼트를 롤해 주지 않습니다.</strong>
+          위의 <code>segment.ms</code> 조정 지침은 그 전제에서 유효합니다.
+          <a href="#tiered-storage">Tiered Storage</a>를 쓰는 토픽이라면 이 부담이 줄어듭니다.
+        </p>
+      </aside>
+
       <figure class="code">
         <figcaption>짧은 리텐션 토픽 — 세그먼트 설정을 함께 조정</figcaption>
         <pre><code class="lang-bash"># ✕ 이것만으로는 부족합니다

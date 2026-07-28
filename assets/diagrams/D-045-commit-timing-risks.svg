@@ -1,0 +1,110 @@
+<svg viewBox="0 0 720 434" role="img" class="kg-diagram"
+     aria-labelledby="d045-title d045-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d045-title">커밋 시점별 유실과 중복 — 처리 전 커밋은 유실, 처리 후 커밋은 중복</title>
+  <desc id="d045-desc">poll 로 오프셋 5 부터 9 까지 다섯 건을 받은 컨슈머가 도중에 크래시하는 상황을 두 가지 커밋 순서로 비교합니다.
+    첫째는 처리 전에 커밋하는 경우입니다. 오프셋 10 을 먼저 커밋한 뒤 5 와 6 만 처리하고 크래시하면,
+    재시작한 컨슈머는 커밋된 10 부터 읽으므로 7, 8, 9 는 아무도 처리하지 않은 채 건너뛰게 됩니다. 이것이 유실이며 at-most-once 성질입니다.
+    둘째는 처리 후에 커밋하는 경우입니다. 5 부터 9 까지 처리를 마쳤지만 커밋 직전에 크래시하면,
+    재시작한 컨슈머는 이전 커밋 지점인 5 부터 다시 읽으므로 다섯 건을 다시 처리합니다. 이것이 중복이며 at-least-once 성질입니다.
+    기본값 enable.auto.commit 이 true 이면 poll 을 부를 때 주기적으로 커밋되므로,
+    처리가 끝나기 전에 커밋이 나가 첫째 경우가 될 수 있습니다.
+    중복을 없애려면 커밋 순서만으로는 부족하고, 컨슈머 쪽 처리를 멱등하게 만들거나 처리 결과와 오프셋을 한 트랜잭션으로 묶어야 합니다.</desc>
+
+  <defs>
+    <marker id="d045-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+  </defs>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">같은 크래시, 커밋 순서만 다릅니다 — 결과는 유실과 중복으로 갈립니다</text>
+
+  <!-- ═════════ 경우 1 : 처리 전 커밋 ═════════ -->
+  <rect class="dg-node dg-node--danger" x="8" y="32" width="704" height="24" rx="3"/>
+  <text x="18" y="49" class="dg-fs-sm dg-bold">① 처리 <tspan class="dg-bold">전</tspan> 커밋 — <tspan class="dg-mono">enable.auto.commit=true</tspan>(기본) 에서 흔히 생기는 모양</text>
+
+  <rect class="dg-node" x="8" y="64" width="166" height="56" rx="4"/>
+  <text x="18" y="84" class="dg-fs-sm dg-bold">poll()</text>
+  <text x="18" y="102" class="dg-fs-sm dg-mono">offset 5 ~ 9</text>
+  <text x="18" y="116" class="dg-fs-sm dg-muted">5건 받음</text>
+  <line class="dg-edge" x1="174" y1="92" x2="198" y2="92" marker-end="url(#d045-ah)"/>
+
+  <rect class="dg-node dg-node--warn" x="202" y="64" width="166" height="56" rx="4"/>
+  <text x="212" y="84" class="dg-fs-sm dg-bold">커밋</text>
+  <text x="212" y="102" class="dg-fs-sm dg-mono">committed = 10</text>
+  <text x="212" y="116" class="dg-fs-sm dg-muted">아직 처리 안 함</text>
+  <line class="dg-edge" x1="368" y1="92" x2="392" y2="92" marker-end="url(#d045-ah)"/>
+
+  <rect class="dg-node dg-node--danger" x="396" y="64" width="166" height="56" rx="4"/>
+  <text x="406" y="84" class="dg-fs-sm dg-bold">처리 중 크래시</text>
+  <text x="406" y="102" class="dg-fs-sm">5, 6 만 처리됨</text>
+  <text x="406" y="116" class="dg-fs-sm dg-muted">7, 8, 9 미처리</text>
+  <line class="dg-edge" x1="562" y1="92" x2="586" y2="92" marker-end="url(#d045-ah)"/>
+
+  <rect class="dg-node dg-node--danger" x="590" y="64" width="122" height="56" rx="4"/>
+  <text x="600" y="84" class="dg-fs-sm dg-bold">재시작</text>
+  <text x="600" y="102" class="dg-fs-sm dg-mono">10 부터 읽음</text>
+  <text x="600" y="116" class="dg-fs-sm dg-muted">건너뜀</text>
+
+  <!-- 오프셋 칸 -->
+  <text x="8" y="146" class="dg-fs-sm dg-bold">결과</text>
+  <rect class="dg-node dg-node--ok" x="60" y="132" width="56" height="26" rx="2"/>
+  <text x="88" y="150" class="dg-fs-sm dg-num" text-anchor="middle">5 ✔</text>
+  <rect class="dg-node dg-node--ok" x="120" y="132" width="56" height="26" rx="2"/>
+  <text x="148" y="150" class="dg-fs-sm dg-num" text-anchor="middle">6 ✔</text>
+  <rect class="dg-node dg-node--danger" x="180" y="132" width="56" height="26" rx="2"/>
+  <text x="208" y="150" class="dg-fs-sm dg-num" text-anchor="middle">7 ✕</text>
+  <rect class="dg-node dg-node--danger" x="240" y="132" width="56" height="26" rx="2"/>
+  <text x="268" y="150" class="dg-fs-sm dg-num" text-anchor="middle">8 ✕</text>
+  <rect class="dg-node dg-node--danger" x="300" y="132" width="56" height="26" rx="2"/>
+  <text x="328" y="150" class="dg-fs-sm dg-num" text-anchor="middle">9 ✕</text>
+  <text x="372" y="150" class="dg-fs-sm dg-bold">3건 유실 · 아무도 처리하지 않았습니다 (at-most-once)</text>
+
+  <!-- ═════════ 경우 2 : 처리 후 커밋 ═════════ -->
+  <rect class="dg-node dg-node--warn" x="8" y="182" width="704" height="24" rx="3"/>
+  <text x="18" y="199" class="dg-fs-sm dg-bold">② 처리 <tspan class="dg-bold">후</tspan> 커밋 — <tspan class="dg-mono">enable.auto.commit=false</tspan> + 처리 완료 후 <tspan class="dg-mono">commitSync()</tspan></text>
+
+  <rect class="dg-node" x="8" y="214" width="166" height="56" rx="4"/>
+  <text x="18" y="234" class="dg-fs-sm dg-bold">poll()</text>
+  <text x="18" y="252" class="dg-fs-sm dg-mono">offset 5 ~ 9</text>
+  <text x="18" y="266" class="dg-fs-sm dg-muted">이전 커밋 = 5</text>
+  <line class="dg-edge" x1="174" y1="242" x2="198" y2="242" marker-end="url(#d045-ah)"/>
+
+  <rect class="dg-node dg-node--ok" x="202" y="214" width="166" height="56" rx="4"/>
+  <text x="212" y="234" class="dg-fs-sm dg-bold">처리 완료</text>
+  <text x="212" y="252" class="dg-fs-sm">5 ~ 9 모두 처리</text>
+  <text x="212" y="266" class="dg-fs-sm dg-muted">부수 효과 발생</text>
+  <line class="dg-edge" x1="368" y1="242" x2="392" y2="242" marker-end="url(#d045-ah)"/>
+
+  <rect class="dg-node dg-node--danger" x="396" y="214" width="166" height="56" rx="4"/>
+  <text x="406" y="234" class="dg-fs-sm dg-bold">커밋 직전 크래시</text>
+  <text x="406" y="252" class="dg-fs-sm dg-mono">committed 은 5</text>
+  <text x="406" y="266" class="dg-fs-sm dg-muted">커밋이 안 나감</text>
+  <line class="dg-edge" x1="562" y1="242" x2="586" y2="242" marker-end="url(#d045-ah)"/>
+
+  <rect class="dg-node dg-node--warn" x="590" y="214" width="122" height="56" rx="4"/>
+  <text x="600" y="234" class="dg-fs-sm dg-bold">재시작</text>
+  <text x="600" y="252" class="dg-fs-sm dg-mono">5 부터 읽음</text>
+  <text x="600" y="266" class="dg-fs-sm dg-muted">재처리</text>
+
+  <text x="8" y="296" class="dg-fs-sm dg-bold">결과</text>
+  <rect class="dg-node dg-node--warn" x="60" y="282" width="56" height="26" rx="2"/>
+  <text x="88" y="300" class="dg-fs-sm dg-num" text-anchor="middle">5 ×2</text>
+  <rect class="dg-node dg-node--warn" x="120" y="282" width="56" height="26" rx="2"/>
+  <text x="148" y="300" class="dg-fs-sm dg-num" text-anchor="middle">6 ×2</text>
+  <rect class="dg-node dg-node--warn" x="180" y="282" width="56" height="26" rx="2"/>
+  <text x="208" y="300" class="dg-fs-sm dg-num" text-anchor="middle">7 ×2</text>
+  <rect class="dg-node dg-node--warn" x="240" y="282" width="56" height="26" rx="2"/>
+  <text x="268" y="300" class="dg-fs-sm dg-num" text-anchor="middle">8 ×2</text>
+  <rect class="dg-node dg-node--warn" x="300" y="282" width="56" height="26" rx="2"/>
+  <text x="328" y="300" class="dg-fs-sm dg-num" text-anchor="middle">9 ×2</text>
+  <text x="372" y="300" class="dg-fs-sm dg-bold">5건 중복 처리 · 유실은 없습니다 (at-least-once)</text>
+
+  <!-- 결론 -->
+  <line class="dg-grid" x1="8" y1="324" x2="712" y2="324"/>
+  <rect class="dg-node dg-node--accent" x="8" y="336" width="704" height="52" rx="4"/>
+  <text x="18" y="356" class="dg-fs-sm dg-bold">유실과 중복 중 하나는 반드시 고릅니다. 대부분의 업무는 ②(중복 허용)를 고르고 처리를 멱등하게 만듭니다.</text>
+  <text x="18" y="376" class="dg-fs-sm">멱등하게 만드는 방법: 레코드 키를 업무 키로 쓰기 · upsert 사용 · 처리한 오프셋을 결과와 같은 트랜잭션에 기록</text>
+
+  <text x="8" y="408" class="dg-fs-sm"><tspan class="dg-mono">enable.auto.commit=true</tspan> 는 <tspan class="dg-mono">poll()</tspan> 호출 시점에 <tspan class="dg-mono">auto.commit.interval.ms=5000</tspan> 주기로 커밋합니다.</text>
+  <text x="8" y="426" class="dg-fs-sm dg-muted">즉 자동 커밋은 ①과 ② 사이 어디든 될 수 있습니다. 유실을 막아야 하면 자동 커밋을 끄고 직접 커밋하세요.</text>
+</svg>

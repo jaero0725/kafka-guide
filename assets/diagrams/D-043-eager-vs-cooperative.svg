@@ -1,0 +1,117 @@
+<svg viewBox="0 0 720 458" role="img" class="kg-diagram"
+     aria-labelledby="d043-title d043-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d043-title">eager vs cooperative 리밸런스 — 처리가 멈추는 파티션의 범위가 다릅니다</title>
+  <desc id="d043-desc">파티션 6개를 컨슈머 2대가 나눠 처리하다가 세 번째 컨슈머가 합류하는 같은 상황을,
+    eager 프로토콜과 cooperative 프로토콜로 나눠 그린 그림입니다. 세로 방향은 파티션 p0 부터 p5, 가로 방향은 시간입니다.
+    eager 에서는 리밸런스가 시작되면 모든 컨슈머가 자기가 가진 파티션 전부를 반납하므로 여섯 줄 모두에 처리 중단 구간이 생깁니다.
+    이것이 stop-the-world 리밸런스입니다.
+    cooperative 에서는 소유자가 바뀌지 않는 p0, p1, p3, p4 는 반납하지 않고 계속 처리하며,
+    실제로 새 컨슈머에게 넘어가는 p2 와 p5 만 회수됩니다.
+    회수된 파티션은 1차 리밸런스에서 이전 소유자에게서 떨어지고 2차 리밸런스에서 새 소유자에게 할당되므로 리밸런스가 두 번 일어납니다.
+    대신 중단 구간이 이동 대상 파티션에만 국한되므로 전체 처리량 손실이 훨씬 작습니다.
+    Kafka 4.x 의 기본 partition.assignment.strategy 는 RangeAssignor 와 CooperativeStickyAssignor 목록이며,
+    cooperative 프로토콜을 쓰려면 그룹의 모든 컨슈머가 CooperativeStickyAssignor 를 사용해야 합니다.</desc>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">같은 상황(컨슈머 1대 합류)에서 <tspan class="dg-bold">중단되는 파티션의 범위</tspan> 가 다릅니다</text>
+
+  <!-- ═════════ eager ═════════ -->
+  <rect class="dg-node dg-node--danger" x="8" y="32" width="704" height="24" rx="3"/>
+  <text x="18" y="49" class="dg-fs-sm dg-bold">eager (예: <tspan class="dg-mono">RangeAssignor</tspan> · <tspan class="dg-mono">StickyAssignor</tspan>) — 전원이 전체 반납, stop-the-world</text>
+
+  <text x="8" y="76" class="dg-fs-sm dg-muted">파티션</text>
+  <text x="118" y="76" class="dg-fs-sm dg-muted">← 리밸런스 전</text>
+  <text x="286" y="76" class="dg-fs-sm dg-muted">리밸런스</text>
+  <text x="446" y="76" class="dg-fs-sm dg-muted">리밸런스 후 →</text>
+
+  <text x="8" y="98" class="dg-fs-sm dg-bold dg-mono">p0</text>
+  <rect class="dg-node dg-node--ok" x="44" y="84" width="236" height="18" rx="2"/>
+  <text x="52" y="98" class="dg-fs-sm">C1 처리</text>
+  <rect class="dg-node dg-node--danger" x="282" y="84" width="158" height="18" rx="2"/>
+  <text x="290" y="98" class="dg-fs-sm">중단</text>
+  <rect class="dg-node dg-node--ok" x="442" y="84" width="270" height="18" rx="2"/>
+  <text x="450" y="98" class="dg-fs-sm">C1 처리</text>
+
+  <text x="8" y="120" class="dg-fs-sm dg-bold dg-mono">p1</text>
+  <rect class="dg-node dg-node--ok" x="44" y="106" width="236" height="18" rx="2"/>
+  <text x="52" y="120" class="dg-fs-sm">C1 처리</text>
+  <rect class="dg-node dg-node--danger" x="282" y="106" width="158" height="18" rx="2"/>
+  <text x="290" y="120" class="dg-fs-sm">중단</text>
+  <rect class="dg-node dg-node--ok" x="442" y="106" width="270" height="18" rx="2"/>
+  <text x="450" y="120" class="dg-fs-sm">C1 처리</text>
+
+  <text x="8" y="142" class="dg-fs-sm dg-bold dg-mono">p2</text>
+  <rect class="dg-node dg-node--ok" x="44" y="128" width="236" height="18" rx="2"/>
+  <text x="52" y="142" class="dg-fs-sm">C1 처리</text>
+  <rect class="dg-node dg-node--danger" x="282" y="128" width="158" height="18" rx="2"/>
+  <text x="290" y="142" class="dg-fs-sm">중단</text>
+  <rect class="dg-node dg-node--ok" x="442" y="128" width="270" height="18" rx="2"/>
+  <text x="450" y="142" class="dg-fs-sm">C3 처리 (이동)</text>
+
+  <text x="8" y="164" class="dg-fs-sm dg-bold dg-mono">p3</text>
+  <rect class="dg-node dg-node--ok" x="44" y="150" width="236" height="18" rx="2"/>
+  <text x="52" y="164" class="dg-fs-sm">C2 처리</text>
+  <rect class="dg-node dg-node--danger" x="282" y="150" width="158" height="18" rx="2"/>
+  <text x="290" y="164" class="dg-fs-sm">중단</text>
+  <rect class="dg-node dg-node--ok" x="442" y="150" width="270" height="18" rx="2"/>
+  <text x="450" y="164" class="dg-fs-sm">C2 처리</text>
+
+  <text x="8" y="186" class="dg-fs-sm dg-bold dg-mono">p4</text>
+  <rect class="dg-node dg-node--ok" x="44" y="172" width="236" height="18" rx="2"/>
+  <text x="52" y="186" class="dg-fs-sm">C2 처리</text>
+  <rect class="dg-node dg-node--danger" x="282" y="172" width="158" height="18" rx="2"/>
+  <text x="290" y="186" class="dg-fs-sm">중단</text>
+  <rect class="dg-node dg-node--ok" x="442" y="172" width="270" height="18" rx="2"/>
+  <text x="450" y="186" class="dg-fs-sm">C2 처리</text>
+
+  <text x="8" y="208" class="dg-fs-sm dg-bold dg-mono">p5</text>
+  <rect class="dg-node dg-node--ok" x="44" y="194" width="236" height="18" rx="2"/>
+  <text x="52" y="208" class="dg-fs-sm">C2 처리</text>
+  <rect class="dg-node dg-node--danger" x="282" y="194" width="158" height="18" rx="2"/>
+  <text x="290" y="208" class="dg-fs-sm">중단</text>
+  <rect class="dg-node dg-node--ok" x="442" y="194" width="270" height="18" rx="2"/>
+  <text x="450" y="208" class="dg-fs-sm">C3 처리 (이동)</text>
+
+  <text x="8" y="230" class="dg-fs-sm"><tspan class="dg-bold">6개 전부 중단</tspan> — 실제로 옮겨진 것은 p2, p5 두 개뿐인데도 전원이 멈춥니다.</text>
+
+  <!-- ═════════ cooperative ═════════ -->
+  <rect class="dg-node dg-node--ok" x="8" y="248" width="704" height="24" rx="3"/>
+  <text x="18" y="265" class="dg-fs-sm dg-bold">cooperative (<tspan class="dg-mono">CooperativeStickyAssignor</tspan>) — 이동 대상만 회수, 증분 재할당</text>
+
+  <text x="8" y="292" class="dg-fs-sm dg-bold dg-mono">p0</text>
+  <rect class="dg-node dg-node--ok" x="44" y="278" width="668" height="18" rx="2"/>
+  <text x="52" y="292" class="dg-fs-sm">C1 처리 — 끊기지 않습니다 (소유자 변경 없음)</text>
+
+  <text x="8" y="314" class="dg-fs-sm dg-bold dg-mono">p1</text>
+  <rect class="dg-node dg-node--ok" x="44" y="300" width="668" height="18" rx="2"/>
+  <text x="52" y="314" class="dg-fs-sm">C1 처리 — 끊기지 않습니다</text>
+
+  <text x="8" y="336" class="dg-fs-sm dg-bold dg-mono">p2</text>
+  <rect class="dg-node dg-node--ok" x="44" y="322" width="236" height="18" rx="2"/>
+  <text x="52" y="336" class="dg-fs-sm">C1 처리</text>
+  <rect class="dg-node dg-node--danger" x="282" y="322" width="158" height="18" rx="2"/>
+  <text x="290" y="336" class="dg-fs-sm">회수 → 보류</text>
+  <rect class="dg-node dg-node--ok" x="442" y="322" width="270" height="18" rx="2"/>
+  <text x="450" y="336" class="dg-fs-sm">C3 처리 (2차에서 할당)</text>
+
+  <text x="8" y="358" class="dg-fs-sm dg-bold dg-mono">p3</text>
+  <rect class="dg-node dg-node--ok" x="44" y="344" width="668" height="18" rx="2"/>
+  <text x="52" y="358" class="dg-fs-sm">C2 처리 — 끊기지 않습니다</text>
+
+  <text x="8" y="380" class="dg-fs-sm dg-bold dg-mono">p4</text>
+  <rect class="dg-node dg-node--ok" x="44" y="366" width="668" height="18" rx="2"/>
+  <text x="52" y="380" class="dg-fs-sm">C2 처리 — 끊기지 않습니다</text>
+
+  <text x="8" y="402" class="dg-fs-sm dg-bold dg-mono">p5</text>
+  <rect class="dg-node dg-node--ok" x="44" y="388" width="236" height="18" rx="2"/>
+  <text x="52" y="402" class="dg-fs-sm">C2 처리</text>
+  <rect class="dg-node dg-node--danger" x="282" y="388" width="158" height="18" rx="2"/>
+  <text x="290" y="402" class="dg-fs-sm">회수 → 보류</text>
+  <rect class="dg-node dg-node--ok" x="442" y="388" width="270" height="18" rx="2"/>
+  <text x="450" y="402" class="dg-fs-sm">C3 처리 (2차에서 할당)</text>
+
+  <text x="8" y="424" class="dg-fs-sm"><tspan class="dg-bold">2개만 중단</tspan> — 1차 리밸런스에서 회수하고, 2차 리밸런스에서 새 소유자에게 할당합니다.</text>
+
+  <!-- 정리 -->
+  <line class="dg-grid" x1="8" y1="436" x2="712" y2="436"/>
+  <text x="8" y="454" class="dg-fs-sm dg-muted">cooperative 는 리밸런스 횟수는 늘고(2회) 중단 범위는 줄어듭니다. 그룹의 <tspan class="dg-bold">모든</tspan> 컨슈머가 같은 assignor 를 써야 합니다.</text>
+</svg>

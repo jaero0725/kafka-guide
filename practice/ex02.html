@@ -1,0 +1,991 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>예제 2 · Spring Boot Producer/Consumer 기본 — Kafka Guide</title>
+  <meta name="description" content="Spring Boot 4.1.0 + spring-kafka 4.1.0으로 Kafka 4.3 클러스터에 붙는 최소 애플리케이션. KafkaTemplate의 CompletableFuture, @KafkaListener, 수동 ack, 토픽 선언까지 다룹니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="practice" data-page="ex02"></div>
+
+  <main id="main" class="page" data-page-id="practice/ex02">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="ex01.html">실무 예제</a></li>
+        <li><span aria-current="page">예제 2 · Spring Boot Producer/Consumer</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실무 예제 · 2</p>
+      <h1>Spring Boot Producer/Consumer 기본</h1>
+      <p class="page__lead">
+        Spring for Apache Kafka는 <code>KafkaProducer</code>·<code>KafkaConsumer</code>를 감싸
+        <strong>템플릿과 애노테이션</strong>으로 바꿔 줍니다.
+        편해지는 대신 <strong>어떤 설정이 어디로 흘러가는지</strong>가 가려지므로,
+        이 예제는 <strong>Spring 프로퍼티 ↔ Kafka 설정의 대응</strong>을 명시하면서 최소 애플리케이션을 만듭니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li><code>spring.kafka.*</code> 프로퍼티가 어떤 Kafka 설정으로 매핑되는지, 전용 키가 없는 설정은 어디에 넣는지 알 수 있습니다.</li>
+        <li><code>KafkaTemplate.send()</code>가 반환하는 <code>CompletableFuture</code>를 <strong>버리지 않고</strong> 다루는 방법을 씁니다.</li>
+        <li><code>ack-mode</code> 7종의 차이를 알고, 수동 ack(<code>MANUAL_IMMEDIATE</code>)를 코드로 구현할 수 있습니다.</li>
+        <li><code>concurrency</code>와 파티션 수의 관계를 설명할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="scenario">
+      <h2 id="scenario">시나리오</h2>
+
+      <p>
+        사내 알림 서비스가 여러 도메인 서비스로부터 알림 요청을 받습니다.
+        기존에는 HTTP 동기 호출이라 알림 서비스가 느려지면
+        <strong>호출한 서비스의 응답 시간까지 함께 늘어났습니다.</strong>
+      </p>
+      <p>
+        이를 Kafka로 분리합니다. 도메인 서비스는 <code>notifications</code> 토픽에 요청을 넣고 즉시 반환하고,
+        알림 서비스는 그 토픽을 소비해 실제 발송을 합니다.
+        첫 단계 목표는 <strong>가장 단순하지만 유실이 없는 구조</strong>를 만드는 것입니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="architecture">
+      <h2 id="architecture">아키텍처</h2>
+
+      <p>
+        하나의 Spring Boot 애플리케이션이 프로듀서와 컨슈머를 모두 갖습니다
+        (실제로는 서비스가 분리되지만, 학습을 위해 한 프로세스에 둡니다).
+        REST 엔드포인트가 프로듀서를 호출하고, <code>@KafkaListener</code>가 소비합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Spring for Apache Kafka의 주요 구성 요소와 대응하는 Kafka 클라이언트</caption>
+          <thead>
+            <tr>
+              <th scope="col">Spring 컴포넌트</th>
+              <th scope="col">감싸는 Kafka 객체</th>
+              <th scope="col">역할</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>ProducerFactory</code></th>
+              <td><code>KafkaProducer</code> 생성</td>
+              <td>프로듀서 설정을 보관하고 인스턴스를 만듭니다. 기본적으로 하나를 공유합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>KafkaTemplate</code></th>
+              <td><code>KafkaProducer.send()</code></td>
+              <td><code>CompletableFuture&lt;SendResult&gt;</code>를 반환합니다. 3.0부터 <code>ListenableFuture</code>가 아닙니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ConsumerFactory</code></th>
+              <td><code>KafkaConsumer</code> 생성</td>
+              <td>컨슈머 설정을 보관합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ConcurrentMessageListenerContainer</code></th>
+              <td><code>KafkaConsumer.poll()</code> 루프</td>
+              <td><code>concurrency</code> 개의 컨슈머 스레드를 돌립니다. 각 스레드가 별개의 <code>KafkaConsumer</code>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>@KafkaListener</code></th>
+              <td>—</td>
+              <td>poll로 받은 레코드를 메서드 호출로 변환합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>KafkaAdmin</code> + <code>NewTopic</code> 빈</th>
+              <td><code>AdminClient.createTopics()</code></td>
+              <td>기동 시 토픽을 선언적으로 만듭니다 (<code>spring.kafka.admin.auto-create</code>, 기본 <code>true</code>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCDAK Application Development">
+        <p>
+          <code>concurrency</code>는 <strong>이 인스턴스가 만드는 컨슈머 스레드 수</strong>입니다.
+          컨슈머 그룹의 병렬성 상한은 여전히 <strong>파티션 수</strong>입니다.
+          파티션 3개인 토픽에 <code>concurrency=5</code>를 주면
+          <strong>2개 스레드는 파티션을 할당받지 못해 유휴 상태</strong>가 됩니다.
+          인스턴스를 늘릴 때도 같습니다 — <strong>파티션 수를 넘는 컨슈머는 일하지 않습니다.</strong>
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prerequisites">
+      <h2 id="prerequisites">사전 요구사항</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>검증 환경 (2026-07 기준)</caption>
+          <thead><tr><th scope="col">항목</th><th scope="col">버전</th><th scope="col">비고</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Apache Kafka (브로커)</th><td>4.3.1</td><td><a href="ex01.html">예제 1</a>의 클러스터</td></tr>
+            <tr><th scope="row">Spring Boot</th><td><strong>4.1.0</strong></td><td>Maven Central <code>spring-boot-starter-parent</code> 최신 정식 버전</td></tr>
+            <tr><th scope="row">Spring for Apache Kafka</th><td><strong>4.1.0</strong></td><td>Spring Boot 4.1.0이 관리합니다. 버전을 직접 적지 않습니다</td></tr>
+            <tr><th scope="row">kafka-clients</th><td><strong>4.3.1</strong>로 오버라이드</td><td>Spring Boot 4.1.0의 기본 관리 버전은 <code>4.2.1</code>입니다</td></tr>
+            <tr><th scope="row">Java</th><td>17 이상</td><td>Spring Boot 4의 기준선</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          <strong>Spring Boot 3.x와 4.x의 차이</strong>
+        </p>
+        <div class="table-scroll">
+          <table class="config-table config-table--plain">
+            <tbody>
+              <tr><th scope="row">의존성</th><td>3.x: <code>org.springframework.kafka:spring-kafka</code> 직접 선언 → 4.x: <strong><code>org.springframework.boot:spring-boot-starter-kafka</code></strong></td></tr>
+              <tr><th scope="row">자동 설정 패키지</th><td>3.x: <code>org.springframework.boot.autoconfigure.kafka</code> → 4.x: <strong><code>org.springframework.boot.kafka.autoconfigure</code></strong></td></tr>
+              <tr><th scope="row"><code>send()</code> 반환형</th><td>2.x: <code>ListenableFuture</code> → <strong>3.0부터 <code>CompletableFuture</code></strong> (4.x도 동일)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="full-code">
+      <h2 id="full-code">전체 코드</h2>
+
+      <figure class="code">
+        <figcaption>디렉터리 구조</figcaption>
+        <pre><code class="lang-text">notification-service/
+├── pom.xml
+└── src/main/
+    ├── java/com/example/notification/
+    │   ├── NotificationApplication.java
+    │   ├── KafkaTopicConfig.java      # 토픽 선언
+    │   ├── NotificationRequest.java   # 이벤트 레코드
+    │   ├── NotificationPublisher.java # 프로듀서
+    │   ├── NotificationListener.java  # 컨슈머 (수동 ack)
+    │   └── NotificationController.java# REST 엔드포인트
+    └── resources/
+        └── application.yml</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>notification-service/pom.xml</figcaption>
+        <pre><code class="lang-xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"&gt;
+  &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+
+  &lt;parent&gt;
+    &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+    &lt;version&gt;4.1.0&lt;/version&gt;
+    &lt;relativePath/&gt;
+  &lt;/parent&gt;
+
+  &lt;groupId&gt;com.example&lt;/groupId&gt;
+  &lt;artifactId&gt;notification-service&lt;/artifactId&gt;
+  &lt;version&gt;1.0.0&lt;/version&gt;
+
+  &lt;properties&gt;
+    &lt;java.version&gt;17&lt;/java.version&gt;
+    &lt;!-- 브로커(4.3.1)와 클라이언트 버전을 맞춥니다.
+         Spring Boot 4.1.0 의 기본 관리 버전은 4.2.1 입니다. --&gt;
+    &lt;kafka.version&gt;4.3.1&lt;/kafka.version&gt;
+  &lt;/properties&gt;
+
+  &lt;dependencies&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+      &lt;artifactId&gt;spring-boot-starter-kafka&lt;/artifactId&gt;
+    &lt;/dependency&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+      &lt;artifactId&gt;spring-boot-starter-web&lt;/artifactId&gt;
+    &lt;/dependency&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+      &lt;artifactId&gt;spring-boot-starter-validation&lt;/artifactId&gt;
+    &lt;/dependency&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+      &lt;artifactId&gt;spring-boot-starter-actuator&lt;/artifactId&gt;
+    &lt;/dependency&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+      &lt;artifactId&gt;spring-boot-starter-test&lt;/artifactId&gt;
+      &lt;scope&gt;test&lt;/scope&gt;
+    &lt;/dependency&gt;
+  &lt;/dependencies&gt;
+
+  &lt;build&gt;
+    &lt;plugins&gt;
+      &lt;plugin&gt;
+        &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+        &lt;artifactId&gt;spring-boot-maven-plugin&lt;/artifactId&gt;
+      &lt;/plugin&gt;
+    &lt;/plugins&gt;
+  &lt;/build&gt;
+&lt;/project&gt;</code></pre>
+      </figure>
+
+      <h3 id="application-yml"><code>application.yml</code> — 프로퍼티가 어디로 가는지</h3>
+
+      <figure class="code">
+        <figcaption>src/main/resources/application.yml</figcaption>
+        <pre><code class="lang-yaml">server:
+  port: 8080
+
+spring:
+  application:
+    name: notification-service
+
+  kafka:
+    # 초기 연결 이중화. 부하 분산 목적이 아닙니다.
+    bootstrap-servers: localhost:29092,localhost:39092,localhost:49092
+
+    # NewTopic 빈으로 선언한 토픽을 기동 시 만듭니다. 기본값 true.
+    admin:
+      auto-create: true
+      # 브로커에 붙지 못해도 애플리케이션 기동을 막지 않습니다(로컬 개발 편의).
+      # 프로덕션에서는 true 로 두어 설정 오류를 조기에 드러내는 편이 낫습니다.
+      fail-fast: false
+
+    producer:
+      # → acks. 4.3 기본값도 all 이지만 의도를 명시합니다.
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # JsonSerializer 는 spring-kafka 가 제공합니다(Jackson 필요).
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      # → batch.size (바이트). 기본값 16384.
+      batch-size: 32768
+      # → buffer.memory. 기본값 33554432(32MB).
+      buffer-memory: 33554432
+      # → compression.type. 기본값 none.
+      compression-type: lz4
+      properties:
+        # spring.kafka.producer 아래에 전용 키가 없는 설정은 여기에 씁니다.
+        # 프로퍼티 이름은 Kafka 원래 이름을 그대로 씁니다.
+        enable.idempotence: true
+        # 4.0 에서 기본값이 0 → 5 로 바뀌었습니다. 명시해 의도를 남깁니다.
+        linger.ms: 5
+        max.in.flight.requests.per.connection: 5
+        delivery.timeout.ms: 120000
+        request.timeout.ms: 30000
+        max.block.ms: 60000
+
+    consumer:
+      group-id: notification-sender
+      # 새 그룹일 때만 적용됩니다. 기본값은 latest 입니다.
+      # earliest 로 두면 새 그룹이 처음부터 전부 읽습니다.
+      auto-offset-reset: earliest
+      # → enable.auto.commit. Kafka 기본값은 true 입니다.
+      # false 로 두고 컨테이너(ack-mode)가 커밋을 통제하게 합니다.
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      # → max.poll.records. 기본값 500.
+      max-poll-records: 100
+      # → max.poll.interval.ms. 기본값 300000(5분).
+      max-poll-interval: 300s
+      # → session.timeout.ms. 기본값 45000. (classic 프로토콜에서만 쓰입니다)
+      session-timeout: 45s
+      # → heartbeat.interval.ms. 기본값 3000.
+      heartbeat-interval: 3s
+      properties:
+        # JsonDeserializer 가 역직렬화할 대상 패키지를 화이트리스트로 지정합니다.
+        # "*" 로 두면 임의 클래스를 역직렬화할 수 있어 위험합니다.
+        spring.json.trusted.packages: com.example.notification
+        # 상류가 트랜잭션 프로듀서라면 read_committed 가 필요합니다(예제 5).
+        # 기본값은 read_uncommitted 입니다.
+        isolation.level: read_uncommitted
+
+    listener:
+      # MANUAL_IMMEDIATE: 리스너가 Acknowledgment.acknowledge() 를 호출하는 즉시 커밋합니다.
+      # 코드가 커밋 시점을 완전히 통제하므로 유실/중복 경계를 직접 설계할 수 있습니다.
+      ack-mode: MANUAL_IMMEDIATE
+      # 이 인스턴스가 만드는 컨슈머 스레드 수.
+      # 파티션 수(3)를 넘기면 남는 스레드는 유휴 상태가 됩니다.
+      concurrency: 3
+      # 구독 토픽이 없으면 기동 실패 → 토픽명 오타를 조기에 발견합니다.
+      missing-topics-fatal: true
+      poll-timeout: 3s
+
+app:
+  topics:
+    notifications: notifications
+    notifications-partitions: 3
+    notifications-replicas: 3
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info
+
+logging:
+  level:
+    com.example.notification: DEBUG</code></pre>
+      </figure>
+
+      <aside class="note" data-label="전용 키가 없으면 properties 로">
+        <p>
+          Spring Boot 4.1.0의 <code>spring.kafka.producer.*</code>에는
+          <code>acks</code>·<code>batch-size</code>·<code>buffer-memory</code>·<code>compression-type</code>·<code>retries</code>·<code>transaction-id-prefix</code> 같은
+          <strong>전용 키만</strong> 있습니다.
+          <code>linger.ms</code>·<code>enable.idempotence</code>·<code>delivery.timeout.ms</code>에는 전용 키가 없으므로
+          <strong><code>spring.kafka.producer.properties.*</code></strong>에 <strong>Kafka 원래 이름 그대로</strong> 씁니다.
+          컨슈머도 같습니다 — <code>isolation.level</code>은 <code>properties</code>로 넣어야 합니다.
+        </p>
+      </aside>
+
+      <h3 id="topic-config">토픽 선언</h3>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/notification/KafkaTopicConfig.java</figcaption>
+        <pre><code class="lang-java">package com.example.notification;
+
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.config.TopicConfig;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.config.TopicBuilder;
+
+/**
+ * 토픽을 코드로 선언합니다.
+ *
+ * NewTopic 빈이 있으면 KafkaAdmin 이 기동 시 생성합니다
+ * (spring.kafka.admin.auto-create, 기본값 true).
+ * 이미 존재하면 만들지 않습니다. 파티션 수가 선언보다 적으면 늘려 줍니다
+ * (줄이는 것은 Kafka 자체가 불가능합니다).
+ *
+ * 자동 생성(auto.create.topics.enable)에 맡기면 파티션 1 / RF 1 이 됩니다.
+ */
+@Configuration
+public class KafkaTopicConfig {
+
+    @Bean
+    public NewTopic notificationsTopic(
+            @Value("${app.topics.notifications}") String name,
+            @Value("${app.topics.notifications-partitions}") int partitions,
+            @Value("${app.topics.notifications-replicas}") int replicas) {
+
+        return TopicBuilder.name(name)
+                .partitions(partitions)
+                .replicas(replicas)
+                // acks=all 과 짝을 이루는 내구성 하한. RF=3 에 2 가 표준입니다.
+                // 브로커 기본값은 1 이므로 반드시 토픽 레벨로 명시합니다.
+                .config(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+                // 알림 요청은 3일이면 충분합니다. 기본값은 7일(604800000)입니다.
+                .config(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(3L * 24 * 60 * 60 * 1000))
+                .build();
+    }
+}</code></pre>
+      </figure>
+
+      <h3 id="event">이벤트 레코드</h3>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/notification/NotificationRequest.java</figcaption>
+        <pre><code class="lang-java">package com.example.notification;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
+import java.time.Instant;
+
+/**
+ * 알림 요청 이벤트.
+ *
+ * record 를 쓰면 불변이라 스레드 안전하고, JsonSerializer 가 그대로 직렬화합니다.
+ * 실무에서는 여기에 스키마(Avro/Protobuf)를 붙이는 편이 안전합니다(예제 7).
+ */
+public record NotificationRequest(
+        @NotBlank String requestId,
+        @NotBlank String userId,
+        @NotNull Channel channel,
+        @NotBlank String message,
+        Instant requestedAt) {
+
+    public enum Channel { EMAIL, SMS, PUSH }
+
+    /** 발행 시각을 서버에서 채웁니다. */
+    public static NotificationRequest of(String requestId, String userId,
+                                         Channel channel, String message) {
+        return new NotificationRequest(requestId, userId, channel, message, Instant.now());
+    }
+}</code></pre>
+      </figure>
+
+      <h3 id="publisher">프로듀서 — <code>CompletableFuture</code>를 버리지 않습니다</h3>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/notification/NotificationPublisher.java</figcaption>
+        <pre><code class="lang-java">package com.example.notification;
+
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
+import org.springframework.stereotype.Service;
+
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CompletableFuture;
+
+@Service
+public class NotificationPublisher {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationPublisher.class);
+
+    private final KafkaTemplate&lt;String, NotificationRequest&gt; template;
+    private final String topic;
+
+    public NotificationPublisher(KafkaTemplate&lt;String, NotificationRequest&gt; template,
+                                 @Value("${app.topics.notifications}") String topic) {
+        this.template = template;
+        this.topic = topic;
+    }
+
+    /**
+     * 비동기 발행.
+     *
+     * KafkaTemplate.send() 는 spring-kafka 3.0부터 CompletableFuture 를 반환합니다
+     * (그 이전은 ListenableFuture 였습니다).
+     * 반환값을 버리면 브로커가 거부해도 아무 일도 일어나지 않은 것처럼 보입니다.
+     */
+    public CompletableFuture&lt;SendResult&lt;String, NotificationRequest&gt;&gt; publish(
+            NotificationRequest request) {
+
+        // 키를 userId 로 둡니다. 같은 사용자의 알림 순서가 보장되고,
+        // 파티션 분포도 사용자 수만큼 고르게 퍼집니다.
+        // requestId 를 키로 쓰면 순서 보장의 의미가 없어집니다(항상 유일하므로).
+        ProducerRecord&lt;String, NotificationRequest&gt; record =
+                new ProducerRecord&lt;&gt;(topic, request.userId(), request);
+
+        // 추적 헤더. 컨슈머가 본문을 역직렬화하지 못해도 읽을 수 있습니다.
+        record.headers()
+              .add("request-id", request.requestId().getBytes(StandardCharsets.UTF_8))
+              .add("channel", request.channel().name().getBytes(StandardCharsets.UTF_8));
+
+        CompletableFuture&lt;SendResult&lt;String, NotificationRequest&gt;&gt; future = template.send(record);
+
+        // whenComplete 로 성공/실패를 모두 관측합니다.
+        // 이 콜백은 프로듀서의 Sender(I/O) 스레드에서 실행되므로 블로킹 금지입니다.
+        future.whenComplete((result, ex) -&gt; {
+            if (ex != null) {
+                log.error("발행 실패 requestId={} userId={}",
+                        request.requestId(), request.userId(), ex);
+                return;
+            }
+            var md = result.getRecordMetadata();
+            log.debug("발행 성공 requestId={} → {}-{}@{}",
+                    request.requestId(), md.topic(), md.partition(), md.offset());
+        });
+
+        return future;
+    }
+
+    /**
+     * 동기 발행 — 호출자가 결과를 반드시 알아야 할 때만 씁니다.
+     *
+     * join() 은 배치를 무력화하므로 초당 수천 건 경로에는 쓰지 마세요.
+     * (레코드마다 브로커 왕복을 기다립니다)
+     */
+    public SendResult&lt;String, NotificationRequest&gt; publishSync(NotificationRequest request) {
+        // join() 은 실패 시 CompletionException 으로 감싸 던집니다.
+        return publish(request).join();
+    }
+}</code></pre>
+      </figure>
+
+      <h3 id="listener">컨슈머 — 수동 ack</h3>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/notification/NotificationListener.java</figcaption>
+        <pre><code class="lang-java">package com.example.notification;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.stereotype.Component;
+
+@Component
+public class NotificationListener {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationListener.class);
+
+    @KafkaListener(
+            topics = "${app.topics.notifications}",
+            groupId = "notification-sender")
+    public void onNotification(
+            @Payload NotificationRequest request,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+            @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+            @Header(KafkaHeaders.OFFSET) long offset,
+            Acknowledgment ack) {
+
+        log.debug("수신 {}-{}@{} userId={} channel={}",
+                topic, partition, offset, request.userId(), request.channel());
+
+        // 실제 발송 로직. 실패하면 예외를 던집니다.
+        // 여기서 try-catch 로 삼키면 에러 핸들러가 동작하지 못합니다(예제 6).
+        send(request);
+
+        // ack-mode=MANUAL_IMMEDIATE 이므로 이 호출 즉시 오프셋이 커밋됩니다.
+        // 처리 "후" 에 커밋하므로 at-least-once 입니다 —
+        // 커밋 전에 죽으면 같은 레코드를 다시 받습니다(중복 가능, 유실 없음).
+        // 반대로 처리 "전" 에 ack 하면 at-most-once 가 됩니다(유실 가능).
+        ack.acknowledge();
+    }
+
+    private void send(NotificationRequest request) {
+        // 실제로는 이메일/SMS/푸시 게이트웨이를 호출합니다.
+        // 재시도 시 중복 발송을 막으려면 requestId 를 멱등 키로 넘겨야 합니다.
+        log.info("발송 channel={} userId={} message={}",
+                request.channel(), request.userId(), request.message());
+    }
+}</code></pre>
+      </figure>
+
+      <h3 id="controller">REST 엔드포인트</h3>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/notification/NotificationController.java</figcaption>
+        <pre><code class="lang-java">package com.example.notification;
+
+import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletionException;
+
+@RestController
+@RequestMapping("/api/notifications")
+public class NotificationController {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationController.class);
+
+    private final NotificationPublisher publisher;
+
+    public NotificationController(NotificationPublisher publisher) {
+        this.publisher = publisher;
+    }
+
+    public record CreateRequest(String userId,
+                                NotificationRequest.Channel channel,
+                                String message) {
+    }
+
+    /**
+     * 비동기 발행 — 202 Accepted 를 즉시 반환합니다.
+     * 발행 실패는 로그와 메트릭으로만 드러나므로,
+     * 유실이 곤란한 요청이라면 아래 동기 엔드포인트를 쓰세요.
+     */
+    @PostMapping
+    public ResponseEntity&lt;Map&lt;String, String&gt;&gt; create(@Valid @RequestBody CreateRequest body) {
+        String requestId = UUID.randomUUID().toString();
+        publisher.publish(NotificationRequest.of(
+                requestId, body.userId(), body.channel(), body.message()));
+
+        return ResponseEntity.accepted().body(Map.of("requestId", requestId));
+    }
+
+    /**
+     * 동기 발행 — 브로커 커밋을 확인한 뒤 201 을 반환합니다.
+     * 실패하면 503 을 반환해 호출자가 재시도할 수 있게 합니다.
+     */
+    @PostMapping("/sync")
+    public ResponseEntity&lt;Map&lt;String, String&gt;&gt; createSync(@Valid @RequestBody CreateRequest body) {
+        String requestId = UUID.randomUUID().toString();
+        try {
+            var result = publisher.publishSync(NotificationRequest.of(
+                    requestId, body.userId(), body.channel(), body.message()));
+            var md = result.getRecordMetadata();
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                    "requestId", requestId,
+                    "partition", String.valueOf(md.partition()),
+                    "offset", String.valueOf(md.offset())));
+
+        } catch (CompletionException e) {
+            // join() 이 감싸 던진 원인을 풀어 로그에 남깁니다.
+            log.error("동기 발행 실패 requestId={}", requestId, e.getCause());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("requestId", requestId, "error", "kafka-unavailable"));
+        }
+    }
+}</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/notification/NotificationApplication.java</figcaption>
+        <pre><code class="lang-java">package com.example.notification;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class NotificationApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(NotificationApplication.class, args);
+    }
+}</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="ack-modes">
+      <h2 id="ack-modes"><code>ack-mode</code> 7종</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>spring-kafka <code>ContainerProperties.AckMode</code> — <code>spring.kafka.listener.ack-mode</code>로 지정</caption>
+          <thead>
+            <tr>
+              <th scope="col">값</th>
+              <th scope="col">커밋 시점</th>
+              <th scope="col">언제 쓰나</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>RECORD</code></th><td>리스너가 레코드 하나를 성공 처리한 직후</td><td>재처리 비용이 큰 경우. 커밋 요청이 가장 많습니다</td></tr>
+            <tr><th scope="row"><code>BATCH</code></th><td>poll 배치의 모든 레코드 처리 후 (기본값)</td><td>일반적인 선택. 처리량과 안전의 균형</td></tr>
+            <tr><th scope="row"><code>TIME</code></th><td><code>ack-time</code> 경과 후</td><td>커밋 빈도를 시간으로 제한하고 싶을 때</td></tr>
+            <tr><th scope="row"><code>COUNT</code></th><td><code>ack-count</code>건 처리 후</td><td>커밋 빈도를 건수로 제한하고 싶을 때</td></tr>
+            <tr><th scope="row"><code>COUNT_TIME</code></th><td>둘 중 먼저 도달한 쪽</td><td>위 두 개의 조합</td></tr>
+            <tr><th scope="row"><code>MANUAL</code></th><td><code>acknowledge()</code> 호출을 <strong>모아 두고</strong> 배치 끝에 커밋</td><td>코드가 대상을 고르되 커밋 요청 수를 줄이고 싶을 때</td></tr>
+            <tr><th scope="row"><code>MANUAL_IMMEDIATE</code></th><td><code>acknowledge()</code> 호출 <strong>즉시</strong> 커밋</td><td>커밋 시점을 완전히 통제해야 할 때. 이 예제가 쓰는 값</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="MANUAL / MANUAL_IMMEDIATE 의 전제">
+        <p>
+          이 두 모드를 쓰려면 리스너 메서드가 <code>Acknowledgment</code> 파라미터를 받아야 합니다.
+          받지 않으면 <strong>기동 시점에</strong> 설정 오류가 발생합니다.
+          그리고 <code>acknowledge()</code>를 호출하지 않으면
+          <strong>오프셋이 영구히 전진하지 않아</strong> 재시작마다 같은 레코드를 다시 읽습니다.
+          예외 경로에서 <code>acknowledge()</code>를 건너뛰도록 짜는 것이 중요합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="how-to-run">
+      <h2 id="how-to-run">실행 방법</h2>
+
+      <figure class="code">
+        <figcaption>순서대로 실행</figcaption>
+        <pre><code class="lang-bash"># 0. 예제 1의 클러스터
+cd kafka-lab &amp;&amp; docker compose ps
+cd ..
+
+# 1. 애플리케이션 기동 (토픽은 NewTopic 빈이 만듭니다)
+cd notification-service
+mvn -q spring-boot:run
+
+# 2. 다른 터미널에서 비동기 발행
+curl -s -X POST http://localhost:8080/api/notifications \
+  -H 'Content-Type: application/json' \
+  -d '{"userId":"U-1001","channel":"EMAIL","message":"주문이 접수되었습니다"}'
+
+# 3. 동기 발행 — 파티션과 오프셋이 응답에 담깁니다
+curl -s -X POST http://localhost:8080/api/notifications/sync \
+  -H 'Content-Type: application/json' \
+  -d '{"userId":"U-1001","channel":"SMS","message":"배송이 시작되었습니다"}'
+
+# 4. 같은 사용자로 10건 — 같은 파티션으로 가는지 확인
+for i in $(seq 1 10); do
+  curl -s -X POST http://localhost:8080/api/notifications/sync \
+    -H 'Content-Type: application/json' \
+    -d "{\"userId\":\"U-1001\",\"channel\":\"PUSH\",\"message\":\"알림 $i\"}"
+  echo
+done</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>동기 발행 응답 예시 — 같은 키는 같은 파티션</figcaption>
+        <pre><code class="lang-json">{"requestId":"7c1d...","partition":1,"offset":11}
+{"requestId":"9a3f...","partition":1,"offset":12}
+{"requestId":"b2e0...","partition":1,"offset":13}</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="verification">
+      <h2 id="verification">검증 방법</h2>
+
+      <h3 id="verify-topic">1. 토픽이 선언대로 만들어졌는가</h3>
+
+      <figure class="code">
+        <figcaption>토픽 스펙 확인</figcaption>
+        <pre><code class="lang-bash">cd kafka-lab
+./kcli kafka-topics.sh --describe --topic notifications</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 출력</figcaption>
+        <pre><code class="lang-text">Topic: notifications  TopicId: ...  PartitionCount: 3  ReplicationFactor: 3
+	Configs: min.insync.replicas=2,retention.ms=259200000
+	Topic: notifications	Partition: 0	Leader: 1	Replicas: 1,2,3	Isr: 1,2,3
+	Topic: notifications	Partition: 1	Leader: 2	Replicas: 2,3,1	Isr: 2,3,1
+	Topic: notifications	Partition: 2	Leader: 3	Replicas: 3,1,2	Isr: 3,1,2</code></pre>
+      </figure>
+
+      <h3 id="verify-key-partition">2. 같은 키가 같은 파티션으로 가는가</h3>
+
+      <figure class="code">
+        <figcaption>키와 파티션을 함께 출력</figcaption>
+        <pre><code class="lang-bash">./kcli kafka-console-consumer.sh --topic notifications --from-beginning \
+  --timeout-ms 8000 \
+  --property print.key=true --property print.partition=true \
+  --property print.value=false 2&gt;/dev/null | sort | uniq -c</code></pre>
+      </figure>
+
+      <p>
+        같은 <code>userId</code>의 레코드가 <strong>모두 하나의 파티션 번호</strong>로 나옵니다.
+        기본 파티셔너는 키가 있으면 <code>murmur2(key) % 파티션수</code>로 결정적으로 배치합니다.
+        <strong>여기서 파티션이 여러 개로 흩어진다면 키가 null로 들어간 것</strong>입니다.
+      </p>
+
+      <h3 id="verify-concurrency">3. <code>concurrency</code>가 실제로 파티션을 나눠 갖는가</h3>
+
+      <figure class="code">
+        <figcaption>컨슈머 그룹 멤버 확인</figcaption>
+        <pre><code class="lang-bash">./kcli kafka-consumer-groups.sh --describe --group notification-sender</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 출력 — CONSUMER-ID 접미사(-0, -1, -2)가 스레드입니다</figcaption>
+        <pre><code class="lang-text">GROUP                TOPIC          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG  CONSUMER-ID                                          CLIENT-ID
+notification-sender  notifications  0          4               4               0    consumer-notification-sender-1-...                   consumer-notification-sender-1
+notification-sender  notifications  1          13              13              0    consumer-notification-sender-2-...                   consumer-notification-sender-2
+notification-sender  notifications  2          2               2               0    consumer-notification-sender-3-...                   consumer-notification-sender-3</code></pre>
+      </figure>
+
+      <p>
+        <code>concurrency: 3</code>이므로 컨슈머 3개가 파티션 하나씩 가져갑니다.
+        <strong><code>concurrency</code>를 5로 올려 다시 확인해 보세요</strong> —
+        <code>CONSUMER-ID</code>는 5개가 되지만 파티션을 할당받은 것은 여전히 3개이고
+        2개는 아무 파티션도 없이 유휴 상태입니다.
+      </p>
+
+      <h3 id="verify-manual-ack">4. 수동 ack가 유실을 막는가</h3>
+
+      <figure class="code">
+        <figcaption><code>acknowledge()</code> 전에 프로세스를 죽여 봅니다</figcaption>
+        <pre><code class="lang-bash"># NotificationListener.send() 안에 Thread.sleep(30000) 을 임시로 넣고 재기동한 뒤,
+# 레코드를 하나 발행하고 처리 중에 프로세스를 SIGKILL 합니다.
+curl -s -X POST http://localhost:8080/api/notifications/sync \
+  -H 'Content-Type: application/json' \
+  -d '{"userId":"U-9999","channel":"EMAIL","message":"ack 테스트"}'
+
+pkill -9 -f 'com.example.notification.NotificationApplication'
+
+# 오프셋이 전진하지 않았으므로 lag 이 1 로 남아 있습니다.
+./kcli kafka-consumer-groups.sh --describe --group notification-sender | grep -v ' 0 '
+
+# 재기동하면 같은 레코드를 다시 받아 처리합니다(at-least-once).
+cd ../notification-service &amp;&amp; mvn -q spring-boot:run</code></pre>
+      </figure>
+
+      <p>
+        레코드가 <strong>사라지지 않고 다시 처리되는 것</strong>이 정답입니다.
+        만약 <code>ack.acknowledge()</code>를 처리 <em>전</em>으로 옮기면
+        같은 실험에서 그 레코드가 <strong>영구히 사라집니다</strong>(at-most-once).
+        커밋 시점이 유실·중복 경계를 결정한다는 것을 직접 확인할 수 있습니다
+        (<a href="ex04.html">예제 4</a>에서 더 자세히 다룹니다).
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="production">
+      <h2 id="production">프로덕션 고려사항</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>로컬 예제와 프로덕션의 차이</caption>
+          <thead><tr><th scope="col">항목</th><th scope="col">이 예제</th><th scope="col">프로덕션</th></tr></thead>
+          <tbody>
+            <tr>
+              <th scope="row">직렬화</th>
+              <td><code>JsonSerializer</code> + record</td>
+              <td>Avro/Protobuf + Schema Registry. JSON은 필드 추가·삭제 시 컨슈머가 조용히 깨집니다(<a href="ex07.html">예제 7</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">역직렬화 실패</th>
+              <td>처리하지 않음</td>
+              <td><code>ErrorHandlingDeserializer</code>로 감싸지 않으면 잘못된 레코드 하나가 <strong>포이즌 필</strong>이 되어 파티션을 영구히 막습니다(<a href="ex06.html">예제 6</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">에러 처리</th>
+              <td>없음 (예외가 그대로 나갑니다)</td>
+              <td><code>DefaultErrorHandler</code> + DLQ를 반드시 구성합니다(<a href="ex06.html">예제 6</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">발행 실패 대응</th>
+              <td>비동기는 로그만</td>
+              <td>유실이 곤란하면 <strong>outbox 패턴</strong>이나 동기 발행 + 재시도. 로그만 남기면 아무도 못 봅니다(<a href="ex03.html">예제 3</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">멱등성</th>
+              <td>없음</td>
+              <td>at-least-once이므로 <strong>같은 알림이 두 번 발송될 수 있습니다.</strong> <code>requestId</code>를 게이트웨이의 멱등 키로 넘겨야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">종료 처리</th>
+              <td>Spring 기본</td>
+              <td>Spring Boot는 컨테이너를 graceful하게 멈추지만, K8s <code>terminationGracePeriodSeconds</code>가 짧으면 SIGKILL로 커밋이 유실됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row">모니터링</th>
+              <td>actuator 기본</td>
+              <td>Micrometer로 <code>kafka.consumer.*</code>·<code>kafka.producer.*</code>를 Prometheus에 노출하고 lag에 알림(<a href="ex10.html">예제 10</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">보안</th>
+              <td><code>PLAINTEXT</code></td>
+              <td><code>spring.kafka.security.protocol=SASL_SSL</code> + <code>spring.kafka.properties.sasl.*</code>. 자격증명은 시크릿에서 주입합니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">자주 하는 실수</h2>
+
+      <aside class="note note--warn" data-label="실수 1 · send() 의 반환값을 버린다">
+        <p>
+          <code>template.send(topic, key, value);</code>로 끝내면
+          브로커가 거부해도 <strong>애플리케이션은 성공한 것으로 압니다.</strong>
+          <code>whenComplete</code>로 실패를 관측하거나, 결과가 중요하면 <code>join()</code>으로 확인하세요.
+          (<code>join()</code>은 배치를 무력화하므로 고빈도 경로에는 쓰지 않습니다.)
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 2 · concurrency 를 파티션 수보다 크게 잡는다">
+        <p>
+          <code>concurrency: 10</code>을 파티션 3개 토픽에 주면
+          <strong>7개 스레드가 아무 일도 하지 않습니다.</strong>
+          처리량을 늘리려면 <strong>파티션 수를 먼저 늘려야</strong> 합니다.
+          단 파티션 수는 늘릴 수만 있고, 늘리면 기존 키의 해시 분배가 바뀌어
+          <strong>순서 보장이 깨집니다</strong>(<a href="../cases/case05.html">케이스 5</a>).
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 3 · JsonDeserializer 의 신뢰 패키지를 * 로 둔다">
+        <p>
+          <code>spring.json.trusted.packages: "*"</code>는
+          레코드에 담긴 타입 정보로 <strong>임의 클래스를 역직렬화</strong>할 수 있게 만듭니다.
+          외부에서 토픽에 쓸 수 있는 환경이라면 역직렬화 취약점이 됩니다.
+          <strong>구체적인 패키지만 나열하세요.</strong>
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 4 · auto-offset-reset 을 재처리 수단으로 쓴다">
+        <p>
+          <code>auto-offset-reset</code>은 <strong>커밋된 오프셋이 없을 때만</strong> 적용됩니다.
+          이미 커밋된 그룹에서 <code>earliest</code>로 바꿔도 아무 일도 일어나지 않습니다.
+          처음부터 다시 읽으려면 그룹을 새로 만들거나
+          <code>kafka-consumer-groups.sh --reset-offsets</code>를 써야 합니다
+          (<a href="../cases/case01.html">케이스 1</a>).
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 5 · 3.x 예제를 그대로 복사한다">
+        <p>
+          Spring Boot 4에서 <strong>Kafka 스타터 이름과 자동 설정 패키지가 바뀌었습니다.</strong>
+          <code>org.springframework.kafka:spring-kafka</code>를 직접 넣는 3.x 방식도 동작하지만,
+          Boot 4에서는 <code>spring-boot-starter-kafka</code>를 쓰는 것이 권장입니다.
+          그리고 <code>ListenableFuture</code>는 <strong>3.0에서 제거</strong>되었으므로
+          2.x 예제의 <code>addCallback(...)</code> 코드는 컴파일되지 않습니다.
+        </p>
+      </aside>
+
+      <h3 id="related-cases">관련 케이스 스터디</h3>
+      <ul>
+        <li><a href="../cases/case01.html">케이스 1</a> — <code>auto.offset.reset</code>과 그룹 ID를 오해해 전체 재처리가 일어난 사고.</li>
+        <li><a href="../cases/case04.html">케이스 4</a> — 키를 지정하지 않아 순서가 뒤바뀐 사고.</li>
+        <li><a href="../cases/case05.html">케이스 5</a> — 파티션 수를 늘려 오히려 느려진 사고.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="next">
+      <h2 id="next">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="ex06.html">
+          <span class="card__title">예제 6 · DLQ + 재시도 패턴</span>
+          <span class="card__desc">이 애플리케이션에 실패 처리를 붙입니다.</span>
+          <span class="card__meta">실무</span>
+        </a></li>
+        <li><a class="card" href="ex04.html">
+          <span class="card__title">예제 4 · 컨슈머 오프셋 전략</span>
+          <span class="card__desc">커밋 시점이 유실·중복을 어떻게 바꾸는지 클라이언트 API로.</span>
+          <span class="card__meta">실무</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch05.html">
+          <span class="card__title">5장 · Consumer 심화</span>
+          <span class="card__desc">poll 루프·타임아웃·리밸런스·KIP-848.</span>
+          <span class="card__meta">CCDAK App Dev</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc">Producer/Consumer 설정 전체 표와 프리셋.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs" rel="noopener noreferrer">Producer Configs</a> — <code>acks</code>=<code>all</code>, <code>batch.size</code>=<code>16384</code>, <code>buffer.memory</code>=<code>33554432</code>, <code>compression.type</code>=<code>none</code>, <code>linger.ms</code>=<code>5</code>, <code>enable.idempotence</code>=<code>true</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#consumerconfigs" rel="noopener noreferrer">Consumer Configs</a> — <code>enable.auto.commit</code>=<code>true</code>, <code>auto.offset.reset</code>=<code>latest</code>, <code>max.poll.records</code>=<code>500</code>, <code>max.poll.interval.ms</code>=<code>300000</code>, <code>session.timeout.ms</code>=<code>45000</code>, <code>heartbeat.interval.ms</code>=<code>3000</code>, <code>isolation.level</code>=<code>read_uncommitted</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs" rel="noopener noreferrer">Topic Configs</a> — <code>min.insync.replicas</code>=<code>1</code>, <code>retention.ms</code>=<code>604800000</code></li>
+        <li><a href="https://docs.spring.io/spring-boot/reference/messaging/kafka.html" rel="noopener noreferrer">Spring Boot Reference — Apache Kafka Support</a> — <code>spring.kafka.*</code> 프로퍼티, <code>NewTopic</code> 빈으로 토픽 생성</li>
+        <li><a href="https://docs.spring.io/spring-kafka/reference/kafka/sending-messages.html" rel="noopener noreferrer">Spring for Apache Kafka Reference — Sending Messages</a> — <code>KafkaTemplate</code>이 <code>CompletableFuture</code>를 반환한다는 서술</li>
+        <li><a href="https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages.html" rel="noopener noreferrer">Spring for Apache Kafka Reference — Receiving Messages</a> — <code>@KafkaListener</code>, <code>AckMode</code> 7종, <code>Acknowledgment</code></li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

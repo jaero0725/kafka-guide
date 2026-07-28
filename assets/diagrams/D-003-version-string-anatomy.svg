@@ -1,0 +1,70 @@
+<svg viewBox="0 0 720 412" role="img" class="kg-diagram"
+     aria-labelledby="d003-title d003-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d003-title">Kafka 배포 파일명 분해 — kafka_2.13-4.3.1.tgz 의 2.13 은 Scala 버전</title>
+  <desc id="d003-desc">배포 파일명 kafka_2.13-4.3.1.tgz 를 두 부분으로 분해합니다. 밑줄 뒤의 2.13 은 브로커를 컴파일한 Scala 버전이며 Kafka 4.x 는 Scala 2.13 배포판만 제공합니다. Scala 2.12 지원은 4.0 에서 제거되었습니다. 하이픈 뒤의 4.3.1 이 Apache Kafka 버전으로 major 4, minor 3, patch 1 이며 설정 기본값과 CLI, API 는 이 번호를 기준으로 봅니다. 아래 경고 상자는 Kafka 2.13 이라는 버전이 존재하지 않는다는 점을 알려 줍니다. Kafka 의 minor 버전은 2.8 다음이 3.0 이므로 2.9 부터 2.13 까지는 아예 없습니다. 맨 아래에는 2.6, 2.7, 2.8, 3.0 을 지나 3.9, 4.0, 4.3 으로 이어지는 실제 버전 흐름이 표시되어 있습니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">Kafka 버전 표기 읽는 법 — 2.13 은 Kafka 버전이 아닙니다</text>
+<rect class="dg-node dg-node--alt" x="8" y="34" width="704" height="62" rx="4"/>
+<text class="dg-fs-xl dg-bold dg-mono" x="196" y="76">kafka</text>
+<text class="dg-fs-xl dg-bold dg-mono" x="258" y="76">_2.13</text>
+<text class="dg-fs-xl dg-bold dg-mono" x="330" y="76">-4.3.1</text>
+<text class="dg-fs-xl dg-mono dg-muted" x="414" y="76">.tgz</text>
+<path class="dg-edge dg-edge--warn" d="M286,88 L286,118 L180,118 L180,132" marker-end="url(#mk-arrow-warn)"/>
+<path class="dg-edge dg-edge--accent" d="M358,88 L358,118 L500,118 L500,132" marker-end="url(#mk-arrow-accent)"/>
+<g>
+<rect class="dg-node dg-node--warn" x="20" y="134" width="320" height="84" rx="4"/>
+<text class="dg-fs-sm" x="34" y="156.6" text-anchor="start">2.13 = Scala 버전</text>
+<text class="dg-fs-sm" x="34" y="172.6" text-anchor="start">브로커를 컴파일한 Scala 의 버전입니다.</text>
+<text class="dg-fs-sm" x="34" y="188.6" text-anchor="start">Kafka 4.x 는 Scala 2.13 배포판만 제공합니다</text>
+<text class="dg-fs-sm" x="34" y="204.6" text-anchor="start">(2.12 지원은 4.0 에서 제거).</text>
+</g>
+<g>
+<rect class="dg-node dg-node--accent" x="380" y="134" width="320" height="84" rx="4"/>
+<text class="dg-fs-sm" x="394" y="156.6" text-anchor="start">4.3.1 = Apache Kafka 버전</text>
+<text class="dg-fs-sm" x="394" y="172.6" text-anchor="start">major 4 · minor 3 · patch 1.</text>
+<text class="dg-fs-sm" x="394" y="188.6" text-anchor="start">설정 기본값 · CLI · API 는 모두</text>
+<text class="dg-fs-sm" x="394" y="204.6" text-anchor="start">이 번호를 기준으로 봅니다.</text>
+</g>
+<g>
+<rect class="dg-node dg-node--danger" x="8" y="232" width="704" height="56" rx="4"/>
+<text class="dg-fs-sm" x="22" y="256.6" text-anchor="start">Kafka 2.13 이라는 버전은 존재하지 않습니다.</text>
+<text class="dg-fs-sm" x="22" y="272.6" text-anchor="start">Kafka 의 minor 버전은 2.8 다음이 3.0 입니다 — 2.9 부터 2.13 까지는 아예 없습니다.</text>
+</g>
+<text class="dg-fs-sm dg-bold" x="8" y="314">실제 Kafka 버전의 흐름</text>
+<rect class="dg-node" x="8" y="324" width="56" height="30" rx="3"/>
+<text class="dg-fs-sm dg-bold dg-num" x="36" y="344" text-anchor="middle">2.6</text>
+<path class="dg-edge" d="M64,339 L74,339" marker-end="url(#mk-arrow)"/>
+<rect class="dg-node" x="76" y="324" width="56" height="30" rx="3"/>
+<text class="dg-fs-sm dg-bold dg-num" x="104" y="344" text-anchor="middle">2.7</text>
+<path class="dg-edge" d="M132,339 L142,339" marker-end="url(#mk-arrow)"/>
+<rect class="dg-node dg-node--accent" x="144" y="324" width="56" height="30" rx="3"/>
+<text class="dg-fs-sm dg-bold dg-num" x="172" y="344" text-anchor="middle">2.8</text>
+<path class="dg-edge" d="M200,339 L210,339" marker-end="url(#mk-arrow)"/>
+<rect class="dg-node dg-node--accent" x="212" y="324" width="56" height="30" rx="3"/>
+<text class="dg-fs-sm dg-bold dg-num" x="240" y="344" text-anchor="middle">3.0</text>
+<path class="dg-edge" d="M268,339 L278,339" marker-end="url(#mk-arrow)"/>
+<rect class="dg-node" x="280" y="324" width="32" height="30" rx="3"/>
+<text class="dg-fs-sm dg-bold dg-num" x="296" y="344" text-anchor="middle">…</text>
+<path class="dg-edge" d="M312,339 L322,339" marker-end="url(#mk-arrow)"/>
+<rect class="dg-node" x="324" y="324" width="56" height="30" rx="3"/>
+<text class="dg-fs-sm dg-bold dg-num" x="352" y="344" text-anchor="middle">3.9</text>
+<path class="dg-edge" d="M380,339 L390,339" marker-end="url(#mk-arrow)"/>
+<rect class="dg-node" x="392" y="324" width="56" height="30" rx="3"/>
+<text class="dg-fs-sm dg-bold dg-num" x="420" y="344" text-anchor="middle">4.0</text>
+<path class="dg-edge" d="M448,339 L458,339" marker-end="url(#mk-arrow)"/>
+<rect class="dg-node" x="460" y="324" width="32" height="30" rx="3"/>
+<text class="dg-fs-sm dg-bold dg-num" x="476" y="344" text-anchor="middle">…</text>
+<path class="dg-edge" d="M492,339 L502,339" marker-end="url(#mk-arrow)"/>
+<rect class="dg-node" x="504" y="324" width="56" height="30" rx="3"/>
+<text class="dg-fs-sm dg-bold dg-num" x="532" y="344" text-anchor="middle">4.3</text>
+<text class="dg-fs-sm" x="8" y="380">2.8 다음이 3.0 — 여기서 minor 번호가 건너뜁니다. Scala 버전(2.13)과는 아무 관계가 없습니다.</text>
+<text class="dg-fs-sm dg-muted" x="8" y="400">Scala 를 직접 쓰지 않는다면 _2.13 배포판을 그대로 고르면 됩니다. 브로커 실행에는 Java 만 필요합니다.</text>
+</svg>
