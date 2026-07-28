@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CCAAK · Troubleshooting — Kafka Guide</title>
+  <meta name="description" content="CCAAK Troubleshooting 섹션. URP 대응 절차, 디스크 풀, 리밸런스 스톰, 느린 컨슈머, 컨트롤러 이상, offline 파티션을 증상에서 조치까지 순서대로 정리한 운영자용 의사결정 가이드입니다.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccaak" data-page="domain-troubleshooting"></div>
+
+  <main id="main" class="page" data-page-id="ccaak/domain-troubleshooting">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCAAK</a></li>
+        <li><span aria-current="page">Troubleshooting</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCAAK · 섹션 7</p>
+      <h1>Troubleshooting</h1>
+      <p class="page__lead">
+        시나리오 문항의 본진입니다. 이 섹션의 문항은 거의 전부
+        <strong>"이 증상에서 무엇을 먼저 확인하는가"</strong> 형태이고,
+        선택지에는 <strong>결국 필요하지만 지금은 아닌 조치</strong>가 섞여 있습니다.
+        따라서 개별 지식이 아니라 <strong>순서</strong>를 외워야 합니다.
+        아래 여섯 시나리오의 번호 매긴 절차가 그 순서입니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>증상에서 계층(컨트롤러 · 브로커 · 파티션 · 클라이언트)을 좁히는 순서를 적용할 수 있습니다.</li>
+        <li>URP와 offline 파티션을 다른 심각도로 다루고 각각의 절차를 실행할 수 있습니다.</li>
+        <li>디스크 풀 상황에서 가장 먼저 해야 할 것과 <strong>하면 안 되는 것</strong>을 구분할 수 있습니다.</li>
+        <li>리밸런스 스톰의 원인 3가지를 나누고 각각에 맞는 설정을 조정할 수 있습니다.</li>
+        <li>느린 컨슈머와 느린 복제를 lag만 보고 혼동하지 않습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="what-it-asks">
+      <h2 id="what-it-asks">이 도메인이 묻는 것</h2>
+
+      <p>
+        문항 지문은 대개 <strong>메트릭 값 + 로그 한 줄 + 사용자 불만</strong>의 조합으로 옵니다.
+        정답을 고르는 요령은 <strong>가역적이고 진단적인 조치를 먼저 고르는 것</strong>입니다.
+        확인·조회가 조치보다 먼저 오고, 되돌릴 수 없는 조치
+        (unclean 선출 활성화, 토픽 삭제, 오프셋 리셋)는 항상 마지막입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>증상 → 먼저 확인할 것 요약표</caption>
+          <thead>
+            <tr><th scope="col">증상</th><th scope="col">먼저 확인</th><th scope="col">해당 절차</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">프로듀서가 <code>NotEnoughReplicas</code>를 받는다</th>
+              <td><code>UnderMinIsrPartitionCount</code>와 죽은 브로커 수</td>
+              <td><a href="#scenario-urp">시나리오 1</a></td>
+            </tr>
+            <tr>
+              <th scope="row">브로커가 기동하다 죽는다 / 쓰기가 전부 실패</th>
+              <td>디스크 사용률</td>
+              <td><a href="#scenario-disk-full">시나리오 2</a></td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머가 계속 리밸런스만 한다</th>
+              <td>배치 처리 시간과 <code>max.poll.interval.ms</code></td>
+              <td><a href="#scenario-rebalance-storm">시나리오 3</a></td>
+            </tr>
+            <tr>
+              <th scope="row">lag이 계속 늘어난다</th>
+              <td>컨슈머가 느린가, 복제가 느린가, 유입이 늘었나</td>
+              <td><a href="#scenario-slow-consumer">시나리오 4</a></td>
+            </tr>
+            <tr>
+              <th scope="row">토픽을 만들 수 없다 / 설정 변경이 타임아웃</th>
+              <td><code>ActiveControllerCount</code> 합계</td>
+              <td><a href="#scenario-controller">시나리오 5</a></td>
+            </tr>
+            <tr>
+              <th scope="row">특정 파티션의 읽기·쓰기가 모두 안 된다</th>
+              <td><code>OfflinePartitionsCount</code></td>
+              <td><a href="#scenario-offline">시나리오 6</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="triage">
+      <h2 id="triage">공통 트리아지 — 계층을 좁히는 순서</h2>
+
+      <p>
+        어떤 증상이든 아래 순서로 계층을 좁힌 뒤 개별 절차로 들어갑니다.
+        운영자 시험이 요구하는 사고 순서이기도 합니다.
+      </p>
+
+      <ol>
+        <li><strong>컨트롤러</strong> — <code>ActiveControllerCount</code> 합계가 1인가.
+            아니면 메타데이터 변경이 전부 실패하며, 토픽 단위 증상으로 위장합니다.</li>
+        <li><strong>브로커</strong> — 몇 대가 살아 있는가. 디스크 여유가 있는가.
+            <code>RequestHandlerAvgIdlePercent</code>가 0.3 이상인가.</li>
+        <li><strong>파티션</strong> — <code>OfflinePartitionsCount</code> →
+            <code>UnderMinIsrPartitionCount</code> → <code>UnderReplicatedPartitions</code> 순으로 봅니다.
+            앞의 것이 더 심각합니다.</li>
+        <li><strong>클라이언트</strong> — 그룹 상태, lag, 인증·인가 오류.
+            여기까지 와서야 클라이언트를 의심합니다.</li>
+      </ol>
+
+      <figure class="diagram" data-diagram="D-122">
+        <figcaption>
+          결정 트리 — 브로커 성능 저하: 디스크 · 스레드 · 복제 · 클라이언트 중 어디를 볼지 분기
+        </figcaption>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Troubleshooting">
+        <p>
+          "브로커를 재시작한다"는 선택지는 거의 항상 오답입니다.
+          재시작은 <strong>증상을 지우고 원인을 숨기며</strong>, 리더 이동으로 상황을 더 흔듭니다.
+          정답은 <strong>진단(메트릭·CLI 조회)</strong>이거나
+          <strong>가역적인 설정 조정</strong>(동적 설정, 쿼터, 스로틀 해제)입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="scenarios">
+      <h2 id="scenarios">장애 시나리오와 대응</h2>
+
+      <h3 id="scenario-urp">시나리오 1 — URP가 0이 아니고 프로듀서가 실패한다</h3>
+
+      <p>
+        먼저 <strong>"복제가 뒤처졌다"와 "쓰기가 거부됐다"를 구분</strong>합니다.
+        전자는 <code>UnderReplicatedPartitions</code>, 후자는 <code>UnderMinIsrPartitionCount</code>입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>URP 대응 절차</caption>
+          <thead>
+            <tr><th scope="col">단계</th><th scope="col">할 일</th><th scope="col">판단</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">1</th>
+              <td><code>UnderMinIsrPartitionCount</code>를 확인합니다.</td>
+              <td>0보다 크면 <strong>이미 쓰기가 실패</strong>하는 중입니다. 최우선 대응 대상.</td>
+            </tr>
+            <tr>
+              <th scope="row">2</th>
+              <td>살아 있는 브로커 수를 셉니다.</td>
+              <td>브로커 다운이면 <strong>복구가 정답</strong>입니다. 설정으로 우회하지 않습니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">3</th>
+              <td><code>kafka-topics.sh --describe</code>로 어느 파티션·브로커인지 좁힙니다.</td>
+              <td>특정 브로커에 몰려 있으면 그 노드 문제, 흩어져 있으면 클러스터 전반 문제입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">4</th>
+              <td>남아 있는 <strong>복제 스로틀</strong>을 확인합니다.</td>
+              <td>재할당 후 <code>--verify</code>를 생략했으면 여기서 걸립니다. 해제하면 즉시 회복됩니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">5</th>
+              <td>대상 브로커의 디스크 I/O, <code>RequestHandlerAvgIdlePercent</code>,
+                  <code>ReplicaFetcherManager MaxLag</code>를 봅니다.</td>
+              <td>디스크 포화면 <a href="#scenario-disk-full">시나리오 2</a>로 갑니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">6</th>
+              <td>복제 속도가 부족하면 <code>num.replica.fetchers</code>(기본 1)를 올립니다.</td>
+              <td><code>cluster-wide</code>라 재시작 없이 적용됩니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">7</th>
+              <td>서비스가 멈춰 있고 브로커 복구에 시간이 걸린다면
+                  <strong>해당 토픽만</strong> <code>min.insync.replicas</code>를 한시적으로 낮춥니다.</td>
+              <td>내구성을 낮추는 거래입니다. <strong>복구 후 반드시 되돌립니다.</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="절대 먼저 하지 말 것">
+        <p>
+          <strong><code>unclean.leader.election.enable=true</code>를 켜는 것</strong>은
+          URP 대응의 첫 번째 카드가 아닙니다. 이 설정은 ISR 밖 레플리카를 리더로 올려
+          <strong>확정적으로 데이터를 잃습니다.</strong>
+          ISR이 비어 파티션이 offline이 되었고, 데이터 유실보다 가용성이 중요하다고
+          <strong>의사결정권자가 판단한 경우에만</strong> 씁니다. 켠 뒤에는 즉시 되돌립니다.
+        </p>
+      </aside>
+
+      <h3 id="scenario-disk-full">시나리오 2 — 디스크가 찼다</h3>
+
+      <p>
+        가장 급한 장애입니다. 디스크가 가득 차면 브로커는 쓰기를 할 수 없고,
+        재시작해도 로그 복구 단계에서 다시 실패할 수 있습니다.
+      </p>
+
+      <ol>
+        <li>
+          <strong>무엇이 공간을 먹는지 먼저 확인합니다.</strong>
+          데이터 로그인지, 애플리케이션 로그(<code>state-change.log</code> 등)인지, 다른 프로세스인지 나눕니다.
+          애플리케이션 로그가 원인인 경우가 의외로 많고, 그렇다면 데이터를 건드리지 않고 해결됩니다.
+        </li>
+        <li>
+          <strong>가장 큰 토픽의 리텐션을 동적으로 줄입니다.</strong>
+          <code>kafka-configs.sh --entity-type topics --alter --add-config retention.ms=...</code>는
+          재시작이 필요 없습니다. 재처리 여유를 잃는 대신 공간을 확보합니다.
+        </li>
+        <li>
+          <strong>세그먼트가 굴러가야 삭제됩니다.</strong>
+          리텐션만 줄여도 공간이 안 줄면 <code>segment.ms</code>/<code>segment.bytes</code>를 줄여
+          활성 세그먼트를 봉인시킵니다. <strong>활성 세그먼트는 삭제 대상이 아닙니다.</strong>
+        </li>
+        <li>
+          <strong>정리 주기를 기다립니다.</strong>
+          <code>log.retention.check.interval.ms</code>는 기본 <strong>300000</strong>(5분)이라
+          설정 직후 즉시 줄지 않습니다. 이 지연을 모르면 "설정이 안 먹는다"고 오판합니다.
+        </li>
+        <li>
+          <strong>여유가 생기면 근본 대책을 넣습니다.</strong>
+          <code>retention.bytes</code>는 기본값이 <strong>-1(무제한)</strong>이므로
+          크기 상한을 걸어 두면 같은 사고를 구조적으로 막습니다.
+        </li>
+        <li>
+          <strong>장기 대책</strong>: 디스크·브로커 추가 후 파티션 재할당.
+          로그 디렉터리를 줄여야 한다면 <code>cordoned.log.dirs</code>로 신규 배치를 막고
+          재할당으로 비운 뒤 제거합니다(절차는
+          <a href="domain-cluster-config.html">Cluster Configuration</a>).
+        </li>
+      </ol>
+
+      <aside class="note note--danger" data-label="하면 안 되는 조치">
+        <p>
+          <strong>로그 디렉터리의 세그먼트 파일을 직접 삭제하지 마세요.</strong>
+          인덱스와 로그의 정합이 깨져 브로커가 기동하지 못하거나 데이터가 손상됩니다.
+          공간이 필요하면 <strong>리텐션 설정으로</strong> Kafka가 지우게 해야 합니다.
+        </p>
+        <p>
+          <strong>토픽을 급하게 삭제하는 것</strong>도 마지막 수단입니다.
+          되돌릴 수 없고, 그 토픽을 쓰는 애플리케이션 범위를 그 순간에는 알 수 없습니다.
+        </p>
+      </aside>
+
+      <h3 id="scenario-rebalance-storm">시나리오 3 — 컨슈머가 계속 리밸런스만 한다</h3>
+
+      <p>원인은 세 갈래이고, 각각 조정할 설정이 다릅니다.</p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>리밸런스 스톰의 세 원인</caption>
+          <thead>
+            <tr><th scope="col">원인</th><th scope="col">증거</th><th scope="col">조치</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">① 처리가 느려 poll 간격 초과</th>
+              <td>한 배치 처리 시간이 <code>max.poll.interval.ms</code>(기본 300000)에 근접.
+                  로그에 그룹 이탈 메시지</td>
+              <td><code>max.poll.records</code>(기본 500)를 줄여 배치를 작게 하거나
+                  <code>max.poll.interval.ms</code>를 늘립니다. <strong>배치를 줄이는 쪽이 우선</strong>입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">② 컨슈머 프로세스가 자꾸 재시작</th>
+              <td><code>--members</code>의 멤버 수가 오르내림. 배포·OOM·헬스체크 실패</td>
+              <td><strong>static membership</strong>(<code>group.instance.id</code>)으로 재시작 시 리밸런스를 회피합니다.
+                  근본 대책은 프로세스 안정화입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">③ 하트비트가 끊김</th>
+              <td>GC 정지나 네트워크로 <code>session.timeout.ms</code>(기본 45000) 초과</td>
+              <td>GC·네트워크를 먼저 봅니다.
+                  <code>heartbeat.interval.ms</code>(기본 3000)는 세션 타임아웃의 1/3 이하로 유지합니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="구조적 완화">
+        <p>
+          할당 전략을 cooperative sticky 계열로 두면 리밸런스가 증분으로 일어나 전체 정지가 사라집니다.
+          4.x의 기본 전략은 <code>[RangeAssignor, CooperativeStickyAssignor]</code>입니다.
+        </p>
+        <p>
+          더 근본적으로는 <strong>KIP-848 새 컨슈머 그룹 프로토콜</strong>이 있습니다.
+          4.0에서 GA이지만 <strong><code>group.protocol</code>의 기본값은 여전히 <code>classic</code></strong>이므로
+          <code>consumer</code>로 명시해야 켜집니다. 이 프로토콜을 켜면
+          <code>heartbeat.interval.ms</code>·<code>session.timeout.ms</code>·
+          <code>partition.assignment.strategy</code>는 클라이언트에서 더 이상 쓰이지 않고 브로커가 관리합니다.
+          자세한 내용은 <a href="../basics/ch05.html">5장 Consumer 심화</a>에 있습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="브로커 쪽에서 보이는 영향">
+        <p>
+          리밸런스 스톰은 컨슈머만의 문제가 아닙니다.
+          그룹 코디네이터 브로커에 요청이 집중되어 <code>RequestHandlerAvgIdlePercent</code>가 떨어지고,
+          <code>__consumer_offsets</code> 쓰기가 늘어 그 브로커의 지연이 전체로 번집니다.
+          "특정 브로커만 느리다"의 원인이 리밸런스 스톰인 경우가 있습니다.
+        </p>
+      </aside>
+
+      <h3 id="scenario-slow-consumer">시나리오 4 — lag이 계속 늘어난다</h3>
+
+      <p>
+        먼저 <strong>컨슈머가 느린 것인지, 복제가 느린 것인지, 유입이 늘어난 것인지</strong>를 가릅니다.
+        세 경우의 조치가 전혀 다릅니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-120">
+        <figcaption>
+          결정 트리 — 컨슈머가 데이터를 못 읽는다: 권한 · 오프셋 · 리밸런스 · 복제 중 어디를 볼지 분기
+        </figcaption>
+      </figure>
+
+      <ol>
+        <li>
+          <code>kafka-consumer-groups.sh --describe</code>로 <strong>파티션별 lag</strong>을 봅니다.
+          특정 파티션만 크면 데이터 편향(키 쏠림)이거나 그 파티션 담당 컨슈머만 느린 것입니다.
+        </li>
+        <li>
+          <code>--members --verbose</code>로 <strong>할당이 균등한지</strong> 확인합니다.
+          컨슈머 수가 파티션 수보다 많으면 남는 컨슈머는 유휴 상태입니다.
+        </li>
+        <li>
+          <strong>복제가 뒤처졌는지</strong> 확인합니다. URP가 0보다 크면 high watermark가 뒤로 밀려
+          <strong>컨슈머가 최선을 다해도 lag이 0이 되지 않습니다.</strong> 이 경우는 컨슈머 문제가 아닙니다.
+        </li>
+        <li>
+          프로듀서 쪽 유입량(<code>BytesInPerSec</code>)이 늘었는지 봅니다.
+          유입이 원인이면 컨슈머를 <strong>파티션 수까지</strong> 늘려 처리량을 올립니다.
+          그 이상 늘려도 남는 컨슈머는 일하지 않습니다.
+        </li>
+        <li>
+          컨슈머 자체가 느리면 fetch 크기(<code>max.partition.fetch.bytes</code> 기본 1048576,
+          <code>fetch.max.bytes</code> 기본 52428800)와 처리 로직을 봅니다.
+          외부 API 호출이 병목인 경우가 가장 흔합니다.
+        </li>
+        <li>
+          <strong>오프셋 리셋은 마지막 수단</strong>입니다.
+          <code>--reset-offsets --to-latest</code>는 미처리 데이터를 버리는 조치이며,
+          <strong>컨슈머가 모두 정지된 상태에서만</strong> 동작합니다.
+        </li>
+      </ol>
+
+      <aside class="note note--warn" data-label="lag 알림의 사각지대">
+        <p>
+          <code>records-lag-max</code>는 <strong>컨슈머가 발행하는 메트릭</strong>이므로
+          컨슈머가 죽으면 값이 커지는 대신 <strong>사라집니다.</strong>
+          "lag 알림이 안 울렸는데 며칠치가 밀렸다"의 원인입니다.
+          해결은 메트릭 부재에도 알림을 걸고, 브로커에서 커밋 오프셋 기준 lag을 함께 수집하는 것입니다
+          (<a href="domain-observability.html#lag">Observability</a>).
+        </p>
+      </aside>
+
+      <h3 id="scenario-controller">시나리오 5 — 토픽 생성·설정 변경이 전부 타임아웃</h3>
+
+      <ol>
+        <li>
+          <code>ActiveControllerCount</code> 합계를 확인합니다. 0이면 액티브 컨트롤러가 없습니다.
+          <strong>기존 파티션의 읽기·쓰기는 한동안 계속되므로</strong> 사용자는 아직 모를 수 있습니다.
+        </li>
+        <li>
+          <code>kafka-metadata-quorum.sh --bootstrap-controller ... describe --status</code>로
+          voter 목록과 리더를 확인합니다. 브로커가 응답하지 않으면 컨트롤러로 직접 붙습니다.
+        </li>
+        <li>
+          <strong>과반이 살아 있는지</strong> 셉니다. 3대 중 2대, 5대 중 3대가 필요합니다.
+          과반을 잃으면 리더 선출 자체가 불가능하므로 <strong>노드 복구가 유일한 정답</strong>입니다.
+        </li>
+        <li>
+          선거가 반복되면(<code>LeaderElectionRateAndTimeMs</code>가 계속 non-zero)
+          컨트롤러 노드 간 네트워크와 <code>controller.quorum.fetch.timeout.ms</code>(기본 2000)를 봅니다.
+        </li>
+        <li>
+          <code>MetadataErrorCount</code>가 올라 있으면 메타데이터 처리 오류가 있었다는 뜻입니다.
+          이 상태에서 노드를 다시 포맷하기 전에 반드시
+          <code>describe --replication</code>으로 <strong>과반이 커밋된 데이터를 보유</strong>하는지 확인합니다.
+          그러지 않으면 커밋된 데이터가 빠진 리더가 선출될 수 있습니다.
+        </li>
+        <li>
+          컨트롤러를 교체·추가할 때는
+          <a href="domain-deployment.html#controller-membership">배포 아키텍처</a>의 순서를 따릅니다 —
+          프로비저닝 → 기동 → 따라잡기 확인 → <code>add-controller</code>.
+        </li>
+      </ol>
+
+      <h3 id="scenario-offline">시나리오 6 — <code>OfflinePartitionsCount</code>가 0이 아니다</h3>
+
+      <p>
+        가장 심각한 상태입니다. 리더가 없는 파티션은 <strong>읽기와 쓰기가 모두 불가능</strong>합니다.
+      </p>
+
+      <ol>
+        <li>죽은 브로커 수와 해당 파티션의 RF를 비교합니다. RF보다 많이 죽었다면 offline은 당연한 결과입니다.</li>
+        <li><code>kafka-topics.sh --describe</code>로 리더가 없는 파티션을 찾고, 그 레플리카가 어느 브로커에 있는지 확인합니다.</li>
+        <li><strong>그 브로커를 되살리는 것이 정답</strong>입니다. 디스크가 살아 있다면 기동만으로 회복됩니다.</li>
+        <li>브로커를 되살릴 수 없고 ISR이 비어 있다면 남은 선택지는
+            <strong>unclean 선출(데이터 유실)</strong>이거나 <strong>기다리는 것</strong>뿐입니다.
+            이 결정은 운영자 혼자 하지 않습니다.</li>
+        <li>회복 후 <code>UncleanLeaderElectionsPerSec</code>가 증가했는지 확인해
+            <strong>실제로 유실이 있었는지</strong> 기록합니다. 사후 보고에 필요합니다.</li>
+        <li>재발 방지: RF 상향, 랙 인식, <code>min.insync.replicas=2</code>,
+            <code>auto.create.topics.enable=false</code>.</li>
+      </ol>
+
+      <aside class="note note--ok" data-label="RF=1 토픽이 범인인 경우가 많습니다">
+        <p>
+          offline 파티션의 원인이 <strong>자동 생성된 RF=1 토픽</strong>인 경우가 흔합니다.
+          <code>auto.create.topics.enable</code>이 기본 <code>true</code>이고
+          <code>default.replication.factor</code>가 기본 <code>1</code>이기 때문입니다.
+          이 조합은 브로커 1대만 잃어도 offline을 만듭니다.
+          정기적으로 RF=1 토픽을 스캔해 두면 사고를 미리 없앨 수 있습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="cli">
+      <h2 id="cli">필수 CLI 명령어</h2>
+
+      <figure class="code">
+        <figcaption>1분 안에 상태를 파악하는 순서</figcaption>
+        <pre><code class="lang-bash"># 1) 메타데이터 계층이 살아 있는가
+bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --status
+
+# 2) 브로커가 응답하지 않으면 컨트롤러로 직접
+bin/kafka-metadata-quorum.sh --bootstrap-controller localhost:9093 describe --status
+
+# 3) 복제 이상을 파티션 단위로 (Isr 가 Replicas 보다 짧은 줄을 찾습니다)
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe
+
+# 4) 소비 지연
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group order-workers
+
+# 5) 그룹 멤버가 오르내리는지 (리밸런스 스톰 판별)
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+    --describe --group order-workers --members --verbose</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>디스크 풀 — 즉시 쓸 수 있는 완화책</figcaption>
+        <pre><code class="lang-bash"># 토픽 리텐션을 임시로 축소 (재시작 불필요)
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics \
+    --entity-name bulk-events --alter --add-config retention.ms=3600000
+
+# 세그먼트를 더 빨리 굴려 삭제 대상이 되게
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics \
+    --entity-name bulk-events --alter --add-config segment.ms=600000
+
+# 크기 상한을 걸어 재발 방지 (기본값은 -1 = 무제한)
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics \
+    --entity-name bulk-events --alter --add-config retention.bytes=53687091200
+
+# 상황이 끝나면 원복
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics \
+    --entity-name bulk-events --alter --delete-config retention.ms,segment.ms</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>남은 스로틀 확인과 해제 — URP 만성화의 1순위 원인</figcaption>
+        <pre><code class="lang-bash"># 브로커·토픽에 스로틀 설정이 남아 있는지
+bin/kafka-configs.sh --describe --bootstrap-server localhost:9092 --entity-type brokers
+bin/kafka-configs.sh --describe --bootstrap-server localhost:9092 --entity-type topics
+
+# 원래 재할당 JSON 이 있으면 정상 경로로 해제
+bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \
+    --reassignment-json-file reassign.json --verify
+
+# JSON 을 잃었다면 직접 삭제
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 1 \
+    --alter --delete-config leader.replication.throttled.rate,follower.replication.throttled.rate</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>리더 균형 회복과 조사용 로그 레벨 상향</figcaption>
+        <pre><code class="lang-bash"># 롤링 재시작 후 리더가 한쪽에 쏠렸을 때
+bin/kafka-leader-election.sh --bootstrap-server localhost:9092 \
+    --election-type preferred --all-topic-partitions
+
+# 조사용 로그 레벨 상향 (조사 후 반드시 원복)
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --broker-logger 0 \
+    --alter --add-config kafka.server.ReplicaManager=DEBUG</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>오프셋 리셋 — 컨슈머가 모두 정지된 상태에서만</figcaption>
+        <pre><code class="lang-bash"># 먼저 dry-run: 옵션 없이 실행하면 "무엇을 바꿀지"만 출력합니다
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+    --reset-offsets --group order-workers --topic orders --to-latest
+
+# 확인 후 실제 적용
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+    --reset-offsets --group order-workers --topic orders --to-latest --execute
+
+# 특정 시각으로 되감기 (재처리)
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+    --reset-offsets --group order-workers --topic orders \
+    --to-datetime '2026-07-27T00:00:00.000' --execute</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="오프셋 리셋 주의">
+        <p>
+          <code>--reset-offsets</code>는 <strong>한 번에 하나의 그룹</strong>만 다루고,
+          <code>--all-topics</code> 또는 <code>--topic</code> 중 하나를 <strong>반드시</strong> 지정해야 합니다
+          (<code>--from-file</code> 시나리오는 예외).
+          그리고 <strong>컨슈머 인스턴스가 모두 비활성</strong>이어야 동작합니다.
+          범위를 벗어난 오프셋은 사용 가능한 끝값으로 조정됩니다 —
+          끝이 10인데 15로 shift하면 10이 선택됩니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="must-know-configs">
+      <h2 id="must-know-configs">반드시 외워야 할 설정값</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>장애 대응에서 손대는 설정들 (Kafka 4.3 기준)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">기본값</th>
+              <th scope="col">언제 손대는가</th>
+              <th scope="col">주의</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>min.insync.replicas</code><br><span class="badge">broker</span> <span class="badge">topic</span></th>
+              <td>1</td>
+              <td>ISR 부족으로 쓰기가 막혔을 때 한시적으로 하향</td>
+              <td><code>cluster-wide</code>라 즉시 적용됩니다. <strong>복구 후 원복 필수.</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>unclean.leader.election.enable</code><br><span class="badge">broker</span> <span class="badge">topic</span></th>
+              <td>false</td>
+              <td>offline 파티션에서 <strong>유실을 감수하고</strong> 가용성을 되찾을 때</td>
+              <td><strong>데이터 유실 확정.</strong> 최후의 수단이며 즉시 되돌립니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.replica.fetchers</code><br><span class="badge">broker</span></th>
+              <td>1</td>
+              <td>복제가 못 따라잡을 때</td>
+              <td><code>cluster-wide</code>. 디스크가 병목이면 효과가 없습니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.io.threads</code><br><span class="badge">broker</span></th>
+              <td>8</td>
+              <td><code>RequestHandlerAvgIdlePercent</code>가 0.3 미만일 때</td>
+              <td><code>cluster-wide</code>. CPU가 이미 포화면 효과가 없습니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retention.ms</code><br><span class="badge">topic</span></th>
+              <td>604800000<br>(7일)</td>
+              <td>디스크 풀 완화</td>
+              <td>재처리 여유를 잃습니다. 세그먼트가 굴러야 실제로 줍니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retention.bytes</code><br><span class="badge">topic</span></th>
+              <td><strong>-1</strong><br>(무제한)</td>
+              <td>디스크 풀 재발 방지</td>
+              <td>기본적으로 <strong>꺼져 있습니다.</strong> 운영 토픽에는 걸어 두는 편이 안전합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.retention.check.interval.ms</code><br><span class="badge">broker</span></th>
+              <td>300000<br>(5분)</td>
+              <td>—</td>
+              <td><code>read-only</code>. 리텐션이 즉시 듣지 않는 이유입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.poll.records</code><br><span class="badge">consumer</span></th>
+              <td>500</td>
+              <td>리밸런스 스톰 원인 ①</td>
+              <td>배치를 줄이는 것이 타임아웃을 늘리는 것보다 안전합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.poll.interval.ms</code><br><span class="badge">consumer</span></th>
+              <td>300000</td>
+              <td>처리 시간이 구조적으로 긴 경우</td>
+              <td>너무 크게 잡으면 죽은 컨슈머를 오래 감지하지 못합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>session.timeout.ms</code><br><span class="badge">consumer</span></th>
+              <td>45000</td>
+              <td>하트비트 끊김</td>
+              <td>브로커의 그룹 허용 범위 안이어야 합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>heartbeat.interval.ms</code><br><span class="badge">consumer</span></th>
+              <td>3000</td>
+              <td>동일</td>
+              <td>세션 타임아웃의 1/3 이하로 유지합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.partition.fetch.bytes</code><br><span class="badge">consumer</span></th>
+              <td>1048576</td>
+              <td>느린 컨슈머 튜닝</td>
+              <td>브로커의 <code>message.max.bytes</code>(1048588)와 함께 봐야 합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch.max.bytes</code><br><span class="badge">consumer</span></th>
+              <td>52428800<br>(50 MiB)</td>
+              <td>동일</td>
+              <td>메모리 사용량이 함께 올라갑니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.protocol</code><br><span class="badge">consumer</span></th>
+              <td><strong><code>classic</code></strong></td>
+              <td>리밸런스 구조 개선</td>
+              <td>KIP-848은 4.0 GA이지만 <strong>기본값이 아닙니다.</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">자주 나오는 함정</h2>
+
+      <aside class="note note--warn" data-label="함정 1">
+        <p>
+          <strong>"URP가 있으면 데이터가 유실됐다"</strong> — 아닙니다.
+          URP는 복제가 뒤처졌다는 뜻이고, 커밋된 데이터는 남아 있습니다.
+          유실을 확정적으로 알려 주는 지표는 <code>UncleanLeaderElectionsPerSec</code>입니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 2">
+        <p>
+          <strong>"디스크가 차면 세그먼트 파일을 지운다"</strong> —
+          직접 삭제하면 인덱스 정합이 깨집니다. <strong>리텐션 설정을 줄여</strong> Kafka가 지우게 합니다.
+          그리고 세그먼트가 굴러가지 않으면 리텐션도 듣지 않습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 3">
+        <p>
+          <strong>"리밸런스가 잦으면 <code>session.timeout.ms</code>를 늘린다"</strong> —
+          원인이 ③(하트비트 끊김)일 때만 맞습니다.
+          원인이 ①(처리 지연)이면 <code>max.poll.interval.ms</code>와 <code>max.poll.records</code>를 봐야 합니다.
+          <strong>하트비트 축과 poll 축은 별개</strong>입니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 4">
+        <p>
+          <strong>"lag이 크면 컨슈머를 늘린다"</strong> —
+          컨슈머 수가 <strong>파티션 수를 넘으면 남는 컨슈머는 일하지 않습니다.</strong>
+          그리고 복제가 뒤처져 lag이 남는 경우에는 컨슈머를 늘려도 전혀 개선되지 않습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 5">
+        <p>
+          <strong>"컨트롤러가 죽으면 클러스터가 즉시 멈춘다"</strong> — 아닙니다.
+          <strong>기존 파티션의 읽기·쓰기는 한동안 계속</strong>되고,
+          멈추는 것은 메타데이터 변경(토픽 생성·삭제, 리더 선출)입니다.
+          그래서 초기 증상이 "일부 관리 작업만 안 된다"로 나타납니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 6">
+        <p>
+          <strong>"오프셋을 리셋하면 문제가 해결된다"</strong> —
+          <code>--to-latest</code>는 <strong>미처리 데이터를 버리는 것</strong>입니다.
+          그리고 컨슈머가 살아 있으면 명령 자체가 동작하지 않습니다.
+          리셋은 원인을 제거한 뒤의 마지막 단계입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="cases">
+      <h2 id="cases">관련 케이스 스터디</h2>
+      <ul>
+        <li><a href="../cases/case02.html">케이스 2 · 컨슈머가 무한 리밸런스 루프에 빠졌다</a> — 시나리오 3의 실제 사례</li>
+        <li><a href="../cases/case01.html">케이스 1 · 배포 후 며칠치 데이터가 사라졌다</a> — 리텐션 축소의 대가</li>
+        <li><a href="../cases/case06.html">케이스 6 · RF=3인데 브로커 1대 죽자 유실됐다</a> — <code>min.insync.replicas</code>와 offline</li>
+        <li><a href="../cases/case10.html">케이스 10 · 큰 메시지가 무한 재시도로 쌓였다</a> — 크기 설정 불일치</li>
+      </ul>
+      <p>
+        결정 트리 전체는 <a href="../cheatsheet/troubleshooting.html">트러블슈팅 치트시트</a>,
+        메트릭 이름과 임계값은 <a href="domain-observability.html">Observability</a>,
+        조치에 쓰는 명령의 상세 옵션은 <a href="../cheatsheet/cli.html">CLI 치트시트</a>와
+        <a href="domain-cluster-config.html">Cluster Configuration</a>에 있습니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="quiz">
+      <h2 id="quiz">미니 퀴즈</h2>
+      <p>증상 → 조치 순서 배열이 중심입니다. 오답 선택지가 "결국 필요하지만 지금은 아닌 조치"임을 확인하세요.</p>
+      <div class="quiz-embed" data-set="ccaak-troubleshooting" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#monitoring" rel="noopener noreferrer">Monitoring</a> — <code>UnderReplicatedPartitions</code>, <code>UnderMinIsrPartitionCount</code>, <code>OfflinePartitionsCount</code>, <code>ActiveControllerCount</code>, <code>UncleanLeaderElectionsPerSec</code>, <code>RequestHandlerAvgIdlePercent</code>, <code>MetadataErrorCount</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops" rel="noopener noreferrer">Basic Kafka Operations</a> — <code>--reset-offsets</code> 시나리오와 제약, 스로틀 해제, preferred 리더 선출, cordon과 브로커 제거</li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> — <code>min.insync.replicas</code>, <code>unclean.leader.election.enable</code>, <code>num.replica.fetchers</code>, <code>log.retention.check.interval.ms</code> 기본값과 갱신 모드</li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs" rel="noopener noreferrer">Topic Configs</a> — <code>retention.ms</code>, <code>retention.bytes</code>, <code>segment.ms</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#consumerconfigs" rel="noopener noreferrer">Consumer Configs</a> — <code>max.poll.records</code>, <code>max.poll.interval.ms</code>, <code>session.timeout.ms</code>, <code>fetch.max.bytes</code>, <code>group.protocol</code> 기본값</li>
+        <li><a href="https://kafka.apache.org/documentation/#kraft" rel="noopener noreferrer">KRaft</a> — 쿼럼 과반, <code>kafka-metadata-quorum.sh</code>, 컨트롤러 디스크 교체 시 확인 절차</li>
+        <li><a href="https://kafka.apache.org/documentation/#hwandos" rel="noopener noreferrer">Hardware and OS</a> — 디스크·파일시스템, 로그 복구</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

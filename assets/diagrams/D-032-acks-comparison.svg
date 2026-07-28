@@ -1,0 +1,119 @@
+<svg viewBox="0 0 720 418" role="img" class="kg-diagram"
+     aria-labelledby="d032-title d032-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d032-title">acks 0 · 1 · all 비교 — 각 설정에서 유실이 생기는 지점</title>
+  <desc id="d032-desc">같은 구성(리더 1대와 팔로워 2대)에 대해 acks 값 세 가지를 나란히 놓은 시퀀스 비교입니다.
+    각 열에는 프로듀서가 전송을 완료로 간주하는 지점을 가로 파선으로 표시했습니다. 이 선이 아래로 내려갈수록 보장이 강해집니다.
+    acks=0 은 소켓 버퍼에 쓴 직후 완료로 보므로 요청이 브로커에 닿지 않아도 프로듀서가 알 수 없고 유실됩니다.
+    offset 은 항상 -1 로 돌아오고 retries 설정도 동작하지 않습니다.
+    acks=1 은 리더가 자기 로그에 기록한 직후 완료로 보므로, 복제가 끝나기 전에 리더가 죽으면 그 레코드는 새 리더에 없어 유실됩니다.
+    acks=all 은 현재 ISR 전원이 응답한 뒤 완료로 보므로 리더가 죽어도 팔로워에 데이터가 있어 유실되지 않습니다.
+    단 ISR 이 1대로 줄어든 상태에서는 acks=all 도 1대만 확인하므로,
+    min.insync.replicas 를 2 이상으로 두어야 레플리카 한 대 손실을 실제로 견딜 수 있습니다.</desc>
+
+  <defs>
+    <marker id="d032-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+    <marker id="d032-ah-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker--ok" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+  </defs>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">가로 파선 = 프로듀서가 전송을 완료로 간주하는 지점. 아래로 갈수록 보장이 강합니다.</text>
+
+  <!-- ══════════════ acks=0 ══════════════ -->
+  <rect class="dg-node dg-node--danger" x="8" y="32" width="228" height="28" rx="4"/>
+  <text x="20" y="51" class="dg-fs-sm dg-bold dg-mono">acks=0</text>
+  <text x="228" y="51" class="dg-fs-sm" text-anchor="end">확인 없음</text>
+
+  <rect class="dg-node" x="20" y="70" width="204" height="28" rx="4"/>
+  <text x="30" y="89" class="dg-fs-sm dg-bold">프로듀서</text>
+  <line class="dg-edge" x1="68" y1="98" x2="68" y2="138" marker-end="url(#d032-ah)"/>
+
+  <text x="20" y="106" class="dg-fs-sm dg-bold">완료 지점 · 소켓 버퍼</text>
+  <line class="dg-edge dg-edge--accent dg-edge--dashed" x1="20" y1="114" x2="224" y2="114"/>
+  <path class="dg-x" d="M62,118 L74,130 M74,118 L62,130"/>
+  <text x="82" y="128" class="dg-fs-sm dg-muted">여기서 사라져도 모릅니다</text>
+
+  <rect class="dg-node dg-node--muted" x="20" y="140" width="204" height="30" rx="4"/>
+  <text x="30" y="160" class="dg-fs-sm dg-muted">리더 — 못 받았을 수도</text>
+
+  <rect class="dg-node--empty" x="20" y="208" width="98" height="28" rx="4"/>
+  <text x="28" y="227" class="dg-fs-sm dg-muted">팔로워 2</text>
+  <rect class="dg-node--empty" x="126" y="208" width="98" height="28" rx="4"/>
+  <text x="134" y="227" class="dg-fs-sm dg-muted">팔로워 3</text>
+
+  <rect class="dg-node dg-node--danger" x="20" y="266" width="204" height="92" rx="4"/>
+  <text x="30" y="282" class="dg-fs-sm dg-bold">유실 지점: 전송 직후</text>
+  <text x="30" y="302" class="dg-fs-sm">브로커에 닿지 않아도</text>
+  <text x="30" y="320" class="dg-fs-sm">성공으로 처리됩니다</text>
+  <text x="30" y="342" class="dg-fs-sm dg-mono">retries 무효 · offset -1</text>
+
+  <!-- ══════════════ acks=1 ══════════════ -->
+  <rect class="dg-node dg-node--warn" x="246" y="32" width="228" height="28" rx="4"/>
+  <text x="258" y="51" class="dg-fs-sm dg-bold dg-mono">acks=1</text>
+  <text x="466" y="51" class="dg-fs-sm" text-anchor="end">리더만 확인</text>
+
+  <rect class="dg-node" x="258" y="70" width="204" height="28" rx="4"/>
+  <text x="268" y="89" class="dg-fs-sm dg-bold">프로듀서</text>
+  <line class="dg-edge" x1="306" y1="98" x2="306" y2="138" marker-end="url(#d032-ah)"/>
+  <line class="dg-edge dg-edge--dashed" x1="442" y1="190" x2="442" y2="100" marker-end="url(#d032-ah)"/>
+  <text x="450" y="130" class="dg-fs-sm dg-muted">ack</text>
+
+  <rect class="dg-node dg-node--accent" x="258" y="140" width="204" height="30" rx="4"/>
+  <text x="268" y="160" class="dg-fs-sm dg-bold">리더 — 로컬 로그 기록</text>
+
+  <text x="258" y="182" class="dg-fs-sm dg-bold">완료 지점 · 리더 기록 후</text>
+  <line class="dg-edge dg-edge--accent dg-edge--dashed" x1="258" y1="190" x2="462" y2="190"/>
+  <text x="258" y="204" class="dg-fs-sm dg-muted">↓ 복제 전에 리더 다운</text>
+
+  <rect class="dg-node--empty" x="258" y="208" width="98" height="28" rx="4"/>
+  <text x="266" y="227" class="dg-fs-sm dg-muted">미복제</text>
+  <path class="dg-x" d="M330,214 L342,226 M342,214 L330,226"/>
+  <rect class="dg-node--empty" x="364" y="208" width="98" height="28" rx="4"/>
+  <text x="372" y="227" class="dg-fs-sm dg-muted">미복제</text>
+  <path class="dg-x" d="M436,214 L448,226 M448,214 L436,226"/>
+
+  <rect class="dg-node dg-node--danger" x="258" y="266" width="204" height="92" rx="4"/>
+  <text x="268" y="282" class="dg-fs-sm dg-bold">유실 지점: 복제 이전</text>
+  <text x="268" y="302" class="dg-fs-sm">ack 을 받은 레코드가</text>
+  <text x="268" y="320" class="dg-fs-sm">새 리더에는 없습니다</text>
+  <text x="268" y="342" class="dg-fs-sm dg-bold">성공으로 보고된 뒤 유실</text>
+
+  <!-- ══════════════ acks=all ══════════════ -->
+  <rect class="dg-node dg-node--ok" x="484" y="32" width="228" height="28" rx="4"/>
+  <text x="496" y="51" class="dg-fs-sm dg-bold dg-mono">acks=all</text>
+  <text x="704" y="51" class="dg-fs-sm" text-anchor="end">ISR 전원 확인</text>
+
+  <rect class="dg-node" x="496" y="70" width="204" height="28" rx="4"/>
+  <text x="506" y="89" class="dg-fs-sm dg-bold">프로듀서</text>
+  <line class="dg-edge" x1="544" y1="98" x2="544" y2="138" marker-end="url(#d032-ah)"/>
+  <line class="dg-edge dg-edge--dashed" x1="680" y1="256" x2="680" y2="100" marker-end="url(#d032-ah)"/>
+  <text x="688" y="180" class="dg-fs-sm dg-muted">ack</text>
+
+  <rect class="dg-node dg-node--accent" x="496" y="140" width="204" height="30" rx="4"/>
+  <text x="506" y="160" class="dg-fs-sm dg-bold">리더 — 로컬 로그 기록</text>
+
+  <line class="dg-edge dg-edge--ok" x1="524" y1="170" x2="524" y2="204" marker-end="url(#d032-ah-ok)"/>
+  <line class="dg-edge dg-edge--ok" x1="650" y1="170" x2="650" y2="204" marker-end="url(#d032-ah-ok)"/>
+  <text x="556" y="192" class="dg-fs-sm dg-muted">복제 완료</text>
+
+  <rect class="dg-node dg-node--ok" x="496" y="208" width="98" height="28" rx="4"/>
+  <text x="504" y="227" class="dg-fs-sm">팔로워 2 ✔</text>
+  <rect class="dg-node dg-node--ok" x="602" y="208" width="98" height="28" rx="4"/>
+  <text x="610" y="227" class="dg-fs-sm">팔로워 3 ✔</text>
+
+  <text x="496" y="248" class="dg-fs-sm dg-bold">완료 지점 · ISR 전원 응답</text>
+  <line class="dg-edge dg-edge--accent dg-edge--dashed" x1="496" y1="256" x2="700" y2="256"/>
+
+  <rect class="dg-node dg-node--ok" x="496" y="266" width="204" height="92" rx="4"/>
+  <text x="506" y="282" class="dg-fs-sm dg-bold">결과: 무손실 (조건부)</text>
+  <text x="506" y="302" class="dg-fs-sm">리더가 죽어도 팔로워에</text>
+  <text x="506" y="320" class="dg-fs-sm">데이터가 남아 있습니다</text>
+  <text x="506" y="342" class="dg-fs-sm dg-bold">단, ISR 이 1대면 위험</text>
+
+  <!-- ══════════════ 정리 ══════════════ -->
+  <line class="dg-grid" x1="8" y1="374" x2="712" y2="374"/>
+  <text x="8" y="392" class="dg-fs-sm"><tspan class="dg-bold"><tspan class="dg-mono">acks=all</tspan> 만으로는 무손실이 아닙니다.</tspan> ISR 이 1대로 줄면 확인 대상도 1대뿐입니다.</text>
+  <text x="8" y="410" class="dg-fs-sm">→ <tspan class="dg-mono">min.insync.replicas=2</tspan> 를 함께 두어야 레플리카 1대 손실을 견딥니다. <tspan class="dg-mono">acks</tspan> 기본값은 <tspan class="dg-mono">all</tspan> 입니다.</text>
+</svg>

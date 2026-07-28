@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>케이스 9 · 스키마 배포 후 전체 컨슈머가 죽었다 — Kafka Guide</title>
+  <meta name="description" content="409 호환성 오류를 우회하려 Schema Registry 호환성 모드를 NONE으로 바꾸고 프로듀서를 먼저 배포해 전체 컨슈머가 역직렬화 실패로 죽은 사고. 호환성 모드 7종, 모드별 배포 순서(BACKWARD는 컨슈머 먼저, FORWARD는 프로듀서 먼저), 복구 절차를 다룹니다.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="cases" data-page="case09"></div>
+
+  <main id="main" class="page" data-page-id="cases/case09">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="case01.html">실수 케이스</a></li>
+        <li><span aria-current="page">케이스 9 · 스키마 배포 사고</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실수 케이스 · 9</p>
+      <h1>스키마 배포 후 전체 컨슈머가 죽었다</h1>
+      <p class="page__lead">
+        스키마 등록이 <strong>409 Conflict</strong>로 막혔습니다.
+        릴리스 일정이 급해 호환성 모드를 <code>NONE</code>으로 바꿔 통과시켰고,
+        프로듀서를 먼저 배포했습니다.
+        11분 뒤 <strong>이 토픽을 구독하는 컨슈머 7개가 전부 크래시 루프</strong>에 들어갔습니다.
+        409는 버그가 아니라 <strong>이 사고를 막고 있던 안전장치</strong>였습니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 케이스에서 얻어 갈 것</h2>
+      <ul>
+        <li>호환성 모드 7종의 정의를 <strong>"누가 누구의 데이터를 읽는가"</strong>로 설명할 수 있습니다.</li>
+        <li><strong>BACKWARD면 컨슈머 먼저, FORWARD면 프로듀서 먼저</strong> 배포해야 하는 이유를 압니다.</li>
+        <li>역직렬화 실패가 남기는 실제 예외와, 그것이 왜 <strong>크래시 루프</strong>가 되는지 압니다.</li>
+        <li>이미 잘못된 스키마가 등록되고 나쁜 레코드가 토픽에 들어간 뒤의 복구 절차를 압니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="situation">
+      <h2 id="situation">상황</h2>
+
+      <p>
+        주문 이벤트 파이프라인입니다. <code>orders</code> 토픽은
+        <strong>파티션 24개, 복제 계수 3</strong>, 브로커 3대에서 <strong>일 500만 건</strong>을 받습니다.
+        Avro + Schema Registry를 쓰고, subject는 기본 전략(TopicNameStrategy)에 따라
+        <strong><code>orders-value</code></strong>입니다.
+      </p>
+      <p>
+        이 토픽을 구독하는 컨슈머는 <strong>7개</strong>입니다 —
+        정산, 배송, 알림, 리스크, 검색 인덱서, 데이터 웨어하우스 싱크, 실시간 대시보드.
+        전부 <strong>생성된 Avro 클래스(SpecificRecord)</strong>를 씁니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>변경 요청 — 통화 정밀도 문제로 금액 표현을 바꿔야 했습니다</figcaption>
+        <pre><code class="lang-json">// v1 (기존, 등록됨)
+{
+  "type": "record", "name": "Order", "namespace": "com.example.orders",
+  "fields": [
+    {"name": "orderId",       "type": "string"},
+    {"name": "memberId",      "type": "string"},
+    {"name": "amount",        "type": "long"},
+    {"name": "legacyCouponId","type": "string"}
+  ]
+}
+
+// v2 (배포하려던 것)
+{
+  "type": "record", "name": "Order", "namespace": "com.example.orders",
+  "fields": [
+    {"name": "orderId",  "type": "string"},
+    {"name": "memberId", "type": "string"},
+    {"name": "amount",   "type": "string"},   // ← long 에서 string 으로 타입 변경
+    {"name": "currency", "type": "string"}    // ← default 없는 신규 필드
+  ]
+}
+// legacyCouponId 제거 (default 없는 필드였음)</code></pre>
+      </figure>
+
+      <p>
+        CI 파이프라인의 스키마 등록 단계가 <strong>409</strong>로 실패했습니다.
+        릴리스 창구가 닫히기 30분 전이었고, 담당자는 스택오버플로에서 본 대로
+        <strong>subject의 호환성 모드를 <code>NONE</code>으로 바꿨습니다.</strong>
+      </p>
+
+      <figure class="code">
+        <figcaption>실행된 우회 — 이 두 줄이 사고의 전부입니다</figcaption>
+        <pre><code class="lang-bash">$ curl -sX PUT -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+    --data '{"compatibility": "NONE"}' \
+    http://schema-registry:8081/config/orders-value
+{"compatibility":"NONE"}
+
+$ # 등록이 통과됨
+$ curl -sX POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+    --data @order-v2.json \
+    http://schema-registry:8081/subjects/orders-value/versions
+{"id":1418}</code></pre>
+      </figure>
+
+      <p>
+        그리고 <strong>프로듀서를 먼저 배포했습니다.</strong>
+        "데이터의 원천이니까 프로듀서가 먼저"라는 것이 이유였습니다.
+        14:02에 배포가 끝나고, 14:13에 7개 컨슈머 전부가 재시작 루프에 들어갔습니다.
+      </p>
+
+      <aside class="note note--danger" data-label="세 가지 실수가 겹쳤습니다">
+        <ol>
+          <li>
+            <strong>409를 우회했다.</strong> 409는 "이 변경은 기존 스키마와 호환되지 않는다"는
+            <strong>정확한 진단</strong>이었습니다. 모드를 <code>NONE</code>으로 바꾼 것은
+            진단을 고친 것이 아니라 <strong>진단기를 끈 것</strong>입니다.
+          </li>
+          <li>
+            <strong>양방향 비호환 변경을 했다.</strong> 타입 변경(<code>long</code> → <code>string</code>)과
+            default 없는 필드 추가·제거는 <strong>어느 방향으로도 호환되지 않습니다.</strong>
+            배포 순서를 어떻게 바꿔도 깨집니다.
+          </li>
+          <li>
+            <strong>프로듀서를 먼저 배포했다.</strong> 기존 컨슈머(v1 리더)가
+            새 데이터(v2 라이터)를 읽어야 하는 상황이 되었습니다.
+            이 방향을 보장하는 것은 <strong>FORWARD</strong>이고, 이 변경은 그것도 만족하지 않았습니다.
+          </li>
+        </ol>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-118">
+        <figcaption>
+          호환성 모드와 배포 순서 — BACKWARD에서 컨슈머를 먼저 올려야 하는 이유,
+          FORWARD에서 프로듀서를 먼저 올려야 하는 이유, 그리고 순서를 뒤바꿨을 때 깨지는 지점
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="symptoms">
+      <h2 id="symptoms">관측된 증상</h2>
+
+      <h3 id="metrics-shape">메트릭이 어떻게 보였는가</h3>
+      <ul>
+        <li><strong>consumer lag</strong>: 7개 그룹 전부가 <strong>동시에</strong> 수직 상승. 여러 그룹이 함께 죽는 것은 공통 원인(브로커 또는 데이터 형식)을 가리킵니다.</li>
+        <li><strong>파드 재시작 횟수</strong>: 컨슈머 파드가 3~5분마다 재시작. <code>CrashLoopBackOff</code>.</li>
+        <li><strong><code>records-consumed-rate</code></strong>: 0. 첫 번째 v2 레코드에 부딪히는 순간 예외로 죽고, 재시작해도 <strong>같은 오프셋에서 다시 죽습니다.</strong></li>
+        <li><strong>Schema Registry 요청</strong>: 스키마 조회(<code>GET /schemas/ids/1418</code>)가 급증. 컨슈머가 재시작마다 다시 조회합니다.</li>
+        <li><strong>브로커·프로듀서 지표</strong>: 전부 정상. 프로듀서는 아무 문제 없이 쓰고 있었습니다.</li>
+      </ul>
+
+      <h3 id="consumer-log">컨슈머 로그 — 크래시 루프의 지문</h3>
+      <p>
+        Kafka 클라이언트가 역직렬화 실패를 감싸는 예외는 <code>RecordDeserializationException</code>이고,
+        메시지에 <strong>파티션과 오프셋이 정확히 찍힙니다.</strong>
+        이 오프셋이 재시작마다 같다는 것이 크래시 루프의 증거입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>settlement-service 로그 — 같은 오프셋에서 반복해서 죽습니다</figcaption>
+        <pre><code class="lang-bash">ERROR Application shutting down due to unhandled exception
+org.apache.kafka.common.errors.RecordDeserializationException: Error deserializing VALUE for partition orders-11 at offset 88413902. If needed, please seek past the record to continue consumption.
+	at org.apache.kafka.clients.consumer.internals.CompletedFetch.newRecordDeserializationException(CompletedFetch.java:...)
+Caused by: org.apache.kafka.common.errors.SerializationException: Error deserializing Avro message for id 1418
+Caused by: org.apache.avro.AvroTypeException: Found string, expecting long
+	at org.apache.avro.io.ResolvingDecoder.doAction(ResolvingDecoder.java:...)</code></pre>
+      </figure>
+
+      <aside class="note" data-label="로그 출처">
+        <p>
+          <em>"Error deserializing VALUE for partition {} at offset {}. If needed, please seek past the record to continue consumption."</em>는
+          Kafka 4.3의 <code>CompletedFetch</code>에서 확인한 문자열입니다.
+          <code>VALUE</code> 자리에는 <code>KEY</code> 또는 <code>VALUE</code>가 들어갑니다
+          (<code>RecordDeserializationException.DeserializationExceptionOrigin</code> 열거형).
+        </p>
+        <p>
+          <em>"Error deserializing Avro message for id {}"</em>는 Confluent
+          <code>AbstractKafkaAvroDeserializer</code>에서 확인한 <code>SerializationException</code> 메시지입니다.
+          <strong><code>id</code>가 스키마 ID</strong>라는 점이 중요합니다 — 이 번호로 어떤 스키마가 문제인지 바로 조회할 수 있습니다.
+        </p>
+        <p>
+          가장 아래의 <code>AvroTypeException: Found string, expecting long</code>은
+          Avro 라이브러리가 던지는 <strong>형태만 재현</strong>한 것으로, 문구가 정확히 일치하지 않을 수 있습니다.
+          실제 원인 판별은 위의 두 줄과 스키마 ID로 충분합니다.
+        </p>
+      </aside>
+
+      <p>
+        레코드가 여러 건 섞여 있으면 다음 형태로 감싸져 나오기도 합니다.
+        같은 <code>CompletedFetch</code>가 출력합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>배치 중간에서 실패한 경우</figcaption>
+        <pre><code class="lang-bash">org.apache.kafka.common.KafkaException: Received exception when fetching the next record from orders-11. If needed, please seek past the record to continue consumption.</code></pre>
+      </figure>
+
+      <h3 id="registration-error">그리고 원래 나왔어야 했던 오류</h3>
+      <p>
+        14:02 이전, CI가 받았던 <strong>409</strong>가 정확한 진단이었습니다.
+        Schema Registry가 반환하는 본문은 다음 형태입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>호환성 위반 시 Schema Registry 응답 — 409 + 에러 코드 40901</figcaption>
+        <pre><code class="lang-bash">$ curl -sX POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+    --data @order-v2.json \
+    http://schema-registry:8081/subjects/orders-value/versions -w '\nHTTP %{http_code}\n'
+
+{"error_code":40901,"message":"Schema being registered is incompatible with an earlier schema for subject \"orders-value\", details: [{errorType:'TYPE_MISMATCH', description:'The type (path \"/fields/2/type\") is not compatible ...'}]"}
+HTTP 409</code></pre>
+      </figure>
+
+      <p>
+        프로듀서 애플리케이션에서는 이 응답이 아래 형태의 예외로 나타납니다.
+        <code>RestClientException</code>이 메시지 끝에 <strong><code>; error code: 40901</code></strong>을 붙입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>프로듀서 쪽에서 보이는 형태 — 자동 등록을 켠 경우</figcaption>
+        <pre><code class="lang-bash">org.apache.kafka.common.errors.SerializationException: Error registering Avro schema
+Caused by: io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException: Schema being registered is incompatible with an earlier schema for subject "orders-value", details: [...]; error code: 40901</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="auto.register.schemas 가 위험한 이유">
+        <p>
+          <code>auto.register.schemas</code>가 <code>true</code>면
+          <strong>프로듀서가 런타임에 새 스키마를 등록</strong>합니다.
+          이 케이스에서는 CI에서 409로 막혔지만, 자동 등록에 의존하는 파이프라인에서는
+          <strong>배포 시점에 아무 검증 없이 등록이 시도되고, 실패는 런타임 예외로 나타납니다.</strong>
+          프로덕션 프로듀서에는 <code>auto.register.schemas=false</code>를 두고
+          <strong>스키마 등록을 CI의 명시적 단계로 분리</strong>하는 것이 안전합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="root-cause">
+      <h2 id="root-cause">원인 분석</h2>
+
+      <h3 id="step1-check-mode">1단계 — 호환성 모드를 확인한다</h3>
+      <figure class="code">
+        <figcaption>전역 모드와 subject 모드를 모두 확인합니다</figcaption>
+        <pre><code class="lang-bash"># 전역 설정
+$ curl -s http://schema-registry:8081/config
+{"compatibilityLevel":"BACKWARD"}
+
+# subject 설정 — 여기가 오버라이드되어 있었습니다
+$ curl -s http://schema-registry:8081/config/orders-value
+{"compatibilityLevel":"NONE"}
+
+# subject 의 버전 목록과 최신 스키마
+$ curl -s http://schema-registry:8081/subjects/orders-value/versions
+[1,2,3,4,5]
+$ curl -s http://schema-registry:8081/subjects/orders-value/versions/latest | jq -r '.id, .version'
+1418
+5
+
+# 문제의 스키마 ID 로 직접 조회 (로그에 찍힌 id)
+$ curl -s http://schema-registry:8081/schemas/ids/1418 | jq -r '.schema' | jq .</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="subject 오버라이드가 전역 설정을 가립니다">
+        <p>
+          전역 모드가 <code>BACKWARD</code>여도 <strong>subject 레벨 오버라이드가 있으면 그것이 이깁니다.</strong>
+          "우리는 BACKWARD로 운영한다"고 믿고 있어도 subject마다 다를 수 있습니다.
+          <strong>모든 subject의 모드를 정기적으로 점검</strong>하세요.
+        </p>
+        <p>
+          <code>DELETE /config/{subject}</code>로 오버라이드를 제거하면 전역 설정으로 되돌아갑니다.
+        </p>
+      </aside>
+
+      <h3 id="step2-seven-modes">2단계 — 호환성 모드 7종을 정확히 안다</h3>
+      <p>
+        Schema Registry 설정의 <code>compatibility</code> 유효 값과 그 정의입니다.
+        <strong>공식 설정 설명을 그대로 옮긴 것</strong>이므로 이 문장을 기준으로 판단하세요.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>호환성 모드 7종. Schema Registry의 기본값은 <strong><code>backward</code></strong>입니다.</caption>
+          <thead>
+            <tr>
+              <th scope="col">모드</th>
+              <th scope="col">정의 (공식 설명)</th>
+              <th scope="col">비교 대상</th>
+              <th scope="col">배포 순서</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>NONE</code></th>
+              <td>새 스키마는 <strong>유효한 스키마이기만 하면 된다</strong></td>
+              <td>없음</td>
+              <td class="t-center">보장 없음</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>BACKWARD</code><br><span class="badge">기본값</span></th>
+              <td><strong>새 스키마가 최신 등록 스키마로 생산된 데이터를 읽을 수 있다</strong></td>
+              <td>최신 버전 1개</td>
+              <td class="t-center"><strong>컨슈머 먼저</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>BACKWARD_TRANSITIVE</code></th>
+              <td>새 스키마가 <strong>이전 모든 버전</strong>에 대해 backward 호환</td>
+              <td>모든 이전 버전</td>
+              <td class="t-center"><strong>컨슈머 먼저</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>FORWARD</code></th>
+              <td><strong>최신 등록 스키마가 새 스키마로 생산된 데이터를 읽을 수 있다</strong></td>
+              <td>최신 버전 1개</td>
+              <td class="t-center"><strong>프로듀서 먼저</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>FORWARD_TRANSITIVE</code></th>
+              <td>새 스키마가 <strong>이전 모든 버전</strong>에 대해 forward 호환</td>
+              <td>모든 이전 버전</td>
+              <td class="t-center"><strong>프로듀서 먼저</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>FULL</code></th>
+              <td>최신 등록 스키마에 대해 <strong>backward + forward 모두</strong> 호환</td>
+              <td>최신 버전 1개</td>
+              <td class="t-center">순서 무관</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>FULL_TRANSITIVE</code></th>
+              <td><strong>이전 모든 버전</strong>에 대해 backward + forward 모두 호환</td>
+              <td>모든 이전 버전</td>
+              <td class="t-center">순서 무관</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="step3-deploy-order">3단계 — 배포 순서는 정의에서 그대로 따라 나온다</h3>
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          배포 순서를 외우지 말고 <strong>정의에서 유도</strong>하세요.
+        </p>
+        <p>
+          <strong>BACKWARD</strong> = "<strong>새</strong> 스키마가 <strong>옛</strong> 데이터를 읽는다".
+          그러면 <strong>새 스키마를 가진 쪽(리더 = 컨슈머)이 먼저</strong> 준비되어야 합니다.
+          컨슈머를 먼저 올리면, 그 컨슈머는 아직 남아 있는 옛 데이터도 읽고
+          곧 들어올 새 데이터도 읽습니다. → <strong>컨슈머 먼저</strong>
+        </p>
+        <p>
+          <strong>FORWARD</strong> = "<strong>옛</strong> 스키마가 <strong>새</strong> 데이터를 읽는다".
+          그러면 <strong>새 데이터를 만드는 쪽(라이터 = 프로듀서)을 먼저</strong> 올려도 안전합니다.
+          기존 컨슈머가 새 데이터를 읽을 수 있기 때문입니다. → <strong>프로듀서 먼저</strong>
+        </p>
+        <p>
+          <strong>FULL</strong>은 양방향이 보장되므로 순서가 자유롭습니다.
+          <strong><code>NONE</code>은 아무것도 보장하지 않으므로 어떤 순서도 안전하지 않습니다.</strong>
+        </p>
+      </aside>
+
+      <h3 id="step4-what-broke">4단계 — 이 변경이 어느 방향으로도 호환되지 않는 이유</h3>
+      <p>
+        v1 → v2 변경은 세 가지였습니다. 각각을 방향별로 따져 봅니다.
+        <strong>리더(reader) = 읽는 쪽의 스키마, 라이터(writer) = 데이터를 쓴 쪽의 스키마</strong>입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>변경 항목별 호환성 판정 (Avro 스키마 해석 규칙 기준)</caption>
+          <thead>
+            <tr>
+              <th scope="col">변경</th>
+              <th scope="col">BACKWARD<br>(새 리더 ← 옛 데이터)</th>
+              <th scope="col">FORWARD<br>(옛 리더 ← 새 데이터)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>amount</code>: <code>long</code> → <code>string</code></th>
+              <td class="t-center"><span class="mark-no">불가</span><br>타입이 맞지 않음</td>
+              <td class="t-center"><span class="mark-no">불가</span><br>타입이 맞지 않음</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>currency</code> 추가 (default 없음)</th>
+              <td class="t-center"><span class="mark-no">불가</span><br>옛 데이터에 값이 없고 default도 없음</td>
+              <td class="t-center"><span class="mark-ok">가능</span><br>옛 리더가 모르는 필드를 무시</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>legacyCouponId</code> 제거 (default 없던 필드)</th>
+              <td class="t-center"><span class="mark-ok">가능</span><br>새 리더가 그 필드를 요구하지 않음</td>
+              <td class="t-center"><span class="mark-no">불가</span><br>옛 리더가 요구하는데 새 데이터에 없고 default도 없음</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="세 변경을 한 릴리스에 묶은 것도 실수입니다">
+        <p>
+          표를 보면 각 변경의 안전한 방향이 <strong>서로 다릅니다.</strong>
+          하나는 FORWARD만, 하나는 BACKWARD만 만족하고, 타입 변경은 둘 다 불가입니다.
+          <strong>세 개를 한 릴리스에 묶으면 어떤 모드로도 통과할 수 없습니다.</strong>
+        </p>
+        <p>
+          스키마 변경은 <strong>한 릴리스에 한 종류씩</strong> 나누는 것이 원칙입니다.
+          아래 해결 섹션의 다단계 전환이 그 방법입니다.
+        </p>
+      </aside>
+
+      <h3 id="step5-safe-changes">5단계 — 안전한 스키마 진화 규칙</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Avro 스키마 변경 유형별 호환 방향</caption>
+          <thead>
+            <tr>
+              <th scope="col">변경</th>
+              <th scope="col">BACKWARD</th>
+              <th scope="col">FORWARD</th>
+              <th scope="col">메모</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">필드 추가 — <strong>default 있음</strong></th>
+              <td class="t-center"><span class="mark-ok">가능</span></td>
+              <td class="t-center"><span class="mark-ok">가능</span></td>
+              <td><strong>가장 안전한 변경.</strong> FULL 호환</td>
+            </tr>
+            <tr>
+              <th scope="row">필드 추가 — default 없음</th>
+              <td class="t-center"><span class="mark-no">불가</span></td>
+              <td class="t-center"><span class="mark-ok">가능</span></td>
+              <td>기본값을 붙이면 FULL이 됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row">필드 제거 — <strong>default 있던 필드</strong></th>
+              <td class="t-center"><span class="mark-ok">가능</span></td>
+              <td class="t-center"><span class="mark-ok">가능</span></td>
+              <td>제거 전에 default를 붙여 두는 것이 요령</td>
+            </tr>
+            <tr>
+              <th scope="row">필드 제거 — default 없던 필드</th>
+              <td class="t-center"><span class="mark-ok">가능</span></td>
+              <td class="t-center"><span class="mark-no">불가</span></td>
+              <td>이 사고의 <code>legacyCouponId</code></td>
+            </tr>
+            <tr>
+              <th scope="row">필드 타입 변경</th>
+              <td class="t-center"><span class="mark-no">불가</span></td>
+              <td class="t-center"><span class="mark-no">불가</span></td>
+              <td>승격 가능한 조합(<code>int</code>→<code>long</code> 등) 외에는 불가. <strong>새 필드를 추가하는 방식으로 우회</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">필드 이름 변경 (alias 없음)</th>
+              <td class="t-center"><span class="mark-no">불가</span></td>
+              <td class="t-center"><span class="mark-no">불가</span></td>
+              <td>제거 + 추가와 같습니다. <code>aliases</code>를 쓰면 완화 가능</td>
+            </tr>
+            <tr>
+              <th scope="row">enum 심볼 추가</th>
+              <td class="t-center">조건부</td>
+              <td class="t-center">조건부</td>
+              <td>enum default 지정 여부에 따라 달라집니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--ok" data-label="한 가지만 외운다면">
+        <p>
+          <strong>"필드를 추가할 때는 반드시 default를 붙인다."</strong>
+          그리고 <strong>"제거하려면 먼저 default를 붙인 릴리스를 배포한 뒤 다음 릴리스에서 제거한다."</strong>
+          이 두 가지만 지키면 대부분의 변경이 FULL 호환이 되고 배포 순서를 고민할 필요가 없어집니다.
+        </p>
+      </aside>
+
+      <p>
+        직렬화 형식·Schema Registry 아키텍처·wire format의 상세는
+        <a href="../basics/ch08.html">8장 스키마와 직렬화</a>에서 다룹니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="reproduce">
+      <h2 id="reproduce">재현 방법</h2>
+
+      <p>
+        브로커와 Schema Registry가 함께 필요합니다.
+        브로커는 Apache Kafka의 공식 단일 노드 예제를 쓰고, Schema Registry 컨테이너를 추가합니다
+        (3노드 구성은 <a href="../practice/ex01.html">예제 1</a>,
+        Avro 진화 실습은 <a href="../practice/ex07.html">예제 7</a>).
+      </p>
+
+      <figure class="code">
+        <figcaption>docker-compose.yml — 브로커 + Schema Registry</figcaption>
+        <pre><code class="lang-yaml">services:
+  broker:
+    image: apache/kafka:4.3.1
+    hostname: broker
+    container_name: broker
+    ports:
+      - '9092:9092'
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_LISTENERS: 'CONTROLLER://:29093,PLAINTEXT://:19092,PLAINTEXT_HOST://:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:19092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:latest   # 사용 중인 CP 버전으로 고정하세요
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on: [broker]
+    ports:
+      - '8081:8081'
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'PLAINTEXT://broker:19092'
+      SCHEMA_REGISTRY_LISTENERS: 'http://0.0.0.0:8081'
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 1</code></pre>
+      </figure>
+
+      <aside class="note" data-label="Schema Registry 는 Apache Kafka 본체가 아닙니다">
+        <p>
+          Schema Registry는 <strong>Confluent가 제공하는 별도 컴포넌트</strong>이며
+          Apache Kafka 배포판에 포함되지 않습니다.
+          위 compose의 <code>:latest</code> 태그는 재현 편의를 위한 것이며,
+          <strong>실제 사용 중인 Confluent Platform 버전으로 고정</strong>하세요.
+          Apache Kafka 4.3 문서에는 Schema Registry 관련 설정이 없으므로
+          이 컴포넌트의 사실은 Confluent 공식 문서와 <code>confluentinc/schema-registry</code> 소스를 근거로 씁니다.
+          CCDAK 출제 범위에는 포함되므로 이 가이드도 다룹니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>재현 절차 — 409가 안전장치임을 확인한 뒤 우회해서 깨뜨립니다</figcaption>
+        <pre><code class="lang-bash">docker compose up -d
+SR=http://localhost:8081
+CT='Content-Type: application/vnd.schemaregistry.v1+json'
+
+# 0. 기본 호환성 모드 확인 → BACKWARD
+curl -s $SR/config
+
+# 1. v1 스키마 등록
+cat > v1.json <<'EOF'
+{"schema":"{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"com.example.orders\",\"fields\":[{\"name\":\"orderId\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"long\"},{\"name\":\"legacyCouponId\",\"type\":\"string\"}]}"}
+EOF
+curl -sX POST -H "$CT" --data @v1.json $SR/subjects/orders-value/versions
+
+# 2. v2(타입 변경 + default 없는 필드 추가 + 필드 제거) 등록 시도 → 409
+cat > v2.json <<'EOF'
+{"schema":"{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"com.example.orders\",\"fields\":[{\"name\":\"orderId\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"string\"},{\"name\":\"currency\",\"type\":\"string\"}]}"}
+EOF
+curl -sX POST -H "$CT" --data @v2.json $SR/subjects/orders-value/versions -w '\nHTTP %{http_code}\n'
+#   → {"error_code":40901,"message":"Schema being registered is incompatible with an earlier
+#      schema for subject \"orders-value\", details: [...]"}
+#     HTTP 409     ★ 이것이 안전장치입니다
+
+# 3. 등록 전에 호환성만 검사하는 엔드포인트 (CI 에서 이걸 써야 합니다)
+curl -sX POST -H "$CT" --data @v2.json \
+  "$SR/compatibility/subjects/orders-value/versions/latest?verbose=true"
+#   → {"is_compatible":false,"messages":[...]}
+
+# 4. 사고 재현 — 모드를 NONE 으로 바꿔 우회
+curl -sX PUT -H "$CT" --data '{"compatibility":"NONE"}' $SR/config/orders-value
+curl -sX POST -H "$CT" --data @v2.json $SR/subjects/orders-value/versions
+#   → {"id":N}  등록 성공. 이 순간 사고가 확정됩니다.
+
+# 5. 컨슈머(v1 리더)가 v2 데이터를 읽으면 실패합니다.
+#    kafka-avro-console-producer / consumer 로 확인할 수 있습니다.
+docker exec -it schema-registry kafka-avro-console-producer \
+  --bootstrap-server broker:19092 --topic orders \
+  --property schema.registry.url=http://schema-registry:8081 \
+  --property value.schema.id=N          # 4단계에서 받은 id
+# {"orderId":"ORD-1","amount":"34900","currency":"KRW"}
+
+# v1 스키마를 리더로 지정해 읽으면 역직렬화가 실패합니다
+docker exec -it schema-registry kafka-avro-console-consumer \
+  --bootstrap-server broker:19092 --topic orders --from-beginning \
+  --property schema.registry.url=http://schema-registry:8081</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>모드별 배포 순서를 직접 확인하는 실험</figcaption>
+        <pre><code class="lang-bash"># BACKWARD 에서는 "default 있는 필드 추가"가 통과합니다
+curl -sX PUT -H "$CT" --data '{"compatibility":"BACKWARD"}' $SR/config/orders-value
+
+cat > v1b.json <<'EOF'
+{"schema":"{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"com.example.orders\",\"fields\":[{\"name\":\"orderId\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"long\"},{\"name\":\"legacyCouponId\",\"type\":\"string\"},{\"name\":\"currency\",\"type\":\"string\",\"default\":\"KRW\"}]}"}
+EOF
+curl -sX POST -H "$CT" --data @v1b.json \
+  "$SR/compatibility/subjects/orders-value/versions/latest?verbose=true"
+#   → {"is_compatible":true}
+
+# FORWARD 로 바꾸면 "default 없는 필드 추가"도 통과합니다
+curl -sX PUT -H "$CT" --data '{"compatibility":"FORWARD"}' $SR/config/orders-value
+cat > v1c.json <<'EOF'
+{"schema":"{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"com.example.orders\",\"fields\":[{\"name\":\"orderId\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"long\"},{\"name\":\"legacyCouponId\",\"type\":\"string\"},{\"name\":\"channel\",\"type\":\"string\"}]}"}
+EOF
+curl -sX POST -H "$CT" --data @v1c.json \
+  "$SR/compatibility/subjects/orders-value/versions/latest?verbose=true"
+#   → {"is_compatible":true}   ★ 같은 변경이 모드에 따라 결과가 다릅니다
+
+# 원래대로 되돌리기 — subject 오버라이드 삭제
+curl -sX DELETE $SR/config/orders-value
+curl -s $SR/config/orders-value      # → 404 (전역 설정을 따름)</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="fix">
+      <h2 id="fix">해결</h2>
+
+      <h3 id="immediate">즉시 조치 — 컨슈머를 살리고 프로듀서를 되돌린다</h3>
+      <p>
+        크래시 루프는 <strong>같은 오프셋에서 반복해서 죽는 것</strong>이므로,
+        컨슈머를 살리는 방법은 두 가지뿐입니다 —
+        <strong>나쁜 레코드를 건너뛰거나</strong>, <strong>나쁜 레코드가 더 생기지 않게 막는 것</strong>입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>즉시 조치 — 순서를 반드시 이렇게 지킵니다</figcaption>
+        <pre><code class="lang-bash"># 1. 프로듀서를 v1 으로 롤백한다 (가장 먼저. 나쁜 레코드 생성을 멈춥니다)
+kubectl rollout undo deploy/order-producer
+
+# 2. 호환성 모드를 되돌린다 (subject 오버라이드 제거 → 전역 BACKWARD 를 따름)
+curl -sX DELETE http://schema-registry:8081/config/orders-value
+
+# 3. 잘못 등록된 스키마 버전을 soft delete 한다
+#    (hard delete 는 permanent=true. 이미 그 id 로 쓰인 레코드가 있으면 읽을 수 없게 되므로 주의)
+curl -sX DELETE http://schema-registry:8081/subjects/orders-value/versions/5
+
+# 4. 컨슈머가 나쁜 레코드를 건너뛰게 한다.
+#    예외 메시지가 파티션과 오프셋을 알려 주므로 그 지점 다음으로 seek 합니다.
+#    컨슈머를 내린 뒤 오프셋을 앞으로 밀어 줍니다.
+kubectl scale deploy/settlement-service --replicas=0
+
+kafka-consumer-groups.sh --bootstrap-server kafka-1:9092 \
+  --group order-settlement --topic orders:11 \
+  --reset-offsets --shift-by 1 --dry-run     # 확인 후 --execute
+
+kubectl scale deploy/settlement-service --replicas=8</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="건너뛰기는 유실입니다">
+        <p>
+          <code>--shift-by 1</code>로 나쁜 레코드를 건너뛰면 <strong>그 레코드는 처리되지 않습니다.</strong>
+          나쁜 레코드가 수천 건이면 그만큼 유실됩니다.
+        </p>
+        <p>
+          <strong>더 나은 방법은 컨슈머 쪽에 역직렬화 실패 핸들러를 두는 것</strong>입니다.
+          Spring Kafka의 <code>ErrorHandlingDeserializer</code>처럼 역직렬화 실패를
+          예외로 전파하지 않고 <strong>DLQ로 보내는</strong> 구조라면
+          컨슈머가 죽지 않고 나쁜 레코드만 격리됩니다.
+          DLQ 패턴은 <a href="../practice/ex06.html">예제 6</a>에 있습니다.
+        </p>
+        <p>
+          hard delete(<code>?permanent=true</code>)는 <strong>그 스키마 ID로 쓰인 레코드를
+          영구히 읽을 수 없게 만듭니다.</strong> 토픽에 그 ID의 레코드가 남아 있는 동안에는 하지 마세요.
+        </p>
+      </aside>
+
+      <h3 id="root-fix">근본 해결 — 변경을 쪼개고, 게이트를 CI에 둔다</h3>
+
+      <div class="diff">
+        <div class="diff__before">
+          <p>
+            비호환 변경 세 개를 한 릴리스에 묶고, 막히자 <strong>검사를 껐습니다.</strong>
+            프로듀서가 런타임에 스키마를 등록하므로 배포 전에 검증할 기회도 없었습니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 전</figcaption>
+            <pre><code class="lang-properties"># Schema Registry — subject 오버라이드
+compatibility=NONE
+
+# producer
+auto.register.schemas=true
+use.latest.version=false
+
+# CI
+# 스키마 호환성 검사 단계 없음</code></pre>
+          </figure>
+        </div>
+        <div class="diff__after">
+          <p>
+            모드는 <strong>전역 <code>FULL_TRANSITIVE</code></strong>로 강화하고,
+            프로듀서의 자동 등록을 끄고,
+            <strong>등록·검증을 CI의 명시적 단계</strong>로 옮깁니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 후</figcaption>
+            <pre><code class="lang-properties"># Schema Registry — 전역
+compatibility=FULL_TRANSITIVE     # 배포 순서를 고민하지 않아도 되게
+# subject 오버라이드 없음
+
+# producer
+auto.register.schemas=false        # 런타임 등록 금지
+use.latest.version=true
+
+# CI (배포 전 게이트)
+# 1) POST /compatibility/subjects/{subject}/versions/latest?verbose=true → is_compatible 확인
+# 2) 통과하면 POST /subjects/{subject}/versions 로 등록
+# 3) 실패하면 빌드 실패. 모드를 바꿔 우회하는 경로를 아예 막아 둔다</code></pre>
+          </figure>
+        </div>
+      </div>
+
+      <figure class="code">
+        <figcaption>CI 게이트 스크립트 — 이것이 있으면 이 사고는 일어나지 않습니다</figcaption>
+        <pre><code class="lang-bash">#!/usr/bin/env bash
+set -euo pipefail
+SR="${SCHEMA_REGISTRY_URL}"
+CT='Content-Type: application/vnd.schemaregistry.v1+json'
+
+for f in schemas/*.avsc; do
+  subject="$(basename "$f" .avsc)-value"
+  payload=$(jq -Rs '{schema: .}' < "$f")
+
+  # 1) 호환성 검사 — 등록하지 않고 결과만 받습니다
+  res=$(curl -sf -X POST -H "$CT" --data "$payload" \
+        "$SR/compatibility/subjects/$subject/versions/latest?verbose=true")
+  ok=$(echo "$res" | jq -r '.is_compatible')
+
+  if [ "$ok" != "true" ]; then
+    echo "INCOMPATIBLE: $subject"
+    echo "$res" | jq -r '.messages[]?'
+    echo "→ 호환성 모드를 바꿔 우회하지 마세요. 스키마 변경을 쪼개세요."
+    exit 1
+  fi
+
+  # 2) 통과했으면 등록
+  curl -sf -X POST -H "$CT" --data "$payload" "$SR/subjects/$subject/versions" \
+    | jq -r '"registered \($subject) id=\(.id)"'
+done</code></pre>
+      </figure>
+
+      <h3 id="multi-step">필요한 변경을 여러 릴리스로 쪼개는 방법</h3>
+      <p>
+        이 케이스의 세 가지 변경을 <strong>FULL 호환을 유지하면서</strong> 달성하는 절차입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>비호환 변경을 호환 변경의 연속으로 분해하기</caption>
+          <thead>
+            <tr>
+              <th scope="col">릴리스</th>
+              <th scope="col">스키마 변경</th>
+              <th scope="col">애플리케이션 변경</th>
+              <th scope="col">호환성</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">R1</th>
+              <td><code>amountMinor</code>(string, default <code>""</code>)와 <code>currency</code>(string, default <code>"KRW"</code>) <strong>추가</strong>. <code>legacyCouponId</code>에 <strong>default 부여</strong></td>
+              <td>프로듀서가 <code>amount</code>와 <code>amountMinor</code>를 <strong>둘 다</strong> 채움</td>
+              <td class="t-center"><span class="mark-ok">FULL</span></td>
+            </tr>
+            <tr>
+              <th scope="row">R2</th>
+              <td>없음</td>
+              <td>컨슈머 7개를 순차적으로 <strong><code>amountMinor</code> 읽기로 전환</strong></td>
+              <td class="t-center"><span class="mark-ok">변경 없음</span></td>
+            </tr>
+            <tr>
+              <th scope="row">R3</th>
+              <td>없음</td>
+              <td>모든 컨슈머 전환 완료 확인. <strong>대시보드로 검증</strong></td>
+              <td class="t-center"><span class="mark-ok">변경 없음</span></td>
+            </tr>
+            <tr>
+              <th scope="row">R4</th>
+              <td><code>amount</code>와 <code>legacyCouponId</code> <strong>제거</strong>(둘 다 default가 있는 상태)</td>
+              <td>프로듀서가 <code>amountMinor</code>만 채움</td>
+              <td class="t-center"><span class="mark-ok">FULL</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--ok" data-label="핵심 요령">
+        <p>
+          <strong>타입을 바꾸지 말고 새 필드를 추가하세요.</strong>
+          <code>amount</code>(long)를 <code>string</code>으로 바꾸는 대신
+          <code>amountMinor</code>(string)를 추가하고, 전환이 끝난 뒤 옛 필드를 제거합니다.
+        </p>
+        <p>
+          <strong>제거하기 전에 default를 붙이세요.</strong>
+          default가 있는 필드의 제거는 양방향 호환입니다.
+          R1에서 <code>legacyCouponId</code>에 default를 준 것이 R4를 가능하게 만듭니다.
+        </p>
+        <p>
+          이렇게 하면 모드를 <code>FULL_TRANSITIVE</code>로 두어도 전부 통과하고,
+          <strong>배포 순서를 고민할 필요가 없어집니다.</strong>
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prevention">
+      <h2 id="prevention">예방 체크리스트</h2>
+
+      <ul>
+        <li><label><input type="checkbox"> 전역 호환성 모드가 <code>NONE</code>이 아니다. 가능하면 <code>FULL_TRANSITIVE</code>다</label></li>
+        <li><label><input type="checkbox"> <strong>subject 레벨 오버라이드 목록</strong>을 점검했고, <code>NONE</code>으로 열려 있는 subject가 없다</label></li>
+        <li><label><input type="checkbox"> CI에 <code>/compatibility/...</code> <strong>사전 검사 단계</strong>가 있고, 실패 시 빌드가 멈춘다</label></li>
+        <li><label><input type="checkbox"> 프로듀서의 <code>auto.register.schemas=false</code>다 (등록은 CI에서만)</label></li>
+        <li><label><input type="checkbox"> 필드를 추가할 때 <strong>항상 default를 붙인다</strong></label></li>
+        <li><label><input type="checkbox"> 필드 제거는 <strong>default 부여 → 전환 → 제거</strong> 2단계 이상으로 나눈다</label></li>
+        <li><label><input type="checkbox"> <strong>타입 변경 대신 새 필드 추가</strong>로 우회한다</label></li>
+        <li><label><input type="checkbox"> 배포 순서가 모드와 맞는다 — <strong>BACKWARD면 컨슈머 먼저, FORWARD면 프로듀서 먼저</strong></label></li>
+        <li><label><input type="checkbox"> 이 토픽을 구독하는 <strong>컨슈머 목록</strong>이 최신이다 (7개인지 8개인지 아는가?)</label></li>
+        <li><label><input type="checkbox"> 컨슈머에 <strong>역직렬화 실패 핸들러(DLQ)</strong>가 있어 나쁜 레코드 하나로 죽지 않는다</label></li>
+        <li><label><input type="checkbox"> 스키마 hard delete(<code>permanent=true</code>)를 운영에서 쓰지 않는다</label></li>
+        <li><label><input type="checkbox"> "409가 나면 모드를 바꾼다"는 대응이 <strong>런북에서 금지</strong>되어 있다</label></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트</h2>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <ul>
+          <li>
+            <strong>배포 순서는 CCDAK 단골 문항입니다.</strong>
+            <code>BACKWARD</code> → <strong>컨슈머 먼저</strong>,
+            <code>FORWARD</code> → <strong>프로듀서 먼저</strong>,
+            <code>FULL</code> → 순서 무관.
+          </li>
+          <li>
+            Schema Registry의 기본 호환성 모드는 <strong><code>BACKWARD</code></strong>입니다.
+          </li>
+          <li>
+            모드 정의: <code>BACKWARD</code> = "새 스키마가 최신 등록 스키마로 생산된 데이터를 읽을 수 있다",
+            <code>FORWARD</code> = "최신 등록 스키마가 새 스키마로 생산된 데이터를 읽을 수 있다".
+            <strong>두 문장을 바꿔 놓은 선택지가 오답으로 나옵니다.</strong>
+          </li>
+          <li>
+            <code>*_TRANSITIVE</code>는 <strong>최신 버전 하나가 아니라 이전 모든 버전</strong>과 비교합니다.
+          </li>
+          <li>
+            <strong>default 있는 필드 추가</strong>는 양방향(FULL) 호환입니다.
+            <strong>default 없는 필드 추가</strong>는 FORWARD만 만족합니다.
+          </li>
+          <li>
+            호환성 위반 시 HTTP <strong>409</strong>, 에러 코드 <strong>40901</strong>.
+            프로듀서에서는 <code>SerializationException</code>이
+            <code>RestClientException</code>을 감싸고, 메시지 끝에
+            <code>; error code: 40901</code>이 붙습니다.
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · subject 와 wire format">
+        <ul>
+          <li>
+            기본 subject naming strategy는 <strong>TopicNameStrategy</strong>이며
+            subject 이름은 <code>{topic}-key</code> / <code>{topic}-value</code>입니다.
+            다른 전략은 <code>RecordNameStrategy</code>, <code>TopicRecordNameStrategy</code>입니다.
+          </li>
+          <li>
+            wire format은 <strong>magic byte(1) + schema id(4, big-endian) + payload</strong>입니다.
+            컨슈머는 이 id로 Schema Registry에서 라이터 스키마를 조회합니다.
+            역직렬화 실패 로그의 <code>for id N</code>이 그 id입니다.
+          </li>
+          <li>
+            <code>auto.register.schemas=true</code>의 위험 —
+            <strong>프로듀서가 런타임에 스키마를 등록</strong>하므로
+            검증 없이 새 버전이 생길 수 있습니다. 프로덕션에서는 <code>false</code>가 권장됩니다.
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Troubleshooting">
+        <p>
+          "여러 컨슈머 그룹이 <strong>동시에</strong> lag이 치솟고 재시작을 반복한다" →
+          공통 원인을 의심합니다. 브로커 장애가 아니라면 <strong>데이터 형식 변경</strong>입니다.
+          확인 순서는 <strong>① 최근 스키마 등록 이력 → ② subject 호환성 모드 →
+          ③ 컨슈머 로그의 <code>RecordDeserializationException</code>과 스키마 ID</strong>입니다.
+        </p>
+        <p>
+          역직렬화 실패 예외 메시지는 <strong>파티션과 오프셋을 정확히 알려 줍니다</strong> —
+          <em>"Error deserializing VALUE for partition {tp} at offset {n}.
+          If needed, please seek past the record to continue consumption."</em>
+          이 안내대로 <code>seek</code>하거나 오프셋을 밀면 진행할 수 있지만, 그 레코드는 유실됩니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch08.html">
+          <span class="card__title">8장 · 스키마와 직렬화</span>
+          <span class="card__desc">Schema Registry 아키텍처, wire format, 호환성 매트릭스.</span>
+          <span class="card__meta">CCDAK Application Development</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex07.html">
+          <span class="card__title">예제 7 · Avro 스키마 진화</span>
+          <span class="card__desc">BACKWARD 호환을 유지하며 스키마를 바꾸는 실습.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex06.html">
+          <span class="card__title">예제 6 · DLQ + 재시도 패턴</span>
+          <span class="card__desc">역직렬화 실패를 크래시가 아니라 격리로 처리하는 구조.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="case04.html">
+          <span class="card__title">케이스 4 · 상태가 뒤바뀌어 저장됐다</span>
+          <span class="card__desc">키·직렬화 설계가 다운스트림에 미치는 영향.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="case08.html">
+          <span class="card__title">케이스 8 · 상태 토픽이 사라졌다</span>
+          <span class="card__desc">토픽 설정을 "지정하지 않음"으로 남기는 실수의 다른 형태.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/troubleshooting.html">
+          <span class="card__title">트러블슈팅 결정 트리</span>
+          <span class="card__desc">"컨슈머가 안 읽는다"에서 역직렬화 분기로 내려가는 경로.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>
+        Kafka 쪽 사실은 Apache Kafka 4.3 문서·소스에서, Schema Registry 쪽 사실은
+        Confluent 공식 문서와 <code>confluentinc/schema-registry</code> 소스에서 확인했습니다.
+      </p>
+      <ul>
+        <li><a href="https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html" rel="noopener noreferrer">Schema Registry — Schema Evolution and Compatibility</a> — 호환성 모드 7종, 모드별 배포 순서, 변경 유형별 허용/거부</li>
+        <li><a href="https://docs.confluent.io/platform/current/schema-registry/develop/api.html" rel="noopener noreferrer">Schema Registry REST API</a> — <code>/config</code>, <code>/config/{subject}</code>, <code>/subjects/{subject}/versions</code>, <code>/compatibility/subjects/{subject}/versions/latest</code>, 에러 코드 체계</li>
+        <li><a href="https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html" rel="noopener noreferrer">Schema Registry — Serializer/Deserializer 설정</a> — <code>auto.register.schemas</code>, <code>use.latest.version</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#consumerconfigs" rel="noopener noreferrer">Apache Kafka — Consumer Configs</a> — 역직렬화 설정과 <code>value.deserializer</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops_consumer_group" rel="noopener noreferrer">Apache Kafka — Managing Consumer Groups</a> — <code>--reset-offsets --shift-by</code></li>
+        <li><a href="https://github.com/apache/kafka" rel="noopener noreferrer">Apache Kafka 소스 (4.3)</a> — <code>CompletedFetch</code>의 <code>RecordDeserializationException</code> 메시지와 <code>DeserializationExceptionOrigin</code> 열거형</li>
+        <li><a href="https://github.com/confluentinc/schema-registry" rel="noopener noreferrer">Confluent Schema Registry 소스</a> — 기본 호환성 <code>backward</code>, 모드 7종 설명 문자열, 40901/409 응답, <code>RestClientException</code> 메시지 형식, <code>AbstractKafkaAvroDeserializer</code>·<code>AbstractKafkaAvroSerializer</code>의 예외 문자열</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

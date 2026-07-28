@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kafka Connect (15%) — Kafka Guide</title>
+  <meta name="description" content="CCDAK Kafka Connect(15%) 압축 정리. worker/connector/task 구조, standalone과 distributed, 내부 토픽 3종, source와 sink의 오프셋 저장 위치 비대칭, 컨버터, SMT 체인, DLQ, REST API, 409 Conflict. Apache Kafka 4.3 기준.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccdak" data-page="domain-connect"></div>
+
+  <main id="main" class="page" data-page-id="ccdak/domain-connect">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCDAK</a></li>
+        <li><span aria-current="page">Kafka Connect</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCDAK 도메인 · 가중치 15%</p>
+      <h1>Kafka Connect</h1>
+      <p class="page__lead">
+        세 번째로 큰 도메인입니다. 코드를 쓰지 않고 <strong>설정(JSON)으로 데이터를 옮기는 프레임워크</strong>라서,
+        출제 지점도 "무엇을 어디에 설정하는가"에 집중됩니다.
+        특히 <strong>source와 sink의 오프셋 저장 위치가 다르다</strong>는 비대칭,
+        SMT의 능력 범위, DLQ 설정 조합이 반복해서 나옵니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 도메인의 학습 목표</h2>
+      <ul>
+        <li>worker · connector · task · converter · transform의 역할을 구분할 수 있습니다.</li>
+        <li>standalone과 distributed 모드의 차이, 내부 토픽 3종의 용도를 말할 수 있습니다.</li>
+        <li><strong>source와 sink가 오프셋을 어디에 저장하는지</strong> 정확히 구분할 수 있습니다.</li>
+        <li>SMT로 할 수 있는 일과 할 수 없는 일의 경계를 판단할 수 있습니다.</li>
+        <li>DLQ를 켜는 설정 조합과 <code>errors.tolerance</code>의 의미를 설명할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="what-this-domain-asks">
+      <h2 id="what-this-domain-asks">이 도메인이 묻는 것</h2>
+      <p>
+        Kafka Connect는 <a href="../basics/ch09.html">9장 Kafka Connect</a>의 범위입니다.
+        Connect는 "커넥터 플러그인을 실행해 주는 워커 클러스터"이고,
+        개발자가 쓰는 것은 대부분 <strong>커넥터 설정 JSON과 REST API</strong>입니다.
+        따라서 출제도 설정 키 이름, REST 경로, 그리고 <strong>실패했을 때 무엇을 봐야 하는가</strong>에 몰립니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="architecture">
+      <h2 id="architecture">핵심 개념 (1) 구조와 실행 모드</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Connect의 4개 구성 요소</caption>
+          <thead>
+            <tr><th scope="col">요소</th><th scope="col">역할</th><th scope="col">단위</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">worker</th><td>JVM 프로세스. 커넥터와 태스크를 실행하고 REST API를 제공</td><td>프로세스</td></tr>
+            <tr><th scope="row">connector</th><td>"무엇을 어디로 옮기는가"의 정의. 실제 데이터를 옮기지 않고 <strong>태스크로 쪼갠다</strong></td><td>논리 작업</td></tr>
+            <tr><th scope="row">task</th><td>실제로 데이터를 읽고 쓰는 단위. <strong>병렬성의 단위</strong></td><td>스레드</td></tr>
+            <tr><th scope="row">converter</th><td>Connect 내부 표현 ↔ Kafka 바이트 직렬화 변환</td><td>레코드</td></tr>
+            <tr><th scope="row">transform (SMT)</th><td>레코드 하나 단위의 가벼운 변환. converter 앞/뒤에 체인으로 붙음</td><td>레코드</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>standalone vs distributed</caption>
+          <thead>
+            <tr><th scope="col">관점</th><th scope="col">standalone</th><th scope="col">distributed</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">실행 스크립트</th><td><code>connect-standalone.sh</code></td><td><code>connect-distributed.sh</code></td></tr>
+            <tr><th scope="row">커넥터 설정 전달</th><td>커맨드라인의 properties 파일</td><td><strong>REST API로만</strong> (커맨드라인 불가)</td></tr>
+            <tr><th scope="row">오프셋 저장</th><td><code>offset.storage.file.filename</code> (로컬 파일)</td><td><code>offset.storage.topic</code> (Kafka 토픽)</td></tr>
+            <tr><th scope="row">설정·상태 저장</th><td>로컬 (프로세스 재시작 시 초기화 위험)</td><td><code>config.storage.topic</code> / <code>status.storage.topic</code></td></tr>
+            <tr><th scope="row">확장 · 내결함성</th><td>없음 (프로세스 1개)</td><td>워커 추가로 확장, 태스크 자동 재분배</td></tr>
+            <tr><th scope="row">용도</th><td>개발·테스트, 단일 노드 로그 수집</td><td><strong>프로덕션</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Connect">
+        <p>
+          distributed 모드 워커의 <code>group.id</code>는 <strong>Connect 클러스터의 이름</strong>이며,
+          <strong>컨슈머 그룹 ID와 겹치면 안 됩니다.</strong>
+          같은 <code>group.id</code>를 가진 워커들이 하나의 Connect 클러스터를 이룹니다.
+          "워커를 늘렸는데 태스크가 재분배되지 않는다" → <code>group.id</code>가 다르거나
+          내부 토픽 이름이 달라 별개 클러스터가 된 경우입니다.
+        </p>
+      </aside>
+
+      <h3 id="internal-topics">내부 토픽 3종</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>distributed 모드 내부 토픽 (Apache Kafka 4.3 워커 기본값)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">용도</th>
+              <th scope="col">파티션 권장</th>
+              <th scope="col">RF 기본값</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>config.storage.topic</code></th>
+              <td>커넥터·태스크 설정</td>
+              <td><strong>반드시 1개</strong> (순서가 중요)</td>
+              <td>3 (<code>config.storage.replication.factor</code>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.storage.topic</code></th>
+              <td><strong>source 커넥터</strong>의 소스 시스템 오프셋</td>
+              <td>많이 (기본 <code>offset.storage.partitions=25</code>)</td>
+              <td>3</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>status.storage.topic</code></th>
+              <td>커넥터·태스크 상태</td>
+              <td>여러 개 (기본 <code>status.storage.partitions=5</code>)</td>
+              <td>3</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        세 토픽 모두 <strong><code>cleanup.policy=compact</code></strong>으로 만들어야 합니다.
+        키별 최신 값(최신 설정, 최신 오프셋, 최신 상태)만 필요하기 때문입니다.
+        Connect가 자동 생성할 수도 있지만, 공식 문서는
+        <strong>파티션 수와 복제 계수를 직접 지정해 수동 생성하는 것을 권장</strong>합니다.
+      </p>
+
+      <aside class="note note--danger" data-label="흔한 함정">
+        <p>
+          <code>config.storage.topic</code>의 파티션 수는 <strong>1이어야 합니다.</strong>
+          설정 변경은 순서대로 적용되어야 하고, 순서 보장은 파티션 단위이기 때문입니다.
+          "성능을 위해 파티션을 늘린다"는 선택지는 오답입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="offsets-asymmetry">
+      <h2 id="offsets-asymmetry">핵심 개념 (2) source와 sink의 오프셋 비대칭</h2>
+
+      <p>이 도메인에서 <strong>가장 자주 나오는 단일 사실</strong>입니다.</p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>오프셋을 어디에 저장하는가</caption>
+          <thead>
+            <tr><th scope="col">관점</th><th scope="col">Source 커넥터</th><th scope="col">Sink 커넥터</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">무엇의 오프셋인가</th>
+              <td><strong>소스 시스템</strong>의 위치 (파일 오프셋, DB binlog 위치, 테이블 커서 등)</td>
+              <td><strong>Kafka 토픽</strong>의 컨슈머 오프셋</td>
+            </tr>
+            <tr>
+              <th scope="row">저장 위치 (distributed)</th>
+              <td><code>offset.storage.topic</code><br>(Connect 내부 토픽)</td>
+              <td><strong><code>__consumer_offsets</code></strong><br>(일반 컨슈머와 동일)</td>
+            </tr>
+            <tr>
+              <th scope="row">저장 위치 (standalone)</th>
+              <td><code>offset.storage.file.filename</code><br>(로컬 파일)</td>
+              <td><code>__consumer_offsets</code> (모드와 무관)</td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머 그룹 이름</th>
+              <td>없음 (컨슈머가 아님)</td>
+              <td><code>connect-{커넥터 이름}</code></td>
+            </tr>
+            <tr>
+              <th scope="row">확인 방법</th>
+              <td><code>GET /connectors/{name}/offsets</code></td>
+              <td><code>kafka-consumer-groups --describe --group connect-{name}</code><br>또는 같은 REST 엔드포인트</td>
+            </tr>
+            <tr>
+              <th scope="row">커밋 주기</th>
+              <td colspan="2"><code>offset.flush.interval.ms</code> 기본 <strong>60000</strong> (1분)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Connect">
+        <p>
+          <strong>"sink 커넥터의 오프셋은 Connect의 <code>offset.storage.topic</code>에 저장된다"는 오답입니다.</strong>
+          sink 커넥터는 내부적으로 일반 컨슈머를 쓰므로 오프셋도 일반 컨슈머와 같은 곳
+          — <code>__consumer_offsets</code> — 에 저장됩니다.
+          그래서 sink 커넥터의 lag은 <code>kafka-consumer-groups</code>로 볼 수 있고,
+          source 커넥터의 진행 상황은 그 명령으로 볼 수 없습니다.
+        </p>
+        <p>
+          이 비대칭은 <strong>matching 유형의 단골 소재</strong>입니다.
+          "커넥터 종류 ↔ 오프셋 저장 위치"를 짝짓는 문항에 대비하세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="converters-smt">
+      <h2 id="converters-smt">핵심 개념 (3) 컨버터와 SMT</h2>
+
+      <h3 id="converters">컨버터 — 직렬화 형식을 결정합니다</h3>
+      <figure class="code">
+        <figcaption>worker 또는 커넥터 레벨에서 지정</figcaption>
+        <pre><code class="lang-properties">key.converter=org.apache.kafka.connect.storage.StringConverter
+value.converter=org.apache.kafka.connect.json.JsonConverter
+
+# JsonConverter 는 기본적으로 Connect 스키마를 JSON 안에 함께 넣는다.
+# 순수 JSON 을 원하면 끈다 (스키마 정보를 잃는 대가가 있다).
+value.converter.schemas.enable=false</code></pre>
+      </figure>
+      <ul>
+        <li><code>StringConverter</code> · <code>ByteArrayConverter</code> — 스키마 없음. 가장 단순</li>
+        <li><code>JsonConverter</code> — <code>schemas.enable</code>로 스키마 포함 여부를 결정. Apache Kafka에 포함</li>
+        <li>Avro · Protobuf · JSON Schema 컨버터 — <strong>Confluent가 제공</strong>하며 Schema Registry가 필요합니다</li>
+      </ul>
+
+      <aside class="note note--warn" data-label="자주 틀리는 지점">
+        <p>
+          컨버터는 <strong>키와 값에 각각 따로</strong> 지정합니다.
+          키는 <code>StringConverter</code>, 값은 Avro를 쓰는 조합이 매우 흔합니다.
+          "값만 Avro로 바꿨는데 키 역직렬화 오류가 난다"는 시나리오는
+          <code>key.converter</code>를 함께 맞추지 않은 경우입니다.
+        </p>
+      </aside>
+
+      <h3 id="smt-chain">SMT 체인의 위치와 순서</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>SMT가 적용되는 지점</caption>
+          <thead>
+            <tr><th scope="col">방향</th><th scope="col">처리 순서</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Source</th>
+              <td>소스 시스템 → SourceTask → <strong>SMT 체인</strong> → converter → Kafka 토픽</td>
+            </tr>
+            <tr>
+              <th scope="row">Sink</th>
+              <td>Kafka 토픽 → converter → <strong>SMT 체인</strong> → SinkTask → 대상 시스템</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <figure class="code">
+        <figcaption>SMT 체인 설정 — <code>transforms</code>에 나열한 순서대로 적용됩니다</figcaption>
+        <pre><code class="lang-properties">transforms=unwrap,addSource,route
+
+transforms.unwrap.type=org.apache.kafka.connect.transforms.ExtractField$Value
+transforms.unwrap.field=payload
+
+transforms.addSource.type=org.apache.kafka.connect.transforms.InsertField$Value
+transforms.addSource.static.field=source_system
+transforms.addSource.static.value=oracle-crm
+
+transforms.route.type=org.apache.kafka.connect.transforms.RegexRouter
+transforms.route.regex=(.*)
+transforms.route.replacement=crm_$1</code></pre>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Apache Kafka에 포함된 대표 SMT (전부 <code>org.apache.kafka.connect.transforms</code> 패키지)</caption>
+          <thead>
+            <tr><th scope="col">SMT</th><th scope="col">용도</th><th scope="col">주요 파라미터</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>InsertField</code></th><td>필드 추가 (정적 값, 타임스탬프, 토픽·파티션·오프셋)</td><td><code>static.field</code>, <code>timestamp.field</code>, <code>offset.field</code></td></tr>
+            <tr><th scope="row"><code>ReplaceField</code></th><td>필드 이름 변경·포함·제외</td><td><code>renames</code>, <code>include</code>, <code>exclude</code></td></tr>
+            <tr><th scope="row"><code>MaskField</code></th><td>민감 필드를 기본값·지정값으로 마스킹</td><td><code>fields</code>, <code>replacement</code></td></tr>
+            <tr><th scope="row"><code>ValueToKey</code></th><td>값의 필드를 <strong>키로 승격</strong> (컴팩션·조인 준비에 필수)</td><td><code>fields</code></td></tr>
+            <tr><th scope="row"><code>ExtractField</code></th><td>중첩 구조에서 한 필드만 꺼냄</td><td><code>field</code></td></tr>
+            <tr><th scope="row"><code>HoistField</code></th><td>반대로, 스칼라를 구조체 한 필드로 감쌈</td><td><code>field</code></td></tr>
+            <tr><th scope="row"><code>Cast</code></th><td>필드 타입 변환</td><td><code>spec</code> (예: <code>amount:float64</code>)</td></tr>
+            <tr><th scope="row"><code>TimestampConverter</code></th><td>문자열·유닉스시각·Date 상호 변환</td><td><code>field</code>, <code>target.type</code>, <code>format</code></td></tr>
+            <tr><th scope="row"><code>RegexRouter</code></th><td>대상 토픽 이름을 정규식으로 변경</td><td><code>regex</code>, <code>replacement</code></td></tr>
+            <tr><th scope="row"><code>TimestampRouter</code></th><td>토픽 이름에 시각을 붙임 (일별 인덱스 등)</td><td><code>topic.format</code>, <code>timestamp.format</code></td></tr>
+            <tr><th scope="row"><code>Filter</code></th><td>조건에 맞는 레코드를 <strong>버림</strong> (predicate와 함께 씀)</td><td><code>predicate</code>, <code>negate</code></td></tr>
+            <tr><th scope="row"><code>Flatten</code></th><td>중첩 구조를 평탄화</td><td><code>delimiter</code></td></tr>
+            <tr><th scope="row"><code>SetSchemaMetadata</code></th><td>스키마 이름·버전 지정</td><td><code>schema.name</code>, <code>schema.version</code></td></tr>
+            <tr><th scope="row"><code>HeaderFrom</code> · <code>InsertHeader</code> · <code>DropHeaders</code></th><td>헤더 조작</td><td><code>fields</code>, <code>headers</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Connect">
+        <p>SMT의 성질 세 가지가 그대로 출제됩니다.</p>
+        <ul>
+          <li><strong>메시지 하나 단위</strong>로 동작합니다.</li>
+          <li><strong>stateless</strong>입니다 — 집계·조인·윈도우가 불가능합니다.</li>
+          <li>여러 개를 <strong>체인</strong>으로 쓰며 <strong>순서가 결과를 바꿉니다.</strong></li>
+        </ul>
+        <p>
+          따라서 "여러 레코드를 합쳐 합계를 구하라", "다른 토픽과 조인하라"는 요구는
+          SMT로 할 수 없고 <strong>Kafka Streams(또는 ksqlDB)</strong>로 가야 합니다.
+          이 경계 판단이 <a href="domain-streams.html">Streams 도메인</a>과 걸쳐 나옵니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="error-handling">
+      <h2 id="error-handling">핵심 개념 (4) 에러 처리와 DLQ</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Connect 에러 처리 설정 (Apache Kafka 4.3 기본값)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">의미</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>errors.tolerance</code></th>
+              <td><code>none</code></td>
+              <td><code>none</code>이면 첫 에러에 <strong>태스크가 FAILED</strong>. <code>all</code>이면 건너뜀</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.log.enable</code></th>
+              <td><code>false</code></td>
+              <td>에러와 문제 레코드의 토픽·파티션·오프셋을 로그로 남김</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.log.include.messages</code></th>
+              <td><code>false</code></td>
+              <td>키·값·헤더까지 로그에 남김. <strong>민감정보 노출 위험</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.deadletterqueue.topic.name</code></th>
+              <td><code>""</code> (빈 문자열)</td>
+              <td>비어 있으면 <strong>DLQ 없음.</strong> 토픽 이름을 지정해야 활성화. <strong>sink 전용</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.deadletterqueue.topic.replication.factor</code></th>
+              <td>3</td>
+              <td>단일 브로커 개발 환경에서는 1로 낮춰야 함</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.deadletterqueue.context.headers.enable</code></th>
+              <td><code>false</code></td>
+              <td><strong>실패 원인·원본 위치를 헤더에 기록.</strong> 사실상 켜야 쓸모가 있음</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.retry.timeout</code></th>
+              <td>0</td>
+              <td>재시도에 쓰는 시간 예산. <code>0</code>이면 <strong>재시도 없음</strong>. <code>-1</code>은 무한</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.retry.delay.max.ms</code></th>
+              <td>60000</td>
+              <td>재시도 간 지수 백오프의 상한</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="code">
+        <figcaption>실용적인 DLQ 설정 세트 (sink 커넥터)</figcaption>
+        <pre><code class="lang-json">{
+  "name": "orders-jdbc-sink",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "topics": "orders",
+    "tasks.max": "3",
+
+    "errors.tolerance": "all",
+    "errors.log.enable": "true",
+    "errors.deadletterqueue.topic.name": "orders-jdbc-sink-dlq",
+    "errors.deadletterqueue.topic.replication.factor": "3",
+    "errors.deadletterqueue.context.headers.enable": "true",
+    "errors.retry.timeout": "300000",
+    "errors.retry.delay.max.ms": "30000"
+  }
+}</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="흔한 함정 — DLQ가 조용히 꺼져 있는 경우">
+        <p>
+          DLQ는 <strong>세 가지가 동시에 맞아야</strong> 동작합니다.
+        </p>
+        <ol>
+          <li><code>errors.deadletterqueue.topic.name</code>에 토픽 이름이 있어야 합니다 (기본값은 빈 문자열).</li>
+          <li><code>errors.tolerance=all</code>이어야 합니다. <code>none</code>이면 첫 에러에 태스크가 죽어서 DLQ로 갈 기회가 없습니다.</li>
+          <li>DLQ는 <strong>sink 커넥터에만</strong> 있습니다. source 커넥터에는 DLQ가 없습니다.</li>
+        </ol>
+        <p>
+          그리고 <code>errors.deadletterqueue.context.headers.enable=false</code>(기본값)이면
+          DLQ 토픽에 <strong>원인 정보가 없는 레코드만</strong> 쌓여 디버깅이 불가능합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="rest-api">
+      <h2 id="rest-api">핵심 개념 (5) REST API</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Connect REST API 주요 엔드포인트 (Apache Kafka 4.3)</caption>
+          <thead>
+            <tr><th scope="col">메서드 · 경로</th><th scope="col">용도</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>GET /connectors</code></th><td>커넥터 목록</td></tr>
+            <tr><th scope="row"><code>POST /connectors</code></th><td>커넥터 생성 (<code>{"name":…, "config":{…}}</code>)</td></tr>
+            <tr><th scope="row"><code>GET /connectors/{name}</code></th><td>커넥터 정보</td></tr>
+            <tr><th scope="row"><code>GET /connectors/{name}/config</code></th><td>설정 조회</td></tr>
+            <tr><th scope="row"><code>PUT /connectors/{name}/config</code></th><td>설정 <strong>전체 교체</strong> (없으면 생성)</td></tr>
+            <tr><th scope="row"><code>PATCH /connectors/{name}/config</code></th><td>설정 <strong>부분 수정</strong></td></tr>
+            <tr><th scope="row"><code>GET /connectors/{name}/status</code></th><td><strong>커넥터·태스크 상태와 실패 <code>trace</code></strong> — 장애 시 첫 호출</td></tr>
+            <tr><th scope="row"><code>GET /connectors/{name}/tasks</code></th><td>태스크 목록과 설정</td></tr>
+            <tr><th scope="row"><code>GET /connectors/{name}/tasks/{taskId}/status</code></th><td>개별 태스크 상태</td></tr>
+            <tr><th scope="row"><code>POST /connectors/{name}/restart</code></th><td>커넥터 재시작 (<code>?includeTasks=true&amp;onlyFailed=true</code> 지원)</td></tr>
+            <tr><th scope="row"><code>POST /connectors/{name}/tasks/{taskId}/restart</code></th><td>실패한 태스크만 재시작</td></tr>
+            <tr><th scope="row"><code>PUT /connectors/{name}/pause</code> · <code>resume</code> · <code>stop</code></th><td>일시정지 / 재개 / 정지</td></tr>
+            <tr><th scope="row"><code>DELETE /connectors/{name}</code></th><td>커넥터 삭제</td></tr>
+            <tr><th scope="row"><code>GET /connectors/{name}/offsets</code></th><td><strong>오프셋 조회</strong> (source·sink 모두)</td></tr>
+            <tr><th scope="row"><code>PATCH /connectors/{name}/offsets</code> · <code>DELETE …/offsets</code></th><td>오프셋 변경 / 초기화 (커넥터가 <strong>STOPPED</strong>여야 함)</td></tr>
+            <tr><th scope="row"><code>GET /connectors/{name}/topics</code></th><td>이 커넥터가 사용한 토픽 목록</td></tr>
+            <tr><th scope="row"><code>GET /connector-plugins</code></th><td>설치된 플러그인 목록</td></tr>
+            <tr><th scope="row"><code>PUT /connector-plugins/{type}/config/validate</code></th><td><strong>배포 전 설정 검증</strong></td></tr>
+            <tr><th scope="row"><code>GET /admin/loggers</code> · <code>PUT /admin/loggers/{name}</code></th><td><strong>런타임 로그 레벨 조회·변경</strong> (재시작 없이)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="task-states">태스크 상태와 409 Conflict</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>상태 값과 대응</caption>
+          <thead>
+            <tr><th scope="col">상태</th><th scope="col">의미</th><th scope="col">대응</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>RUNNING</code></th><td>정상</td><td>—</td></tr>
+            <tr><th scope="row"><code>PAUSED</code></th><td>사람이 멈춤</td><td><code>resume</code></td></tr>
+            <tr><th scope="row"><code>FAILED</code></th><td>예외로 중단. <strong>자동 재시작하지 않음</strong></td><td><code>status</code>의 <code>trace</code> 확인 → 원인 수정 → <code>restart</code></td></tr>
+            <tr><th scope="row"><code>UNASSIGNED</code></th><td>아직 워커에 배정되지 않음</td><td>리밸런스 완료 대기</td></tr>
+            <tr><th scope="row"><code>RESTARTING</code></th><td>재시작 중</td><td>대기</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Connect">
+        <p><strong>409 Conflict</strong>가 나오는 경우와 대응입니다.</p>
+        <ul>
+          <li><strong>리밸런스 진행 중</strong>에 재시작·생성 요청을 보냄 → 리밸런스 완료 후 재시도.
+            공식 문서도 "리밸런스 중 태스크 재시작을 시도하면 409를 반환한다"고 명시합니다.
+            리밸런스 자체가 커넥터와 태스크를 다시 시작시키므로 재시도가 불필요할 수도 있습니다.</li>
+          <li><strong>같은 이름의 커넥터가 이미 존재</strong> → 이름 확인 후 <code>PUT …/config</code>로 갱신.</li>
+        </ul>
+        <p>
+          그리고 <strong>태스크가 <code>FAILED</code>가 되어도 Connect는 자동으로 재시작하지 않습니다.</strong>
+          "잠시 기다리면 복구된다"는 선택지는 오답입니다.
+        </p>
+      </aside>
+
+      <h3 id="scaling">확장 전략 — <code>tasks.max</code>의 한계</h3>
+      <p>
+        <code>tasks.max</code>는 <strong>상한</strong>입니다. 커넥터가 그만큼의 병렬성을 만들 수 없으면 더 적은 태스크를 만듭니다.
+      </p>
+      <ul>
+        <li><strong>sink 커넥터</strong> — 태스크 수의 실질 상한은 <strong>입력 토픽의 파티션 수</strong>입니다.
+          파티션 6개에 <code>tasks.max=10</code>을 주면 4개는 유휴 상태가 됩니다.</li>
+        <li><strong>source 커넥터</strong> — 커넥터 구현이 정하는 분할 단위(테이블 수, 파일 수 등)가 상한입니다.
+          단일 테이블을 읽는 JDBC 커넥터는 태스크를 늘려도 1개만 만들 수 있습니다.</li>
+        <li><strong>워커를 늘리는 것</strong>은 태스크를 분산 배치할 곳을 늘리는 것입니다.
+          태스크 수 자체가 1이면 워커를 늘려도 처리량은 그대로입니다.</li>
+      </ul>
+      <aside class="note note--warn" data-label="자주 나오는 오답 선택지">
+        <p>
+          "처리량이 부족하니 커넥터를 여러 개 만든다"는 흔한 오답입니다.
+          같은 소스를 읽는 커넥터를 복제하면 <strong>데이터가 중복</strong>됩니다.
+          올바른 순서는 ① <code>tasks.max</code> 상향 → ② (sink면) 입력 토픽 파티션 증설 →
+          ③ 워커 추가입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="must-memorize">
+      <h2 id="must-memorize">반드시 외워야 할 설정값</h2>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Connect 워커·커넥터 필수 암기 설정 (Apache Kafka 4.3)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">시험 포인트</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>offset.flush.interval.ms</code></th><td>60000</td><td>source 오프셋 커밋 주기 (1분)</td></tr>
+            <tr><th scope="row"><code>offset.flush.timeout.ms</code></th><td>5000</td><td>플러시 대기 상한</td></tr>
+            <tr><th scope="row"><code>offset.storage.partitions</code></th><td>25</td><td>자동 생성 시 파티션 수</td></tr>
+            <tr><th scope="row"><code>status.storage.partitions</code></th><td>5</td><td></td></tr>
+            <tr><th scope="row"><code>config.storage.replication.factor</code></th><td>3</td><td>offset·status도 동일하게 3</td></tr>
+            <tr><th scope="row"><code>rebalance.timeout.ms</code></th><td>60000</td><td>워커 리밸런스 상한</td></tr>
+            <tr><th scope="row"><code>plugin.path</code></th><td><code>null</code></td><td>비어 있으면 커넥터를 못 찾습니다 (기동 후 목록이 빔)</td></tr>
+            <tr><th scope="row"><code>errors.tolerance</code></th><td><code>none</code></td><td>DLQ를 쓰려면 <code>all</code></td></tr>
+            <tr><th scope="row"><code>errors.retry.timeout</code></th><td>0</td><td><strong>기본값은 재시도 없음</strong></td></tr>
+            <tr><th scope="row"><code>errors.deadletterqueue.topic.name</code></th><td><code>""</code></td><td>기본값은 DLQ 비활성</td></tr>
+            <tr><th scope="row"><code>exactly.once.source.support</code></th><td><code>disabled</code></td><td>source EOS(KIP-618)는 <strong>기본 비활성</strong></td></tr>
+            <tr><th scope="row"><code>transaction.boundary</code> (source)</th><td><code>poll</code></td><td><code>interval</code>, <code>connector</code> 선택 가능</td></tr>
+            <tr><th scope="row"><code>tasks.max</code></th><td>(커넥터별)</td><td>상한일 뿐, 실제 태스크 수는 더 적을 수 있음</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="common-traps">
+      <h2 id="common-traps">자주 나오는 함정</h2>
+
+      <h3 id="trap-offsets">함정 1 — source vs sink 오프셋 저장 위치</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>이 비대칭이 이 도메인 최다 출제 지점입니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col">Source</th><th scope="col">Sink</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>외부 시스템 → Kafka</td><td>Kafka → 외부 시스템</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>워커 <code>offset.storage.topic</code></td><td>컨슈머 (Connect가 내부 생성)</td></tr>
+            <tr><th scope="row">언제 발동</th><td><code>offset.flush.interval.ms</code>마다</td><td>컨슈머 커밋 시점</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">복구 시 잘못된 곳을 초기화해 <strong>전량 재수집 또는 재적재</strong></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"sink 커넥터의 진행 상황을 확인하는 명령은?" → <code>kafka-consumer-groups</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-modes">함정 2 — standalone vs distributed</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>"단일 노드 distributed"도 정상적인 프로덕션 구성입니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col">standalone</th><th scope="col">distributed</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>단일 프로세스, 로컬 상태</td><td>클러스터, Kafka 토픽에 상태 저장</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>워커 properties + 커넥터 properties</td><td>워커 properties + <strong>REST</strong></td></tr>
+            <tr><th scope="row">언제 발동</th><td>기동 시 커넥터가 즉시 시작</td><td>REST 호출 시 커넥터 시작</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">distributed에 커넥터 properties를 커맨드라인으로 주면 <strong>무시</strong>됩니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"워커를 재시작하니 커넥터가 사라졌다" → standalone의 로컬 상태</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-smt-streams">함정 3 — SMT vs Kafka Streams</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>"어디까지 SMT로 할 것인가"</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col">SMT</th><th scope="col">Kafka Streams</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>레코드 1건 단위의 stateless 변환</td><td>상태를 갖는 스트림 처리 애플리케이션</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>커넥터 설정 JSON</td><td>별도 애플리케이션 (라이브러리)</td></tr>
+            <tr><th scope="row">가능한 것</th><td>필드 추가·삭제·마스킹·타입 변환·라우팅·필터</td><td>집계 · 조인 · 윈도우 · 상태 저장</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">SMT 체인이 10개를 넘어가면 유지보수 불가. 그때는 Streams로 옮길 신호입니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"두 토픽을 조인해 적재하려면?" → SMT로는 불가, Streams(또는 ksqlDB)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-errors">함정 4 — <code>errors.tolerance</code> vs <code>errors.retry.timeout</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>둘 다 "에러"를 다루지만 하는 일이 다릅니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col"><code>errors.tolerance</code></th><th scope="col"><code>errors.retry.timeout</code></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>실패 레코드를 <strong>건너뛸지</strong> 결정</td><td>실패를 <strong>다시 시도할</strong> 시간 예산</td></tr>
+            <tr><th scope="row">기본값</th><td><code>none</code> (첫 에러에 태스크 FAILED)</td><td><code>0</code> (재시도 없음)</td></tr>
+            <tr><th scope="row">언제 발동</th><td>변환·컨버터·sink 쓰기 실패 시</td><td>재시도 가능한 실패 시</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td><code>all</code>만 켜면 일시적 장애로 <strong>데이터가 조용히 버려짐</strong></td><td>재시도만 켜면 영구 실패에 태스크가 계속 죽음</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"일시 장애는 재시도, 영구 불량은 DLQ로 보내려면?" → 둘을 함께 설정</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-internal-topics">함정 5 — 내부 토픽 3종의 파티션 수</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>세 토픽의 요구사항이 다릅니다</caption>
+          <thead>
+            <tr><th scope="col">관점</th><th scope="col"><code>config.storage.topic</code></th><th scope="col"><code>offset.storage.topic</code></th><th scope="col"><code>status.storage.topic</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">파티션</th><td><strong>1 (필수)</strong></td><td>많이 (기본 25)</td><td>여러 개 (기본 5)</td></tr>
+            <tr><th scope="row"><code>cleanup.policy</code></th><td colspan="3"><code>compact</code> — 세 개 모두</td></tr>
+            <tr><th scope="row">담는 것</th><td>커넥터·태스크 설정</td><td>source 오프셋</td><td>커넥터·태스크 상태</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>파티션을 늘리면 설정 순서가 깨짐</td><td>파티션이 적으면 오프셋 커밋 병목</td><td>—</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="3">"내부 토픽 3종의 공통 정책은?" → <code>compact</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-scaling">함정 6 — <code>tasks.max</code> vs 파티션 수 vs 워커 수</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>처리량을 늘리는 세 손잡이</caption>
+          <thead>
+            <tr><th scope="col">관점</th><th scope="col"><code>tasks.max</code></th><th scope="col">입력 토픽 파티션</th><th scope="col">워커 수</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇을 바꾸는가</th><td>태스크 수 상한</td><td>sink 태스크의 실질 상한</td><td>태스크를 놓을 자리</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>커넥터 설정</td><td>토픽</td><td>인프라</td></tr>
+            <tr><th scope="row">단독으로 효과</th><td class="mark-no">파티션이 적으면 무효</td><td class="mark-ok">sink에서 효과적</td><td class="mark-no">태스크가 1개면 무효</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="3">"파티션 6개 토픽에 <code>tasks.max=12</code>. 실제 동작 태스크 수는?" → 6</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="code-reading">
+      <h2 id="code-reading">설정 읽기 문제 대비</h2>
+
+      <h3 id="code-1">스니펫 1 — 이 커넥터에서 DLQ는 동작하는가</h3>
+      <figure class="code">
+        <figcaption>POST /connectors 본문</figcaption>
+        <pre><code class="lang-json">{
+  "name": "es-sink",
+  "config": {
+    "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
+    "topics": "logs",
+    "tasks.max": "4",
+    "errors.deadletterqueue.topic.name": "es-sink-dlq",
+    "errors.log.enable": "true"
+  }
+}</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <p>
+          <strong>동작하지 않습니다.</strong> <code>errors.tolerance</code>가 기본값 <code>none</code>이므로
+          첫 번째 잘못된 레코드에서 <strong>태스크가 <code>FAILED</code>가 되어 버립니다.</strong>
+          DLQ로 보내려면 <code>"errors.tolerance": "all"</code>이 필요합니다.
+          추가로 <code>errors.deadletterqueue.context.headers.enable</code>이 <code>false</code>(기본)이므로,
+          설령 DLQ가 동작해도 <strong>원인 헤더가 없어 디버깅이 어렵습니다.</strong>
+        </p>
+      </aside>
+
+      <h3 id="code-2">스니펫 2 — 이 SMT 체인의 결과</h3>
+      <figure class="code">
+        <figcaption>connector.properties</figcaption>
+        <pre><code class="lang-properties">transforms=key,mask
+transforms.key.type=org.apache.kafka.connect.transforms.ValueToKey
+transforms.key.fields=userId
+transforms.mask.type=org.apache.kafka.connect.transforms.MaskField$Value
+transforms.mask.fields=userId,ssn</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <p>
+          순서가 <code>key</code> → <code>mask</code>이므로
+          <strong><code>userId</code>가 먼저 키로 복사된 뒤 값이 마스킹</strong>됩니다.
+          결과적으로 <strong>키에는 원본 <code>userId</code>가 그대로 남습니다.</strong>
+          민감정보를 지우려던 의도라면 실패입니다.
+          체인 순서를 바꾸면(<code>mask</code> → <code>key</code>) 키에 마스킹된 값이 들어가지만,
+          그러면 파티셔닝이 무의미해집니다.
+          <strong>SMT는 순서가 결과를 바꾼다</strong>는 원칙을 묻는 문항입니다.
+        </p>
+      </aside>
+
+      <h3 id="code-3">스니펫 3 — 이 요청이 409를 받는 이유</h3>
+      <figure class="code">
+        <figcaption>운영 중 실행한 명령과 응답</figcaption>
+        <pre><code class="lang-bash">$ curl -s -o /dev/null -w "%{http_code}\n" \
+    -X POST http://connect-1:8083/connectors/orders-sink/tasks/2/restart
+409
+
+$ curl -s http://connect-1:8083/connectors/orders-sink/status | head -20
+# "connector": { "state": "RUNNING" }
+# "tasks": [ { "id": 0, "state": "UNASSIGNED" }, { "id": 1, "state": "UNASSIGNED" } ]</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <p>
+          태스크가 <code>UNASSIGNED</code>라는 것은 <strong>워커 리밸런스가 진행 중</strong>이라는 신호입니다.
+          이 상태에서 재시작을 요청하면 409 Conflict가 돌아옵니다.
+          대응은 <strong>리밸런스가 끝날 때까지 기다린 뒤 상태를 다시 확인</strong>하는 것입니다.
+          리밸런스가 커넥터와 태스크를 다시 시작시키므로 재시작이 필요 없어질 수도 있습니다.
+          "커넥터를 삭제하고 다시 만든다"는 선택지는 과잉 조치이며 오프셋 관리 위험을 만듭니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch09.html">
+          <span class="card__title">9장 · Kafka Connect</span>
+          <span class="card__desc">아키텍처, 컨버터, SMT, DLQ, REST API의 전체 설명.</span>
+          <span class="card__meta">기본개념</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex08.html">
+          <span class="card__title">예제 8 · Connect CDC 파이프라인</span>
+          <span class="card__desc">동작하는 source·sink 커넥터 설정 전체.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex06.html">
+          <span class="card__title">예제 6 · DLQ + 재시도 패턴</span>
+          <span class="card__desc">DLQ 토픽 설계와 재처리 루프.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="domain-observability.html">
+          <span class="card__title">Application Observability</span>
+          <span class="card__desc">Connect 워커 로그를 어디서 찾는가, Connect 메트릭 읽는 법.</span>
+          <span class="card__meta">CCDAK 13%</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/connect.html">
+          <span class="card__title">Connect 치트시트</span>
+          <span class="card__desc">REST 엔드포인트 전체 표, SMT 목록, curl 예시.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="traps.html">
+          <span class="card__title">함정 사전 40쌍</span>
+          <span class="card__desc">Connect 구역 4쌍을 포함한 전체 비교표.</span>
+          <span class="card__meta">CCDAK 도구</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="mini-quiz">
+      <h2 id="mini-quiz">도메인 미니 퀴즈</h2>
+      <div class="quiz-embed" data-set="ccdak-connect" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#connect" rel="noopener noreferrer">Kafka Connect</a> — 개요와 개념</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_running" rel="noopener noreferrer">Running Kafka Connect</a> — standalone/distributed, 내부 토픽 3종과 권장 구성</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_configuring" rel="noopener noreferrer">Configuring Connectors</a> — <code>tasks.max</code>, <code>topics</code>, <code>topics.regex</code>, 컨버터 오버라이드</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_transforms" rel="noopener noreferrer">Transformations</a> — SMT 목록과 파라미터</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_errorreporting" rel="noopener noreferrer">Error Reporting in Connect</a> — <code>errors.*</code> 설정</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_rest" rel="noopener noreferrer">Connect REST Interface</a> — 엔드포인트 전체</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_administration" rel="noopener noreferrer">Connect Administration</a> — 상태 값, 리밸런스 중 409 Conflict</li>
+        <li><a href="https://kafka.apache.org/documentation/#connectconfigs" rel="noopener noreferrer">Connect Configs</a> — 워커 설정 기본값</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

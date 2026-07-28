@@ -1,0 +1,14 @@
+{
+  "name": "kafka-guide",
+  "private": true,
+  "type": "module",
+  "description": "Apache Kafka 4.3 기준 정적 학습 사이트. 빌드 없이 브라우저에서 바로 열립니다. 의존성 0.",
+  "scripts": {
+    "validate": "node tools/validate.mjs --all",
+    "index": "node tools/build-index.mjs",
+    "inline": "node tools/inline-diagrams.mjs",
+    "check-inline": "node tools/inline-diagrams.mjs --check",
+    "build": "node tools/inline-diagrams.mjs && node tools/build-index.mjs && node tools/validate.mjs --all --strict --deploy",
+    "serve": "python3 -m http.server 8000"
+  }
+}

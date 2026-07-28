@@ -1,0 +1,290 @@
+{
+  "setId": "basics-ch09",
+  "title": "9장 확인 문제 — Kafka Connect",
+  "exam": "BASICS",
+  "domain": "Kafka Connect",
+  "kafkaVersion": "4.3",
+  "questions": [
+    {
+      "id": "basics-ch09-001",
+      "exam": "BASICS",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "distributed 모드에서 sink 커넥터의 진행 위치(오프셋)는 어디에 저장되는가?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "Connect 내부 토픽인 `offset.storage.topic`" },
+        { "id": "B", "text": "워커 로컬 파일인 `offset.storage.file.filename`" },
+        { "id": "C", "text": "일반 컨슈머와 동일하게 `__consumer_offsets`" },
+        { "id": "D", "text": "`status.storage.topic` 의 커넥터 상태 레코드 안" }
+      ],
+      "answer": ["C"],
+      "explanation": "sink 태스크는 내부적으로 그냥 컨슈머이므로 오프셋도 일반 컨슈머와 같은 경로인 `__consumer_offsets` 에 커밋합니다. 반면 source 커넥터의 진행 위치는 소스 시스템 안의 좌표(파일 바이트 위치, binlog 좌표 등)를 커넥터가 스스로 정의한 구조로 담기 때문에 Connect의 `offset.storage.topic` 에 저장됩니다. 이 비대칭이 Connect 도메인에서 가장 자주 출제되는 지점입니다. 실무에서도 sink를 처음부터 다시 읽히려면 `kafka-consumer-groups.sh --reset-offsets --group connect-{커넥터명}` 으로 충분합니다.",
+      "distractorNotes": {
+        "A": "이 토픽은 source 커넥터의 진행 위치를 담습니다. sink에는 쓰이지 않습니다.",
+        "B": "standalone 모드의 source 오프셋 저장 위치입니다. sink는 모드와 무관하게 `__consumer_offsets` 를 씁니다.",
+        "D": "status 토픽은 커넥터·태스크의 상태와 사용 중인 토픽 목록을 담습니다. 오프셋 저장소가 아닙니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Kafka Connect", "url": "https://kafka.apache.org/documentation/#connect" },
+        { "title": "Apache Kafka — Connect Configs", "url": "https://kafka.apache.org/documentation/#connectconfigs" }
+      ],
+      "tags": ["connect-offsets", "sink-connector", "__consumer_offsets"]
+    },
+    {
+      "id": "basics-ch09-002",
+      "exam": "BASICS",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "여러 이벤트를 합산해 새 필드를 만들어야 한다. SMT로 이 요구를 처리할 수 있는가?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "할 수 없다. SMT는 레코드 단위 stateless 변환이므로 집계가 불가능하다." },
+        { "id": "B", "text": "할 수 있다. `transforms` 체인에 상태 저장소를 붙이면 집계가 가능하다." },
+        { "id": "C", "text": "할 수 있다. sink 커넥터에서는 SMT가 배치 단위로 실행된다." },
+        { "id": "D", "text": "할 수 없다. SMT는 키만 변경할 수 있고 value는 건드릴 수 없다." }
+      ],
+      "answer": ["A"],
+      "explanation": "공식 문서는 transform을 \"가벼운 메시지 단위 수정\"으로 정의합니다. 레코드 하나씩 처리하고 상태 저장소가 없으므로 집계·조인·중복 제거·윈도우는 원리적으로 불가능합니다. 여러 개를 체인으로 엮을 수 있고 `transforms` 목록의 순서가 결과를 바꾸지만, 어디까지나 개별 레코드를 고치는 범위입니다. 집계가 필요하면 Kafka Streams나 ksqlDB로 옮겨야 하며, 이 경계를 묻는 문항이 자주 나옵니다.",
+      "distractorNotes": {
+        "B": "SMT에 상태 저장소를 붙이는 확장 지점은 없습니다. `Transformation` 인터페이스는 레코드 하나를 받아 하나를 반환합니다.",
+        "C": "sink에서도 SMT는 레코드 단위로 적용됩니다. 적용 시점만 목적지에 쓰기 직전으로 다릅니다.",
+        "D": "SMT는 키와 value, 헤더, 토픽 이름까지 바꿀 수 있습니다. 한계는 상태가 없다는 점입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Connect Transformations", "url": "https://kafka.apache.org/documentation/#connect_transforms" },
+        { "title": "Apache Kafka — Kafka Connect", "url": "https://kafka.apache.org/documentation/#connect" }
+      ],
+      "tags": ["smt", "connect-transforms", "kafka-streams"]
+    },
+    {
+      "id": "basics-ch09-003",
+      "exam": "BASICS",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "distributed 모드 Connect의 내부 토픽 3종에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "config·offset·status 세 토픽 모두 `cleanup.policy=delete` 로 운영해야 한다." },
+        { "id": "B", "text": "세 토픽 모두 `cleanup.policy=compact` 이며, config 토픽은 단일 파티션을 권장한다." },
+        { "id": "C", "text": "세 토픽은 워커가 기동할 때 자동 생성되므로 미리 만들 필요가 없다." },
+        { "id": "D", "text": "status 토픽만 compact이고 나머지는 리텐션 기반으로 정리된다." }
+      ],
+      "answer": ["B"],
+      "explanation": "Connect는 distributed 모드에서 상태를 워커 로컬이 아니라 config·offset·status 세 토픽에 두므로 워커가 죽어도 다른 워커가 이어받습니다. 세 토픽 모두 최신 값만 남으면 되는 성질이라 `cleanup.policy=compact` 로 운영하고, 설정 변경 순서가 전역으로 하나여야 하는 config 토픽은 단일 파티션을 씁니다. offset 토픽과 status 토픽은 파티션을 여러 개 두며 각각 `offset.storage.partitions` 기본 25, `status.storage.partitions` 기본 5입니다. 공식 문서는 브로커 기본값이 용도에 맞지 않을 수 있으므로 이 토픽들을 기동 전에 직접 만들 것을 권장합니다.",
+      "distractorNotes": {
+        "A": "`delete` 로 두면 설정과 오프셋이 리텐션이 지나면서 사라져 커넥터 상태를 복원할 수 없습니다.",
+        "C": "자동 생성에 맡기면 브로커 기본 파티션 수·복제 계수가 적용됩니다. 사전 생성이 권장 사항입니다.",
+        "D": "세 토픽 모두 compact입니다. 하나만 예외인 구성은 없습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Running Kafka Connect", "url": "https://kafka.apache.org/documentation/#connect_running" },
+        { "title": "Apache Kafka — Connect Configs", "url": "https://kafka.apache.org/documentation/#connectconfigs" }
+      ],
+      "tags": ["connect-internal-topics", "compaction", "connect-offsets"]
+    },
+    {
+      "id": "basics-ch09-004",
+      "exam": "BASICS",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "커넥터 배포 스크립트가 `POST /connectors` 요청에서 `409 Conflict` 를 받았다. 가장 적절한 대응은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "커넥터를 `DELETE` 한 뒤 다시 등록한다." },
+        { "id": "B", "text": "Connect 클러스터의 내부 토픽 3종을 삭제하고 워커를 재시작한다." },
+        { "id": "C", "text": "`tasks.max` 를 줄여 태스크 수를 낮춘 뒤 다시 요청한다." },
+        { "id": "D", "text": "이름 충돌 여부를 확인하고, 리밸런스가 끝나기를 기다린 뒤 재시도한다." }
+      ],
+      "answer": ["D"],
+      "explanation": "409는 리밸런스가 진행 중일 때, 같은 이름의 커넥터가 이미 존재할 때, 그리고 리더가 아닌 워커로 간 쓰기 요청의 포워딩이 실패했을 때 반환됩니다. 세 원인 모두 재시도로 해소될 수 있는 상태이므로 409는 재시도 가능한 상태 코드로 다뤄야 합니다. 이름 충돌이라면 `GET /connectors` 로 확인하고 설정 변경 목적이라면 `PUT /connectors/{name}/config` 를 씁니다. 포워딩 실패가 반복된다면 `rest.advertised.*` 값이 다른 워커에서 실제로 도달 가능한 주소인지 확인해야 합니다.",
+      "distractorNotes": {
+        "A": "삭제는 진행 중인 데이터 파이프라인을 끊고 새 리밸런스를 유발합니다. 원인 확인 없이 쓸 조치가 아닙니다.",
+        "B": "내부 토픽 삭제는 클러스터의 모든 커넥터 설정과 오프셋을 잃는 파괴적 조치입니다.",
+        "C": "409는 태스크 수와 무관합니다. 태스크 수 문제는 다른 증상으로 나타납니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Connect REST API", "url": "https://kafka.apache.org/documentation/#connect_rest" },
+        { "title": "Apache Kafka — Connect Administration", "url": "https://kafka.apache.org/documentation/#connect_administration" }
+      ],
+      "tags": ["connect-409", "connect-rest", "rebalance"]
+    },
+    {
+      "id": "basics-ch09-005",
+      "exam": "BASICS",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "distributed 모드의 source 커넥터를 소스 시스템 처음부터 다시 읽히려고 한다. 옳은 방법은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "커넥터를 `STOPPED` 상태로 만든 뒤 `DELETE /connectors/{name}/offsets` 를 호출한다." },
+        { "id": "B", "text": "`kafka-consumer-groups.sh --reset-offsets --group connect-{커넥터명}` 을 실행한다." },
+        { "id": "C", "text": "커넥터를 `PAUSED` 로 만든 뒤 `offset.storage.topic` 을 삭제하고 재생성한다." },
+        { "id": "D", "text": "`auto.offset.reset=earliest` 를 커넥터 설정에 추가해 재시작한다." }
+      ],
+      "answer": ["A"],
+      "explanation": "source 커넥터의 진행 위치는 커넥터가 스스로 정의한 구조로 `offset.storage.topic` 에 들어 있으므로 컨슈머 그룹 도구로는 손댈 수 없습니다. Connect는 이를 위해 오프셋 관리 REST 엔드포인트를 제공하며, 오프셋 수정과 삭제는 커넥터가 `STOPPED` 상태일 때만 허용됩니다. `PAUSED` 는 태스크 자원을 유지하는 일시 정지라서 오프셋 변경이 되지 않습니다. sink 커넥터라면 반대로 `connect-{커넥터명}` 컨슈머 그룹의 오프셋을 리셋하는 방법이 맞습니다.",
+      "distractorNotes": {
+        "B": "이것은 sink 커넥터에 통하는 방법입니다. source는 컨슈머가 아니므로 그룹이 없습니다.",
+        "C": "내부 토픽을 지우면 그 클러스터의 다른 커넥터 오프셋까지 사라집니다. 그리고 `PAUSED` 에서는 오프셋 변경이 허용되지 않습니다.",
+        "D": "`auto.offset.reset` 은 컨슈머 설정입니다. source 커넥터의 소스 시스템 위치와 무관합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Connect REST API", "url": "https://kafka.apache.org/documentation/#connect_rest" },
+        { "title": "Apache Kafka — Kafka Connect", "url": "https://kafka.apache.org/documentation/#connect" }
+      ],
+      "tags": ["connect-offsets", "source-connector", "connect-rest"]
+    },
+    {
+      "id": "basics-ch09-006",
+      "exam": "BASICS",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "커넥터 상태는 `RUNNING` 인데 데이터가 일부만 흐른다. `GET /connectors/{name}/status` 를 보니 태스크 하나가 `FAILED` 다. 옳은 판단은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "커넥터 상태가 `RUNNING` 이므로 태스크는 곧 자동으로 복구된다." },
+        { "id": "B", "text": "Connect는 실패한 태스크를 자동 재시작하지 않으므로 `POST .../restart?onlyFailed=true` 로 직접 재시작해야 한다." },
+        { "id": "C", "text": "커넥터 상태와 태스크 상태는 항상 같으므로 응답을 잘못 읽은 것이다." },
+        { "id": "D", "text": "`errors.tolerance=all` 로 바꾸면 실패한 태스크가 자동으로 재시작된다." }
+      ],
+      "answer": ["B"],
+      "explanation": "커넥터 상태와 태스크 상태는 별개로 관리되므로 커넥터가 `RUNNING` 이어도 개별 태스크가 `FAILED` 로 남을 수 있고, 그만큼 파티션 일부의 데이터가 흐르지 않습니다. Connect는 실패한 태스크를 자동으로 되살리지 않기 때문에 모니터링은 커넥터 상태가 아니라 태스크 상태까지 봐야 합니다. 복구 전에는 status 응답의 `trace` 로 실패 원인을, `worker_id` 로 어느 워커의 로그를 볼지 확인합니다. 워커 로그는 노드 로컬에 남으므로 그 노드를 직접 조회해야 하며, 필요하면 `PUT /admin/loggers/{logger}` 로 재시작 없이 로그 레벨을 올릴 수 있습니다.",
+      "distractorNotes": {
+        "A": "자동 복구는 없습니다. 이 오해 때문에 데이터 누락이 오래 방치됩니다.",
+        "C": "두 상태는 독립적으로 보고됩니다. 커넥터가 정상인데 태스크가 죽는 상황이 실제로 흔합니다.",
+        "D": "`errors.tolerance` 는 레코드 단위 오류를 건너뛸지 정하는 설정이며 태스크 재시작과 무관합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Connect REST API", "url": "https://kafka.apache.org/documentation/#connect_rest" },
+        { "title": "Apache Kafka — Connect Monitoring", "url": "https://kafka.apache.org/documentation/#connect_monitoring" }
+      ],
+      "tags": ["connect-logging", "connect-rest", "connect-tasks"]
+    },
+    {
+      "id": "basics-ch09-007",
+      "exam": "BASICS",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "SMT에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "여러 개를 체인으로 엮을 수 있고 `transforms` 목록의 순서가 결과를 바꾼다." },
+        { "id": "B", "text": "source에서는 Kafka에 쓰기 전에, sink에서는 목적지에 쓰기 직전에 적용된다." },
+        { "id": "C", "text": "sink 커넥터에서만 사용할 수 있다." },
+        { "id": "D", "text": "윈도우 집계를 위해 상태를 유지할 수 있다." },
+        { "id": "E", "text": "레코드 여러 개를 묶어 중복을 제거할 수 있다." }
+      ],
+      "answer": ["A", "B"],
+      "explanation": "SMT는 `transforms` 에 이름을 나열하고 각 이름에 클래스와 설정을 붙여 체인을 만듭니다. 앞 변환의 출력이 뒤 변환의 입력이 되므로 순서가 결과를 바꾸며, 예를 들어 필드를 추출한 뒤 키로 승격하는 순서를 뒤집으면 동작하지 않습니다. 적용 지점은 방향에 따라 다릅니다 — source는 커넥터가 만든 레코드를 Kafka에 쓰기 전에, sink는 Kafka에서 읽은 레코드를 목적지에 쓰기 직전에 거칩니다. stateless이므로 상태를 유지하는 집계나 여러 레코드에 걸친 중복 제거는 할 수 없습니다.",
+      "distractorNotes": {
+        "C": "source와 sink 양쪽에서 모두 쓸 수 있습니다. DLQ 관련 설정이 sink 전용인 것과 혼동하기 쉽습니다.",
+        "D": "상태 저장소가 없습니다. 윈도우는 Streams의 영역입니다.",
+        "E": "레코드 하나만 보기 때문에 이전 레코드를 기억할 수 없습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Connect Transformations", "url": "https://kafka.apache.org/documentation/#connect_transforms" },
+        { "title": "Apache Kafka — Kafka Connect", "url": "https://kafka.apache.org/documentation/#connect" }
+      ],
+      "tags": ["smt", "connect-transforms", "converter"]
+    },
+    {
+      "id": "basics-ch09-008",
+      "exam": "BASICS",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "Connect의 에러 처리와 DLQ 설정에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`errors.tolerance` 에 넣을 수 있는 값은 `none`(기본)과 `all` 둘뿐이다." },
+        { "id": "B", "text": "DLQ 관련 설정은 sink 커넥터 전용이며, `errors.deadletterqueue.topic.name` 이 비어 있으면 DLQ가 꺼진 상태다." },
+        { "id": "C", "text": "`errors.deadletterqueue.context.headers.enable` 기본값이 `true` 여서 실패 원인이 자동으로 헤더에 실린다." },
+        { "id": "D", "text": "`errors.tolerance` 에 허용 오류 비율을 백분율로 지정할 수 있다." },
+        { "id": "E", "text": "source 커넥터도 `errors.deadletterqueue.topic.name` 을 지정하면 DLQ를 쓸 수 있다." }
+      ],
+      "answer": ["A", "B"],
+      "explanation": "Connect의 기본 동작은 fail fast입니다 — `errors.tolerance=none`, `errors.retry.timeout=0`, `errors.log.enable=false`, DLQ 토픽 이름이 빈 값인 조합이 그 동작을 만듭니다. `errors.tolerance` 는 `none` 과 `all` 두 값만 받으며 숫자나 비율은 넣을 수 없습니다. DLQ는 sink 전용 기능이고 토픽 이름을 지정하지 않으면 아예 동작하지 않습니다. 원인 헤더는 기본으로 꺼져 있으므로 `errors.deadletterqueue.context.headers.enable=true` 를 켜야 `__connect.errors.` 접두어 헤더로 실패 문맥을 남길 수 있습니다.",
+      "distractorNotes": {
+        "C": "기본값은 `false` 입니다. 끄고 쓰면 DLQ에 원인 없는 페이로드만 쌓입니다.",
+        "D": "비율 지정은 지원되지 않습니다. 전부 실패시키거나 전부 건너뛰는 두 선택뿐입니다.",
+        "E": "DLQ는 sink 커넥터 전용입니다. source에는 이 설정군이 없습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Connect Error Reporting", "url": "https://kafka.apache.org/documentation/#connect_errorreporting" },
+        { "title": "Apache Kafka — Sink Connector Configs", "url": "https://kafka.apache.org/documentation/#sinkconnectconfigs" }
+      ],
+      "tags": ["connect-dlq", "errors.tolerance", "connect-logging"]
+    },
+    {
+      "id": "basics-ch09-009",
+      "exam": "BASICS",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "Connect가 관리하는 각 정보를 그것이 저장되는 위치와 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        { "id": "p1", "left": "source 커넥터의 진행 위치 (distributed)", "right": "`offset.storage.topic`" },
+        { "id": "p2", "left": "sink 커넥터의 진행 위치", "right": "`__consumer_offsets`" },
+        { "id": "p3", "left": "커넥터와 태스크의 설정", "right": "`config.storage.topic`" },
+        { "id": "p4", "left": "커넥터·태스크의 상태", "right": "`status.storage.topic`" },
+        { "id": "p5", "left": "source 커넥터의 진행 위치 (standalone)", "right": "`offset.storage.file.filename` 로컬 파일" }
+      ],
+      "extraRights": ["`__transaction_state`", "`__cluster_metadata`", "각 워커의 로컬 메모리"],
+      "explanation": "source와 sink의 진행 위치가 서로 다른 곳에 저장된다는 비대칭이 이 장의 핵심입니다. source의 위치는 커넥터가 스스로 정의한 구조라서 Connect 내부 토픽에 담기지만, sink는 형식이 공통인 컨슈머 오프셋이므로 `__consumer_offsets` 에 들어갑니다. standalone 모드에서는 source 오프셋만 로컬 파일로 바뀌고 sink는 모드와 무관하게 `__consumer_offsets` 를 씁니다. 설정과 상태는 각각 config·status 토픽에 저장되며, 이 셋을 워커 로컬에 두지 않기 때문에 워커가 죽어도 다른 워커가 이어받을 수 있습니다.",
+      "distractorNotes": {
+        "p2": "\"Connect가 관리하는 오프셋\"이라는 인식 때문에 `offset.storage.topic` 을 고르기 쉽습니다. sink는 일반 컨슈머 경로입니다.",
+        "p5": "standalone에서도 sink가 파일에 저장된다고 착각하기 쉽지만 바뀌는 것은 source뿐입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Kafka Connect", "url": "https://kafka.apache.org/documentation/#connect" },
+        { "title": "Apache Kafka — Connect Configs", "url": "https://kafka.apache.org/documentation/#connectconfigs" }
+      ],
+      "tags": ["connect-offsets", "connect-internal-topics", "sink-connector"]
+    },
+    {
+      "id": "basics-ch09-010",
+      "exam": "BASICS",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "hard",
+      "type": "ordering",
+      "question": "source 커넥터에서 하나의 레코드가 Kafka 토픽에 기록될 때까지 거치는 단계를 순서대로 배열하세요.",
+      "code": null,
+      "items": [
+        { "id": "i3", "text": "converter가 Connect 내부 표현을 바이트열로 직렬화한다" },
+        { "id": "i1", "text": "커넥터 태스크가 소스 시스템에서 데이터를 읽어 SourceRecord를 만든다" },
+        { "id": "i4", "text": "워커의 프로듀서가 대상 토픽으로 전송한다" },
+        { "id": "i2", "text": "`transforms` 에 나열된 SMT 체인이 순서대로 적용된다" }
+      ],
+      "answer": ["i1", "i2", "i3", "i4"],
+      "explanation": "source 방향에서는 커넥터가 만든 레코드가 SMT 체인을 먼저 거치고, 그 결과를 converter가 직렬화한 뒤 프로듀서가 Kafka에 씁니다. SMT가 converter보다 앞에 있어야 하는 이유는 SMT가 Connect의 내부 표현(Struct/Map + Schema)을 다루기 때문입니다 — 바이트열이 된 뒤에는 필드를 조작할 수 없습니다. sink 방향은 이 순서가 그대로 뒤집혀 Kafka에서 읽은 바이트를 converter가 역직렬화하고 SMT를 거쳐 목적지에 씁니다. 그래서 같은 파이프라인에서도 SMT의 적용 지점이 방향에 따라 달라집니다.",
+      "distractorNotes": {
+        "i2": "converter가 먼저라고 착각하기 쉽습니다. 직렬화 후에는 SMT가 필드를 볼 수 없습니다.",
+        "i4": "커넥터가 직접 브로커에 쓴다고 오해하기 쉽지만, 전송은 워커가 관리하는 프로듀서가 담당합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Connect Transformations", "url": "https://kafka.apache.org/documentation/#connect_transforms" },
+        { "title": "Apache Kafka — Kafka Connect", "url": "https://kafka.apache.org/documentation/#connect" }
+      ],
+      "tags": ["smt", "converter", "source-connector"]
+    }
+  ]
+}

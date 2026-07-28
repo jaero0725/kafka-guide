@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>케이스 8 · 상태 토픽 데이터가 조용히 사라졌다 — Kafka Guide</title>
+  <meta name="description" content="컴팩션 토픽으로 쓸 의도였는데 cleanup.policy가 기본값 delete로 남아 있어 7일 뒤 상태 스냅샷이 사라진 사고. cleanup.policy 변경이 기존 데이터에 소급 적용되지 않는다는 점, 활성 세그먼트 제외, compact,delete 조합의 함정을 다룹니다.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="cases" data-page="case08"></div>
+
+  <main id="main" class="page" data-page-id="cases/case08">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="case01.html">실수 케이스</a></li>
+        <li><span aria-current="page">케이스 8 · 상태 토픽이 사라졌다</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실수 케이스 · 8</p>
+      <h1>상태 토픽 데이터가 조용히 사라졌다</h1>
+      <p class="page__lead">
+        회원 프로필 스냅샷 토픽은 "키별 최신값을 영구 보관하는 저장소"로 설계됐습니다.
+        <strong>그런데 <code>cleanup.policy</code>를 지정하지 않았습니다.</strong>
+        기본값은 <code>delete</code>이고 <code>retention.ms</code> 기본값은 7일입니다.
+        정확히 8일째, 새 파드가 캐시를 부트스트랩하면서
+        <strong>회원 240만 명 중 96만 명의 프로필이 사라진 것</strong>을 발견했습니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 케이스에서 얻어 갈 것</h2>
+      <ul>
+        <li><code>delete</code>와 <code>compact</code>의 차이, 그리고 두 정책이 <strong>세그먼트 단위</strong>로 동작한다는 것을 설명할 수 있습니다.</li>
+        <li><strong><code>cleanup.policy</code> 변경이 이미 삭제된 데이터를 되살리지 못한다</strong>는 것을 근거와 함께 압니다.</li>
+        <li>컴팩션이 <strong>활성 세그먼트를 건드리지 않는다</strong>는 점과 그 실무적 의미를 압니다.</li>
+        <li><code>compact,delete</code> 조합, tombstone, <code>min.cleanable.dirty.ratio</code>의 함정을 구분할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="situation">
+      <h2 id="situation">상황</h2>
+
+      <p>
+        회원 프로필 캐시 파이프라인입니다. <code>user-profile-snapshot</code> 토픽은
+        <strong>파티션 12개, 복제 계수 3</strong>, 브로커 3대에 있고
+        회원 <strong>240만 명</strong>의 최신 프로필을 <strong>회원 ID를 키로</strong> 보관합니다.
+        하루 유입은 <strong>약 18만 건</strong>(프로필 변경 이벤트)입니다.
+      </p>
+      <p>
+        설계 의도는 명확했습니다.
+        <strong>"이 토픽 하나를 처음부터 끝까지 읽으면 전체 회원의 현재 프로필을 재구성할 수 있다"</strong>
+        — 즉 컴팩션 토픽입니다. 프로필 서비스 파드가 기동할 때 이 토픽을 전부 읽어
+        로컬 캐시를 만들고, 그 뒤로는 tail만 따라갑니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>토픽 생성 스크립트 — 한 줄이 빠져 있습니다</figcaption>
+        <pre><code class="lang-bash">kafka-topics.sh --bootstrap-server kafka-1:9092 --create \
+  --topic user-profile-snapshot \
+  --partitions 12 --replication-factor 3 \
+  --config min.insync.replicas=2
+#   ★ --config cleanup.policy=compact 가 없습니다.
+#     기본값 delete + retention.ms 기본값 604800000(7일)이 적용됩니다.</code></pre>
+      </figure>
+
+      <p>
+        토픽을 만든 뒤 3일간은 문제가 없었습니다. 파드를 재배포해도 캐시가 정상적으로 채워졌습니다.
+        7일이 지나기 전까지는 <strong>삭제 대상 세그먼트가 없었기 때문입니다.</strong>
+      </p>
+      <p>
+        8일째 오전, 프로필 서비스를 재배포했습니다.
+        신규 파드가 캐시를 부트스트랩했고, 그 파드로 라우팅된 요청 중
+        <strong>40%가 "회원 정보 없음"으로 응답</strong>했습니다.
+        최근 8일 안에 프로필을 수정한 회원은 정상이었고, 그보다 오래된 회원은 전부 사라져 있었습니다.
+      </p>
+
+      <aside class="note note--danger" data-label="이 사고가 8일째에 터지는 이유">
+        <p>
+          <code>retention.ms</code> 기본값은 <strong>604800000</strong>(7일)입니다.
+          그리고 <strong>삭제는 레코드 단위가 아니라 세그먼트 단위</strong>로 일어납니다.
+          <code>segment.bytes</code> 기본값이 <strong>1073741824</strong>(1GiB),
+          <code>segment.ms</code> 기본값이 <strong>604800000</strong>(7일)이므로,
+          첫 세그먼트가 봉인되고 리텐션 기준을 넘기는 시점이 대략 8일째입니다.
+        </p>
+        <p>
+          <strong>이 사고는 토픽을 만든 날에 이미 확정되었고, 8일 뒤에 발현했을 뿐입니다.</strong>
+          그 사이 어떤 배포도, 어떤 코드 변경도 없었습니다.
+          "최근에 아무것도 안 바꿨는데 문제가 생겼다"는 보고가 들어오면 리텐션을 의심하세요.
+        </p>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-117">
+        <figcaption>
+          <code>delete</code> 정책과 <code>compact</code> 정책의 결과 차이 —
+          같은 키별 이력 로그에 두 정책을 적용했을 때 남는 데이터,
+          그리고 세그먼트 단위 삭제가 오래된 키의 최신값까지 함께 지우는 지점
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="symptoms">
+      <h2 id="symptoms">관측된 증상</h2>
+
+      <h3 id="metrics-shape">메트릭이 어떻게 보였는가</h3>
+      <ul>
+        <li><strong>Kafka 지표 전부 정상.</strong> lag 0, 에러 0, ISR 정상. 리텐션 삭제는 <strong>정상 동작</strong>이므로 어떤 경고도 없습니다.</li>
+        <li><strong>토픽 크기</strong>: 8일째에 증가가 멈추고 평평해졌습니다. 이것이 유일한 Kafka 쪽 단서입니다.</li>
+        <li><strong>파티션 log-start-offset</strong>: 0에서 갑자기 큰 값으로 점프. <strong>가장 확실한 지문입니다.</strong></li>
+        <li><strong>캐시 적재 건수</strong>: 신규 파드에서 240만 → 144만으로 감소.</li>
+        <li><strong>"회원 정보 없음" 응답률</strong>: 0.1% → 40%.</li>
+      </ul>
+
+      <h3 id="broker-log">브로커 로그 — 삭제는 정상 동작으로 기록됩니다</h3>
+      <p>
+        <code>UnifiedLog</code>가 세그먼트를 삭제할 때 <strong>INFO</strong> 레벨로 이유를 남깁니다.
+        경고나 오류가 아니라 정보 로그입니다. 정상 동작이기 때문입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>kafka-1 server.log — 8일째 새벽</figcaption>
+        <pre><code class="lang-bash">INFO [UnifiedLog partition=user-profile-snapshot-3, dir=/var/lib/kafka/data] Deleting segment LogSegment(baseOffset=0, size=1073215488, lastModifiedTime=1760419203118, largestRecordTimestamp=1760419198004) due to log retention time 604800000ms breach based on the largest record timestamp in the segment
+INFO [UnifiedLog partition=user-profile-snapshot-3, dir=/var/lib/kafka/data] Incremented log start offset to 1188402 due to segment deletion
+INFO [UnifiedLog partition=user-profile-snapshot-7, dir=/var/lib/kafka/data] Deleting segment LogSegment(baseOffset=0, size=1072940544, lastModifiedTime=1760419214771, largestRecordTimestamp=1760419209660) due to log retention time 604800000ms breach based on the largest record timestamp in the segment</code></pre>
+      </figure>
+
+      <aside class="note" data-label="로그 문자열 확인 수준">
+        <p>
+          <em>"Deleting segment … due to log retention time {}ms breach based on the largest record timestamp in the segment"</em>는
+          Kafka 4.3의 <code>UnifiedLog</code>에서 확인한 문자열입니다.
+          같은 클래스는 크기 초과(<em>"due to log retention size … breach"</em>)와
+          log-start-offset 초과(<em>"Deleting segments due to log start offset … breach"</em>)에 대해서도
+          각각 다른 문장을 남깁니다. <strong>어느 조건으로 삭제되었는지 로그로 구분할 수 있습니다.</strong>
+        </p>
+        <p>
+          <code>LogSegment(...)</code> 안의 필드 표기와
+          <em>"Incremented log start offset to …"</em> 줄은 <strong>형태만 재현</strong>한 것으로,
+          문자열이 정확히 일치하지 않을 수 있습니다.
+        </p>
+      </aside>
+
+      <h3 id="offset-evidence">오프셋으로 본 증거</h3>
+      <figure class="code">
+        <figcaption>log-start-offset 이 0이 아니면 데이터가 삭제된 것입니다</figcaption>
+        <pre><code class="lang-bash">$ kafka-get-offsets.sh --bootstrap-server kafka-1:9092 \
+    --topic user-profile-snapshot --time -2      # -2 = earliest
+user-profile-snapshot:0:1191033
+user-profile-snapshot:3:1188402
+user-profile-snapshot:7:1190774
+...
+
+$ kafka-get-offsets.sh --bootstrap-server kafka-1:9092 \
+    --topic user-profile-snapshot --time -1      # -1 = latest
+user-profile-snapshot:0:1495882
+user-profile-snapshot:3:1492117
+user-profile-snapshot:7:1494203
+...
+
+# earliest 가 0 이 아니라는 것 = 앞쪽 세그먼트가 삭제되었다는 뜻입니다.
+# 컴팩션 토픽이라면 earliest 는 0 에 가깝게 유지됩니다
+# (컴팩션은 세그먼트를 재작성하지만 log-start-offset 을 밀지 않습니다).</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="root-cause">
+      <h2 id="root-cause">원인 분석</h2>
+
+      <h3 id="step1-configs">1단계 — 설정을 확인한다</h3>
+      <p>
+        <code>--describe</code>만 실행하면 <strong>명시적으로 설정한 값만</strong> 보입니다.
+        기본값으로 동작하는 설정은 나타나지 않으므로 <strong><code>--all</code>을 반드시 붙여야</strong> 합니다.
+        이것이 이 사고가 오래 발견되지 않은 이유이기도 합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption><code>--all</code> 없이 보면 문제를 못 찾습니다</figcaption>
+        <pre><code class="lang-bash">$ kafka-configs.sh --bootstrap-server kafka-1:9092 \
+    --entity-type topics --entity-name user-profile-snapshot --describe
+
+Dynamic configs for topic user-profile-snapshot are:
+  min.insync.replicas=2 sensitive=false synonyms={DYNAMIC_TOPIC_CONFIG:min.insync.replicas=2}
+#   ★ cleanup.policy 가 보이지 않습니다. "설정 안 함 = 기본값"입니다.
+
+$ kafka-configs.sh --bootstrap-server kafka-1:9092 \
+    --entity-type topics --entity-name user-profile-snapshot --describe --all \
+    | grep -E 'cleanup.policy|retention.ms|segment'
+
+  cleanup.policy=delete sensitive=false synonyms={DEFAULT_CONFIG:log.cleanup.policy=delete}
+  retention.ms=604800000 sensitive=false synonyms={DEFAULT_CONFIG:log.retention.ms=604800000}
+  segment.bytes=1073741824 sensitive=false synonyms={DEFAULT_CONFIG:log.segment.bytes=1073741824}
+  segment.ms=604800000 sensitive=false synonyms={DEFAULT_CONFIG:log.roll.ms=604800000}
+#   ★ 여기서 delete 가 드러납니다.</code></pre>
+      </figure>
+
+      <h3 id="step2-two-policies">2단계 — 두 정책의 차이를 정확히 안다</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>cleanup.policy</code> 값별 동작. 타입은 <strong>list</strong>이고 기본값은 <code>delete</code>입니다.</caption>
+          <thead>
+            <tr>
+              <th scope="col">값</th>
+              <th scope="col">동작</th>
+              <th scope="col">기준 설정</th>
+              <th scope="col">용도</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>delete</code><br><span class="badge">기본값</span></th>
+              <td>보관 시간·크기 한계를 넘긴 <strong>오래된 세그먼트를 버림</strong></td>
+              <td><code>retention.ms</code>(604800000), <code>retention.bytes</code>(-1)</td>
+              <td>이벤트 스트림. 지나간 것은 필요 없는 데이터</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compact</code></th>
+              <td><strong>키별 최신값을 유지</strong>하고 같은 키의 이전 값을 제거</td>
+              <td><code>min.cleanable.dirty.ratio</code>(0.5), <code>min.compaction.lag.ms</code>(0), <code>max.compaction.lag.ms</code></td>
+              <td>상태 스냅샷, changelog, 설정 저장소</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compact,delete</code></th>
+              <td><strong>둘 다 적용.</strong> 오래된 세그먼트는 리텐션으로 버리고, 남은 세그먼트는 컴팩션</td>
+              <td>위 둘 전부</td>
+              <td>"최신값을 유지하되 아주 오래된 것은 버려도 되는" 경우</td>
+            </tr>
+            <tr>
+              <th scope="row">빈 목록</th>
+              <td><strong>무한 보관.</strong> 어떤 정리 정책도 적용되지 않음</td>
+              <td>—</td>
+              <td>감사 로그 등. 디스크 관리를 직접 해야 합니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="compact,delete 는 안전한 선택이 아닙니다">
+        <p>
+          "혹시 모르니 둘 다 걸어 두자"는 판단이 흔한데, 이것은 <strong>이 사고를 그대로 재현</strong>합니다.
+          공식 문서는 <code>compact,delete</code>에 대해
+          <strong>"오래된 세그먼트는 보관 시간·크기 설정에 따라 폐기되고,
+          남은 세그먼트는 컴팩션된다"</strong>고 명시합니다.
+        </p>
+        <p>
+          즉 <strong><code>delete</code>가 포함되어 있으면 오래된 키의 최신값도 사라질 수 있습니다.</strong>
+          "전체 상태를 재구성할 수 있어야 하는" 토픽에는 <strong><code>compact</code>만</strong> 쓰세요.
+        </p>
+      </aside>
+
+      <h3 id="step3-retroactive">3단계 — 핵심: 정책 변경은 소급 적용되지 않는다</h3>
+      <p>
+        사고를 인지한 팀은 즉시 <code>cleanup.policy=compact</code>로 바꿨습니다.
+        그리고 <strong>사라진 데이터가 돌아오지 않는다는 것</strong>을 확인했습니다. 당연합니다.
+      </p>
+
+      <aside class="note note--danger" data-label="cleanup.policy 변경의 소급 범위">
+        <p>
+          <code>cleanup.policy</code>를 <code>delete</code>에서 <code>compact</code>로 바꾸면,
+          <strong>그 시점 이후의 정리 동작만 바뀝니다.</strong>
+        </p>
+        <ul>
+          <li>
+            <strong>이미 삭제된 세그먼트는 돌아오지 않습니다.</strong>
+            디스크에서 파일이 지워진 상태이고, Kafka에는 그것을 복원할 어떤 메커니즘도 없습니다.
+            <code>log-start-offset</code>도 되돌아가지 않습니다.
+          </li>
+          <li>
+            <strong>남아 있는 데이터에는 이후 컴팩션이 적용됩니다.</strong>
+            즉 "지금 남아 있는 것만" 키별 최신값으로 정리됩니다.
+            사라진 키는 그 로그에 존재하지 않으므로 컴팩션 대상 자체가 아닙니다.
+          </li>
+          <li>
+            반대 방향(<code>compact</code> → <code>delete</code>)도 마찬가지입니다.
+            <strong>컴팩션으로 이미 제거된 이전 값들은 복구되지 않습니다.</strong>
+          </li>
+        </ul>
+        <p>
+          <strong>정책 변경은 미래에만 작용합니다.</strong>
+          복구는 Kafka 밖에서, 원본 데이터가 있는 곳에서 재적재하는 방법밖에 없습니다.
+        </p>
+      </aside>
+
+      <h3 id="step4-compaction-details">4단계 — 컴팩션으로 바꾼 뒤에도 즉시 정리되지 않는다</h3>
+      <p>
+        <code>compact</code>로 바꾸고 나면 이번엔 "왜 중복이 안 없어지느냐"는 질문이 나옵니다.
+        컴팩션에는 세 가지 지연 요인이 있습니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>컴팩션이 즉시 일어나지 않는 이유</caption>
+          <thead>
+            <tr><th scope="col">요인</th><th scope="col">기본값</th><th scope="col">의미</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><strong>활성 세그먼트 제외</strong></th>
+              <td>—</td>
+              <td>
+                공식 문서는 <strong>"현재 쓰이고 있는 마지막 세그먼트를 제외한 모든 세그먼트가 컴팩션 대상"</strong>이며
+                <strong>"활성 세그먼트는 모든 메시지가 최소 컴팩션 지연 시간보다 오래되었더라도 컴팩션되지 않는다"</strong>고
+                명시합니다. 즉 <strong>최신 데이터는 항상 중복 상태로 남아 있습니다.</strong>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row"><code>min.cleanable.dirty.ratio</code></th>
+              <td>0.5</td>
+              <td>
+                로그의 50% 이상이 "dirty"(미압축)가 되어야 정리를 시도합니다.
+                유입이 적은 토픽은 이 비율에 오래 도달하지 못합니다.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row"><code>min.compaction.lag.ms</code> /<br><code>max.compaction.lag.ms</code></th>
+              <td>0 /<br>9223372036854775807</td>
+              <td>
+                <code>min</code>은 "이 시간이 지나기 전에는 컴팩션하지 않음"(하한),
+                <code>max</code>는 "이 시간이 지나면 dirty ratio와 무관하게 대상이 됨"(상한).
+                <code>max</code>가 사실상 무한이므로 <strong>기본 상태에서는 dirty ratio에만 의존</strong>합니다.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="컴팩션의 보장은 무엇인가">
+        <p>공식 문서가 명시하는 컴팩션의 보장입니다.</p>
+        <ul>
+          <li>로그의 head를 따라잡은 컨슈머는 <strong>기록된 모든 메시지를 보고, 그 오프셋은 연속적</strong>입니다.</li>
+          <li><strong>순서는 항상 유지됩니다.</strong> 컴팩션은 재정렬하지 않고 일부를 제거만 합니다.</li>
+          <li>
+            <strong>오프셋은 변하지 않습니다.</strong> 컴팩션으로 사라진 오프셋도
+            "유효한 위치"로 남고, 그 위치에서 읽으면 그 이상의 가장 가까운 오프셋부터 반환됩니다.
+          </li>
+        </ul>
+        <p>
+          따라서 <strong>"컴팩션이 오프셋을 재배치한다"는 오해</strong>는 틀렸습니다.
+          컴팩션 토픽에서도 오프셋 기반 커밋은 정상적으로 동작합니다.
+        </p>
+      </aside>
+
+      <h3 id="step5-tombstone-and-key">5단계 — tombstone 과 키 필수 조건</h3>
+      <p>
+        컴팩션 토픽에서 <strong>키가 있고 value가 <code>null</code></strong>인 레코드는 <strong>tombstone</strong>으로
+        해석되어 그 키의 삭제를 의미합니다. tombstone 자체도
+        <code>delete.retention.ms</code>(기본 <strong>86400000</strong> = 1일)가 지나면 정리됩니다.
+      </p>
+
+      <aside class="note note--warn" data-label="컴팩션 토픽에는 키가 필수입니다">
+        <p>
+          컴팩션 토픽에 <strong>키 없는 레코드</strong>를 보내면 브로커가 거부합니다.
+          <code>Errors.INVALID_RECORD</code>와 함께 다음 메시지가 반환됩니다.
+        </p>
+        <p>
+          <code>Compacted topic cannot accept message without key in topic partition user-profile-snapshot-3</code>
+        </p>
+        <p>
+          그래서 <strong>기존 <code>delete</code> 토픽을 <code>compact</code>로 전환할 때는
+          프로듀서가 반드시 키를 넣는지 먼저 확인</strong>해야 합니다.
+          키 없이 보내던 프로듀서가 있으면 정책 변경 직후 전송이 실패합니다.
+          키 설계는 <a href="case04.html">케이스 4</a>를 보세요.
+        </p>
+      </aside>
+
+      <p>
+        스토리지·리텐션·컴팩션의 원리 전체는
+        <a href="../basics/ch07.html">7장 스토리지·리텐션·컴팩션</a>에서 다룹니다.
+      </p>
+
+      <aside class="note note--version" data-label="버전 노트 — log.cleaner.enable">
+        <p>
+          브로커 설정 <code>log.cleaner.enable</code>의 기본값은 <strong><code>true</code></strong>이며,
+          Apache Kafka 4.3 문서는 이 설정이 <strong>deprecated 되었고 Kafka 5.0에서 제거될 예정</strong>이라고 명시합니다.
+          <strong><code>false</code>로 설정하지 마세요.</strong>
+          끄면 <code>cleanup.policy=compact</code> 토픽(<code>__consumer_offsets</code> 포함)이
+          컴팩션되지 않고 계속 커집니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="reproduce">
+      <h2 id="reproduce">재현 방법</h2>
+
+      <p>
+        리텐션과 세그먼트 설정을 아주 작게 주면 몇 분 안에 재현됩니다.
+        아래 compose는 Apache Kafka의 공식 단일 노드 예제입니다
+        (3노드 구성은 <a href="../practice/ex01.html">예제 1</a>).
+      </p>
+
+      <figure class="code">
+        <figcaption>docker-compose.yml — 정리 주기를 짧게 준 재현 전용 구성</figcaption>
+        <pre><code class="lang-yaml">services:
+  broker:
+    image: apache/kafka:4.3.1
+    hostname: broker
+    container_name: broker
+    ports:
+      - '9092:9092'
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_LISTENERS: 'CONTROLLER://:29093,PLAINTEXT://:19092,PLAINTEXT_HOST://:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:19092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      # 재현 전용 — 운영에서는 절대 이렇게 두지 마세요
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 5000      # 기본 300000
+      KAFKA_LOG_CLEANER_BACKOFF_MS: 3000</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>재현 절차 — 같은 데이터로 delete / compact 두 토픽의 결과를 비교</figcaption>
+        <pre><code class="lang-bash">docker compose up -d
+K=/opt/kafka/bin
+
+# 1. delete 정책 토픽 (기본값). 세그먼트를 8KiB, 리텐션을 20초로 줍니다.
+docker exec -it broker $K/kafka-topics.sh --create --topic snap-delete \
+  --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092 \
+  --config segment.bytes=1048576 --config retention.ms=20000 \
+  --config segment.ms=10000
+
+# 2. compact 정책 토픽. 컴팩션이 바로 돌게 dirty ratio 를 낮춥니다.
+docker exec -it broker $K/kafka-topics.sh --create --topic snap-compact \
+  --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092 \
+  --config cleanup.policy=compact --config segment.bytes=1048576 \
+  --config segment.ms=10000 --config min.cleanable.dirty.ratio=0.01 \
+  --config delete.retention.ms=1000
+
+# 3. 두 토픽에 같은 데이터를 넣는다.
+#    키 100개(user-1..user-100)를 각각 30번 갱신 → 총 3000건
+gen() {
+  for round in $(seq 1 30); do
+    for u in $(seq 1 100); do
+      echo "user-$u:{\"userId\":\"user-$u\",\"rev\":$round}"
+    done
+  done
+}
+for t in snap-delete snap-compact; do
+  gen | docker exec -i broker $K/kafka-console-producer.sh --topic "$t" \
+    --bootstrap-server localhost:9092 \
+    --property parse.key=true --property key.separator=:
+done
+
+# 4. 리텐션·컴팩션이 돌 시간을 준다
+sleep 60
+
+# 5. 결과를 비교한다
+echo "--- earliest offset (0 이 아니면 앞쪽이 삭제된 것)"
+docker exec -it broker $K/kafka-get-offsets.sh --bootstrap-server localhost:9092 \
+  --topic snap-delete --time -2
+docker exec -it broker $K/kafka-get-offsets.sh --bootstrap-server localhost:9092 \
+  --topic snap-compact --time -2
+
+echo "--- 남아 있는 고유 키 개수 (기대: compact=100, delete=100보다 적음)"
+for t in snap-delete snap-compact; do
+  n=$(docker exec -i broker $K/kafka-console-consumer.sh --topic "$t" \
+        --from-beginning --timeout-ms 15000 --bootstrap-server localhost:9092 \
+        --property print.key=true --property print.value=false 2>/dev/null \
+        | sort -u | wc -l)
+  echo "$t unique keys = $n"
+done
+#   → snap-delete 는 100 미만 (오래된 키가 세그먼트째로 사라짐)
+#     snap-compact 는 100 (모든 키의 최신값이 남음)</code></pre>
+      </figure>
+
+      <h3 id="reproduce-retroactive">변형 — 정책을 바꿔도 돌아오지 않는다</h3>
+      <figure class="code">
+        <figcaption>소급 적용되지 않는다는 것을 직접 확인</figcaption>
+        <pre><code class="lang-bash"># 위 재현 후 snap-delete 를 compact 로 바꿉니다
+docker exec -it broker $K/kafka-configs.sh --bootstrap-server localhost:9092 \
+  --entity-type topics --entity-name snap-delete \
+  --alter --add-config cleanup.policy=compact
+
+sleep 60
+
+# earliest offset 을 다시 봅니다 → 되돌아가지 않습니다
+docker exec -it broker $K/kafka-get-offsets.sh --bootstrap-server localhost:9092 \
+  --topic snap-delete --time -2
+
+# 고유 키 개수도 늘어나지 않습니다
+docker exec -i broker $K/kafka-console-consumer.sh --topic snap-delete \
+  --from-beginning --timeout-ms 15000 --bootstrap-server localhost:9092 \
+  --property print.key=true --property print.value=false 2>/dev/null | sort -u | wc -l</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>세그먼트 파일을 직접 들여다보기 — <code>kafka-dump-log</code></figcaption>
+        <pre><code class="lang-bash"># 어떤 세그먼트가 남아 있는지
+docker exec broker sh -c 'ls -la /tmp/kraft-combined-logs/snap-compact-0/'
+
+# 세그먼트 안의 레코드 헤더를 확인 (--deep-iteration 으로 개별 레코드까지)
+docker exec broker sh -c '/opt/kafka/bin/kafka-dump-log.sh \
+  --files /tmp/kraft-combined-logs/snap-compact-0/00000000000000000000.log \
+  --print-data-log --deep-iteration' | head -30
+
+# tombstone 보내기 — value 가 null 이어야 합니다.
+# 빈 문자열("")은 tombstone 이 아닙니다. null.marker 로 마커를 지정하고
+# 그 마커를 값 자리에 넣으면 실제 null 로 전송됩니다.
+echo "user-7:NULL" | docker exec -i broker /opt/kafka/bin/kafka-console-producer.sh \
+  --topic snap-compact --bootstrap-server localhost:9092 \
+  --property parse.key=true --property key.separator=: \
+  --property null.marker=NULL
+
+# delete.retention.ms(위에서 1000ms) 가 지나면 tombstone 자체도 정리됩니다
+sleep 30
+docker exec -i broker /opt/kafka/bin/kafka-console-consumer.sh --topic snap-compact \
+  --from-beginning --timeout-ms 15000 --bootstrap-server localhost:9092 \
+  --property print.key=true 2>/dev/null | grep user-7
+
+# 키 없는 레코드를 보내면 거부됩니다
+echo "no-key-record" | docker exec -i broker /opt/kafka/bin/kafka-console-producer.sh \
+  --topic snap-compact --bootstrap-server localhost:9092
+#   → Compacted topic cannot accept message without key in topic partition snap-compact-0</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="fix">
+      <h2 id="fix">해결</h2>
+
+      <h3 id="immediate">즉시 조치 — 더 이상 사라지지 않게 만든다</h3>
+      <p>
+        복구보다 <strong>출혈을 멈추는 것</strong>이 먼저입니다.
+        <code>cleanup.policy</code>는 동적 토픽 설정이라 재시작 없이 즉시 적용됩니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>즉시 조치 — 순서가 중요합니다</figcaption>
+        <pre><code class="lang-bash"># 1. 프로듀서가 모든 레코드에 키를 넣는지 먼저 확인한다.
+#    키 없는 레코드가 있으면 compact 로 바꾼 순간 전송이 실패합니다.
+kafka-console-consumer.sh --bootstrap-server kafka-1:9092 \
+  --topic user-profile-snapshot --max-messages 200 \
+  --property print.key=true --property print.value=false \
+  | grep -c '^null'
+#   → 0 이어야 합니다.
+
+# 2. 정책을 변경한다 (즉시 적용, 재시작 불필요)
+kafka-configs.sh --bootstrap-server kafka-1:9092 \
+  --entity-type topics --entity-name user-profile-snapshot \
+  --alter --add-config cleanup.policy=compact
+
+# 3. delete 쪽 설정이 남아 있지 않은지 확인한다.
+#    compact 만 쓸 때는 retention.* 오버라이드를 제거하는 편이 안전합니다.
+kafka-configs.sh --bootstrap-server kafka-1:9092 \
+  --entity-type topics --entity-name user-profile-snapshot \
+  --alter --delete-config retention.ms
+
+# 4. 확인
+kafka-configs.sh --bootstrap-server kafka-1:9092 \
+  --entity-type topics --entity-name user-profile-snapshot --describe --all \
+  | grep -E 'cleanup.policy|retention'</code></pre>
+      </figure>
+
+      <h3 id="recovery">복구 — Kafka 밖에서 재적재한다</h3>
+      <p>
+        사라진 96만 명의 프로필은 <strong>Kafka로는 복구할 수 없습니다.</strong>
+        원본이 있는 곳에서 다시 채워 넣어야 합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>복구 절차 — 원본 DB에서 전체 스냅샷을 다시 발행</figcaption>
+        <pre><code class="lang-bash"># 1. cleanup.policy=compact 로 이미 바뀐 상태에서 진행합니다.
+#    (delete 상태에서 재적재하면 7일 뒤 같은 사고가 반복됩니다)
+
+# 2. 원본 DB에서 전체 회원 프로필을 키(회원 ID)와 함께 발행합니다.
+#    같은 키를 다시 쓰므로 컴팩션이 중복을 정리해 줍니다.
+psql -At -F'|' -c "SELECT user_id, row_to_json(p) FROM user_profiles p" \
+  | awk -F'|' '{print $1 ":" $2}' \
+  | kafka-console-producer.sh --bootstrap-server kafka-1:9092 \
+      --topic user-profile-snapshot \
+      --property parse.key=true --property key.separator=: \
+      --producer-property acks=all --producer-property compression.type=lz4
+
+# 3. 파티션별 고유 키 수가 회복되었는지 확인한 뒤 캐시를 재적재합니다.
+kafka-get-offsets.sh --bootstrap-server kafka-1:9092 \
+  --topic user-profile-snapshot --time -1</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="재적재의 부작용">
+        <p>
+          전체 스냅샷을 다시 발행하면 <strong>이 토픽을 구독하는 모든 컨슈머가 240만 건을 다시 받습니다.</strong>
+          그 컨슈머들이 외부 부작용을 만든다면 <a href="case07.html">케이스 7</a>의 문제가 됩니다.
+          재적재 전에 <strong>다운스트림 목록을 확인</strong>하세요.
+        </p>
+      </aside>
+
+      <h3 id="root-fix">근본 해결 — 토픽 정의를 코드로 관리한다</h3>
+
+      <div class="diff">
+        <div class="diff__before">
+          <p>
+            토픽을 사람이 CLI로 만들었고, <strong>중요한 설정이 "지정하지 않음"</strong>으로 남았습니다.
+            리뷰에서도 <strong>없는 줄은 눈에 보이지 않습니다.</strong>
+          </p>
+          <figure class="code">
+            <figcaption>변경 전 — 수동 생성</figcaption>
+            <pre><code class="lang-bash">kafka-topics.sh --create --topic user-profile-snapshot \
+  --partitions 12 --replication-factor 3 \
+  --config min.insync.replicas=2
+# cleanup.policy 없음 → delete
+# retention.ms 없음 → 604800000</code></pre>
+          </figure>
+        </div>
+        <div class="diff__after">
+          <p>
+            토픽 정의를 <strong>선언적으로 관리</strong>하고,
+            상태 토픽에는 <strong>모든 정리 관련 설정을 명시</strong>합니다.
+            기본값에 의존하는 칸을 남기지 않습니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 후 — 선언적 정의 (IaC)</figcaption>
+            <pre><code class="lang-yaml">topics:
+  - name: user-profile-snapshot
+    partitions: 12
+    replicationFactor: 3
+    configs:
+      # 이 토픽의 성격을 명시 — 상태 스냅샷
+      cleanup.policy: compact            # delete 를 포함하지 않는다
+      min.insync.replicas: "2"
+      min.cleanable.dirty.ratio: "0.3"   # 상태 토픽은 조금 더 자주 정리
+      delete.retention.ms: "86400000"    # tombstone 보관 1일 (기본값 명시)
+      segment.bytes: "268435456"         # 256MiB — 컴팩션 단위를 작게
+      max.compaction.lag.ms: "3600000"   # 1시간 안에는 반드시 정리 대상이 되게
+      compression.type: producer</code></pre>
+          </figure>
+        </div>
+      </div>
+
+      <aside class="note note--ok" data-label="상태 토픽 설정 원칙">
+        <ul>
+          <li><strong><code>cleanup.policy=compact</code>만</strong> 쓴다. <code>delete</code>를 섞지 않는다.</li>
+          <li><strong><code>retention.*</code> 오버라이드를 남기지 않는다.</strong> <code>compact</code>만이면 무의미하지만, 나중에 정책이 바뀌면 되살아납니다.</li>
+          <li><strong><code>segment.bytes</code>를 기본값(1GiB)보다 작게</strong> 둔다. 활성 세그먼트가 컴팩션되지 않으므로, 세그먼트가 크면 그만큼 많은 데이터가 정리되지 않은 상태로 남습니다. 단 파일 수가 늘어나므로 <a href="case05.html">케이스 5</a>의 비용을 함께 고려하세요.</li>
+          <li><strong><code>max.compaction.lag.ms</code>를 설정</strong>한다. 기본값이 사실상 무한이라 유입이 적은 토픽은 오래 정리되지 않습니다.</li>
+          <li>프로듀서가 <strong>반드시 키를 넣는다.</strong></li>
+        </ul>
+      </aside>
+
+      <h3 id="alerting">알림 — 리텐션 삭제를 감지한다</h3>
+      <ul>
+        <li>
+          <strong><code>log-start-offset</code>이 0에서 증가하는 것</strong>을 감지합니다.
+          상태 토픽에서는 이것이 곧 사고입니다.
+          <code>kafka-get-offsets --time -2</code>를 주기적으로 수집하세요.
+        </li>
+        <li>
+          브로커 로그에서 <strong><code>Deleting segment</code></strong> 문자열을
+          <strong>상태 토픽 이름과 함께</strong> 알림 대상으로 잡습니다.
+        </li>
+        <li>
+          <strong>컴팩션 상태 메트릭</strong>을 봅니다.
+          공식 문서가 언급하는 <code>uncleanable-partitions-count</code>,
+          <code>max-clean-time-secs</code>, <code>max-compaction-delay-secs</code>를
+          모니터링하라고 명시하고 있습니다.
+        </li>
+        <li>
+          <strong>토픽별 고유 키 수</strong>를 정기 배치로 측정해 원본과 대조합니다.
+          이 사고를 유일하게 조기에 잡을 수 있는 지표입니다.
+        </li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prevention">
+      <h2 id="prevention">예방 체크리스트</h2>
+
+      <ul>
+        <li><label><input type="checkbox"> 상태·스냅샷·changelog 성격의 토픽에 <code>cleanup.policy=compact</code>가 <strong>명시</strong>되어 있다</label></li>
+        <li><label><input type="checkbox"> 그 토픽에 <code>delete</code>가 <strong>섞여 있지 않다</strong> (<code>compact,delete</code> 아님)</label></li>
+        <li><label><input type="checkbox"> <code>kafka-configs --describe</code>에 <strong><code>--all</code>을 붙여</strong> 기본값까지 확인했다</label></li>
+        <li><label><input type="checkbox"> 컴팩션 토픽의 프로듀서가 <strong>모든 레코드에 키를 넣는다</strong></label></li>
+        <li><label><input type="checkbox"> <code>max.compaction.lag.ms</code>를 설정했다 (기본값은 사실상 무한)</label></li>
+        <li><label><input type="checkbox"> <strong>활성 세그먼트는 컴팩션되지 않는다</strong>는 것을 알고 <code>segment.bytes</code>를 정했다</label></li>
+        <li><label><input type="checkbox"> <code>delete.retention.ms</code>(tombstone 보관)가 컨슈머의 최대 부트스트랩 시간보다 길다</label></li>
+        <li><label><input type="checkbox"> <code>log.cleaner.enable</code>을 <code>false</code>로 끈 곳이 없다 (기본값 <code>true</code>, 5.0에서 제거 예정)</label></li>
+        <li><label><input type="checkbox"> 토픽 정의가 <strong>코드·IaC로 관리</strong>되고, <code>auto.create.topics.enable</code>로 생성되지 않는다</label></li>
+        <li><label><input type="checkbox"> <code>log-start-offset</code>이 0에서 증가하는 것에 <strong>알림</strong>이 걸려 있다</label></li>
+        <li><label><input type="checkbox"> <strong>정책 변경은 소급 적용되지 않는다</strong>는 것을 팀이 알고 있다</label></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트</h2>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <ul>
+          <li>
+            <code>cleanup.policy</code> 기본값은 <strong><code>delete</code></strong>이고,
+            유효 값은 <code>compact</code>·<code>delete</code>이며 <strong>목록(list) 타입</strong>이라
+            <code>compact,delete</code> 조합이 가능합니다. <strong>빈 목록은 무한 보관</strong>입니다.
+          </li>
+          <li>
+            <strong>삭제와 컴팩션은 세그먼트 단위</strong>로 일어납니다.
+            그래서 <code>segment.ms</code>·<code>segment.bytes</code>가 실제 보관량을 좌우합니다.
+          </li>
+          <li>
+            <strong>활성 세그먼트는 컴팩션되지 않습니다.</strong>
+            "컴팩션은 중복을 즉시 제거한다"는 대표적 오답입니다.
+          </li>
+          <li>
+            <code>min.cleanable.dirty.ratio</code> 기본값 <strong>0.5</strong>,
+            <code>delete.retention.ms</code> 기본값 <strong>86400000</strong>(1일),
+            <code>min.compaction.lag.ms</code> 기본값 <strong>0</strong>,
+            <code>retention.ms</code> 기본값 <strong>604800000</strong>(7일).
+          </li>
+          <li>
+            <strong>tombstone = 키가 있고 value가 <code>null</code></strong>인 레코드.
+            그 키의 삭제를 의미하고, tombstone 자체도 <code>delete.retention.ms</code> 뒤에 정리됩니다.
+          </li>
+          <li>
+            <strong>컴팩션은 오프셋을 바꾸지 않습니다.</strong> 순서도 유지됩니다.
+            사라진 오프셋도 유효한 위치로 남습니다.
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Troubleshooting">
+        <ul>
+          <li>
+            "컴팩션 토픽인데 데이터가 사라졌다" → <code>cleanup.policy</code>에
+            <strong><code>delete</code>가 포함되어 있는지</strong> 확인하는 것이 정답 경로입니다.
+          </li>
+          <li>
+            "정책을 <code>compact</code>로 바꿨는데 데이터가 안 돌아온다" →
+            <strong>정책 변경은 소급 적용되지 않습니다.</strong> 삭제된 세그먼트는 복구 불가입니다.
+          </li>
+          <li>
+            컴팩션 토픽에 키 없는 레코드를 보내면
+            <strong><code>INVALID_RECORD</code></strong>와 함께
+            <em>"Compacted topic cannot accept message without key"</em>로 거부됩니다.
+          </li>
+          <li>
+            <code>log.cleaner.enable</code>을 끄면 <code>__consumer_offsets</code>를 포함한
+            컴팩션 토픽이 계속 커집니다. 기본값은 <code>true</code>이고
+            <strong>4.3에서 deprecated, 5.0에서 제거 예정</strong>입니다.
+          </li>
+          <li>
+            컴팩션 모니터링 메트릭: <code>uncleanable-partitions-count</code>,
+            <code>max-clean-time-secs</code>, <code>max-compaction-delay-secs</code>.
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · 어느 토픽에 어느 정책">
+        <p>
+          <strong><code>compact</code>가 맞는 것</strong>:
+          <code>__consumer_offsets</code>, Streams changelog·상태 저장소 백업 토픽,
+          설정·프로필 스냅샷, CDC 최신 상태 테이블.
+        </p>
+        <p>
+          <strong><code>delete</code>가 맞는 것</strong>:
+          클릭스트림, 로그·메트릭, 주문/결제 이벤트 스트림처럼
+          <strong>이력 그 자체가 의미</strong>이고 지나간 것은 버려도 되는 데이터.
+        </p>
+        <p>
+          <strong>판단 기준</strong>: "이 토픽을 처음부터 다 읽으면 <em>현재 상태</em>가 복원되어야 하는가?"
+          → 그렇다면 <code>compact</code>입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch07.html">
+          <span class="card__title">7장 · 스토리지·리텐션·컴팩션</span>
+          <span class="card__desc">세그먼트 구조, 리텐션, 컴팩션 전후 비교, Tiered Storage.</span>
+          <span class="card__meta">CCDAK Fundamentals</span>
+        </a></li>
+        <li><a class="card" href="case04.html">
+          <span class="card__title">케이스 4 · 상태가 뒤바뀌어 저장됐다</span>
+          <span class="card__desc">컴팩션 토픽의 전제인 키 설계 문제.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="case05.html">
+          <span class="card__title">케이스 5 · 파티션 과다</span>
+          <span class="card__desc"><code>segment.bytes</code>를 작게 둘 때 따라오는 비용.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch10.html">
+          <span class="card__title">10장 · Kafka Streams와 ksqlDB</span>
+          <span class="card__desc">상태 저장소와 changelog 토픽이 컴팩션에 의존하는 방식.</span>
+          <span class="card__meta">CCDAK Kafka Streams</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc">토픽 설정 전체 표와 기본값.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/cli.html">
+          <span class="card__title">CLI 치트시트</span>
+          <span class="card__desc"><code>kafka-configs</code>·<code>kafka-get-offsets</code>·<code>kafka-dump-log</code> 사용법.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs_cleanup.policy" rel="noopener noreferrer">Topic Configs — <code>cleanup.policy</code></a> — 기본값 <code>delete</code>, list 타입, <code>compact,delete</code> 조합 동작, 빈 목록 = 무한 보관</li>
+        <li><a href="https://kafka.apache.org/documentation/#compaction" rel="noopener noreferrer">Design — Log Compaction</a> — tombstone, 활성 세그먼트 제외, 오프셋 불변·순서 유지 보장, 모니터링 메트릭 3종</li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs_min.cleanable.dirty.ratio" rel="noopener noreferrer">Topic Configs — <code>min.cleanable.dirty.ratio</code> · <code>min.compaction.lag.ms</code> · <code>max.compaction.lag.ms</code></a> — 기본값 0.5 / 0 / <code>Long.MAX_VALUE</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs_delete.retention.ms" rel="noopener noreferrer">Topic Configs — <code>delete.retention.ms</code></a> — 기본값 86400000</li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs_retention.ms" rel="noopener noreferrer">Topic Configs — <code>retention.ms</code> · <code>segment.bytes</code> · <code>segment.ms</code></a> — 기본값 604800000 / 1073741824 / 604800000</li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs_log.cleaner.enable" rel="noopener noreferrer">Broker Configs — <code>log.cleaner.enable</code></a> — 기본값 <code>true</code>, deprecated 및 5.0 제거 예정</li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs_log.retention.check.interval.ms" rel="noopener noreferrer">Broker Configs — <code>log.retention.check.interval.ms</code></a> — 기본값 300000</li>
+        <li><a href="https://github.com/apache/kafka" rel="noopener noreferrer">Apache Kafka 소스 (4.3)</a> — <code>UnifiedLog</code>의 세그먼트 삭제 로그 문자열, <code>LogValidator</code>의 <em>"Compacted topic cannot accept message without key"</em></li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

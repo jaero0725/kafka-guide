@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CCAAK · Observability — Kafka Guide</title>
+  <meta name="description" content="CCAAK Observability 섹션. UnderReplicatedPartitions · OfflinePartitionsCount · ActiveControllerCount · RequestHandlerAvgIdlePercent 해석, 컨슈머 lag 측정 3방법, 알림 임계값 설계를 운영자 관점으로 정리합니다.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccaak" data-page="domain-observability"></div>
+
+  <main id="main" class="page" data-page-id="ccaak/domain-observability">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCAAK</a></li>
+        <li><span aria-current="page">Observability</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCAAK · 섹션 6</p>
+      <h1>Observability</h1>
+      <p class="page__lead">
+        이 섹션은 <a href="domain-troubleshooting.html">Troubleshooting</a>의 <strong>입력값</strong>입니다.
+        장애 문항의 지문은 대개 메트릭 이름과 값으로 주어지므로,
+        메트릭 이름을 정확히 알지 못하면 문제를 읽을 수조차 없습니다.
+        메트릭을 <strong>이름 단위로</strong> 외우세요 — matching 유형에서 그대로 나옵니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>핵심 4대 지표의 정상값과 이상 시 의미를 즉시 말할 수 있습니다.</li>
+        <li><code>UnderReplicatedPartitions</code>와 <code>UnderMinIsrPartitionCount</code>를 구분할 수 있습니다.</li>
+        <li>컨슈머 lag을 세 가지 경로로 측정하고 각 경로의 한계를 설명할 수 있습니다.</li>
+        <li>컨트롤러 전용 메트릭으로 메타데이터 계층의 건강을 판단할 수 있습니다.</li>
+        <li>임계값을 "0이어야 하는 것"과 "비율로 봐야 하는 것"으로 나눠 알림을 설계할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="what-it-asks">
+      <h2 id="what-it-asks">이 도메인이 묻는 것</h2>
+
+      <div class="table-scroll">
+        <table>
+          <caption>이 섹션의 전형적인 질문 형태</caption>
+          <thead>
+            <tr><th scope="col">질문 형태</th><th scope="col">실제로 확인하는 것</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">"<code>ActiveControllerCount</code>가 2다. 무슨 뜻인가?"</th><td>이 값은 클러스터 전체에서 정확히 1이어야 함</td></tr>
+            <tr><th scope="row">"<code>OfflinePartitionsCount</code>가 5다. 먼저 무엇을 하는가?"</th><td>리더 없는 파티션의 의미와 우선순위</td></tr>
+            <tr><th scope="row">"각 메트릭을 정상값과 연결하시오" (matching)</th><td>0이어야 하는 것 vs 비율 지표 구분</td></tr>
+            <tr><th scope="row">"컨슈머 lag을 확인하는 방법을 모두 고르시오"</th><td>CLI · 클라이언트 JMX · 브로커 측 오프셋</td></tr>
+            <tr><th scope="row">"<code>RequestHandlerAvgIdlePercent</code>가 0.05다"</th><td>요청 처리 스레드 포화와 조치</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="core-metrics">
+      <h2 id="core-metrics">핵심 개념 요약 — 4대 지표부터</h2>
+
+      <p>
+        Kafka 브로커는 JMX로 메트릭을 노출합니다. 수백 개가 있지만
+        <strong>대시보드 최상단에는 네 개만</strong> 두면 됩니다. 나머지는 이 네 개가 움직인 뒤에 봅니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-104">
+        <figcaption>
+          핵심 메트릭 대시보드 — URP · OfflinePartitions · ActiveController · RequestHandlerIdle 배치 예시
+        </figcaption>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>핵심 4대 지표</caption>
+          <thead>
+            <tr>
+              <th scope="col">메트릭</th>
+              <th scope="col">정상값</th>
+              <th scope="col">이상 시 의미</th>
+              <th scope="col">먼저 볼 것</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,<wbr>name=UnderReplicatedPartitions</code></th>
+              <td class="t-center"><strong>0</strong></td>
+              <td>ISR이 전체 레플리카보다 작은 파티션 수. 복제가 뒤처짐</td>
+              <td>어느 브로커가 ISR에서 빠졌는가, 디스크·네트워크, 남은 스로틀</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,<wbr>name=OfflinePartitionsCount</code></th>
+              <td class="t-center"><strong>0</strong></td>
+              <td>리더가 없는 파티션 수. <strong>읽기·쓰기 모두 불가</strong></td>
+              <td>가장 심각한 신호. 브로커 다운 수와 RF를 즉시 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,<wbr>name=ActiveControllerCount</code></th>
+              <td class="t-center">노드당 <strong>0 또는 1</strong>,<br>클러스터 합 <strong>정확히 1</strong></td>
+              <td>합이 0이면 컨트롤러 없음(메타데이터 변경 불가), 2 이상이면 분열 의심</td>
+              <td><code>kafka-metadata-quorum.sh describe --status</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=KafkaRequestHandlerPool,<wbr>name=RequestHandlerAvgIdlePercent</code></th>
+              <td class="t-center">0~1 사이,<br><strong>&gt; 0.3 이상적</strong></td>
+              <td>요청 처리 스레드가 포화. 모든 지연이 함께 나빠짐</td>
+              <td><code>num.io.threads</code>(기본 8), 요청 급증 원인, 쿼터</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Observability">
+        <p>
+          <strong><code>ActiveControllerCount</code>는 노드별 게이지</strong>입니다.
+          각 노드에서 0 또는 1이고, <strong>클러스터 전체를 합해 1</strong>이어야 정상입니다.
+          "한 노드에서 이 값이 0이면 장애"라고 보면 오답입니다 — 스탠바이 컨트롤러는 정상적으로 0입니다.
+          알림은 <strong>합계가 1이 아닐 때</strong> 걸어야 합니다.
+        </p>
+      </aside>
+
+      <h3 id="urp-vs-underminisr">URP와 UnderMinIsr — 헷갈리면 조치가 반대로 갑니다</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>ISR 관련 3개 메트릭의 정확한 조건</caption>
+          <thead>
+            <tr><th scope="col">메트릭</th><th scope="col">조건</th><th scope="col">쓰기 가능?</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>UnderReplicatedPartitions</code></th>
+              <td>|ISR| &lt; |전체 레플리카|</td>
+              <td><code>min.insync.replicas</code>를 만족하면 <strong>가능</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>AtMinIsrPartitionCount</code></th>
+              <td>|ISR| = <code>min.insync.replicas</code></td>
+              <td>가능하지만 <strong>한 대만 더 빠지면 중단</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>UnderMinIsrPartitionCount</code></th>
+              <td>|ISR| &lt; <code>min.insync.replicas</code></td>
+              <td><strong>불가</strong> — <code>acks=all</code> 쓰기가 거부됩니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="알림 설계에 반영하기">
+        <p>
+          URP는 "복제가 뒤처졌다"는 <strong>경고</strong>이고,
+          <code>UnderMinIsrPartitionCount</code>는 "이미 쓰기가 실패하고 있다"는 <strong>사고</strong>입니다.
+          <code>AtMinIsrPartitionCount</code>는 그 사이의 <strong>선행 지표</strong>여서
+          여기에 알림을 걸면 사고 전에 개입할 수 있습니다.
+          세 개를 같은 심각도로 두면 알림 피로만 생깁니다.
+        </p>
+      </aside>
+
+      <h3 id="broker-metrics">브로커 · 복제 메트릭</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>브로커 쪽 주요 메트릭</caption>
+          <thead>
+            <tr><th scope="col">메트릭</th><th scope="col">정상값</th><th scope="col">의미</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>ReplicaManager,name=IsrShrinksPerSec</code><br><code>ReplicaManager,name=IsrExpandsPerSec</code></th>
+              <td>평시 <strong>0</strong></td>
+              <td>브로커가 내려가면 축소, 복귀하면 확장이 일어납니다. 그 외에는 0이 기대값입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ReplicaManager,name=FailedIsrUpdatesPerSec</code></th>
+              <td><strong>0</strong></td>
+              <td>ISR 갱신 실패. 컨트롤러 통신 문제를 의심합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ReplicaFetcherManager,name=MaxLag,<wbr>clientId=Replica</code></th>
+              <td>produce 배치 크기에 비례</td>
+              <td>팔로워와 리더 사이의 최대 메시지 lag. 계속 커지면 복제가 못 따라갑니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>FetcherLagMetrics,name=ConsumerLag,<wbr>clientId=...,topic=...,partition=...</code></th>
+              <td>재할당 중 <strong>감소 추세</strong></td>
+              <td>팔로워별 lag. 파티션 재할당이 진행되는지 판단하는 지표입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ControllerStats,name=UncleanLeaderElectionsPerSec</code></th>
+              <td><strong>항상 0</strong></td>
+              <td>0이 아니면 <strong>데이터가 유실되었습니다.</strong> 사후 확인이 아니라 알림 대상입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ControllerStats,name=LeaderElectionRateAndTimeMs</code></th>
+              <td>평시 0, 장애 시 non-zero</td>
+              <td>리더 선출 빈도와 소요 시간. 반복적으로 non-zero면 브로커가 플래핑합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>KafkaController,name=PreferredReplicaImbalanceCount</code></th>
+              <td>평시 <strong>0</strong></td>
+              <td>리더가 preferred가 아닌 파티션 수. 롤링 재시작 후 일시적으로 오릅니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SocketServer,name=NetworkProcessorAvgIdlePercent</code></th>
+              <td>0~1, <strong>&gt; 0.3</strong></td>
+              <td>네트워크 스레드 여유. 낮으면 <code>num.network.threads</code>(기본 3)를 검토합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>RequestMetrics,name=TotalTimeMs,<wbr>request={Produce|FetchConsumer|FetchFollower}</code></th>
+              <td>워크로드 기준선 대비</td>
+              <td>요청 전체 시간. queue · local · remote · response send로 분해해서 봅니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>RequestMetrics,name=RequestQueueTimeMs,...</code></th>
+              <td>낮게 유지</td>
+              <td>큐 대기 시간이 크면 <strong>처리 스레드 부족</strong>입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SocketServer,name=ExpiredConnectionsKilledCount</code></th>
+              <td>재인증 사용 시 <strong>0</strong></td>
+              <td>재인증하지 않고 만료된 연결을 계속 쓰는 클라이언트가 있다는 신호입니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="TotalTimeMs를 분해해서 보세요">
+        <p>
+          <code>TotalTimeMs</code>만 보면 원인을 알 수 없습니다.
+          이 값은 <strong>큐 대기 · 로컬 처리 · 원격(복제) 대기 · 응답 전송</strong>으로 분해됩니다.
+          큐 대기가 크면 스레드 부족, 원격 대기가 크면 <code>acks=all</code>에서 팔로워가 느린 것,
+          응답 전송이 크면 네트워크나 큰 fetch 응답이 원인입니다.
+          같은 "지연 증가"에 대해 조치가 완전히 달라집니다.
+        </p>
+      </aside>
+
+      <h3 id="controller-metrics">컨트롤러 · 메타데이터 메트릭</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>KRaft 컨트롤러 메트릭</caption>
+          <thead>
+            <tr><th scope="col">메트릭</th><th scope="col">의미</th><th scope="col">해석</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>KafkaController,name=MetadataErrorCount</code></th>
+              <td>이 노드가 메타데이터 로그 처리 중 만난 오류 수</td>
+              <td>0이 아니면 즉시 조사 대상입니다. 메타데이터 손상 가능성.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>KafkaController,name=LastAppliedRecordLagMs</code></th>
+              <td>마지막으로 적용한 메타데이터 레코드의 지연</td>
+              <td><strong>액티브 컨트롤러에서는 항상 0</strong>입니다. 스탠바이에서 이 값이 크면 뒤처진 것입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>KafkaController,name=LastAppliedRecordOffset</code><br><code>KafkaController,name=LastCommittedRecordOffset</code></th>
+              <td>적용·커밋된 메타데이터 오프셋</td>
+              <td>두 값의 차이가 계속 벌어지면 적용이 밀리고 있습니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>KafkaController,name=TimedOutBrokerHeartbeatCount</code></th>
+              <td>브로커 하트비트 타임아웃 횟수</td>
+              <td><strong>액티브 컨트롤러만</strong> 증가합니다. 늘어나면 브로커가 간헐적으로 끊기는 중입니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="lag">컨슈머 lag 측정 3방법</h3>
+
+      <p>
+        같은 lag을 세 경로로 볼 수 있고, <strong>세 경로가 보는 것이 미묘하게 다릅니다.</strong>
+        이 차이가 시험 문항이 됩니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>lag 측정 3방법 비교</caption>
+          <thead>
+            <tr>
+              <th scope="col">방법</th>
+              <th scope="col">경로</th>
+              <th scope="col">장점</th>
+              <th scope="col">한계</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">① CLI</th>
+              <td><code>kafka-consumer-groups.sh --describe --group</code>의 <code>LAG</code> 열
+                  (= <code>LOG-END-OFFSET</code> − <code>CURRENT-OFFSET</code>)</td>
+              <td>컨슈머에 손대지 않고 <strong>커밋된 오프셋 기준</strong>으로 즉시 확인</td>
+              <td>단발성 조회. <strong>커밋 기준</strong>이라 처리했지만 아직 커밋 안 한 분량이 lag으로 보입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">② 컨슈머 클라이언트 JMX</th>
+              <td><code>kafka.consumer:type=consumer-fetch-manager-metrics,<wbr>client-id={client-id}</code>의
+                  <code>records-lag-max</code></td>
+              <td>컨슈머 <strong>실시간</strong> 상태. 대시보드·알림에 적합</td>
+              <td><strong>컨슈머가 발행하는 메트릭</strong>입니다. 컨슈머가 죽으면 값 자체가 사라집니다</td>
+            </tr>
+            <tr>
+              <th scope="row">③ 브로커 측 오프셋</th>
+              <td><code>kafka.log:type=Log,name=LogEndOffset,<wbr>topic=...,partition=...</code>과
+                  커밋 오프셋을 조합해 직접 계산</td>
+              <td>컨슈머가 없어도 <strong>토픽의 증가 속도</strong>를 볼 수 있습니다</td>
+              <td>lag을 얻으려면 커밋 오프셋을 따로 가져와 계산해야 합니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Observability">
+        <p>
+          <strong><code>records-lag-max</code>는 컨슈머가 발행하는 메트릭이며 브로커가 아닙니다.</strong>
+          공식 문서에도 "Published by the consumer, not broker"로 명시되어 있습니다.
+          따라서 <strong>컨슈머가 죽으면 이 메트릭은 알림을 울리지 않고 사라집니다.</strong>
+          "컨슈머가 죽었는데 lag 알림이 안 왔다"의 답이 이것이고,
+          그래서 lag 알림은 <strong>①번 경로(브로커에서 커밋 오프셋 조회)</strong>와 함께 이중으로 걸어야 합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="cli">
+      <h2 id="cli">필수 CLI 명령어</h2>
+
+      <figure class="code">
+        <figcaption>lag 확인 — 가장 자주 쓰는 명령</figcaption>
+        <pre><code class="lang-bash"># 파티션별 CURRENT-OFFSET / LOG-END-OFFSET / LAG
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group order-workers
+
+# 활성 멤버와 각 멤버가 가진 파티션 수
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+    --describe --group order-workers --members
+
+# 멤버별 실제 할당 파티션까지
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+    --describe --group order-workers --members --verbose
+
+# 그룹 상태 요약: 코디네이터 / 할당 전략 / STATE / 멤버 수
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+    --describe --group order-workers --state</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="권한 주의">
+        <p>
+          컨슈머 그룹이 <strong>새 컨슈머 프로토콜</strong>(<code>group.protocol=consumer</code>)을 쓰면,
+          <code>--describe</code>를 실행하는 admin 클라이언트가
+          <strong>그룹이 구독한 모든 토픽에 대해 DESCRIBE 권한</strong>을 가져야 합니다.
+          classic 프로토콜은 그 요구가 없습니다.
+          "운영 계정으로 어떤 그룹은 describe가 되고 어떤 그룹은 안 된다"의 원인입니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>메타데이터 계층 상태 확인</figcaption>
+        <pre><code class="lang-bash"># 리더 · 에폭 · HighWatermark · MaxFollowerLag · voter/observer
+bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --status
+
+# 노드별 LogEndOffset / Lag / LastFetchTimestamp / LastCaughtUpTimestamp / Status
+bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --replication</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>복제 상태 판독 — URP를 파티션 단위로 좁히기</figcaption>
+        <pre><code class="lang-bash"># Isr 가 Replicas 보다 짧은 파티션을 눈으로 찾습니다
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe
+
+# 그룹 종류를 통합 조회 (Consumer / Share / Streams)
+bin/kafka-groups.sh --bootstrap-server localhost:9092 --list</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>브로커 로그 레벨을 재시작 없이 올리기</figcaption>
+        <pre><code class="lang-bash"># 특정 로거만 DEBUG 로 (조사 후 반드시 원복)
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --broker-logger 0 \
+    --alter --add-config kafka.server.ReplicaManager=DEBUG
+
+# 현재 로거 레벨 확인
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --broker-logger 0 --describe</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="must-know-configs">
+      <h2 id="must-know-configs">반드시 외워야 할 값 — 임계값과 관련 설정</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>알림 임계값과 대응 설정</caption>
+          <thead>
+            <tr>
+              <th scope="col">지표</th>
+              <th scope="col">임계 기준</th>
+              <th scope="col">움직였을 때 볼 설정</th>
+              <th scope="col">기본값</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>UnderReplicatedPartitions</code></th>
+              <td><strong>&gt; 0</strong> 지속 시 경고</td>
+              <td><code>num.replica.fetchers</code> / <code>replica.lag.time.max.ms</code></td>
+              <td>1 / 30000</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>UnderMinIsrPartitionCount</code></th>
+              <td><strong>&gt; 0</strong> 즉시 사고</td>
+              <td><code>min.insync.replicas</code></td>
+              <td>1</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>OfflinePartitionsCount</code></th>
+              <td><strong>&gt; 0</strong> 즉시 사고</td>
+              <td><code>default.replication.factor</code>, <code>unclean.leader.election.enable</code></td>
+              <td>1 / false</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ActiveControllerCount</code> 합계</th>
+              <td><strong>≠ 1</strong> 즉시 사고</td>
+              <td><code>controller.quorum.fetch.timeout.ms</code></td>
+              <td>2000</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>UncleanLeaderElectionsPerSec</code></th>
+              <td><strong>&gt; 0</strong> 즉시 사고 (유실 발생)</td>
+              <td><code>unclean.leader.election.enable</code></td>
+              <td>false</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>RequestHandlerAvgIdlePercent</code></th>
+              <td><strong>&lt; 0.3</strong> 경고</td>
+              <td><code>num.io.threads</code>, <code>queued.max.requests</code></td>
+              <td>8 / 500</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>NetworkProcessorAvgIdlePercent</code></th>
+              <td><strong>&lt; 0.3</strong> 경고</td>
+              <td><code>num.network.threads</code></td>
+              <td>3</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>PreferredReplicaImbalanceCount</code></th>
+              <td>지속적으로 &gt; 0이면 경고</td>
+              <td><code>auto.leader.rebalance.enable</code>, <code>leader.imbalance.check.interval.seconds</code></td>
+              <td>true / 300</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>LastAppliedRecordLagMs</code> (스탠바이)</th>
+              <td>지속 증가 시 경고</td>
+              <td><code>metadata.log.dir</code> 디스크 성능</td>
+              <td>null (첫 <code>log.dirs</code>)</td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머 lag</th>
+              <td>서비스 SLO 기준</td>
+              <td><code>max.poll.records</code>, <code>max.poll.interval.ms</code></td>
+              <td>500 / 300000</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="쿼터도 메트릭으로 확인합니다">
+        <p>
+          쿼터가 실제로 걸리고 있는지는
+          <code>kafka.server:type={Produce|Fetch},user=...,client-id=...</code> 메트릭으로 봅니다.
+          "쿼터를 걸었는데 효과가 없다"거나 반대로 "왜 이 클라이언트만 느리냐"를 판단할 때 쓰는 지표입니다.
+          쿼터 설정 방법은 <a href="domain-cluster-config.html#quotas">Cluster Configuration</a>에 있습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="scenarios">
+      <h2 id="scenarios">장애 시나리오와 대응</h2>
+
+      <h3 id="scenario-lag-alert-silent">시나리오 1 — 컨슈머가 죽었는데 lag 알림이 오지 않았다</h3>
+
+      <ol>
+        <li>알림이 <code>records-lag-max</code>(컨슈머 발행 메트릭) 하나에만 걸려 있는지 확인합니다.</li>
+        <li><strong>컨슈머가 죽으면 그 메트릭도 사라집니다.</strong> 값이 커지는 게 아니라 없어지는 것입니다.</li>
+        <li>즉시 조치: <code>kafka-consumer-groups.sh --describe --group</code>으로 현재 lag을 확인합니다.</li>
+        <li>구조 개선: <strong>메트릭 부재 자체</strong>(no data)에 알림을 걸고,
+            동시에 브로커에서 <strong>커밋 오프셋 기준 lag</strong>을 주기적으로 수집합니다.</li>
+        <li>그룹의 활성 멤버 수(<code>--members</code>)에도 알림을 걸면 "컨슈머가 사라진 것"을 직접 감지할 수 있습니다.</li>
+      </ol>
+
+      <h3 id="scenario-idle-drop">시나리오 2 — 모든 요청 지연이 동시에 나빠졌다</h3>
+
+      <ol>
+        <li><code>RequestHandlerAvgIdlePercent</code>를 봅니다. 0.3 미만이면 처리 스레드가 포화입니다.</li>
+        <li><code>RequestQueueTimeMs</code>가 커졌는지 확인합니다. 큐 대기가 지연의 대부분이면 스레드 부족이 확정입니다.</li>
+        <li><code>NetworkProcessorAvgIdlePercent</code>도 함께 봅니다. 이쪽이 낮으면 네트워크 스레드가 원인입니다.</li>
+        <li>원인 트래픽을 특정합니다 — 쿼터 메트릭으로 사용자·클라이언트별 사용량을 봅니다.</li>
+        <li>단기 조치는 <code>num.io.threads</code> 상향(<code>cluster-wide</code>라 재시작 불필요),
+            중기 조치는 쿼터 부여입니다.</li>
+      </ol>
+
+      <h3 id="scenario-controller-metric">시나리오 3 — <code>ActiveControllerCount</code> 합계가 0이 되었다</h3>
+
+      <ol>
+        <li>즉시 <code>kafka-metadata-quorum.sh --bootstrap-controller ... describe --status</code>를 실행합니다.</li>
+        <li>리더가 없다면 <strong>쿼럼 과반이 살아 있는지</strong> 확인합니다. 과반을 잃으면 리더가 뽑히지 않습니다.</li>
+        <li>기존 파티션의 <strong>읽기·쓰기는 한동안 계속</strong>되지만 메타데이터 변경은 전부 실패합니다. 이 점을 관계자에게 먼저 알립니다.</li>
+        <li>컨트롤러 노드 간 네트워크를 확인합니다.
+            <code>controller.quorum.fetch.timeout.ms</code>(기본 2000)를 넘기면 선거가 반복됩니다.</li>
+        <li><code>MetadataErrorCount</code>가 올라 있으면 메타데이터 손상 가능성이 있으므로,
+            노드를 다시 포맷하기 전에 <code>describe --replication</code>으로 과반의 데이터 보유를 확인합니다.</li>
+      </ol>
+
+      <h3 id="scenario-urp-not-zero">시나리오 4 — URP가 0으로 돌아오지 않는다</h3>
+
+      <ol>
+        <li>어느 브로커·파티션인지 <code>kafka-topics.sh --describe</code>로 좁힙니다.</li>
+        <li><code>ReplicaFetcherManager MaxLag</code>가 커지는 추세인지 봅니다. 커지면 복제가 뒤처지는 중입니다.</li>
+        <li><strong>남아 있는 스로틀</strong>을 확인합니다. 재할당 후 <code>--verify</code>를 생략했다면 여기서 걸립니다.</li>
+        <li><code>IsrShrinksPerSec</code>/<code>IsrExpandsPerSec</code>가 반복되면 특정 브로커의 디스크·네트워크를 봅니다.</li>
+        <li><code>num.replica.fetchers</code>(기본 1)를 올려 팔로워 fetch 병렬성을 확보합니다.</li>
+      </ol>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">자주 나오는 함정</h2>
+
+      <aside class="note note--warn" data-label="함정 1">
+        <p>
+          <strong>"<code>ActiveControllerCount</code>는 1이어야 한다"</strong> —
+          <strong>클러스터 합계</strong>가 1이어야 합니다. 개별 노드에서는 0이 정상입니다.
+          노드별로 알림을 걸면 스탠바이 컨트롤러 때문에 매번 울립니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 2">
+        <p>
+          <strong>"URP &gt; 0이면 쓰기가 실패한다"</strong> — 아닙니다.
+          <code>min.insync.replicas</code>를 만족하는 동안은 계속 씁니다.
+          쓰기 실패는 <code>UnderMinIsrPartitionCount</code>가 &gt; 0일 때입니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 3">
+        <p>
+          <strong>"<code>records-lag-max</code>는 브로커 메트릭이다"</strong> —
+          <strong>컨슈머</strong>가 발행합니다. 브로커 JMX를 뒤져도 없습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 4">
+        <p>
+          <strong>"Idle percent는 높으면 문제"</strong> — 반대입니다.
+          <code>*AvgIdlePercent</code>는 <strong>유휴 비율</strong>이므로 <strong>높을수록 여유</strong>가 있습니다.
+          0에 가까울수록 위험합니다. 이상적인 값은 0.3 이상입니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 5">
+        <p>
+          <strong>"<code>LastAppliedRecordLagMs</code>가 0이면 지연이 없다"</strong> —
+          <strong>액티브 컨트롤러에서는 정의상 항상 0</strong>입니다.
+          이 지표는 <strong>스탠바이 컨트롤러</strong>에서 봐야 의미가 있습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 6">
+        <p>
+          <strong>"<code>TotalTimeMs</code>가 늘었으니 브로커를 늘린다"</strong> —
+          분해해서 봐야 합니다. 원격(복제) 대기가 원인이라면 브로커를 늘려도 개선되지 않고,
+          느린 팔로워나 <code>acks=all</code> 구성을 봐야 합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="cases">
+      <h2 id="cases">관련 케이스 스터디</h2>
+      <ul>
+        <li><a href="../cases/case02.html">케이스 2 · 컨슈머가 무한 리밸런스 루프에 빠졌다</a> — 그룹 상태 판독</li>
+        <li><a href="../cases/case06.html">케이스 6 · RF=3인데 브로커 1대 죽자 유실됐다</a> — ISR 메트릭으로 사전 감지</li>
+      </ul>
+      <p>
+        메트릭 전체 목록은 <a href="../cheatsheet/metrics.html">JMX 메트릭 치트시트</a>,
+        운영 배경은 <a href="../basics/ch11.html">11장 운영 기초</a>,
+        lag 모니터링 실습은 <a href="../practice/ex10.html">예제 10</a>에 있습니다.
+        이 지표들을 실제 조치로 잇는 방법은 <a href="domain-troubleshooting.html">Troubleshooting</a>에서 다룹니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="quiz">
+      <h2 id="quiz">미니 퀴즈</h2>
+      <p>메트릭 이름과 정상값 매칭이 중심입니다.</p>
+      <div class="quiz-embed" data-set="ccaak-observability" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#monitoring" rel="noopener noreferrer">Monitoring</a> — 4대 지표와 정상값, ISR 메트릭 3종, <code>UncleanLeaderElectionsPerSec</code>, <code>RequestHandlerAvgIdlePercent</code>/<code>NetworkProcessorAvgIdlePercent</code>의 0.3 기준, <code>records-lag-max</code>가 컨슈머 발행임, 컨트롤러 메트릭, <code>TotalTimeMs</code> 분해</li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops" rel="noopener noreferrer">Basic Kafka Operations</a> — <code>kafka-consumer-groups.sh --describe</code> 출력, <code>--members</code>/<code>--state</code>, 새 컨슈머 프로토콜의 DESCRIBE 권한 요구</li>
+        <li><a href="https://kafka.apache.org/documentation/#kraft" rel="noopener noreferrer">KRaft</a> — <code>kafka-metadata-quorum.sh describe --status</code>/<code>--replication</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> — <code>num.io.threads</code>, <code>num.network.threads</code>, <code>num.replica.fetchers</code>, <code>queued.max.requests</code> 기본값과 갱신 모드</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

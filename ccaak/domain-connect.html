@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CCAAK · Kafka Connect — Kafka Guide</title>
+  <meta name="description" content="CCAAK Kafka Connect 섹션. 분산 모드 워커 운영, 내부 토픽 3종 관리, 워커 장애 시 로그 추적(GET /connectors/{name}/status의 trace, PUT /admin/loggers), 409 Conflict의 원인을 운영자 관점으로 정리합니다.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccaak" data-page="domain-connect"></div>
+
+  <main id="main" class="page" data-page-id="ccaak/domain-connect">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCAAK</a></li>
+        <li><span aria-current="page">Kafka Connect</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCAAK · 섹션 3</p>
+      <h1>Kafka Connect</h1>
+      <p class="page__lead">
+        개발자 시험은 커넥터 <em>설정</em>을 묻고, 운영자 시험은 커넥터 <em>클러스터</em>를 묻습니다.
+        워커를 몇 대 두고 어떻게 늘리는가, 내부 토픽 3종이 어떤 성질을 가져야 하는가,
+        워커가 죽었을 때 로그를 어디서 찾는가, 그리고 <code>409 Conflict</code>가 왜 나는가입니다.
+        이 페이지는 그 네 가지에 집중합니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>분산 모드 워커 그룹의 구성 요소와 <code>group.id</code>의 제약을 설명할 수 있습니다.</li>
+        <li>내부 토픽 3종의 파티션·복제·정리 정책 요구사항을 구분할 수 있습니다.</li>
+        <li>커넥터·태스크 상태 6종을 구분하고 FAILED에서 자동 복구되지 않는다는 점을 말할 수 있습니다.</li>
+        <li>워커 장애 시 로그를 찾아가는 세 경로를 순서대로 실행할 수 있습니다.</li>
+        <li><code>409 Conflict</code>가 나오는 두 상황을 구분할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="what-it-asks">
+      <h2 id="what-it-asks">이 도메인이 묻는 것</h2>
+
+      <div class="table-scroll">
+        <table>
+          <caption>이 섹션의 전형적인 질문 형태</caption>
+          <thead>
+            <tr><th scope="col">질문 형태</th><th scope="col">실제로 확인하는 것</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">"워커를 3대에서 5대로 늘리면 무엇이 일어나는가?"</th>
+              <td>리밸런스 동작과 <code>tasks.max</code>의 상한 역할</td>
+            </tr>
+            <tr>
+              <th scope="row">"<code>config.storage.topic</code>의 파티션 수는?"</th>
+              <td>내부 토픽 3종의 요구사항 차이</td>
+            </tr>
+            <tr>
+              <th scope="row">"태스크가 FAILED다. 어떻게 조치하는가?"</th>
+              <td>자동 재시작이 없다는 사실과 restart API</td>
+            </tr>
+            <tr>
+              <th scope="row">"워커 1대가 죽었다. 그 태스크의 예외를 어디서 보는가?"</th>
+              <td>로그 위치 · REST의 <code>trace</code> · 런타임 로그 레벨 변경</td>
+            </tr>
+            <tr>
+              <th scope="row">"REST 호출이 409를 반환했다"</th>
+              <td>리밸런스 진행 중 재시작 요청, 또는 리더가 아닌 워커로의 요청 상황 판단</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="core-concepts">
+      <h2 id="core-concepts">핵심 개념 요약 — 운영 관점</h2>
+
+      <h3 id="worker-group">워커 그룹의 모양</h3>
+
+      <p>
+        분산 모드의 워커들은 같은 <code>group.id</code>로 하나의 Connect 클러스터를 이룹니다.
+        커넥터는 <strong>논리적 작업 정의</strong>이고 실제 일은 <strong>태스크</strong>가 합니다.
+        태스크는 워커들에 분배되며, 커넥터가 요구하는 태스크 수는 <code>tasks.max</code>가 상한입니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-080">
+        <figcaption>
+          Connect 아키텍처 — 워커 3대에 커넥터와 태스크가 분배되는 구조, 리더 워커의 역할
+        </figcaption>
+      </figure>
+
+      <aside class="note note--danger" data-label="가장 흔한 구성 사고">
+        <p>
+          Connect 워커의 <code>group.id</code>는 <strong>컨슈머 그룹 ID와 충돌하면 안 됩니다.</strong>
+          워커 그룹은 Kafka 그룹 조정 프로토콜을 쓰기 때문에, 같은 이름을 쓰는 컨슈머 그룹이 있으면
+          서로를 멤버로 인식해 리밸런스가 엉킵니다. 사고가 나면 원인을 찾기 매우 어렵습니다.
+          <code>connect-</code> 같은 접두어로 네임스페이스를 분리하세요.
+        </p>
+      </aside>
+
+      <h3 id="rebalance">리밸런스 — 왜 워커를 죽여도 바로 재분배되지 않는가</h3>
+
+      <p>
+        Connect는 기본적으로 <strong>증분 협력 리밸런스(incremental cooperative rebalancing)</strong>를 씁니다.
+        새로 추가·제거·이동이 필요한 태스크만 건드리고 나머지는 멈추지 않습니다.
+        <code>connect.protocol</code>의 기본값은 <code>sessioned</code>이며,
+        <code>eager</code>로 되돌리면 예전처럼 전체 태스크를 회수·재분배합니다.
+      </p>
+
+      <p>
+        워커가 그룹을 떠나면 Connect는 즉시 재분배하지 않고
+        <strong><code>scheduled.rebalance.max.delay.ms</code>(기본 300000ms = 5분)</strong>을 기다립니다.
+        그 안에 워커가 돌아오면 <strong>이전 태스크를 그대로</strong> 되돌려받습니다.
+        돌아오지 않으면 남은 워커들에 재할당됩니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-084">
+        <figcaption>
+          워커 이탈 시 태스크 재분배 — 지연 대기 후 남은 워커로 재할당되는 흐름
+        </figcaption>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Connect">
+        <p>
+          "워커를 재시작했는데 5분 동안 태스크가 아무 데서도 안 돈다"는 증상은
+          <strong>버그가 아니라 설계된 지연</strong>입니다.
+          업그레이드용 롤링 재시작을 태스크 중단 없이 넘기기 위한 장치입니다.
+          급하게 재분배해야 한다면 이 값을 낮추지만, 그러면 롤링 업그레이드마다 재분배가 발생합니다.
+        </p>
+      </aside>
+
+      <h3 id="internal-topics">내부 토픽 3종 — 요구사항이 서로 다릅니다</h3>
+
+      <p>
+        분산 모드 워커는 상태를 로컬에 두지 않고 Kafka 토픽에 둡니다.
+        세 토픽 모두 <strong>복제되어야 하고 compaction이 걸려야</strong> 하지만,
+        <strong>파티션 요구사항이 다릅니다.</strong> 이 차이가 matching 문항으로 자주 나옵니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Connect 내부 토픽 3종</caption>
+          <thead>
+            <tr>
+              <th scope="col">토픽 설정</th>
+              <th scope="col">담는 것</th>
+              <th scope="col">파티션 요구</th>
+              <th scope="col">기본 파티션</th>
+              <th scope="col">기본 RF</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>config.storage.topic</code></th>
+              <td>커넥터·태스크 설정</td>
+              <td><strong>반드시 파티션 1개</strong> — 설정 변경 순서가 전역으로 정해져야 합니다</td>
+              <td class="t-center">1 (고정)</td>
+              <td class="t-center">3</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.storage.topic</code></th>
+              <td><strong>source</strong> 커넥터의 오프셋</td>
+              <td>파티션 여러 개 (처리량)</td>
+              <td class="t-center">25</td>
+              <td class="t-center">3</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>status.storage.topic</code></th>
+              <td>커넥터·태스크 상태, 사용 토픽 목록</td>
+              <td>파티션 여러 개</td>
+              <td class="t-center">5</td>
+              <td class="t-center">3</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Connect">
+        <p>
+          <strong>source와 sink의 오프셋 저장 위치는 비대칭입니다.</strong>
+          source 커넥터의 진행 위치는 Connect의 <code>offset.storage.topic</code>에,
+          sink 커넥터의 진행 위치는 <strong>일반 컨슈머와 똑같이 <code>__consumer_offsets</code></strong>에 저장됩니다.
+          sink는 내부적으로 컨슈머이기 때문입니다.
+          따라서 sink 커넥터의 lag은 <code>kafka-consumer-groups.sh</code>로 볼 수 있고,
+          source 커넥터의 진행은 그 명령으로 볼 수 없습니다.
+          상세 구조는 <a href="../basics/ch09.html">9장 Kafka Connect</a>에 있습니다.
+        </p>
+      </aside>
+
+      <h3 id="states">커넥터·태스크 상태 6종</h3>
+
+      <div class="table-scroll">
+        <table>
+          <caption>상태와 운영 의미</caption>
+          <thead>
+            <tr><th scope="col">상태</th><th scope="col">의미</th><th scope="col">운영 조치</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>UNASSIGNED</code></th><td>아직 워커에 할당되지 않음</td><td>리밸런스 대기 중일 수 있습니다. 잠시 기다립니다.</td></tr>
+            <tr><th scope="row"><code>RUNNING</code></th><td>정상 동작</td><td>—</td></tr>
+            <tr><th scope="row"><code>PAUSED</code></th><td>관리자가 일시 정지. 자원은 <strong>계속 점유</strong></td><td>재개는 빠릅니다. 원격 시스템 점검 시 사용.</td></tr>
+            <tr><th scope="row"><code>STOPPED</code></th><td>태스크를 종료하고 자원 반납. <strong>커넥터에만</strong> 적용</td><td>오프셋 관리 API는 <strong>이 상태에서만</strong> 동작합니다.</td></tr>
+            <tr><th scope="row"><code>FAILED</code></th><td>예외로 실패. 원인은 상태 출력의 <code>trace</code>에</td><td><strong>자동 재시작되지 않습니다.</strong> restart API로 수동 조치.</td></tr>
+            <tr><th scope="row"><code>RESTARTING</code></th><td>재시작 중이거나 곧 재시작 예정</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="상태 조회의 지연">
+        <p>
+          상태는 <code>status.storage.topic</code>을 통해 전파되고 워커들이 <strong>비동기로 소비</strong>합니다.
+          그래서 상태 변경이 REST에 반영되기까지 짧은 지연이 있습니다.
+          "재시작했는데 아직 FAILED로 보인다"는 대개 이 지연입니다. 몇 초 뒤 다시 조회하세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="cli">
+      <h2 id="cli">필수 명령어 — Connect는 CLI 대신 REST입니다</h2>
+
+      <figure class="code">
+        <figcaption>상태 확인 — 문제 조사의 출발점</figcaption>
+        <pre><code class="lang-bash"># 커넥터 목록
+curl -s http://worker-1:8083/connectors
+
+# 커넥터와 모든 태스크의 상태. 실패 시 각 태스크에 "trace" 필드가 붙습니다
+curl -s http://worker-1:8083/connectors/pg-source/status
+
+# 특정 태스크만
+curl -s http://worker-1:8083/connectors/pg-source/tasks/0/status
+
+# 이 커넥터가 실제로 쓰는 토픽 목록 (status.storage.topic 이 추적)
+curl -s http://worker-1:8083/connectors/pg-source/topics
+
+# 워커 버전과 연결된 클러스터 ID
+curl -s http://worker-1:8083/</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>복구 조작 — FAILED는 수동으로 되살립니다</figcaption>
+        <pre><code class="lang-bash"># 실패한 인스턴스만 재시작 (커넥터 + 태스크)
+curl -s -X POST 'http://worker-1:8083/connectors/pg-source/restart?includeTasks=true&amp;onlyFailed=true'
+
+# 개별 태스크 재시작
+curl -s -X POST http://worker-1:8083/connectors/pg-source/tasks/0/restart
+
+# 일시 정지 / 재개 (자원 유지)
+curl -s -X PUT http://worker-1:8083/connectors/pg-source/pause
+curl -s -X PUT http://worker-1:8083/connectors/pg-source/resume
+
+# 완전 정지 (자원 반납) — 오프셋 관리 전 필수 단계
+curl -s -X PUT http://worker-1:8083/connectors/pg-source/stop</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>오프셋 관리 — STOPPED 상태에서만 됩니다</figcaption>
+        <pre><code class="lang-bash"># 현재 오프셋 조회
+curl -s http://worker-1:8083/connectors/pg-source/offsets
+
+# 리셋 (커넥터가 STOPPED 여야 함)
+curl -s -X DELETE http://worker-1:8083/connectors/pg-source/offsets
+
+# 특정 위치로 변경 (커넥터가 STOPPED 여야 함)
+curl -s -X PATCH http://worker-1:8083/connectors/pg-source/offsets \
+  -H 'Content-Type: application/json' \
+  -d '{"offsets":[{"partition":{"filename":"test.txt"},"offset":{"position":30}}]}'</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>런타임 로그 레벨 변경 — 재시작 없이 디버그 로그를 켭니다</figcaption>
+        <pre><code class="lang-bash"># 현재 명시적으로 지정된 로거와 레벨
+curl -s http://worker-1:8083/admin/loggers
+
+# 특정 로거 레벨 조회
+curl -s http://worker-1:8083/admin/loggers/org.apache.kafka.connect.runtime.WorkerSinkTask
+
+# 레벨 변경 — 워커 재시작 없이 즉시 적용
+curl -s -X PUT http://worker-1:8083/admin/loggers/org.apache.kafka.connect.runtime.WorkerSinkTask \
+  -H 'Content-Type: application/json' -d '{"level":"DEBUG"}'</code></pre>
+      </figure>
+
+      <aside class="note" data-label="admin 엔드포인트 위치">
+        <p>
+          <code>/admin/loggers</code>는 <code>admin.listeners</code>로 별도 포트에 분리할 수 있습니다.
+          <code>admin.listeners</code>를 설정하지 않으면(기본값 <code>null</code>)
+          일반 REST 리스너(<code>listeners</code>, 기본 <code>http://:8083</code>)에서 함께 제공됩니다.
+          분리해 두었다면 <strong>그 포트로</strong> 호출해야 합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="must-know-configs">
+      <h2 id="must-know-configs">반드시 외워야 할 설정값</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Kafka 4.3 Connect 워커·커넥터 기본값</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">기본값</th>
+              <th scope="col">의미</th>
+              <th scope="col">운영 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>listeners</code><br><span class="badge">worker</span></th>
+              <td><code>http://:8083</code></td>
+              <td>REST API 리스너</td>
+              <td>워커 간 요청 전달도 이 경로를 씁니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>connect.protocol</code><br><span class="badge">worker</span></th>
+              <td><code>sessioned</code></td>
+              <td>Connect 그룹 프로토콜 (<code>eager</code>/<code>compatible</code>/<code>sessioned</code>)</td>
+              <td><code>eager</code>는 전체 정지 재분배로 되돌립니다. 특별한 이유 없이 바꾸지 않습니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>scheduled.rebalance.max.delay.ms</code><br><span class="badge">worker</span></th>
+              <td>300000<br>(5분)</td>
+              <td>워커 이탈 후 재분배까지 대기</td>
+              <td>이 시간 동안 <strong>태스크가 미할당 상태로 남습니다.</strong> 롤링 업그레이드를 위한 값입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>session.timeout.ms</code><br><span class="badge">worker</span></th>
+              <td>10000</td>
+              <td>워커 장애 감지 시간</td>
+              <td>브로커의 그룹 최소·최대 세션 타임아웃 범위 안이어야 합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>rebalance.timeout.ms</code><br><span class="badge">worker</span></th>
+              <td>60000</td>
+              <td>리밸런스 시작 후 각 워커의 합류 제한 시간</td>
+              <td>초과하면 워커가 그룹에서 빠지고 <strong>오프셋 커밋이 실패</strong>합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.flush.interval.ms</code><br><span class="badge">worker</span></th>
+              <td>60000</td>
+              <td>source 오프셋 커밋 주기</td>
+              <td>워커가 죽으면 최대 이 주기만큼 재처리될 수 있습니다(at-least-once).</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.flush.timeout.ms</code><br><span class="badge">worker</span></th>
+              <td>5000</td>
+              <td>오프셋 커밋 제한 시간</td>
+              <td>느린 sink에서 이 값이 짧으면 커밋 실패 로그가 반복됩니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>config.storage.replication.factor</code><br><span class="badge">worker</span></th>
+              <td>3</td>
+              <td>내부 토픽 복제 계수 (offset·status도 동일 기본값)</td>
+              <td>브로커가 3대 미만인 실습 환경에서는 워커 기동이 실패합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.storage.partitions</code><br><span class="badge">worker</span></th>
+              <td>25</td>
+              <td>source 오프셋 토픽 파티션 수</td>
+              <td><code>status.storage.partitions</code>는 <strong>5</strong>, config는 <strong>1 고정</strong>입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>exactly.once.source.support</code><br><span class="badge">worker</span></th>
+              <td><code>disabled</code></td>
+              <td>source 커넥터 EOS</td>
+              <td>기존 클러스터는 <code>preparing</code> → <code>enabled</code> <strong>2단계 롤링</strong>이 필요합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>tasks.max</code><br><span class="badge">connector</span></th>
+              <td>1</td>
+              <td>태스크 수 상한</td>
+              <td>기본값이 1이라 워커를 늘려도 병렬성이 안 늘어납니다. <strong>스케일링 사고 1위.</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.tolerance</code><br><span class="badge">connector</span></th>
+              <td><code>none</code></td>
+              <td>오류 허용 여부</td>
+              <td>기본은 <strong>첫 오류에 태스크 FAILED</strong>. <code>all</code>로 바꿔야 건너뜁니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.log.enable</code><br><span class="badge">connector</span></th>
+              <td><code>false</code></td>
+              <td>오류를 애플리케이션 로그에 기록</td>
+              <td>켜야 토픽·파티션·오프셋이 로그에 남습니다. 진단의 출발점입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.deadletterqueue.topic.name</code><br><span class="badge">sink</span></th>
+              <td>빈 문자열</td>
+              <td>DLQ 토픽</td>
+              <td>비어 있으면 DLQ가 없습니다. RF 기본값은 <strong>3</strong>, 헤더 기록은 기본 <strong>false</strong>입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.retry.timeout</code><br><span class="badge">connector</span></th>
+              <td>0</td>
+              <td>재시도 총 예산(ms)</td>
+              <td>기본값 0은 <strong>재시도하지 않음</strong>입니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="scenarios">
+      <h2 id="scenarios">장애 시나리오와 대응</h2>
+
+      <h3 id="scenario-worker-died">시나리오 1 — 워커 1대가 죽었다. 그 태스크의 예외를 어디서 보는가</h3>
+
+      <p>
+        이것이 이 섹션의 대표 문항입니다. 죽은 노드의 로그는 REST로 가져올 수 없으므로
+        <strong>세 경로를 순서대로</strong> 씁니다.
+      </p>
+
+      <ol>
+        <li>
+          <strong>죽은 노드의 로컬 로그 파일을 직접 본다.</strong>
+          Connect 워커의 예외 스택은 그 워커의 프로세스 로그에 남습니다.
+          중앙 로그 수집이 있다면 그쪽에서 해당 워커의 호스트로 필터링합니다.
+          이 경로가 <strong>유일하게 완전한</strong> 정보를 줍니다.
+        </li>
+        <li>
+          <strong>살아 있는 워커에서 <code>GET /connectors/{name}/status</code>를 호출해 <code>trace</code>를 읽는다.</strong>
+          상태는 <code>status.storage.topic</code>으로 공유되므로,
+          <strong>죽은 워커가 남긴 실패 원인도 다른 워커에서 조회됩니다.</strong>
+          단 스택 트레이스 요약 수준이라 상세 컨텍스트는 부족할 수 있습니다.
+        </li>
+        <li>
+          <strong>재현을 위해 <code>PUT /admin/loggers/{logger}</code>로 런타임 로그 레벨을 올린다.</strong>
+          워커를 재시작하지 않고 특정 로거만 <code>DEBUG</code>로 바꿔
+          같은 실패를 다시 유도한 뒤 상세 로그를 수집합니다.
+          조사 후에는 반드시 원래 레벨로 되돌립니다 — 디스크가 빠르게 찹니다.
+        </li>
+      </ol>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Connect">
+        <p>
+          "워커 노드가 죽었을 때 무엇을 하는가"라는 문항에서
+          <strong>"REST API로 죽은 워커의 로그를 가져온다"는 오답</strong>이 자주 섞여 있습니다.
+          REST는 살아 있는 워커에서만 응답합니다.
+          정답은 <strong>죽은 노드의 로컬 로그 + 다른 워커의 <code>status</code> 응답 <code>trace</code></strong>이며,
+          추가 조사가 필요하면 <code>PUT /admin/loggers</code>로 레벨을 올려 재현하는 것입니다.
+        </p>
+      </aside>
+
+      <h3 id="scenario-409">시나리오 2 — REST 호출이 <code>409 Conflict</code>를 반환한다</h3>
+
+      <div class="table-scroll">
+        <table>
+          <caption><code>409 Conflict</code>의 원인과 조치</caption>
+          <thead>
+            <tr><th scope="col">상황</th><th scope="col">왜 409인가</th><th scope="col">조치</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">리밸런스 진행 중에 restart 요청</th>
+              <td>태스크 할당이 확정되지 않은 상태에서 재시작을 받아들일 수 없습니다.</td>
+              <td>리밸런스가 끝난 뒤 재시도합니다. 다만 <strong>리밸런스 자체가 태스크를 다시 시작</strong>하므로 재시도가 불필요할 수 있습니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">설정 변경·커넥터 생성 요청이 리밸런스와 겹침</th>
+              <td>설정 쓰기는 리더 워커를 거쳐야 하고, 리밸런스 중에는 리더가 확정되지 않습니다.</td>
+              <td>잠시 후 재시도합니다. 자동화 스크립트라면 <strong>409를 재시도 대상</strong>으로 다뤄야 합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">워커가 리더로 요청을 전달할 수 없음</th>
+              <td>follower 워커가 받은 쓰기 요청은 리더 REST로 전달됩니다. 그 경로가 막히면 실패합니다.</td>
+              <td><code>rest.advertised.host.name</code> / <code>rest.advertised.port</code> / <code>rest.advertised.listener</code>가 워커 간에 실제 도달 가능한 값인지 확인합니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="워커 간 통신 함정">
+        <p>
+          Connect의 REST는 사용자만 쓰는 것이 아닙니다.
+          <strong>follower 워커가 받은 요청은 리더 워커의 REST로 전달됩니다.</strong>
+          컨테이너 환경에서 워커가 자기 자신을 컨테이너 내부 호스트명으로 광고하면
+          다른 워커가 그 주소에 도달하지 못해 설정 변경이 간헐적으로 실패합니다.
+          증상이 "어떤 워커에 요청하면 되고 어떤 워커에 하면 안 된다"로 나타납니다.
+        </p>
+      </aside>
+
+      <h3 id="scenario-no-parallelism">시나리오 3 — 워커를 늘렸는데 처리량이 그대로다</h3>
+
+      <ol>
+        <li><code>GET /connectors/{name}/tasks</code>로 <strong>실제 태스크 수</strong>를 확인합니다.</li>
+        <li><code>tasks.max</code>가 기본값 <strong>1</strong>이면 워커가 몇 대든 태스크는 1개입니다. 이것이 1순위 원인입니다.</li>
+        <li><code>tasks.max</code>를 올려도 늘지 않으면 <strong>커넥터 자체의 상한</strong>을 봅니다.
+            source 커넥터는 나눌 수 있는 단위(테이블·파일·파티션) 수를 넘겨 태스크를 만들지 못합니다.</li>
+        <li>sink 커넥터의 태스크 수는 <strong>입력 토픽의 파티션 수</strong>가 실질 상한입니다.
+            파티션 4개에 태스크 8개를 줘도 4개만 일합니다.</li>
+        <li>태스크가 충분한데도 느리면 <code>errors.retry.timeout</code>·타임아웃 설정과 대상 시스템 쪽을 봅니다.</li>
+      </ol>
+
+      <h3 id="scenario-failed-loop">시나리오 4 — 태스크가 실패했는데 아무 일도 일어나지 않는다</h3>
+
+      <ol>
+        <li><strong>Connect는 실패한 태스크를 자동으로 재시작하지 않습니다.</strong> 이것이 정상 동작입니다.</li>
+        <li><code>GET /connectors/{name}/status</code>의 <code>trace</code>로 원인을 먼저 확인합니다. 원인을 모른 채 재시작하면 같은 실패가 반복됩니다.</li>
+        <li>데이터 문제(역직렬화 실패, 스키마 불일치)라면 <code>errors.tolerance=all</code>과 DLQ를 붙여
+            <strong>나쁜 레코드를 격리</strong>합니다. DLQ 토픽 이름을 지정하지 않으면 DLQ가 만들어지지 않습니다.</li>
+        <li>일시적 문제(대상 시스템 재시작)라면
+            <code>POST /connectors/{name}/restart?includeTasks=true&amp;onlyFailed=true</code>로 실패분만 되살립니다.</li>
+        <li>재발 방지를 위해 <code>errors.log.enable=true</code>와
+            <code>errors.deadletterqueue.context.headers.enable=true</code>를 켜 두면
+            실패 레코드의 원래 토픽·파티션·오프셋이 남습니다.</li>
+      </ol>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">자주 나오는 함정</h2>
+
+      <aside class="note note--warn" data-label="함정 1">
+        <p>
+          <strong>"워커를 늘리면 병렬성이 늘어난다"</strong> — <code>tasks.max</code>(기본 1)가 상한입니다.
+          워커 수는 태스크를 <em>담을 그릇</em>이지 태스크를 만들지 않습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 2">
+        <p>
+          <strong>"<code>config.storage.topic</code>도 파티션을 늘리면 빨라진다"</strong> —
+          이 토픽은 <strong>파티션 1개여야</strong> 합니다. 설정 변경의 전역 순서가 필요하기 때문입니다.
+          늘리면 워커들이 서로 다른 설정 순서를 볼 수 있습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 3">
+        <p>
+          <strong>"PAUSE와 STOP은 같다"</strong> — <code>PAUSED</code>는 태스크를 살려 두고 자원을 점유하며,
+          <code>STOPPED</code>는 태스크를 종료하고 자원을 반납합니다.
+          <strong>오프셋 관리 API는 <code>STOPPED</code>에서만</strong> 동작합니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 4">
+        <p>
+          <strong>"sink 커넥터 오프셋도 Connect 내부 토픽에 있다"</strong> —
+          sink는 <code>__consumer_offsets</code>를 씁니다. source만 <code>offset.storage.topic</code>입니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 5">
+        <p>
+          <strong>"<code>errors.tolerance=all</code>이면 데이터가 안전하다"</strong> —
+          DLQ 토픽 이름을 지정하지 않으면 <strong>실패 레코드는 그냥 버려집니다.</strong>
+          <code>errors.tolerance</code>와 DLQ 설정은 함께 가야 의미가 있습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="cases">
+      <h2 id="cases">관련 케이스 스터디</h2>
+      <ul>
+        <li><a href="../cases/case10.html">케이스 10 · 큰 메시지가 무한 재시도로 쌓였다</a> — 재시도 예산과 DLQ 설계</li>
+        <li><a href="../cases/case09.html">케이스 9 · 스키마 배포 후 전체 컨슈머가 죽었다</a> — 역직렬화 실패와 <code>errors.tolerance</code></li>
+      </ul>
+      <p>
+        커넥터 설정·SMT 문법은 <a href="../cheatsheet/connect.html">Connect REST · SMT 치트시트</a>,
+        구조와 개발 관점은 <a href="../basics/ch09.html">9장 Kafka Connect</a>,
+        동작하는 CDC 파이프라인은 <a href="../practice/ex08.html">예제 8</a>에 있습니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="quiz">
+      <h2 id="quiz">미니 퀴즈</h2>
+      <p>내부 토픽 요구사항과 장애 조사 순서가 중심입니다.</p>
+      <div class="quiz-embed" data-set="ccaak-connect" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#connect_administration" rel="noopener noreferrer">Connect Administration</a> — 증분 협력 리밸런스, <code>scheduled.rebalance.max.delay.ms</code>, 상태 6종, <code>409 Conflict</code>, 상태 전파 지연</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_running" rel="noopener noreferrer">Running Kafka Connect</a> — 분산 모드 <code>group.id</code> 제약, 내부 토픽 3종의 파티션·복제·compaction 요구</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_rest" rel="noopener noreferrer">Connect REST Interface</a> — 상태·재시작·pause/stop/resume, 오프셋 관리 엔드포인트, <code>/admin/loggers</code>, <code>rest.advertised.*</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_errorreporting" rel="noopener noreferrer">Error Reporting in Connect</a> — <code>errors.log.enable</code>, <code>errors.tolerance</code>, DLQ</li>
+        <li><a href="https://kafka.apache.org/documentation/#connectconfigs" rel="noopener noreferrer">Kafka Connect Configs</a> — 워커 설정 기본값</li>
+        <li><a href="https://kafka.apache.org/documentation/#sinkconnectconfigs" rel="noopener noreferrer">Sink Connector Configs</a> — DLQ·오류 처리 기본값, <code>tasks.max</code></li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

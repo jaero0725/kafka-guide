@@ -1,0 +1,676 @@
+{
+  "setId": "ccaak-troubleshooting",
+  "title": "CCAAK — Troubleshooting",
+  "exam": "CCAAK",
+  "domain": "Troubleshooting",
+  "kafkaVersion": "4.3",
+  "questions": [
+    {
+      "id": "ccaak-troubleshooting-001",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch11",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "브로커의 데이터 디스크가 98%까지 찼다. 가장 먼저 해야 할 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "가장 오래된 세그먼트 파일을 직접 삭제해 즉시 공간을 확보한다."
+        },
+        {
+          "id": "B",
+          "text": "무엇이 공간을 먹는지 데이터 로그·애플리케이션 로그·다른 프로세스로 분류한다."
+        },
+        {
+          "id": "C",
+          "text": "가장 큰 토픽을 삭제해 확실하게 공간을 되찾는다."
+        },
+        {
+          "id": "D",
+          "text": "브로커를 재시작해 로그 정리가 즉시 돌게 만든다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "진단이 조치보다 먼저라는 원칙이 가장 강하게 적용되는 장애입니다. 공간을 먹는 것이 데이터 로그가 아니라 `state-change.log` 같은 애플리케이션 로그이거나 같은 볼륨의 다른 프로세스인 경우가 의외로 많고, 그렇다면 데이터를 전혀 건드리지 않고 해결됩니다. 원인이 데이터 로그로 확인되면 리텐션을 동적으로 줄이는 가역적인 조치로 넘어갑니다. 세그먼트 파일 직접 삭제는 인덱스와 로그의 정합을 깨뜨려 브로커가 기동하지 못하게 만들 수 있으므로 절대 하지 않습니다.",
+      "distractorNotes": {
+        "A": "인덱스와 로그의 정합이 깨져 데이터 손상이나 기동 실패로 이어집니다. 공간이 필요하면 리텐션 설정으로 Kafka가 지우게 해야 합니다.",
+        "C": "되돌릴 수 없고, 그 토픽을 쓰는 애플리케이션 범위를 그 순간에는 알 수 없습니다. 마지막 수단입니다.",
+        "D": "재시작은 정리 주기를 앞당기지 않고, 디스크가 찬 상태에서는 로그 복구 단계에서 다시 실패할 수 있습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Basic Operations",
+          "url": "https://kafka.apache.org/documentation/#basic_ops"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs: retention.ms",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_retention.ms"
+        }
+      ],
+      "tags": [
+        "disk-full",
+        "retention",
+        "triage"
+      ]
+    },
+    {
+      "id": "ccaak-troubleshooting-002",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch07",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "토픽의 `retention.ms` 를 1시간으로 낮췄는데 20분이 지나도 디스크 사용량이 거의 줄지 않는다. 원인 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`retention.ms` 는 토픽 레벨에서 동적으로 변경되지 않으므로 롤링 재시작이 필요하다."
+        },
+        {
+          "id": "B",
+          "text": "`retention.bytes` 가 기본값 -1이므로 시간 기준 리텐션이 무시된다."
+        },
+        {
+          "id": "C",
+          "text": "정리가 5분 주기로 돌고 삭제는 세그먼트 단위이므로 활성 세그먼트가 굴러가야 실제로 줄어든다."
+        },
+        {
+          "id": "D",
+          "text": "`cleanup.policy` 가 `delete` 인 토픽은 시간 기준 삭제를 지원하지 않는다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "삭제 단위가 개별 레코드가 아니라 세그먼트 파일이고 활성 세그먼트는 삭제 대상이 아니므로, 세그먼트가 봉인되지 않으면 리텐션이 실제로 듣지 않습니다. 게다가 정리 작업은 `log.retention.check.interval.ms` 기본값 300000ms, 즉 5분 주기로 돌기 때문에 설정 직후 즉시 반영되지도 않습니다. 저트래픽 토픽이라면 `segment.bytes` 기준으로는 세그먼트가 오래 굴러가지 않으므로 `segment.ms` 를 함께 줄여 봉인을 유도해야 합니다. 이 두 지연을 모르면 설정이 안 먹는다고 오판해 불필요한 재시작을 하게 됩니다.",
+      "distractorNotes": {
+        "A": "토픽 설정은 `kafka-configs.sh` 로 동적으로 바뀌고 재시작이 필요하지 않습니다.",
+        "B": "두 리텐션 기준은 독립적으로 작동합니다. 크기 기준이 꺼져 있어도 시간 기준은 그대로 동작합니다.",
+        "D": "`delete` 정책의 기본 동작이 바로 시간·크기 기준 삭제입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Broker Configs: log.retention.check.interval.ms",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_log.retention.check.interval.ms"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        }
+      ],
+      "tags": [
+        "retention",
+        "segments",
+        "log.retention.check.interval.ms",
+        "disk-full"
+      ]
+    },
+    {
+      "id": "ccaak-troubleshooting-003",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "아래 출력을 30초 간격으로 두 번 찍었더니 `CURRENT-OFFSET` 이 전혀 변하지 않고 `LAG` 만 늘어난다. 가장 먼저 확인할 것은?",
+      "code": {
+        "lang": "bash",
+        "caption": "kafka-consumer-groups.sh --describe --group image-thumbnailer",
+        "body": "Warning: Consumer group 'image-thumbnailer' is rebalancing.\n\nGROUP              TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG     CONSUMER-ID  HOST  CLIENT-ID\nimage-thumbnailer  image-uploaded  0          1841020         2094882         253862  -            -     -\nimage-thumbnailer  image-uploaded  1          1839774         2093010         253236  -            -     -\nimage-thumbnailer  image-uploaded  2          1840119         2093551         253432  -            -     -"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "한 배치의 처리 시간이 `max.poll.interval.ms`(기본 300000)에 근접하는지 확인한다."
+        },
+        {
+          "id": "B",
+          "text": "복제가 뒤처져 high watermark가 밀렸는지 URP를 확인한다."
+        },
+        {
+          "id": "C",
+          "text": "`session.timeout.ms` 를 즉시 두 배로 늘려 리밸런스를 멈춘다."
+        },
+        {
+          "id": "D",
+          "text": "`--reset-offsets --to-latest` 로 lag을 없애 서비스를 복구한다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "리밸런스 경고가 계속 출력되고 커밋 위치가 전혀 전진하지 않는 조합은 그룹이 처리 대신 리밸런스만 반복하고 있음을 뜻합니다. 가장 흔한 원인은 한 배치의 처리 시간이 poll 간격 상한을 넘겨 컨슈머가 그룹에서 이탈하고 다시 합류하는 순환이며, 이때 조정할 축은 `max.poll.records` 와 `max.poll.interval.ms` 입니다. 두 번째 원인은 컨슈머 프로세스가 반복 재시작되는 것이고, 세 번째는 GC나 네트워크로 하트비트가 끊기는 것입니다. 하트비트 축과 poll 축은 별개이므로 원인 확인 없이 세션 타임아웃만 늘리면 아무 효과가 없습니다.",
+      "distractorNotes": {
+        "B": "복제 지연이면 커밋 위치는 계속 전진하다가 어느 지점에서 멈춥니다. 리밸런스 경고와 완전히 정지한 커밋은 다른 신호입니다.",
+        "C": "원인이 하트비트 끊김일 때만 맞는 조치이며, 처리 지연이 원인이면 효과가 없습니다. 확인 없이 값을 늘리는 것은 진단을 건너뛴 조치입니다.",
+        "D": "미처리 데이터를 버리는 비가역 조치이고, 컨슈머가 살아 있으면 명령 자체가 동작하지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer Configs: max.poll.interval.ms",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms"
+        },
+        {
+          "title": "Apache Kafka — Consumer group operations",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        }
+      ],
+      "tags": [
+        "rebalance",
+        "max.poll.interval.ms",
+        "consumer-lag",
+        "cli-output"
+      ]
+    },
+    {
+      "id": "ccaak-troubleshooting-004",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "파티션 12개인 토픽의 lag이 계속 늘어난다. 컨슈머 인스턴스를 12개에서 24개로 늘렸으나 개선이 없다. 다음으로 확인할 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`max.poll.records` 를 늘려 한 번에 더 많은 레코드를 가져오게 한다."
+        },
+        {
+          "id": "B",
+          "text": "파티션 수를 24로 늘려 남는 컨슈머가 일하게 만든다."
+        },
+        {
+          "id": "C",
+          "text": "복제가 뒤처져 high watermark가 밀렸는지, 유입량이 늘었는지를 확인한다."
+        },
+        {
+          "id": "D",
+          "text": "컨슈머 그룹을 두 개로 나누어 부하를 분산한다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "한 파티션은 그룹 내 한 컨슈머만 읽으므로 컨슈머 수가 파티션 수를 넘으면 나머지는 유휴 상태가 되고, 그래서 12개를 넘겨 늘린 것은 처음부터 효과가 없습니다. 개선이 없는 원인은 컨슈머 쪽이 아닐 가능성이 크므로, 복제가 뒤처져 소비 상한 자체가 밀린 것인지와 유입량이 늘어난 것인지를 먼저 갈라야 합니다. URP가 0보다 크면 컨슈머가 최선을 다해도 lag이 0이 되지 않으며 이때 봐야 할 것은 복제 상태입니다. 유입이 원인이라면 파티션과 컨슈머를 함께 늘리는 것이 맞지만, 그 전에 원인을 확정해야 합니다.",
+      "distractorNotes": {
+        "A": "배치를 키우면 한 배치 처리 시간이 길어져 리밸런스 위험이 커집니다. 원인을 모른 채 처리량만 밀어붙이는 조치입니다.",
+        "B": "원인 확인 전에 파티션을 늘리면 키 분배가 바뀌어 순서 보장이 깨집니다. 되돌릴 수도 없습니다.",
+        "D": "다른 그룹은 같은 데이터를 처음부터 다시 읽습니다. 부하 분산이 아니라 중복 소비가 됩니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer group operations",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        },
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
+      ],
+      "tags": [
+        "consumer-lag",
+        "partitions",
+        "under-replicated",
+        "triage"
+      ]
+    },
+    {
+      "id": "ccaak-troubleshooting-005",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch11",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "브로커 6대 중 1대가 죽었을 뿐인데 아래처럼 offline 파티션이 생겼다. 근본 원인으로 가장 타당한 것은?",
+      "code": {
+        "lang": "bash",
+        "caption": "kafka-topics.sh --describe --unavailable-partitions (발췌)",
+        "body": "Topic: metrics-raw-tmp\tPartition: 0\tLeader: none\tReplicas: 4\tIsr:\nTopic: user-events-test\tPartition: 0\tLeader: none\tReplicas: 4\tIsr:"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "`unclean.leader.election.enable` 이 `false` 라 남은 레플리카가 승격되지 못했다."
+        },
+        {
+          "id": "B",
+          "text": "`min.insync.replicas` 가 2로 설정되어 ISR이 부족해 리더가 선출되지 않았다."
+        },
+        {
+          "id": "C",
+          "text": "랙 인식이 꺼져 있어 두 토픽의 레플리카가 모두 브로커 4에 배치되었다."
+        },
+        {
+          "id": "D",
+          "text": "자동 생성 토픽이 `default.replication.factor=1` 로 만들어져 브로커 1대 손실로 사본이 사라졌다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "출력의 `Replicas` 가 브로커 하나뿐이므로 이 토픽들의 복제 계수는 1입니다. 이름에 `tmp`, `test` 가 붙은 점과 함께 보면 `auto.create.topics.enable` 기본값 `true` 와 `default.replication.factor` 기본값 1의 조합으로 조용히 만들어진 토픽임을 알 수 있습니다. 사본이 하나뿐이면 그 브로커를 잃는 순간 승격할 대상이 없어 즉시 offline이 되고, unclean 선출을 켜도 살릴 레플리카가 없습니다. 조치는 그 브로커를 되살리는 것이고, 재발 방지는 자동 생성을 끄고 기본 복제 계수를 올리며 RF=1 토픽을 정기적으로 스캔하는 것입니다.",
+      "distractorNotes": {
+        "A": "unclean 선출은 ISR 밖에 있는 다른 레플리카가 있을 때만 의미가 있습니다. 레플리카가 하나뿐이면 켜도 효과가 없습니다.",
+        "B": "최소 ISR은 쓰기 성공 조건이며 리더 선출 가능성을 결정하지 않습니다. 그리고 이 값이 원인이면 offline이 아니라 쓰기 거부로 나타납니다.",
+        "C": "랙 인식은 레플리카가 둘 이상일 때 분산을 다룹니다. 사본이 하나면 랙 설정과 무관합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Broker Configs: default.replication.factor",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_default.replication.factor"
+        },
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
+      ],
+      "tags": [
+        "offline-partitions",
+        "auto.create.topics.enable",
+        "default.replication.factor",
+        "cli-output"
+      ]
+    },
+    {
+      "id": "ccaak-troubleshooting-006",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch03",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "토픽 생성과 설정 변경이 전부 타임아웃되는데 기존 토픽의 읽기·쓰기는 정상이다. 가장 먼저 확인할 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`ActiveControllerCount` 합계와 컨트롤러 쿼럼의 과반 상태"
+        },
+        {
+          "id": "B",
+          "text": "브로커의 `RequestHandlerAvgIdlePercent` 와 요청 큐 대기 시간"
+        },
+        {
+          "id": "C",
+          "text": "`delete.topic.enable` 이 `false` 로 꺼져 있는지"
+        },
+        {
+          "id": "D",
+          "text": "클라이언트의 `request.timeout.ms` 가 너무 짧게 설정되어 있는지"
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "메타데이터 변경만 실패하고 데이터 경로는 살아 있다는 조합은 컨트롤러 계층을 가리키는 전형적인 신호입니다. 컨트롤러 쿼럼이 과반을 잃으면 토픽 생성·삭제·설정 변경·리더 선출이 모두 멈추지만 기존 파티션의 읽기·쓰기는 한동안 계속되므로 사용자는 아직 모를 수 있습니다. 그래서 트리아지는 컨트롤러 → 브로커 → 파티션 → 클라이언트 순으로 좁히며, 첫 단계가 합계가 1인지 확인하는 것입니다. 브로커가 응답하지 않으면 `kafka-metadata-quorum.sh --bootstrap-controller` 로 컨트롤러에 직접 붙어 voter와 리더를 확인합니다.",
+      "distractorNotes": {
+        "B": "스레드 포화라면 데이터 경로의 지연도 함께 나빠집니다. 관리 작업만 실패하는 패턴과 맞지 않습니다.",
+        "C": "이 설정은 삭제 요청만 무시하게 만듭니다. 생성과 설정 변경까지 타임아웃되는 것을 설명하지 못합니다.",
+        "D": "클라이언트 타임아웃이 원인이면 데이터 요청도 함께 실패합니다. 관리 요청만 골라 실패하지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — KRaft",
+          "url": "https://kafka.apache.org/documentation/#kraft"
+        },
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
+      ],
+      "tags": [
+        "ActiveControllerCount",
+        "controller-quorum",
+        "triage"
+      ]
+    },
+    {
+      "id": "ccaak-troubleshooting-007",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch11",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "브로커 한 대의 지연이 나빠졌다는 보고를 받았다. 선택지 중 CCAAK가 기대하는 첫 조치는?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "그 브로커를 재시작해 상태를 초기화한다."
+        },
+        {
+          "id": "B",
+          "text": "메트릭과 CLI 조회로 어느 계층이 원인인지 좁힌다."
+        },
+        {
+          "id": "C",
+          "text": "그 브로커의 파티션을 다른 브로커로 재할당한다."
+        },
+        {
+          "id": "D",
+          "text": "`unclean.leader.election.enable` 을 켜서 리더 이동을 빠르게 만든다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "운영자 시험은 조치의 정당성을 순서로 판단하므로, 확인·조회가 항상 변경·재시작보다 앞에 옵니다. 재시작은 증상을 지우고 원인을 숨기며 리더 이동으로 상황을 더 흔들기 때문에 거의 항상 오답입니다. 선택지에 확인·조회 계열과 변경·삭제 계열이 섞여 있으면 앞의 것이 정답일 확률이 높다는 것이 실전 소거 원칙입니다. 조치가 필요할 때도 가역적인 것, 즉 동적 설정·쿼터·스로틀 해제를 먼저 고르고 비가역적인 것은 마지막에 둡니다.",
+      "distractorNotes": {
+        "A": "진단 단계를 건너뛴 조치이며 원인을 잃게 만듭니다. 리더 이동으로 다른 브로커에 부하가 옮겨가기도 합니다.",
+        "C": "재할당은 대량의 복제 트래픽을 유발하므로 원인 확인 전에 실행하면 상황을 악화시킬 수 있습니다.",
+        "D": "데이터 유실을 감수하는 최후의 수단이며 지연 문제와는 관계가 없습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Basic Operations",
+          "url": "https://kafka.apache.org/documentation/#basic_ops"
+        }
+      ],
+      "tags": [
+        "triage",
+        "operations",
+        "monitoring"
+      ]
+    },
+    {
+      "id": "ccaak-troubleshooting-008",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "`kafka-consumer-groups.sh --reset-offsets` 를 쓸 때 알아야 할 사실로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "그룹의 컨슈머 인스턴스가 모두 비활성 상태여야 동작한다."
+        },
+        {
+          "id": "B",
+          "text": "`--execute` 없이 실행하면 무엇을 바꿀지만 출력하는 dry-run으로 동작한다."
+        },
+        {
+          "id": "C",
+          "text": "한 번의 실행으로 여러 컨슈머 그룹을 동시에 처리할 수 있다."
+        },
+        {
+          "id": "D",
+          "text": "범위를 벗어난 오프셋을 지정하면 명령이 오류로 실패한다."
+        },
+        {
+          "id": "E",
+          "text": "`--all-topics` 나 `--topic` 을 지정하지 않아도 기본적으로 모든 토픽에 적용된다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
+      ],
+      "explanation": "이 명령은 커밋 오프셋을 직접 덮어쓰므로 소비 중인 인스턴스가 있으면 충돌을 피하기 위해 거부됩니다. 그래서 실무 절차는 컨슈머를 모두 내린 뒤 실행하고 다시 올리는 것입니다. 안전장치로 `--execute` 를 붙이지 않으면 변경 계획만 출력하므로 항상 dry-run으로 먼저 확인하는 것이 좋습니다. 범위를 벗어난 값은 오류가 아니라 사용 가능한 끝값으로 조정되며, 예를 들어 끝이 10인데 15로 이동시키면 10이 선택됩니다.",
+      "distractorNotes": {
+        "C": "한 번에 하나의 그룹만 다룹니다. 여러 그룹은 반복 실행해야 합니다.",
+        "D": "오류가 아니라 사용 가능한 끝값으로 조정됩니다.",
+        "E": "`--all-topics` 또는 `--topic` 중 하나를 반드시 지정해야 합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer group operations",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        }
+      ],
+      "tags": [
+        "kafka-consumer-groups",
+        "reset-offsets",
+        "cli"
+      ]
+    },
+    {
+      "id": "ccaak-troubleshooting-009",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch02",
+      "difficulty": "hard",
+      "type": "multiple",
+      "question": "`unclean.leader.election.enable=true` 를 한시적으로 켜는 판단에 대해 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "ISR이 비어 파티션이 offline이고, 유실보다 가용성이 중요하다고 결정된 경우에만 쓴다."
+        },
+        {
+          "id": "B",
+          "text": "실제로 유실이 발생했는지는 `UncleanLeaderElectionsPerSec` 가 0에서 올라갔는지로 확인한다."
+        },
+        {
+          "id": "C",
+          "text": "URP가 0이 아닐 때 복제를 빨리 회복시키기 위한 첫 번째 조치로 적절하다."
+        },
+        {
+          "id": "D",
+          "text": "cluster-wide 설정이므로 특정 토픽만 켜는 것은 불가능하다."
+        },
+        {
+          "id": "E",
+          "text": "레플리카가 하나뿐인 파티션에서도 이 설정을 켜면 리더를 복구할 수 있다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
+      ],
+      "explanation": "이 설정은 ISR 밖 레플리카를 리더로 올리므로 커밋된 데이터를 확정적으로 버리는 거래이며, 그래서 운영자 혼자 판단하지 않고 의사결정권자의 승인 아래 씁니다. 조건은 ISR이 비어 파티션이 offline이 되었고 브로커를 되살릴 수 없을 때이며, 켠 뒤에는 즉시 되돌립니다. 유실 여부는 unclean 선출 카운터가 0에서 올라갔는지로 사후 확인하고 보고서에 기록합니다. 브로커 기본값과 토픽 오버라이드 양쪽에서 지정할 수 있으므로 문제가 된 토픽만 한시적으로 켜는 것이 피해를 줄이는 방법입니다.",
+      "distractorNotes": {
+        "C": "URP 대응의 첫 카드가 아닙니다. 브로커 복구, 남은 스로틀 해제, fetcher 증설이 모두 앞에 옵니다.",
+        "D": "토픽 레벨 오버라이드가 가능하므로 특정 토픽만 켤 수 있습니다.",
+        "E": "승격할 다른 레플리카가 없으면 이 설정은 아무 효과가 없습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Unclean Leader Election",
+          "url": "https://kafka.apache.org/documentation/#design_uncleanleader"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs: unclean.leader.election.enable",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_unclean.leader.election.enable"
+        }
+      ],
+      "tags": [
+        "unclean.leader.election.enable",
+        "offline-partitions",
+        "operations"
+      ]
+    },
+    {
+      "id": "ccaak-troubleshooting-010",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 증상을 가장 먼저 확인해야 할 대상과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "프로듀서가 `NotEnoughReplicas` 를 받는다",
+          "right": "`UnderMinIsrPartitionCount` 와 죽은 브로커 수"
+        },
+        {
+          "id": "p2",
+          "left": "토픽 생성·설정 변경이 전부 타임아웃",
+          "right": "`ActiveControllerCount` 합계와 쿼럼 과반"
+        },
+        {
+          "id": "p3",
+          "left": "재할당 후 URP가 0으로 돌아오지 않는다",
+          "right": "브로커·토픽에 남아 있는 복제 스로틀"
+        },
+        {
+          "id": "p4",
+          "left": "외부 클라이언트가 부트스트랩 후 붙지 못한다",
+          "right": "`advertised.listeners` 와 인증서 SAN"
+        },
+        {
+          "id": "p5",
+          "left": "롤링 재시작 후 특정 브로커만 CPU가 높다",
+          "right": "`PreferredReplicaImbalanceCount`"
+        }
+      ],
+      "extraRights": [
+        "`log.retention.check.interval.ms` 와 세그먼트 롤 여부",
+        "`records-lag-max` 의 발행 주체",
+        "`ssl.client.auth` 값"
+      ],
+      "explanation": "시나리오 문항의 지문은 대개 증상으로 오고 정답은 그 증상을 설명할 수 있는 관측 지점입니다. 쓰기 거부는 최소 ISR 미달 지표로, 관리 작업만 실패하는 것은 컨트롤러 계층으로, 재할당 뒤의 만성 URP는 해제되지 않은 스로틀로 각각 연결됩니다. 부트스트랩은 되는데 이후가 안 되는 패턴은 광고 주소와 인증서 SAN 문제이고, 롤링 재시작 뒤의 편중은 리더가 preferred로 돌아오지 않은 상태입니다. 미끼로 제시된 항목들은 각각 리텐션 지연, lag 알림 누락, mTLS 인증 실패의 확인 지점이므로 다른 증상과 짝지어야 합니다.",
+      "distractorNotes": {
+        "p1": "URP 지표와 혼동하기 쉽습니다. 쓰기가 실제로 거부되는 경계는 최소 ISR 미달입니다.",
+        "p5": "부하 불균형을 리소스 문제로 보고 브로커 증설을 떠올리기 쉽지만, 먼저 리더 편중 지표를 확인합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Basic Operations",
+          "url": "https://kafka.apache.org/documentation/#basic_ops"
+        }
+      ],
+      "tags": [
+        "triage",
+        "monitoring",
+        "operations"
+      ]
+    },
+    {
+      "id": "ccaak-troubleshooting-011",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch05",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "장애 대응에서 손대는 각 설정을 Apache Kafka 4.3 기준 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`max.poll.records` (consumer)",
+          "right": "500"
+        },
+        {
+          "id": "p2",
+          "left": "`session.timeout.ms` (consumer)",
+          "right": "45000"
+        },
+        {
+          "id": "p3",
+          "left": "`heartbeat.interval.ms` (consumer)",
+          "right": "3000"
+        },
+        {
+          "id": "p4",
+          "left": "`num.replica.fetchers` (broker)",
+          "right": "1"
+        },
+        {
+          "id": "p5",
+          "left": "`fetch.max.bytes` (consumer)",
+          "right": "52428800"
+        }
+      ],
+      "extraRights": [
+        "10000",
+        "300000",
+        "1048576",
+        "8"
+      ],
+      "explanation": "리밸런스 스톰 대응에서는 poll 축과 하트비트 축을 구분해야 하므로 네 값의 기본값을 정확히 알아야 합니다. `session.timeout.ms` 는 3.x에서 10000이었으나 4.x 기준으로 45000이며, `heartbeat.interval.ms` 3000은 세션 타임아웃의 1/3 이하로 유지하라는 권고와 함께 기억합니다. 복제가 못 따라잡을 때 올리는 `num.replica.fetchers` 는 기본 1이며 cluster-wide라 재시작 없이 바꿀 수 있습니다. 컨슈머 fetch 상한 `fetch.max.bytes` 는 50MiB이고 파티션 단위인 `max.partition.fetch.bytes` 는 1048576이라 자릿수를 혼동하기 쉽습니다.",
+      "distractorNotes": {
+        "p2": "3.x 기준 자료의 10000을 그대로 외우면 틀립니다. 4.x는 45000입니다.",
+        "p5": "파티션 단위 상한 1048576과 바꿔 놓는 오답이 흔합니다. 전체 fetch 상한은 50MiB입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer Configs",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs"
+        }
+      ],
+      "tags": [
+        "defaults",
+        "rebalance",
+        "num.replica.fetchers",
+        "fetch.max.bytes"
+      ]
+    },
+    {
+      "id": "ccaak-troubleshooting-012",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "chapter": "ch07",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "디스크가 찬 브로커에서 데이터 로그가 원인으로 확인되었다. 이후 조치를 올바른 순서로 배열하세요.",
+      "code": null,
+      "items": [
+        {
+          "id": "i3",
+          "text": "정리 주기(기본 5분)를 기다리며 사용량이 실제로 줄어드는지 확인"
+        },
+        {
+          "id": "i1",
+          "text": "가장 큰 토픽의 `retention.ms` 를 동적으로 축소"
+        },
+        {
+          "id": "i4",
+          "text": "여유가 생긴 뒤 `retention.bytes` 로 크기 상한을 걸어 재발 방지"
+        },
+        {
+          "id": "i2",
+          "text": "`segment.ms` 를 줄여 활성 세그먼트가 봉인되게 유도"
+        }
+      ],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
+      ],
+      "explanation": "먼저 보관 기간을 줄여 삭제 대상을 만들고, 그것만으로 줄지 않으면 세그먼트를 굴려 봉인시켜야 삭제가 실제로 일어납니다. 활성 세그먼트는 삭제 대상이 아니므로 이 두 단계는 순서가 정해져 있습니다. 정리 작업은 기본 5분 주기로 돌기 때문에 설정 직후가 아니라 다음 주기에 반영되므로, 확인은 대기 뒤에 합니다. 급한 불을 끈 다음 크기 상한을 걸어야 같은 사고가 반복되지 않는데, 이 값은 기본적으로 꺼져 있어 명시하지 않으면 동작하지 않습니다.",
+      "distractorNotes": {
+        "i2": "세그먼트 설정을 먼저 건드리는 것으로 착각하기 쉽습니다. 보관 기간 축소가 먼저이고, 그것으로 부족할 때 세그먼트를 굴립니다.",
+        "i4": "예방 조치를 먼저 넣으려 하기 쉽지만, 진행 중인 장애를 먼저 완화한 뒤에 재발 방지를 넣는 것이 순서입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs: log.retention.check.interval.ms",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_log.retention.check.interval.ms"
+        }
+      ],
+      "tags": [
+        "disk-full",
+        "retention.bytes",
+        "segments",
+        "operations"
+      ]
+    }
+  ]
+}

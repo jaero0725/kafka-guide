@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kafka Guide — Apache Kafka 4.3 학습 가이드</title>
+  <meta name="description" content="Apache Kafka 4.3 기준 KRaft-first 한국어 학습 가이드. 기본개념 11장, 실무 예제, 실수 케이스, 치트시트, CCDAK·CCAAK 대비 문제은행과 진단 테스트.">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/main.css">
+  <link rel="stylesheet" href="assets/css/code.css">
+  <link rel="stylesheet" href="assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="home" data-page="index"></div>
+
+  <main id="main" class="page" data-page-id="index">
+    <header class="page__header">
+      <p class="page__eyebrow">Apache Kafka 4.3.x 기준 · KRaft-first</p>
+      <h1>Kafka Guide</h1>
+      <p class="page__lead">
+        Apache Kafka를 실무에서 쓰고 CCDAK · CCAAK에 합격하기 위한 한국어 가이드입니다.
+        모든 설명은 <strong>Kafka 4.3</strong> 기준이며, ZooKeeper는 4.0에서 제거되었으므로
+        KRaft를 유일한 모드로 서술합니다. 3.x와 동작이 다른 지점은 버전 노트로 병기합니다.
+      </p>
+    </header>
+
+    <aside class="note note--warn" data-label="빌드 진행 중">
+      <p>
+        이 페이지는 <strong>Wave 0 기반 구축 단계의 스텁</strong>입니다.
+        진도 대시보드(전체 진도 %, 도메인별 숙련도, 다음 학습 추천)는 Wave 4에서 완성됩니다.
+        아래 목록에서 아직 만들어지지 않은 페이지는 사이드바에 회색으로 표시됩니다.
+      </p>
+    </aside>
+
+    <section aria-labelledby="start-here">
+      <h2 id="start-here">여기서 시작하세요</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="quiz/diagnostic.html">
+          <span class="card__title">1. 진단 테스트 (30문항)</span>
+          <span class="card__desc">6개 도메인 취약점을 먼저 파악하면 학습 순서가 자동으로 정해집니다. 무엇부터 볼지 모르겠다면 여기부터.</span>
+          <span class="card__meta">CCDAK 최우선</span>
+        </a></li>
+        <li><a class="card" href="basics/ch01.html">
+          <span class="card__title">2. 기본개념 1장</span>
+          <span class="card__desc">이벤트 스트리밍, 토픽·파티션·오프셋, 생태계, 그리고 <code>kafka_2.13-4.3.0</code> 표기 읽는 법.</span>
+          <span class="card__meta">기본개념</span>
+        </a></li>
+        <li><a class="card" href="quiz/index.html">
+          <span class="card__title">3. 문제 풀이 허브</span>
+          <span class="card__desc">학습·시험·도메인 연습·오답 노트·약점 집중. 단일 선택·복수 선택·연결형·순서 배열 네 유형.</span>
+          <span class="card__meta">문제은행</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="sections">
+      <h2 id="sections">전체 구성</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="basics/ch01.html">
+          <span class="card__title">기본개념 11장 + 부록</span>
+          <span class="card__desc">개요 · 아키텍처 · KRaft · Producer · Consumer · 전달 보장 · 스토리지 · 스키마 · Connect · Streams · 운영 · 레거시 부록.</span>
+          <span class="card__meta">basics/</span>
+        </a></li>
+        <li><a class="card" href="practice/ex01.html">
+          <span class="card__title">실무 예제 12개</span>
+          <span class="card__desc">동작하는 코드로 배우는 KRaft 클러스터 구축부터 EOS 파이프라인, CDC, Streams 집계, MirrorMaker 2까지.</span>
+          <span class="card__meta">practice/</span>
+        </a></li>
+        <li><a class="card" href="cases/case01.html">
+          <span class="card__title">실수 케이스 10개</span>
+          <span class="card__desc">증상 → 원인 분석 → 재현 → 해결 → 예방 체크리스트. 프로덕션에서 반복되는 사고를 그대로 다룹니다.</span>
+          <span class="card__meta">cases/</span>
+        </a></li>
+        <li><a class="card" href="cheatsheet/cli.html">
+          <span class="card__title">빠른참조 7종</span>
+          <span class="card__desc">CLI · 설정값 · JMX 메트릭 · 트러블슈팅 결정 트리 · 보안 · Streams · Connect.</span>
+          <span class="card__meta">cheatsheet/</span>
+        </a></li>
+        <li><a class="card" href="ccdak/index.html">
+          <span class="card__title">CCDAK 대비</span>
+          <span class="card__desc">도메인별 요약, 4주 학습 플랜, 플래시카드, 함정 사전, 벼락치기 요약.</span>
+          <span class="card__meta">ccdak/</span>
+        </a></li>
+        <li><a class="card" href="ccaak/index.html">
+          <span class="card__title">CCAAK 대비</span>
+          <span class="card__desc">운영·SRE 관점의 블루프린트 섹션별 요약과 시험 전략.</span>
+          <span class="card__meta">ccaak/</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="ground-rules">
+      <h2 id="ground-rules">이 가이드의 기준</h2>
+      <div class="table-scroll">
+        <table>
+          <caption>서술 기준과 근거</caption>
+          <thead><tr><th scope="col">항목</th><th scope="col">기준</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Kafka 버전</th><td><strong>4.3.x</strong>. 3.6~3.9와 다른 부분은 버전 노트로 병기하고, 2.x는 레거시 부록에서 다룹니다.</td></tr>
+            <tr><th scope="row">메타데이터</th><td><strong>KRaft 전용</strong>. ZooKeeper는 4.0에서 제거되었으므로 역사적 맥락에서만 언급합니다.</td></tr>
+            <tr><th scope="row">사실 확인</th><td>설정명·기본값·CLI 옵션은 Apache Kafka 공식 문서와 소스에서 확인한 값만 씁니다.</td></tr>
+            <tr><th scope="row">문제 출처</th><td>전 문항 <strong>자체 창작</strong>. 시험 덤프는 참조하지 않습니다.</td></tr>
+            <tr><th scope="row">외부 의존성</th><td>CDN·웹폰트·프레임워크 <strong>0건</strong>. 오프라인에서도 열립니다.</td></tr>
+            <tr><th scope="row">진도 저장</th><td>브라우저 <code>localStorage</code> 만 사용합니다. 서버로 전송되지 않습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <aside class="note" data-label="진도 초기화">
+        <p>
+          읽음 기록 · 퀴즈 통계 · 시험 이력 · 플래시카드 진도를 모두 지울 수 있습니다.
+          <button type="button" class="btn btn--sm btn--danger" data-act="reset-progress">전체 진도 초기화</button>
+        </p>
+      </aside>
+    </section>
+  </main>
+
+  <script src="assets/js/progress.js" defer></script>
+  <script src="assets/js/highlight.js" defer></script>
+  <script src="assets/js/viz.js" defer></script>
+  <script src="assets/js/app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<svg viewBox="0 0 720 546" role="img" class="kg-diagram"
+     aria-labelledby="d118-title d118-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d118-title">case09 — 스키마 호환성 모드를 낮춰 컨슈머 전체가 멈추는 흐름</title>
+  <desc id="d118-desc">정상 흐름에서는 기본 호환성 모드 BACKWARD 아래에서 새 스키마가 이전 스키마로 쓰인 데이터를 읽을 수 있는지 검사하고, 호환되지 않는 스키마는 등록 자체가 거부되므로 배포 사고가 사전에 막힙니다. 어긋나는 지점에서 급한 배포를 위해 호환성 모드를 NONE 으로 낮추면 기본값 없는 필수 필드를 추가한 스키마도 등록에 성공합니다. 결과적으로 이전 스키마를 쓰는 컨슈머가 새 레코드를 역직렬화하지 못해 예외를 던지고, 그 오프셋에서 더 나아가지 못한 채 같은 레코드를 반복 실패합니다. 컨슈머 그룹 전체가 같은 지점에서 멈추므로 장애 범위가 넓습니다. 처방은 호환성 모드를 BACKWARD 이상으로 유지하고 필드 추가 시 기본값을 주며 스키마 변경을 배포 전에 검사하는 것입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<rect class="dg-node dg-node--ok" x="8" y="8" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="29">1. 정상 흐름</text>
+<text class="dg-fs-sm dg-muted" x="698" y="29" text-anchor="end">호환성 검사가 방어선입니다</text>
+<g>
+<rect class="dg-node" x="24" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="58.5" text-anchor="middle">새 스키마 등록 요청</text>
+</g>
+<path class="dg-edge" d="M175.5,54 L194.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="198.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="58.5" text-anchor="middle">BACKWARD 검사</text>
+</g>
+<path class="dg-edge" d="M350,54 L369,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="373" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="58.5" text-anchor="middle">비호환이면 등록 거부</text>
+</g>
+<path class="dg-edge" d="M524.5,54 L543.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="547.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="58.5" text-anchor="middle">배포 전에 발견</text>
+</g>
+<text class="dg-fs-sm" x="24" y="98">BACKWARD 는 새 스키마로 이전 데이터를 읽을 수 있어야 통과시킵니다 — 컨슈머를 먼저 배포하는 전략과 짝입니다.</text>
+<text class="dg-fs-sm" x="24" y="116">기본값이 있는 필드 추가나 필드 삭제처럼 안전한 변경만 통과합니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="152" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="173">2. 어긋나는 지점</text>
+<text class="dg-fs-sm dg-muted" x="698" y="173" text-anchor="end">검사를 끄면 방어선이 사라집니다</text>
+<g>
+<rect class="dg-node dg-node--danger" x="24" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="202.6" text-anchor="middle">호환성 NONE 으로 변경</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M175.5,198 L194.5,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="198.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="202.6" text-anchor="middle">default 없는 필수 필드 추가</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M350,198 L369,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="373" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="202.6" text-anchor="middle">등록 성공</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M524.5,198 L543.5,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--warn" x="547.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="202.6" text-anchor="middle">프로듀서 먼저 배포</text>
+</g>
+<text class="dg-fs-sm" x="24" y="242">NONE 은 어떤 변경도 통과시킵니다 — 레지스트리가 더 이상 사고를 막아 주지 않습니다.</text>
+<text class="dg-fs-sm" x="24" y="260">프로듀서가 먼저 배포되면 그 순간부터 새 형식의 레코드가 토픽에 쌓입니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="296" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="317">3. 결과</text>
+<text class="dg-fs-sm dg-muted" x="698" y="317" text-anchor="end">그룹 전체가 같은 지점에서 멈춥니다</text>
+<g>
+<rect class="dg-node dg-node--warn" x="24" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="346.6" text-anchor="middle">구 컨슈머가 새 레코드 수신</text>
+</g>
+<path class="dg-edge" d="M175.5,342 L194.5,342" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="198.5" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="346.6" text-anchor="middle">역직렬화 예외</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M350,342 L369,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="373" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="346.6" text-anchor="middle">오프셋 진행 불가</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M524.5,342 L543.5,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="547.5" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="346.6" text-anchor="middle">그룹 전체 정지</text>
+</g>
+<text class="dg-fs-sm" x="24" y="386">한 레코드에서 계속 실패하므로 뒤의 정상 레코드도 처리되지 않습니다 (포이즌 레코드).</text>
+<text class="dg-fs-sm" x="24" y="404">재시작해도 같은 오프셋에서 다시 실패하고 lag 만 계속 늘어납니다.</text>
+<path class="dg-edge dg-edge--danger" d="M360,132 L360,149" marker-end="url(#mk-arrow-danger)"/>
+<path class="dg-edge dg-edge--danger" d="M360,276 L360,293" marker-end="url(#mk-arrow-danger)"/>
+<rect class="dg-node dg-node--ok" x="8" y="440" width="704" height="98" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="461">처방</text>
+<text class="dg-fs-sm" x="70" y="461">호환성 모드는 BACKWARD 이상으로 유지합니다 — 급하다고 NONE 으로 내리지 않습니다.</text>
+<text class="dg-fs-sm" x="70" y="479">필드를 추가할 때는 기본값을 함께 정의해 이전 스키마 컨슈머가 읽을 수 있게 합니다.</text>
+<text class="dg-fs-sm" x="70" y="497">BACKWARD 계열은 컨슈머를 먼저, FORWARD 계열은 프로듀서를 먼저 배포합니다.</text>
+<text class="dg-fs-sm" x="70" y="515">스키마 변경을 CI 에서 호환성 검사로 걸러 배포 파이프라인 밖으로 나가지 않게 합니다.</text>
+</svg>

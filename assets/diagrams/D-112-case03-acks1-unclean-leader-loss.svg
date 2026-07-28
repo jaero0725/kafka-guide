@@ -1,0 +1,88 @@
+<svg viewBox="0 0 720 546" role="img" class="kg-diagram"
+     aria-labelledby="d112-title d112-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d112-title">case03 — acks=1 과 unclean leader election 이 겹쳐 유실이 확정되는 흐름</title>
+  <desc id="d112-desc">정상 흐름에서 프로듀서가 acks=1 로 보내면 파티션 리더가 자기 로그에 기록한 직후 성공으로 응답하므로 팔로워 복제 완료를 기다리지 않습니다. 어긋나는 지점에서 그 레코드가 아직 복제되지 않은 상태로 리더 브로커가 죽고, unclean.leader.election.enable 이 true 이면 ISR 에 없던 레플리카까지 리더가 될 수 있습니다. 결과적으로 새 리더의 로그에는 그 레코드가 없어 영구 유실되지만 프로듀서는 이미 성공 응답을 받았기 때문에 애플리케이션은 실패를 알지 못합니다. 처방은 acks=all 과 min.insync.replicas 2, replication.factor 3 조합을 쓰고 unclean.leader.election.enable 을 기본값 false 로 유지하는 것입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<rect class="dg-node dg-node--ok" x="8" y="8" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="29">1. 정상 흐름</text>
+<text class="dg-fs-sm dg-muted" x="698" y="29" text-anchor="end">acks=1 은 리더만 기록하면 성공입니다</text>
+<g>
+<rect class="dg-node dg-node--warn" x="24" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="58.5" text-anchor="middle">프로듀서 acks=1</text>
+</g>
+<path class="dg-edge" d="M175.5,54 L194.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node" x="198.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="58.5" text-anchor="middle">리더 로그에 append</text>
+</g>
+<path class="dg-edge" d="M350,54 L369,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--warn" x="373" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="58.5" text-anchor="middle">즉시 성공 응답</text>
+</g>
+<path class="dg-edge" d="M524.5,54 L543.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--muted" x="547.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="58.5" text-anchor="middle">팔로워는 아직 복제 중</text>
+</g>
+<text class="dg-fs-sm" x="24" y="98">acks=1 은 리더가 자기 로그에 쓰기만 하면 성공으로 응답합니다 — 복제 완료를 기다리지 않습니다.</text>
+<text class="dg-fs-sm" x="24" y="116">공식 문서도 이 구간에서 리더가 죽으면 레코드가 사라진다고 명시합니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="152" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="173">2. 어긋나는 지점</text>
+<text class="dg-fs-sm dg-muted" x="698" y="173" text-anchor="end">두 설정이 겹쳐야 사고가 됩니다</text>
+<g>
+<rect class="dg-node dg-node--danger" x="24" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="202.6" text-anchor="middle">리더 브로커 장애</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M175.5,198 L194.5,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="198.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="202.6" text-anchor="middle">팔로워에 그 레코드 없음</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M350,198 L369,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="373" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="202.6" text-anchor="middle">unclean=true</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M524.5,198 L543.5,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="547.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="202.6" text-anchor="middle">ISR 밖 레플리카가 리더</text>
+</g>
+<text class="dg-fs-sm" x="24" y="242">unclean.leader.election.enable=true 는 ISR 에 없는 레플리카도 마지막 수단으로 리더가 되도록 허용합니다.</text>
+<text class="dg-fs-sm" x="24" y="260">기본값은 false 이며, 가용성을 위해 켜는 순간 데이터 유실을 허용한다는 뜻이 됩니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="296" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="317">3. 결과</text>
+<text class="dg-fs-sm dg-muted" x="698" y="317" text-anchor="end">성공 응답을 받은 데이터가 사라집니다</text>
+<g>
+<rect class="dg-node dg-node--danger" x="24" y="326" width="206.7" height="32" rx="4"/>
+<text class="dg-fs-sm" x="127.3" y="346.6" text-anchor="middle">새 리더 로그에 없음</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M233.7,342 L252.7,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="256.7" y="326" width="206.7" height="32" rx="4"/>
+<text class="dg-fs-sm" x="360" y="346.6" text-anchor="middle">영구 유실</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M466.3,342 L485.3,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="489.3" y="326" width="206.7" height="32" rx="4"/>
+<text class="dg-fs-sm" x="592.7" y="346.6" text-anchor="middle">프로듀서는 성공으로 알고 있음</text>
+</g>
+<text class="dg-fs-sm" x="24" y="386">새 리더가 기준이 되므로 그 뒤에 원래 리더가 복귀해도 자기 로그를 잘라내고 새 리더를 따릅니다.</text>
+<text class="dg-fs-sm" x="24" y="404">애플리케이션 로그에는 아무 오류가 남지 않아 사후 추적이 매우 어렵습니다.</text>
+<path class="dg-edge dg-edge--danger" d="M360,132 L360,149" marker-end="url(#mk-arrow-danger)"/>
+<path class="dg-edge dg-edge--danger" d="M360,276 L360,293" marker-end="url(#mk-arrow-danger)"/>
+<rect class="dg-node dg-node--ok" x="8" y="440" width="704" height="98" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="461">처방</text>
+<text class="dg-fs-sm" x="70" y="461">내구성이 필요하면 acks=all · min.insync.replicas=2 · replication.factor=3 을 함께 씁니다.</text>
+<text class="dg-fs-sm" x="70" y="479">unclean.leader.election.enable 은 기본값 false 로 유지합니다 (KRaft 에서도 지원되는 설정입니다).</text>
+<text class="dg-fs-sm" x="70" y="497">확인: kafka-topics.sh --bootstrap-server :9092 --describe --under-min-isr-partitions</text>
+<text class="dg-fs-sm" x="70" y="515">감시: kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount 를 0 으로 유지</text>
+</svg>

@@ -1,0 +1,102 @@
+<svg viewBox="0 0 720 698" role="img" class="kg-diagram"
+     aria-labelledby="d134-title d134-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d134-title">헷갈리는 설정 쌍 6가지 비교 — session.timeout.ms 대 max.poll.interval.ms 등</title>
+  <desc id="d134-desc">시험에서 자주 뒤바뀌는 여섯 쌍을 좌우로 비교합니다. 첫째, session.timeout.ms 는 백그라운드 하트비트 스레드 기준(기본 45000)이고 max.poll.interval.ms 는 애플리케이션 스레드의 poll 호출 간격 기준(기본 300000)입니다. 둘째, cleanup.policy 의 delete 는 오래된 세그먼트를 버리고 compact 는 키별 최신 값을 남깁니다. 셋째, acks 는 프로듀서가 요구하는 응답 수준이고 min.insync.replicas 는 브로커·토픽 쪽 최소 ISR 조건으로 둘은 함께 설정해야 합니다. 넷째, subscribe() 는 그룹에 참여해 리밸런스로 파티션을 받고 assign() 은 직접 지정하며 리밸런스가 없습니다. 다섯째, map 계열은 키를 바꿀 수 있어 리파티션을 유발할 수 있고 mapValues 계열은 유발하지 않습니다. 여섯째, 멱등성은 한 세션 안의 중복 제거이고 트랜잭션은 여러 파티션과 오프셋 커밋의 원자성입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">헷갈리는 설정·API 6쌍 — 시험에서 가장 자주 뒤바뀌는 짝</text>
+<g>
+<rect class="dg-node dg-node--accent" x="8" y="34" width="322" height="84" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="54">session.timeout.ms</text>
+<text class="dg-fs-sm" x="20" y="74">하트비트 스레드(백그라운드)가</text>
+<text class="dg-fs-sm" x="20" y="92">이 시간 안에 하트비트를 못 보내면 이탈</text>
+<text class="dg-fs-sm" x="20" y="110">기본 45000</text>
+<g>
+<rect class="dg-node" x="390" y="34" width="322" height="84" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="402" y="54">max.poll.interval.ms</text>
+<text class="dg-fs-sm" x="402" y="74">애플리케이션 스레드가 이 시간 안에</text>
+<text class="dg-fs-sm" x="402" y="92">poll() 을 다시 부르지 않으면 이탈</text>
+<text class="dg-fs-sm" x="402" y="110">기본 300000</text>
+<text class="dg-fs-sm dg-bold dg-muted" x="360" y="81" text-anchor="middle">vs</text>
+<text class="dg-fs-sm" x="8" y="136">→ 축이 다릅니다. 처리가 길어져 터지는 쪽은 항상 max.poll.interval.ms 입니다.</text>
+<g>
+<rect class="dg-node dg-node--accent" x="8" y="152" width="322" height="84" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="172">cleanup.policy=delete</text>
+<text class="dg-fs-sm" x="20" y="192">시간 · 크기 기준으로 오래된</text>
+<text class="dg-fs-sm" x="20" y="210">세그먼트를 통째로 버립니다</text>
+<text class="dg-fs-sm" x="20" y="228">기본값</text>
+<g>
+<rect class="dg-node" x="390" y="152" width="322" height="84" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="402" y="172">cleanup.policy=compact</text>
+<text class="dg-fs-sm" x="402" y="192">키별 최신 값을 남기고</text>
+<text class="dg-fs-sm" x="402" y="210">같은 키의 옛 값만 지웁니다</text>
+<text class="dg-fs-sm" x="402" y="228">상태·changelog 토픽용</text>
+<text class="dg-fs-sm dg-bold dg-muted" x="360" y="199" text-anchor="middle">vs</text>
+<text class="dg-fs-sm" x="8" y="254">→ 둘을 "delete,compact" 로 함께 쓸 수도 있습니다. 빈 값이면 무한 보관입니다.</text>
+<g>
+<rect class="dg-node dg-node--accent" x="8" y="270" width="322" height="84" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="290">acks</text>
+<text class="dg-fs-sm" x="20" y="310">프로듀서가 요구하는 응답 수준</text>
+<text class="dg-fs-sm" x="20" y="328">acks=all 이면 ISR 전원 응답 대기</text>
+<text class="dg-fs-sm" x="20" y="346">프로듀서 설정 · 기본 all</text>
+<g>
+<rect class="dg-node" x="390" y="270" width="322" height="84" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="402" y="290">min.insync.replicas</text>
+<text class="dg-fs-sm" x="402" y="310">acks=all 일 때 최소 몇 개의 ISR 이</text>
+<text class="dg-fs-sm" x="402" y="328">있어야 쓰기를 받아 줄지</text>
+<text class="dg-fs-sm" x="402" y="346">브로커·토픽 설정 · 기본 1</text>
+<text class="dg-fs-sm dg-bold dg-muted" x="360" y="317" text-anchor="middle">vs</text>
+<text class="dg-fs-sm" x="8" y="372">→ acks=all 만 켜고 min.insync.replicas=1 이면 리더 1대만 살아도 성공합니다. 둘은 짝입니다.</text>
+<g>
+<rect class="dg-node dg-node--accent" x="8" y="388" width="322" height="66" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="408">subscribe()</text>
+<text class="dg-fs-sm" x="20" y="428">그룹에 참여 · 리밸런스로 파티션 배정</text>
+<text class="dg-fs-sm" x="20" y="446">group.id 필요 · 오프셋 커밋 가능</text>
+<g>
+<rect class="dg-node" x="390" y="388" width="322" height="66" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="402" y="408">assign()</text>
+<text class="dg-fs-sm" x="402" y="428">파티션을 직접 지정 · 리밸런스 없음</text>
+<text class="dg-fs-sm" x="402" y="446">그룹 관리 없음 · 커밋은 group.id 있으면 가능</text>
+<text class="dg-fs-sm dg-bold dg-muted" x="360" y="426" text-anchor="middle">vs</text>
+<text class="dg-fs-sm" x="8" y="472">→ assign() 은 컨슈머를 늘려도 자동 분배가 없습니다. 스케일 아웃이 필요하면 subscribe() 입니다.</text>
+<g>
+<rect class="dg-node dg-node--accent" x="8" y="488" width="322" height="66" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="508">map / flatMap / selectKey</text>
+<text class="dg-fs-sm" x="20" y="528">키를 바꿀 수 있으므로</text>
+<text class="dg-fs-sm" x="20" y="546">리파티션 토픽이 생길 수 있음</text>
+<g>
+<rect class="dg-node" x="390" y="488" width="322" height="66" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="402" y="508">mapValues / flatMapValues</text>
+<text class="dg-fs-sm" x="402" y="528">값만 바꾸므로 키가 그대로</text>
+<text class="dg-fs-sm" x="402" y="546">리파티션이 생기지 않음</text>
+<text class="dg-fs-sm dg-bold dg-muted" x="360" y="526" text-anchor="middle">vs</text>
+<text class="dg-fs-sm" x="8" y="572">→ 값만 바꿀 때 mapValues 를 쓰는 것만으로 불필요한 리파티션 토픽을 없앨 수 있습니다.</text>
+<g>
+<rect class="dg-node dg-node--accent" x="8" y="588" width="322" height="84" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="608">멱등성 (enable.idempotence)</text>
+<text class="dg-fs-sm" x="20" y="628">한 프로듀서 세션 안에서</text>
+<text class="dg-fs-sm" x="20" y="646">같은 파티션의 중복 쓰기를 제거</text>
+<text class="dg-fs-sm" x="20" y="664">기본 true</text>
+<g>
+<rect class="dg-node" x="390" y="588" width="322" height="84" rx="4"/>
+</g>
+<text class="dg-fs-sm dg-bold dg-mono" x="402" y="608">트랜잭션 (transactional.id)</text>
+<text class="dg-fs-sm" x="402" y="628">여러 파티션 쓰기와 오프셋 커밋을</text>
+<text class="dg-fs-sm" x="402" y="646">하나의 원자 단위로 묶음</text>
+<text class="dg-fs-sm" x="402" y="664">명시적으로 켜야 함</text>
+<text class="dg-fs-sm dg-bold dg-muted" x="360" y="635" text-anchor="middle">vs</text>
+<text class="dg-fs-sm" x="8" y="690">→ 멱등성은 중복 방지, 트랜잭션은 원자성입니다. 트랜잭션은 멱등성을 포함합니다.</text>
+</svg>

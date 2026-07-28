@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>벼락치기 요약 · CCDAK D-1 — Kafka Guide</title>
+  <meta name="description" content="CCDAK 시험 D-1에 이 한 페이지만 읽으면 되는 단일 페이지 요약. 도메인별 순서로 배치한 필수 설정 기본값, 반드시 외워야 할 숫자, API 호출 순서, 예외 클래스. 인쇄 대응.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccdak" data-page="cram"></div>
+
+  <main id="main" class="page" data-page-id="ccdak/cram">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCDAK</a></li>
+        <li><span aria-current="page">벼락치기 요약</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCDAK · D-1 전용</p>
+      <h1>벼락치기 요약</h1>
+      <p class="page__lead">
+        시험 하루 전에 <strong>이 한 페이지만</strong> 읽는 것을 목표로 만든 요약입니다.
+        설명은 최소로 줄이고 표와 짧은 불릿만 남겼습니다.
+        새 개념을 배우려 하지 말고, <strong>이미 아는 것의 값과 소속을 확인</strong>하세요.
+        브라우저 인쇄 기능으로 종이에 뽑아 가도 레이아웃이 유지됩니다.
+      </p>
+    </header>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="toc">
+      <h2 id="toc">이 페이지의 목차</h2>
+      <ol class="plan">
+        <li><a href="#numbers">외워야 할 숫자 25개</a> — 값만 모아 둔 표</li>
+        <li><a href="#defaults">설정 기본값 총정리</a> — 프로듀서 · 컨슈머 · 브로커 · 토픽 · Streams · Connect</li>
+        <li><a href="#d-app-development">Application Development (28%)</a></li>
+        <li><a href="#d-fundamentals">Fundamentals (23%)</a></li>
+        <li><a href="#d-connect">Kafka Connect (15%)</a></li>
+        <li><a href="#d-observability">Application Observability (13%)</a></li>
+        <li><a href="#d-streams">Kafka Streams (12%)</a></li>
+        <li><a href="#d-testing">Application Testing (8%)</a></li>
+        <li><a href="#api-order">API · 워크플로 호출 순서</a> — list order 유형 대비</li>
+        <li><a href="#exceptions">예외 클래스와 원인</a> — matching 유형 대비</li>
+        <li><a href="#version-facts">버전 사실 10개</a></li>
+        <li><a href="#last-check">시험장 들어가기 전 마지막 확인</a></li>
+      </ol>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="numbers">
+      <h2 id="numbers">외워야 할 숫자 25개</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>숫자만 모아 둔 표 — 값을 가리고 스스로 답해 보세요</caption>
+          <thead>
+            <tr><th scope="col">항목</th><th scope="col">값</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>linger.ms</code></th><td><strong>5</strong> (4.0에서 0→5)</td></tr>
+            <tr><th scope="row"><code>batch.size</code></th><td>16384</td></tr>
+            <tr><th scope="row"><code>buffer.memory</code></th><td>33554432 (32MB)</td></tr>
+            <tr><th scope="row"><code>max.block.ms</code></th><td>60000</td></tr>
+            <tr><th scope="row"><code>max.in.flight.requests.per.connection</code></th><td><strong>5</strong> (멱등성 시 상한)</td></tr>
+            <tr><th scope="row"><code>request.timeout.ms</code></th><td>30000</td></tr>
+            <tr><th scope="row"><code>delivery.timeout.ms</code></th><td><strong>120000</strong></td></tr>
+            <tr><th scope="row"><code>retries</code></th><td>2147483647</td></tr>
+            <tr><th scope="row"><code>max.request.size</code></th><td><strong>1048576</strong> (프로듀서)</td></tr>
+            <tr><th scope="row"><code>transaction.timeout.ms</code></th><td>60000</td></tr>
+            <tr><th scope="row"><code>session.timeout.ms</code></th><td><strong>45000</strong></td></tr>
+            <tr><th scope="row"><code>heartbeat.interval.ms</code></th><td>3000</td></tr>
+            <tr><th scope="row"><code>max.poll.interval.ms</code></th><td><strong>300000</strong> (5분)</td></tr>
+            <tr><th scope="row"><code>max.poll.records</code></th><td><strong>500</strong></td></tr>
+            <tr><th scope="row"><code>auto.commit.interval.ms</code></th><td>5000</td></tr>
+            <tr><th scope="row"><code>fetch.max.bytes</code></th><td>52428800 (50MB)</td></tr>
+            <tr><th scope="row"><code>max.partition.fetch.bytes</code></th><td>1048576 (1MB)</td></tr>
+            <tr><th scope="row"><code>message.max.bytes</code></th><td><strong>1048588</strong> (1MB 아님)</td></tr>
+            <tr><th scope="row"><code>retention.ms</code></th><td>604800000 (7일)</td></tr>
+            <tr><th scope="row"><code>segment.bytes</code></th><td>1073741824 (1GiB)</td></tr>
+            <tr><th scope="row"><code>delete.retention.ms</code></th><td>86400000 (1일)</td></tr>
+            <tr><th scope="row"><code>replica.lag.time.max.ms</code></th><td>30000</td></tr>
+            <tr><th scope="row"><code>offsets.retention.minutes</code></th><td>10080 (7일)</td></tr>
+            <tr><th scope="row">컨트롤러 쿼럼 권장 수</th><td><strong>3 또는 5</strong> (홀수)</td></tr>
+            <tr><th scope="row">EOS 최소 브로커 수</th><td><strong>3</strong> (<code>transaction.state.log.replication.factor=3</code>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="숫자 중 최우선 5개">
+        <p>
+          시간이 없으면 이 다섯 개만 확실히 하세요.
+          <strong><code>linger.ms</code>=5</strong> ·
+          <strong>in-flight ≤ 5</strong> ·
+          <strong><code>max.poll.interval.ms</code>=300000 / <code>max.poll.records</code>=500</strong> ·
+          <strong><code>message.max.bytes</code>=1048588</strong> ·
+          <strong><code>session.timeout.ms</code>=45000</strong>.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="defaults">
+      <h2 id="defaults">설정 기본값 총정리</h2>
+
+      <figure class="diagram" data-diagram="D-133">
+        <figcaption>
+          설정값 관계도 — 프로듀서 · 브로커 · 토픽 · 컨슈머 설정이 서로 어떻게 얽히는지 한 장으로.
+          <code>acks</code> ↔ <code>min.insync.replicas</code> ↔ <code>replication.factor</code>,
+          <code>max.request.size</code> ↔ <code>message.max.bytes</code> ↔ <code>fetch.max.bytes</code> ↔
+          <code>replica.fetch.max.bytes</code>,
+          <code>linger.ms</code> ↔ <code>batch.size</code> ↔ <code>delivery.timeout.ms</code> 묶음이 보입니다.
+          시험 직전 한 장 요약으로 가장 유용한 그림입니다.
+        </figcaption>
+      </figure>
+
+      <h3 id="defaults-producer">프로듀서</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Producer (Apache Kafka 4.3)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">한 줄</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>acks</code></th><td><code>all</code></td><td>3.0부터. <code>all</code>일 때만 minISR 검사</td></tr>
+            <tr><th scope="row"><code>enable.idempotence</code></th><td><code>true</code></td><td>in-flight≤5, <code>acks=all</code>, <code>retries&gt;0</code> 강제</td></tr>
+            <tr><th scope="row"><code>linger.ms</code></th><td><strong>5</strong></td><td>4.0에서 변경. <code>batch.size</code>와 OR 조건</td></tr>
+            <tr><th scope="row"><code>batch.size</code></th><td>16384</td><td>파티션별 배치 크기</td></tr>
+            <tr><th scope="row"><code>buffer.memory</code></th><td>33554432</td><td>고갈 시 <code>send()</code> 블로킹</td></tr>
+            <tr><th scope="row"><code>max.block.ms</code></th><td>60000</td><td>버퍼·메타데이터 대기 상한</td></tr>
+            <tr><th scope="row"><code>max.in.flight…</code></th><td>5</td><td>6 이상이면 <code>ConfigException</code></td></tr>
+            <tr><th scope="row"><code>request.timeout.ms</code></th><td>30000</td><td>요청 1회</td></tr>
+            <tr><th scope="row"><code>delivery.timeout.ms</code></th><td>120000</td><td><strong>전체 예산</strong></td></tr>
+            <tr><th scope="row"><code>retries</code></th><td>2147483647</td><td>사실상 무한 → 시간이 상한</td></tr>
+            <tr><th scope="row"><code>retry.backoff.ms</code></th><td>100</td><td></td></tr>
+            <tr><th scope="row"><code>max.request.size</code></th><td>1048576</td><td>브로커 값과 <strong>다름</strong></td></tr>
+            <tr><th scope="row"><code>compression.type</code></th><td><code>none</code></td><td>토픽 기본값은 <code>producer</code></td></tr>
+            <tr><th scope="row"><code>partitioner.class</code></th><td><code>null</code></td><td>내장 로직 (키 해시 / sticky)</td></tr>
+            <tr><th scope="row"><code>transactional.id</code></th><td><code>null</code></td><td>지정 시 트랜잭션 사용 가능</td></tr>
+            <tr><th scope="row"><code>transaction.timeout.ms</code></th><td>60000</td><td>초과 시 코디네이터가 abort</td></tr>
+            <tr><th scope="row"><code>metadata.max.age.ms</code></th><td>300000</td><td>메타데이터 강제 갱신 주기</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="defaults-consumer">컨슈머</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Consumer (Apache Kafka 4.3)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">한 줄</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>group.protocol</code></th><td><strong><code>classic</code></strong></td><td>KIP-848은 GA지만 기본값 아님</td></tr>
+            <tr><th scope="row"><code>group.id</code></th><td><code>null</code></td><td><code>subscribe()</code>에는 필수</td></tr>
+            <tr><th scope="row"><code>group.instance.id</code></th><td><code>null</code></td><td>static membership</td></tr>
+            <tr><th scope="row"><code>session.timeout.ms</code></th><td>45000</td><td>하트비트 축</td></tr>
+            <tr><th scope="row"><code>heartbeat.interval.ms</code></th><td>3000</td><td>session의 1/3 이하</td></tr>
+            <tr><th scope="row"><code>max.poll.interval.ms</code></th><td>300000</td><td>poll 축</td></tr>
+            <tr><th scope="row"><code>max.poll.records</code></th><td>500</td><td>poll 초과의 1차 처방</td></tr>
+            <tr><th scope="row"><code>enable.auto.commit</code></th><td><code>true</code></td><td>트랜잭션 시 <code>false</code></td></tr>
+            <tr><th scope="row"><code>auto.commit.interval.ms</code></th><td>5000</td><td></td></tr>
+            <tr><th scope="row"><code>auto.offset.reset</code></th><td><code>latest</code></td><td>커밋 없거나 범위 밖일 때만</td></tr>
+            <tr><th scope="row"><code>isolation.level</code></th><td><code>read_uncommitted</code></td><td><strong>컨슈머 설정</strong></td></tr>
+            <tr><th scope="row"><code>partition.assignment.strategy</code></th><td><code>[Range,<br>CooperativeSticky]</code></td><td>classic에서만 유효</td></tr>
+            <tr><th scope="row"><code>fetch.min.bytes</code></th><td>1</td><td><code>fetch.max.wait.ms</code>=500</td></tr>
+            <tr><th scope="row"><code>fetch.max.bytes</code></th><td>52428800</td><td>요청 전체</td></tr>
+            <tr><th scope="row"><code>max.partition.fetch.bytes</code></th><td>1048576</td><td>파티션당</td></tr>
+            <tr><th scope="row"><code>allow.auto.create.topics</code></th><td><code>true</code></td><td>오타 토픽 생성 위험</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="defaults-broker-topic">브로커 · 토픽</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Broker · Topic (Apache Kafka 4.3)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">소속</th><th scope="col">기본값</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>num.partitions</code></th><td>브로커</td><td>1</td></tr>
+            <tr><th scope="row"><code>default.replication.factor</code></th><td>브로커</td><td>1</td></tr>
+            <tr><th scope="row"><code>auto.create.topics.enable</code></th><td>브로커</td><td><code>true</code></td></tr>
+            <tr><th scope="row"><code>message.max.bytes</code></th><td>브로커</td><td><strong>1048588</strong></td></tr>
+            <tr><th scope="row"><code>replica.fetch.max.bytes</code></th><td>브로커</td><td>1048576</td></tr>
+            <tr><th scope="row"><code>replica.lag.time.max.ms</code></th><td>브로커</td><td>30000</td></tr>
+            <tr><th scope="row"><code>offsets.retention.minutes</code></th><td>브로커</td><td>10080</td></tr>
+            <tr><th scope="row"><code>num.network.threads</code></th><td>브로커</td><td>3</td></tr>
+            <tr><th scope="row"><code>num.io.threads</code></th><td>브로커</td><td>8</td></tr>
+            <tr><th scope="row"><code>num.replica.fetchers</code></th><td>브로커</td><td>1</td></tr>
+            <tr><th scope="row"><code>group.initial.rebalance.delay.ms</code></th><td>브로커</td><td>3000</td></tr>
+            <tr><th scope="row"><code>transaction.state.log.replication.factor</code></th><td>브로커</td><td>3</td></tr>
+            <tr><th scope="row"><code>transaction.state.log.min.isr</code></th><td>브로커</td><td>2</td></tr>
+            <tr><th scope="row"><code>min.insync.replicas</code></th><td>브로커·토픽</td><td>1</td></tr>
+            <tr><th scope="row"><code>unclean.leader.election.enable</code></th><td>브로커·토픽</td><td><code>false</code></td></tr>
+            <tr><th scope="row"><code>cleanup.policy</code></th><td>토픽</td><td><code>delete</code></td></tr>
+            <tr><th scope="row"><code>retention.ms</code></th><td>토픽</td><td>604800000</td></tr>
+            <tr><th scope="row"><code>retention.bytes</code></th><td>토픽</td><td>-1 (파티션당)</td></tr>
+            <tr><th scope="row"><code>segment.bytes</code></th><td>토픽</td><td>1073741824</td></tr>
+            <tr><th scope="row"><code>segment.ms</code></th><td>토픽</td><td>604800000</td></tr>
+            <tr><th scope="row"><code>max.message.bytes</code></th><td>토픽</td><td>1048588</td></tr>
+            <tr><th scope="row"><code>min.cleanable.dirty.ratio</code></th><td>토픽</td><td>0.5</td></tr>
+            <tr><th scope="row"><code>delete.retention.ms</code></th><td>토픽</td><td>86400000</td></tr>
+            <tr><th scope="row"><code>min.compaction.lag.ms</code></th><td>토픽</td><td>0</td></tr>
+            <tr><th scope="row"><code>compression.type</code></th><td>토픽</td><td><code>producer</code></td></tr>
+            <tr><th scope="row"><code>message.timestamp.type</code></th><td>토픽</td><td><code>CreateTime</code></td></tr>
+            <tr><th scope="row"><code>remote.storage.enable</code></th><td>토픽</td><td><code>false</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="defaults-streams-connect">Streams · Connect</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Streams · Connect (Apache Kafka 4.3)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">소속</th><th scope="col">기본값</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>processing.guarantee</code></th><td>Streams</td><td><code>at_least_once</code></td></tr>
+            <tr><th scope="row"><code>num.stream.threads</code></th><td>Streams</td><td><strong>1</strong></td></tr>
+            <tr><th scope="row"><code>num.standby.replicas</code></th><td>Streams</td><td><strong>0</strong></td></tr>
+            <tr><th scope="row"><code>commit.interval.ms</code></th><td>Streams</td><td>30000</td></tr>
+            <tr><th scope="row"><code>replication.factor</code></th><td>Streams</td><td>-1 (브로커 기본값)</td></tr>
+            <tr><th scope="row"><code>statestore.cache.max.bytes</code></th><td>Streams</td><td>10485760</td></tr>
+            <tr><th scope="row"><code>state.dir</code></th><td>Streams</td><td><strong>임시 디렉터리</strong></td></tr>
+            <tr><th scope="row"><code>default.key.serde</code></th><td>Streams</td><td><code>null</code> (필수 지정)</td></tr>
+            <tr><th scope="row"><code>topology.optimization</code></th><td>Streams</td><td><code>none</code></td></tr>
+            <tr><th scope="row"><code>max.task.idle.ms</code></th><td>Streams</td><td>0</td></tr>
+            <tr><th scope="row"><code>acceptable.recovery.lag</code></th><td>Streams</td><td>10000</td></tr>
+            <tr><th scope="row"><code>probing.rebalance.interval.ms</code></th><td>Streams</td><td>600000</td></tr>
+            <tr><th scope="row"><code>offset.flush.interval.ms</code></th><td>Connect 워커</td><td>60000</td></tr>
+            <tr><th scope="row"><code>offset.storage.partitions</code></th><td>Connect 워커</td><td>25</td></tr>
+            <tr><th scope="row"><code>status.storage.partitions</code></th><td>Connect 워커</td><td>5</td></tr>
+            <tr><th scope="row"><code>config.storage.replication.factor</code></th><td>Connect 워커</td><td>3</td></tr>
+            <tr><th scope="row"><code>rebalance.timeout.ms</code></th><td>Connect 워커</td><td>60000</td></tr>
+            <tr><th scope="row"><code>plugin.path</code></th><td>Connect 워커</td><td><code>null</code></td></tr>
+            <tr><th scope="row"><code>errors.tolerance</code></th><td>Connect 커넥터</td><td><code>none</code></td></tr>
+            <tr><th scope="row"><code>errors.log.enable</code></th><td>Connect 커넥터</td><td><code>false</code></td></tr>
+            <tr><th scope="row"><code>errors.retry.timeout</code></th><td>Connect 커넥터</td><td><strong>0</strong></td></tr>
+            <tr><th scope="row"><code>errors.deadletterqueue.topic.name</code></th><td>Connect sink</td><td><code>""</code> (비활성)</td></tr>
+            <tr><th scope="row"><code>errors.deadletterqueue.<br>context.headers.enable</code></th><td>Connect sink</td><td><code>false</code></td></tr>
+            <tr><th scope="row"><code>exactly.once.source.support</code></th><td>Connect 워커</td><td><code>disabled</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="d-app-development">
+      <h2 id="d-app-development">Application Development — 28%</h2>
+
+      <h3 id="cram-producer">프로듀서</h3>
+      <ul>
+        <li><code>send()</code>는 <strong>비동기 즉시 반환</strong>. 실제 전송은 <strong>Sender 스레드</strong></li>
+        <li><code>onCompletion()</code>은 <strong>Sender 스레드</strong>에서 실행. 블로킹 작업 금지</li>
+        <li><code>metadata</code>와 <code>exception</code> 중 <strong>하나는 항상 null</strong></li>
+        <li>같은 파티션의 콜백은 <strong>순서 보장</strong>. 파티션이 다르면 보장 없음</li>
+        <li>멱등성 = <strong>PID + 파티션별 시퀀스 번호</strong>. 범위는 <strong>한 세션 × 한 파티션</strong></li>
+        <li>멱등성 켜면 <strong>in-flight ≤ 5</strong>. 6 이상이면 기동 시 <code>ConfigException</code></li>
+        <li>키 있음 → <code>murmur2(key) % N</code> <strong>결정적</strong> / 키 없음 → <strong>배치 단위 sticky</strong></li>
+        <li>파티션 수를 늘리면 <strong>같은 키의 배치가 바뀌어 순서가 깨짐</strong></li>
+        <li>실질 재시도 상한은 <code>retries</code>가 아니라 <strong><code>delivery.timeout.ms</code></strong></li>
+        <li><code>linger.ms</code> + <code>request.timeout.ms</code> ≤ <code>delivery.timeout.ms</code></li>
+        <li>버퍼 고갈 시 <code>send()</code>가 <strong>블로킹</strong>되고 <code>max.block.ms</code> 초과 시 <code>TimeoutException</code></li>
+      </ul>
+
+      <h3 id="cram-consumer">컨슈머</h3>
+      <ul>
+        <li><strong>하트비트 축</strong> = <code>heartbeat.interval.ms</code> · <code>session.timeout.ms</code></li>
+        <li><strong>poll 축</strong> = <code>max.poll.interval.ms</code> · <code>max.poll.records</code></li>
+        <li>"프로세스는 살아 있는데 그룹에서 빠짐" → <strong>poll 축</strong>. 처방은 <code>max.poll.records</code> 축소</li>
+        <li><code>subscribe()</code> = 그룹 참여·리밸런스·<code>group.id</code> 필수</li>
+        <li><code>assign()</code> = 수동 지정·리밸런스 없음·<code>group.id</code> 없어도 동작·<strong>파티션 증가 미감지</strong></li>
+        <li>둘을 섞으면 <strong><code>IllegalStateException</code></strong></li>
+        <li>리밸런스 조건: 합류/이탈, 크래시, poll 초과, <strong>파티션 수 증가</strong>, 패턴 매칭 새 토픽, 코디네이터 장애</li>
+        <li><code>auto.offset.reset</code>은 <strong>커밋이 없거나 범위 밖일 때만</strong> 발동</li>
+        <li>커밋 오프셋은 <code>offsets.retention.minutes</code>(7일) 후 만료 → <code>latest</code>면 <strong>구간 건너뜀</strong></li>
+        <li>권장 커밋: 루프에서 <code>commitAsync()</code>, 종료 <code>finally</code>에서 <code>commitSync()</code></li>
+        <li>처리 <strong>전</strong> 커밋 = at-most-once(유실), 처리 <strong>후</strong> 커밋 = at-least-once(중복)</li>
+        <li><code>group.protocol=consumer</code>면 session·heartbeat·assignment.strategy가 <strong>무시</strong></li>
+      </ul>
+
+      <h3 id="cram-delivery">전달 보장 · 트랜잭션</h3>
+      <ul>
+        <li>기본 동작은 <strong>at-least-once</strong></li>
+        <li>EOS = 프로듀서 <code>transactional.id</code> + 컨슈머 <strong><code>read_committed</code></strong> + <code>sendOffsetsToTransaction</code></li>
+        <li><code>isolation.level</code> 기본값 <strong><code>read_uncommitted</code></strong> — 컨슈머 설정</li>
+        <li><code>read_committed</code>는 <strong>LSO까지만</strong> 읽음. 열린 트랜잭션이 뒤 메시지까지 막음</li>
+        <li>컨트롤 레코드는 <strong>애플리케이션에 안 보이지만 오프셋을 소비</strong> → 오프셋 빈 칸 발생</li>
+        <li>EOS는 <strong>Kafka 경계 안에서만</strong>. 외부 DB·API는 <strong>멱등 키를 직접</strong> 구현</li>
+        <li>트랜잭션 사용 시 컨슈머 <code>enable.auto.commit=false</code></li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="d-fundamentals">
+      <h2 id="d-fundamentals">Fundamentals — 23%</h2>
+
+      <h3 id="cram-replication">복제 · 오프셋</h3>
+      <ul>
+        <li>순서 보장 단위는 <strong>파티션</strong>. 전역 오프셋은 없음</li>
+        <li>파티션 수는 <strong>늘릴 수만</strong> 있고 늘리면 <strong>리밸런스 + 키 배치 변경</strong></li>
+        <li><code>acks=all</code>은 "<strong>현재 ISR</strong> 전원"의 응답. 모든 레플리카가 아님</li>
+        <li><strong>쓰기 가능 장애 대수 = RF − minISR</strong> (RF=3, minISR=2 → 1대)</li>
+        <li>ISR 이탈 기준은 <code>replica.lag.time.max.ms</code>(30000)</li>
+        <li><code>unclean.leader.election.enable=false</code>(기본) → 유실 방지, 가용성 희생</li>
+        <li>오프셋 4종: <strong>log-start / committed / high watermark / LEO</strong></li>
+        <li><strong>lag = high watermark − committed offset</strong> (LEO 아님)</li>
+        <li>컨슈머는 <strong>high watermark를 넘어 읽지 못함</strong></li>
+      </ul>
+
+      <h3 id="cram-size">메시지 크기 5+1개</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>이름 · 소속 · 값</caption>
+          <thead><tr><th scope="col">설정</th><th scope="col">소속</th><th scope="col">값</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>max.request.size</code></th><td>프로듀서</td><td>1048576</td></tr>
+            <tr><th scope="row"><code>message.max.bytes</code></th><td>브로커</td><td><strong>1048588</strong></td></tr>
+            <tr><th scope="row"><code>max.message.bytes</code></th><td>토픽</td><td>1048588</td></tr>
+            <tr><th scope="row"><code>max.partition.fetch.bytes</code></th><td>컨슈머</td><td>1048576</td></tr>
+            <tr><th scope="row"><code>fetch.max.bytes</code></th><td>컨슈머</td><td>52428800</td></tr>
+            <tr><th scope="row"><code>replica.fetch.max.bytes</code></th><td>브로커(팔로워)</td><td>1048576</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li>상한은 <strong>압축 후 레코드 배치</strong> 기준</li>
+        <li>브로커 값(1048588)만 <strong>1MiB가 아님</strong>. 12바이트 차이</li>
+        <li><code>replica.fetch.max.bytes</code>를 빼먹으면 <strong>쓰기는 되고 복제가 실패</strong> → ISR 축소</li>
+      </ul>
+
+      <h3 id="cram-retention">리텐션 · 컴팩션</h3>
+      <ul>
+        <li><code>delete</code> = 기간·크기 초과분을 <strong>세그먼트 단위</strong>로 삭제</li>
+        <li><code>compact</code> = 키별 최신 값만. <strong>키가 필수</strong></li>
+        <li><strong>활성 세그먼트는 컴팩션 대상이 아님</strong> → 옛 값이 보이는 것이 정상</li>
+        <li>컴팩션은 <strong>즉시가 아니라 백그라운드</strong> (dirty ratio 0.5 초과 시)</li>
+        <li>tombstone = <strong>value=null</strong>. 수명은 <code>delete.retention.ms</code>(1일)</li>
+        <li><code>retention.ms</code>를 줄여도 <code>segment.ms</code>가 크면 <strong>안 지워짐</strong></li>
+        <li><code>retention.bytes</code>는 <strong>파티션당</strong></li>
+        <li>디스크 = 유입량 × 일수 × <strong>RF</strong> × (1 − 압축률) × 여유</li>
+      </ul>
+
+      <h3 id="cram-schema">스키마 호환성</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>모드 · 의미 · 배포 순서</caption>
+          <thead><tr><th scope="col">모드</th><th scope="col">의미</th><th scope="col">먼저 배포</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">BACKWARD (기본)</th><td>새 스키마로 옛 데이터 읽기</td><td><strong>컨슈머</strong></td></tr>
+            <tr><th scope="row">FORWARD</th><td>옛 스키마로 새 데이터 읽기</td><td><strong>프로듀서</strong></td></tr>
+            <tr><th scope="row">FULL</th><td>양방향</td><td>무관</td></tr>
+            <tr><th scope="row">*_TRANSITIVE</th><td><strong>모든 이전 버전</strong>과 대조</td><td>같음</td></tr>
+            <tr><th scope="row">NONE</th><td>검사 안 함</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li>BACKWARD: 필드 추가에는 <strong><code>default</code> 필수</strong>. 삭제는 자유</li>
+        <li>FORWARD: 필드 추가 자유. <strong>default 없는 필드 삭제는 거부</strong></li>
+        <li>타입 변경·이름 변경은 어느 모드에서도 <strong>위험</strong> (alias 필요)</li>
+        <li>wire format = <strong>magic byte(1) + schema id(4) + payload</strong></li>
+        <li>subject 전략: TopicName(기본) / RecordName / TopicRecordName</li>
+        <li>프로덕션에서 <code>auto.register.schemas</code>는 <strong>끄기</strong></li>
+      </ul>
+
+      <h3 id="cram-security">보안</h3>
+      <ul>
+        <li><code>PLAINTEXT</code>(둘 다 없음) / <code>SSL</code>(암호화+선택 mTLS) /
+          <code>SASL_PLAINTEXT</code>(인증만, <strong>평문</strong>) / <strong><code>SASL_SSL</code></strong>(권장)</li>
+        <li>SASL 메커니즘: <code>PLAIN</code>, <code>SCRAM-SHA-256/512</code>, <code>GSSAPI</code>, <code>OAUTHBEARER</code></li>
+        <li><strong>인증 ≠ 인가.</strong> ACL이 없으면 <code>TopicAuthorizationException</code></li>
+        <li>컨슈머는 <strong>Topic Read + Group Read</strong> 두 ACL 필요</li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="d-connect">
+      <h2 id="d-connect">Kafka Connect — 15%</h2>
+      <ul>
+        <li>worker(프로세스) → connector(정의) → <strong>task(병렬성 단위)</strong></li>
+        <li>standalone = properties로 커넥터 전달, 로컬 상태 / <strong>distributed = REST만</strong>, Kafka 토픽에 상태</li>
+        <li>내부 토픽 3종 모두 <strong><code>cleanup.policy=compact</code></strong></li>
+        <li><code>config.storage.topic</code>은 <strong>파티션 1개</strong> (순서 중요)</li>
+        <li>워커 <code>group.id</code> = Connect 클러스터 이름. <strong>컨슈머 그룹과 겹치면 안 됨</strong></li>
+        <li><strong>source 오프셋 → <code>offset.storage.topic</code></strong></li>
+        <li><strong>sink 오프셋 → <code>__consumer_offsets</code></strong>, 그룹은 <code>connect-{커넥터명}</code></li>
+        <li>컨버터는 <strong>key·value 각각</strong>. <code>JsonConverter</code>는 <code>schemas.enable</code></li>
+        <li>Avro·Protobuf 컨버터는 <strong>Confluent 제공</strong> (Schema Registry 필요)</li>
+        <li>SMT 위치: source는 <strong>converter 앞</strong>, sink는 <strong>converter 뒤</strong></li>
+        <li>SMT는 <strong>메시지 1건 · stateless · 체인 순서가 결과를 바꿈</strong>. 집계·조인 불가</li>
+        <li>DLQ 3조건: <code>errors.tolerance=all</code> + 토픽 이름 지정 + <strong>sink 전용</strong></li>
+        <li><code>errors.deadletterqueue.context.headers.enable=true</code>여야 원인이 남음</li>
+        <li><code>errors.retry.timeout</code> 기본 <strong>0 = 재시도 없음</strong>, <code>-1</code>은 무한</li>
+        <li>태스크가 <code>FAILED</code>가 되면 <strong>자동 재시작하지 않음</strong></li>
+        <li><strong>409 Conflict</strong> = 리밸런스 진행 중 또는 <strong>이름 중복</strong></li>
+        <li><code>tasks.max</code>는 상한. sink 실질 상한은 <strong>입력 파티션 수</strong></li>
+        <li>확장 순서: <code>tasks.max</code> → 파티션 증설 → 워커 추가. <strong>커넥터 복제는 중복 유발</strong></li>
+      </ul>
+
+      <h3 id="cram-connect-rest">REST 핵심 8개</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>외워 둘 엔드포인트</caption>
+          <thead><tr><th scope="col">경로</th><th scope="col">용도</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>POST /connectors</code></th><td>생성</td></tr>
+            <tr><th scope="row"><code>GET /connectors/{n}/status</code></th><td><strong>상태 + <code>trace</code> + <code>worker_id</code></strong></td></tr>
+            <tr><th scope="row"><code>PUT /connectors/{n}/config</code></th><td>설정 전체 교체</td></tr>
+            <tr><th scope="row"><code>PATCH /connectors/{n}/config</code></th><td>부분 수정</td></tr>
+            <tr><th scope="row"><code>POST /connectors/{n}/restart</code></th><td><code>?includeTasks=true&amp;onlyFailed=true</code></td></tr>
+            <tr><th scope="row"><code>GET/PATCH/DELETE …/offsets</code></th><td>오프셋 조회·변경·초기화 (STOPPED 필요)</td></tr>
+            <tr><th scope="row"><code>PUT /connector-plugins/{t}/config/validate</code></th><td>배포 전 검증</td></tr>
+            <tr><th scope="row"><code>PUT /admin/loggers/{name}</code></th><td><strong>런타임 로그 레벨 변경</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="d-observability">
+      <h2 id="d-observability">Application Observability — 13%</h2>
+      <ul>
+        <li><strong><code>client.id</code></strong>를 지정하지 않으면 메트릭에서 구분 불가</li>
+        <li>프로듀서: <code>record-error-rate</code>(알림 1순위) · <code>record-retry-rate</code> ·
+          <code>record-queue-time-avg</code> · <code>request-latency-avg</code> · <code>batch-size-avg</code></li>
+        <li>컨슈머 fetch: <strong><code>records-lag-max</code></strong> · <code>records-lag-avg</code> ·
+          <code>records-consumed-rate</code> · <code>fetch-latency-avg</code></li>
+        <li>컨슈머 poll: <strong><code>time-between-poll-max</code></strong> ·
+          <code>last-poll-seconds-ago</code> · <code>poll-idle-ratio-avg</code></li>
+        <li>컨슈머 코디네이터: <strong><code>assigned-partitions</code></strong> ·
+          <code>rebalance-rate-per-hour</code> · <code>failed-rebalance-rate-per-hour</code> ·
+          <code>commit-latency-avg</code> · <code>last-rebalance-seconds-ago</code></li>
+        <li><strong>리밸런스 예측은 <code>time-between-poll-max</code></strong>로. lag은 결과 지표라 늦음</li>
+        <li><code>assigned-partitions=0</code> → 컨슈머 수 &gt; 파티션 수 또는 리밸런스 미완</li>
+      </ul>
+
+      <h3 id="cram-lag">lag 측정 3가지</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>방법과 함정</caption>
+          <thead><tr><th scope="col">방법</th><th scope="col">함정</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>kafka-consumer-groups --describe</code></th><td>커밋 기준이라 지연. 컨슈머 없으면 <code>CONSUMER-ID</code>가 <code>-</code></td></tr>
+            <tr><th scope="row">클라이언트 JMX <code>records-lag-max</code></th><td><strong>컨슈머가 죽으면 메트릭이 사라져 0처럼 보임</strong></td></tr>
+            <tr><th scope="row">외부 lag 익스포터</th><td>운영 부담. 커밋 기준의 지연은 동일</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="cram-broker-metrics">브로커 메트릭 (개발자 관점)</h3>
+      <ul>
+        <li><code>UnderReplicatedPartitions</code> = 0이어야 함 (<strong>경고</strong>)</li>
+        <li><strong><code>UnderMinIsrPartitionCount</code></strong> = 0이어야 함
+          (<strong>이미 <code>acks=all</code> 쓰기 실패</strong> → <code>NotEnoughReplicasException</code>)</li>
+        <li><code>AtMinIsrPartitionCount</code> — 한 대만 더 빠지면 실패</li>
+        <li><code>OfflinePartitionsCount</code> = 0 (리더 없음 = 읽기·쓰기 불가)</li>
+        <li><code>ActiveControllerCount</code> — 클러스터 전체 합이 <strong>1</strong></li>
+        <li><code>RequestHandlerAvgIdlePercent</code> · <code>NetworkProcessorAvgIdlePercent</code> — 낮으면 포화</li>
+        <li><code>IsrShrinksPerSec</code> · <code>LeaderElectionRateAndTimeMs</code> — 잦으면 불안정</li>
+      </ul>
+
+      <h3 id="cram-connect-metrics">Connect · Streams 관측</h3>
+      <ul>
+        <li><strong><code>connector-failed-task-count</code></strong> &gt; 0 → 즉시 조사</li>
+        <li><code>total-records-skipped</code> · <code>deadletterqueue-produce-requests</code> —
+          <strong><code>errors.tolerance=all</code>의 조용한 유실</strong>을 잡는 지표</li>
+        <li><code>sink-record-lag-max</code>는 <strong>sink에만</strong> 있음</li>
+        <li>Connect 로그는 <strong>태스크를 실행한 워커 노드의 로컬 파일</strong>.
+          <code>status</code>의 <code>worker_id</code>로 찾음</li>
+        <li>Streams MBean: <code>stream-thread-metrics</code> · <code>stream-task-metrics</code> ·
+          <code>stream-processor-node-metrics</code> · <code>stream-state-metrics</code></li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="d-streams">
+      <h2 id="d-streams">Kafka Streams — 12%</h2>
+      <ul>
+        <li>KStream = append-only 사실 / KTable = <strong>upsert 상태</strong> (null = 삭제) /
+          GlobalKTable = <strong>전체 복제</strong></li>
+        <li>판단 기준: <strong>같은 키가 반복될 때 두 값이 모두 의미가 있는가</strong></li>
+        <li><strong>리파티션 유발</strong>: <code>map</code> · <code>flatMap</code> · <code>selectKey</code> ·
+          <code>groupBy</code> · <code>repartition</code></li>
+        <li><strong>유발하지 않음</strong>: <code>mapValues</code> · <code>flatMapValues</code> ·
+          <code>filter</code> · <code>peek</code> · <code>groupByKey</code></li>
+        <li>stateful: <code>count</code> · <code>reduce</code> · <code>aggregate</code> · 모든 <strong>윈도우</strong> ·
+          모든 <strong>조인</strong> · <code>suppress</code></li>
+        <li>상태 저장소 = RocksDB + <strong>changelog 토픽(compact)</strong>.
+          리파티션 토픽은 <strong><code>delete</code></strong></li>
+        <li><code>state.dir</code> 기본이 <strong>임시 디렉터리</strong>. <code>num.standby.replicas</code>는 <strong>0</strong></li>
+        <li>태스크 수 = <strong>입력 파티션 수</strong>. 컨슈머 그룹 ID = <strong><code>application.id</code></strong></li>
+        <li><code>processing.guarantee</code> 기본 <code>at_least_once</code>. EOS는 <strong>브로커 3대</strong> 전제</li>
+      </ul>
+
+      <h3 id="cram-joins">조인 4종</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>윈도우 · co-partitioning</caption>
+          <thead><tr><th scope="col">조인</th><th scope="col">윈도우</th><th scope="col">co-partitioning</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">KStream ⋈ KStream</th><td><strong>필수</strong></td><td>필요</td></tr>
+            <tr><th scope="row">KStream ⋈ KTable</th><td>불필요</td><td>필요</td></tr>
+            <tr><th scope="row">KStream ⋈ GlobalKTable</th><td>불필요</td><td><strong>불필요</strong></td></tr>
+            <tr><th scope="row">KTable ⋈ KTable</th><td>불필요</td><td>필요 (FK 조인은 불필요)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li>co-partitioning <strong>요건은 2개</strong>: <strong>파티션 수 동일 · 파티셔너 동일</strong>. &ldquo;키 동일&rdquo;은 요건이 아니라 <strong>equi-join의 전제</strong>입니다</li>
+        <li>파티션 수 불일치 → <strong><code>TopologyBuilderException</code></strong></li>
+        <li><strong>파티셔너 불일치는 감지되지 않아 조인이 조용히 누락</strong></li>
+        <li>맞출 때는 <strong>적은 쪽을 많은 쪽에</strong>. KStream-KTable이면 KStream을 리파티션</li>
+      </ul>
+
+      <h3 id="cram-windows">윈도우 4종</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>경계와 성질</caption>
+          <thead><tr><th scope="col">윈도우</th><th scope="col">성질</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Tumbling</th><td>고정 크기, <strong>겹치지 않음</strong>. 레코드당 1개</td></tr>
+            <tr><th scope="row">Hopping</th><td>고정 크기 + advance로 겹침. 레코드당 <strong>size÷advance 개</strong></td></tr>
+            <tr><th scope="row">Sliding</th><td>레코드 기준 고정 간격. 데이터 있는 구간만</td></tr>
+            <tr><th scope="row">Session</th><td><strong>비활성 gap</strong>으로 구분, 크기 가변, <strong>병합 가능</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li>기본 시간 축은 <strong>event time</strong>. 추출기 기본은 <code>FailOnInvalidTimestamp</code></li>
+        <li><code>…WithNoGrace</code>면 <strong>지연 도착 레코드가 버려짐</strong></li>
+        <li>중간 결과를 막고 최종만 내보내려면 <code>suppress()</code></li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="d-testing">
+      <h2 id="d-testing">Application Testing — 8%</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>도구 · 브로커 필요 여부 · 용도</caption>
+          <thead><tr><th scope="col">도구</th><th scope="col">브로커</th><th scope="col">용도</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>TopologyTestDriver</code></th><td><strong>불필요</strong></td><td>Streams 토폴로지 단위 테스트</td></tr>
+            <tr><th scope="row"><code>MockProducer</code></th><td>불필요</td><td><code>history()</code>로 전송 레코드 검사</td></tr>
+            <tr><th scope="row"><code>MockConsumer</code></th><td>불필요</td><td><code>addRecord()</code>로 레코드 주입</td></tr>
+            <tr><th scope="row">Testcontainers</th><td>필요</td><td>실제 브로커 통합 테스트</td></tr>
+            <tr><th scope="row"><code>EmbeddedKafkaCluster</code></th><td>필요(JVM)</td><td>Docker 없는 통합 테스트. <strong>Apache 공개 배포 아티팩트가 아닙니다</strong> (<code>streams/integration-tests</code> 내부 유틸) — &ldquo;Apache 제공 도구&rdquo;로 분류하면 틀립니다</td></tr>
+            <tr><th scope="row"><code>@EmbeddedKafka</code></th><td>필요(JVM)</td><td>Spring 통합 테스트</td></tr>
+            <tr><th scope="row"><code>kafka-producer-perf-test.sh</code></th><td>필요</td><td>쓰기 처리량·지연</td></tr>
+            <tr><th scope="row"><code>kafka-consumer-perf-test.sh</code></th><td>필요</td><td>읽기 처리량</td></tr>
+            <tr><th scope="row"><code>kafka-e2e-latency.sh</code></th><td>필요</td><td>end-to-end 지연</td></tr>
+            <tr><th scope="row"><code>kafka-verifiable-producer/consumer.sh</code></th><td>필요</td><td>유실·중복 정합성 검증</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li><code>createInputTopic</code> → <strong>serializer</strong>, <code>createOutputTopic</code> → <strong>deserializer</strong></li>
+        <li>event-time punctuation은 <strong>자동</strong>, wall-clock은 <code>advanceWallClockTime()</code></li>
+        <li>상태 저장소는 <code>getKeyValueStore()</code>로 미리 채우거나 검증 가능</li>
+        <li><code>TopologyTestDriver</code>로 <strong>리밸런스·다중 인스턴스·브로커 장애는 검증 불가</strong></li>
+        <li><code>MockConsumer</code>는 <code>updateBeginningOffsets()</code> 없이는 poll이 동작하지 않음</li>
+        <li>단일 브로커 테스트: <code>transaction.state.log.replication.factor=1</code>,
+          <code>transaction.state.log.min.isr=1</code></li>
+        <li><strong><code>--throughput -1</code></strong>은 최대 처리량 측정용. 지연은 목표 값을 지정해 측정</li>
+        <li>지연은 <strong>99th · 99.9th 백분위</strong>로 판단</li>
+        <li>Streams 테스트 재실행 전 <code>kafka-streams-application-reset.sh</code> 또는 <code>cleanUp()</code></li>
+      </ul>
+      <aside class="note note--version" data-label="4.3 옵션 변경 (KIP-1147)">
+        <p>
+          perf 도구의 <code>--producer-props</code> → <strong><code>--command-property</code></strong>,
+          <code>--messages</code> → <strong><code>--num-records</code></strong>,
+          <code>--producer.config</code>/<code>--consumer.config</code> → <strong><code>--command-config</code></strong>.
+          기존 옵션은 deprecated이며 Kafka 5.0에서 제거 예정입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="api-order">
+      <h2 id="api-order">API · 워크플로 호출 순서</h2>
+
+      <p>list order 유형 대비. 소리 내어 순서를 읊어 보세요.</p>
+
+      <figure class="code">
+        <figcaption>트랜잭션 (consume-transform-produce)</figcaption>
+        <pre><code class="lang-text">1. initTransactions()          ← 애플리케이션 시작 시 1회만
+2. beginTransaction()
+3. send(...)                    ← 결과 레코드
+4. sendOffsetsToTransaction(...) ← 읽은 오프셋을 같은 트랜잭션에
+5. commitTransaction()
+   실패 시 abortTransaction()
+   ProducerFenced / OutOfOrderSequence / Authorization → close() 후 종료</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>파티션 재할당</figcaption>
+        <pre><code class="lang-text">1. --generate   (계획 JSON 생성)
+2. --execute    (--throttle 로 대역폭 제한)
+3. --verify     ← 반드시 실행. 스로틀이 여기서 해제됨
+   진행 중 취소는 --cancel
+   ※ 파티션 수는 바꿀 수 없음 (레플리카 배치만 이동)</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>KRaft 부트스트랩</figcaption>
+        <pre><code class="lang-text">1. kafka-storage.sh random-uuid          (클러스터 UUID 생성)
+2. kafka-storage.sh format -t {UUID} -c server.properties
+3. kafka-server-start.sh server.properties
+4. kafka-topics.sh --create --bootstrap-server localhost:9092
+   ※ --zookeeper 는 4.0에서 제거되어 존재하지 않는 옵션</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>큰 메시지 허용</figcaption>
+        <pre><code class="lang-text">1. 토픽    max.message.bytes
+2. 프로듀서 max.request.size
+3. 컨슈머  max.partition.fetch.bytes
+4. 브로커  replica.fetch.max.bytes   ← 빼먹으면 복제만 실패 (ISR 축소)</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>스키마 진화 배포 (BACKWARD)</figcaption>
+        <pre><code class="lang-text">1. 새 스키마를 등록해 호환성 검사 통과 확인
+2. 컨슈머 배포        ← BACKWARD 는 컨슈머 먼저
+3. 프로듀서 배포
+   ※ FORWARD 는 2와 3의 순서가 반대</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>Connect 실패 조사</figcaption>
+        <pre><code class="lang-text">1. GET /connectors/{name}/status        → 실패 태스크와 trace, worker_id
+2. 그 worker_id 노드의 로그 파일 확인   ← 리더 워커가 아님
+3. PUT /admin/loggers/{logger}          → 필요하면 런타임 로그 레벨 상향
+4. 원인 수정 (컨버터·권한·스키마 등)
+5. POST /connectors/{name}/restart?includeTasks=true&onlyFailed=true
+6. 로그 레벨을 원래대로 되돌림</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>Streams 상태 초기화</figcaption>
+        <pre><code class="lang-text">1. 애플리케이션 정지 (모든 인스턴스)
+2. kafka-streams-application-reset.sh --application-id {id}
+3. 각 인스턴스에서 KafkaStreams.cleanUp() 또는 state.dir 삭제
+4. 재기동</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>업그레이드 경로</figcaption>
+        <pre><code class="lang-text">2.x → 3.9 (마지막 ZooKeeper 지원 버전) → KRaft 마이그레이션 → 4.x
+※ 4.3 업그레이드는 KRaft 필수, 소프트웨어·메타데이터 최소 3.3.x</code></pre>
+      </figure>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="exceptions">
+      <h2 id="exceptions">예외 클래스와 원인</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>matching 유형 대비 — 재시도 가능 여부 포함</caption>
+          <thead>
+            <tr><th scope="col">예외</th><th scope="col">원인</th><th scope="col">재시도</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>RecordTooLargeException</code></th><td>레코드가 크기 상한 초과</td><td class="mark-no">불가</td></tr>
+            <tr><th scope="row"><code>SerializationException</code></th><td>직렬화·역직렬화 실패 (스키마 불일치 포함)</td><td class="mark-no">불가</td></tr>
+            <tr><th scope="row"><code>AuthorizationException</code> ·<br><code>TopicAuthorizationException</code></th><td><strong>ACL 부족</strong> (인증이 아니라 인가)</td><td class="mark-no">불가</td></tr>
+            <tr><th scope="row"><code>InvalidTopicException</code></th><td>토픽 이름이 규칙 위반</td><td class="mark-no">불가</td></tr>
+            <tr><th scope="row"><code>ConfigException</code></th><td>설정 조합 위반 (예: 멱등성 + in-flight&gt;5)</td><td class="mark-no">기동 실패</td></tr>
+            <tr><th scope="row"><code>IllegalStateException</code></th><td><code>assign()</code>과 <code>subscribe()</code> 혼용</td><td class="mark-no">코드 오류</td></tr>
+            <tr><th scope="row"><code>NotEnoughReplicasException</code></th><td>ISR &lt; <code>min.insync.replicas</code></td><td class="mark-ok">가능</td></tr>
+            <tr><th scope="row"><code>LeaderNotAvailableException</code> ·<br><code>NotLeaderOrFollowerException</code></th><td>리더 이동·선출 중</td><td class="mark-ok">가능</td></tr>
+            <tr><th scope="row"><code>NetworkException</code></th><td>일시적 네트워크 오류</td><td class="mark-ok">가능</td></tr>
+            <tr><th scope="row"><code>TimeoutException</code></th><td>버퍼·메타데이터·요청 대기 초과</td><td class="mark-ok">가능</td></tr>
+            <tr><th scope="row"><code>CoordinatorNotAvailableException</code></th><td>그룹·트랜잭션 코디네이터 부재</td><td class="mark-ok">가능</td></tr>
+            <tr><th scope="row"><code>NoOffsetForPartitionException</code></th><td><code>auto.offset.reset=none</code>인데 커밋 오프셋 없음</td><td class="mark-no">설정 문제</td></tr>
+            <tr><th scope="row"><code>ProducerFencedException</code></th><td>같은 <code>transactional.id</code>의 새 세션이 등장</td><td class="mark-no">종료 필요</td></tr>
+            <tr><th scope="row"><code>OutOfOrderSequenceException</code></th><td>멱등성 시퀀스 불일치</td><td class="mark-no">종료 필요</td></tr>
+            <tr><th scope="row"><code>TopologyBuilderException</code></th><td>Streams 조인 양쪽 <strong>파티션 수 불일치</strong></td><td class="mark-no">토폴로지 수정</td></tr>
+            <tr><th scope="row"><code>DataException</code></th><td>Connect 컨버터 변환 실패</td><td class="mark-no">DLQ 대상</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="version-facts">
+      <h2 id="version-facts">버전 사실 10개</h2>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Apache Kafka 4.3 기준</caption>
+          <thead><tr><th scope="col">사실</th><th scope="col">버전</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>acks</code> 1 → <code>all</code></th><td>3.0</td></tr>
+            <tr><th scope="row"><code>enable.idempotence</code> false → true</th><td>3.0</td></tr>
+            <tr><th scope="row">KRaft production-ready</th><td>3.3</td></tr>
+            <tr><th scope="row">Tiered Storage EA</th><td>3.6</td></tr>
+            <tr><th scope="row"><strong>마지막 ZooKeeper 지원 버전</strong></th><td><strong>3.9</strong></td></tr>
+            <tr><th scope="row"><strong>ZooKeeper 제거 · <code>--zookeeper</code> 제거 · Java 8 제거</strong></th><td><strong>4.0</strong></td></tr>
+            <tr><th scope="row">KIP-848 GA (기본값은 여전히 <code>classic</code>)</th><td>4.0</td></tr>
+            <tr><th scope="row"><strong><code>linger.ms</code> 0 → 5</strong></th><td><strong>4.0</strong></td></tr>
+            <tr><th scope="row">Streams Rebalance Protocol Early Access</th><td>4.1</td></tr>
+            <tr><th scope="row"><strong>Share Groups (KIP-932) production-ready</strong></th><td><strong>4.2</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li>Java: <strong>17 · 21 · 25 완전 지원</strong>. 11은 clients/streams 등 일부. <strong>8은 4.0에서 제거</strong></li>
+        <li>배포판은 <strong><code>kafka_2.13-4.3.1.tgz</code> 단일</strong>. <strong><code>2.13</code>은 Scala 버전</strong></li>
+        <li><strong>Kafka 2.13이라는 버전은 존재하지 않습니다</strong> (2.8 다음이 3.0)</li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="last-check">
+      <h2 id="last-check">시험장 들어가기 전 마지막 확인</h2>
+      <ol class="plan">
+        <li><strong>문항 유형 3종</strong> — multiple-choice · matching · list order. 객관식만이 아닙니다</li>
+        <li><strong><code>linger.ms</code>=5</strong>, <strong><code>group.protocol=classic</code></strong> — 시중 자료가 가장 많이 틀리는 두 개</li>
+        <li><strong>in-flight ≤ 5</strong>, 초과하면 기동 실패</li>
+        <li><strong>하트비트 축과 poll 축은 별개</strong>. 처리 지연이면 <code>max.poll.records</code></li>
+        <li><strong><code>isolation.level</code>은 컨슈머 설정</strong>, 기본값은 <code>read_uncommitted</code></li>
+        <li><strong>EOS는 Kafka 경계 안에서만</strong></li>
+        <li><strong>lag = high watermark − committed offset</strong></li>
+        <li><strong><code>message.max.bytes</code>=1048588</strong>, <code>max.request.size</code>=1048576</li>
+        <li><strong>BACKWARD=컨슈머 먼저</strong>, FORWARD=프로듀서 먼저</li>
+        <li><strong>sink 오프셋은 <code>__consumer_offsets</code></strong>, source는 <code>offset.storage.topic</code></li>
+        <li><strong>DLQ는 <code>errors.tolerance=all</code> + 토픽 지정 + sink 전용</strong></li>
+        <li><strong><code>map</code>은 리파티션, <code>mapValues</code>는 아님</strong></li>
+        <li><strong><code>TopologyTestDriver</code>는 브로커 불필요</strong></li>
+        <li><strong>절대적 표현("항상", "모든")이 든 선택지는 대개 오답</strong></li>
+        <li><strong>설정을 볼 때 소속을 먼저 확인</strong> — 가장 흔한 함정입니다</li>
+      </ol>
+
+      <aside class="note note--ok" data-label="여기까지 왔으면 충분합니다">
+        <p>
+          남은 시간에 새로운 것을 넣지 마세요.
+          <a href="traps.html">함정 사전</a>의 "혼동 시 결과" 행만 한 번 더 훑고,
+          <a href="flashcards.html">플래시카드</a>의 설정 기본값 덱을 10분 돌리는 것이 가장 효율적입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="print-note">
+      <h2 id="print-note">인쇄해서 보기</h2>
+      <p>
+        브라우저의 인쇄 기능(<kbd>Ctrl</kbd>+<kbd>P</kbd> 또는 <kbd>Cmd</kbd>+<kbd>P</kbd>)으로 그대로 출력할 수 있습니다.
+        인쇄 시 사이드바 · 목차 패널 · 버튼 · 복사 아이콘은 자동으로 숨겨지고,
+        표와 코드 블록은 페이지 중간에서 잘리지 않도록 처리됩니다.
+        표가 넓어 잘리는 경우에는 <strong>가로 방향(landscape)</strong>으로 인쇄하세요.
+      </p>
+      <p>
+        링크는 인쇄본에서 URL이 함께 표시되므로, 종이에서도 어느 페이지를 참조하는지 알 수 있습니다.
+      </p>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>
+        이 페이지의 모든 설정 기본값과 버전 사실은 <strong>Apache Kafka 4.3 공식 문서</strong>에서 확인했습니다.
+        도메인 가중치는 공개 자료 기준 잠정치이며 Confluent 공식 Exam Guide로 재확인이 필요합니다
+        (<a href="index.html#domain-blueprint">CCDAK 개요</a> 참조).
+      </p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs" rel="noopener noreferrer">Producer Configs</a> ·
+          <a href="https://kafka.apache.org/documentation/#consumerconfigs" rel="noopener noreferrer">Consumer Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> ·
+          <a href="https://kafka.apache.org/documentation/#topicconfigs" rel="noopener noreferrer">Topic Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#streamsconfigs" rel="noopener noreferrer">Streams Configs</a> ·
+          <a href="https://kafka.apache.org/documentation/#connectconfigs" rel="noopener noreferrer">Connect Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#monitoring" rel="noopener noreferrer">Monitoring</a> — 메트릭 이름과 MBean</li>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" rel="noopener noreferrer">Streams DSL</a> — 리파티션·조인·윈도우</li>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/testing.html" rel="noopener noreferrer">Testing a Streams Application</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#upgrade" rel="noopener noreferrer">Upgrading Apache Kafka</a> — 버전 타임라인, KIP-1147 옵션 변경</li>
+        <li><a href="https://kafka.apache.org/documentation/#semantics" rel="noopener noreferrer">Message Delivery Semantics</a> ·
+          <a href="https://kafka.apache.org/documentation/#compaction" rel="noopener noreferrer">Log Compaction</a></li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

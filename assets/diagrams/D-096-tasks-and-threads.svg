@@ -1,0 +1,107 @@
+<svg viewBox="0 0 720 410" role="img" class="kg-diagram"
+     aria-labelledby="d096-title d096-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d096-title">태스크와 스레드 병렬성 — 파티션 수가 병렬성의 상한입니다</title>
+  <desc id="d096-desc">입력 토픽의 파티션 여섯 개가 태스크 여섯 개로 이어지고,
+    그 태스크가 애플리케이션 인스턴스 두 대의 스트림 스레드 세 개씩에 하나씩 배정된 모습을 그린 그림입니다.
+    태스크 수는 sub-topology 가 읽는 입력 토픽의 파티션 수로 정해지며 실행 중에 바뀌지 않습니다.
+    num.stream.threads 는 인스턴스 하나가 몇 개의 태스크를 동시에 실행할지를 정하는 설정이고 기본값은 1 입니다.
+    이 그림에서는 num.stream.threads 를 3 으로 두고 인스턴스를 두 대 띄웠으므로
+    스레드 총합이 여섯 개가 되어 태스크 여섯 개와 정확히 맞습니다.
+    스레드 총합이 태스크 수보다 많으면 남는 스레드는 아무 태스크도 받지 못하고 유휴 상태가 됩니다.
+    인스턴스를 더 띄워도 파티션 수를 넘는 병렬성은 얻을 수 없습니다.
+    처리량을 더 늘리려면 입력 토픽의 파티션 수를 늘려야 합니다.
+    스레드 사이에는 공유 상태가 없으므로 스레드 간 조정도 필요하지 않습니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">태스크와 스레드 — 파티션 수 = 태스크 수 = 병렬성 상한</text>
+
+  <!-- 파티션 -->
+  <text class="dg-fs-sm dg-bold" x="12" y="62">입력 토픽</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="78">파티션 6</text>
+  <g data-dg="p0"><rect class="dg-node dg-node--alt" x="80" y="44" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="124" y="67" text-anchor="middle">P0</text></g>
+  <g data-dg="p1"><rect class="dg-node dg-node--alt" x="184" y="44" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="228" y="67" text-anchor="middle">P1</text></g>
+  <g data-dg="p2"><rect class="dg-node dg-node--alt" x="288" y="44" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="332" y="67" text-anchor="middle">P2</text></g>
+  <g data-dg="p3"><rect class="dg-node dg-node--alt" x="392" y="44" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="436" y="67" text-anchor="middle">P3</text></g>
+  <g data-dg="p4"><rect class="dg-node dg-node--alt" x="496" y="44" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="540" y="67" text-anchor="middle">P4</text></g>
+  <g data-dg="p5"><rect class="dg-node dg-node--alt" x="600" y="44" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="644" y="67" text-anchor="middle">P5</text></g>
+
+  <!-- 파티션 → 태스크 -->
+  <line class="dg-edge dg-edge--accent" x1="124" y1="80" x2="124" y2="88"/>
+  <path class="dg-marker--accent" d="M119,88 L129,88 L124,96 Z"/>
+  <line class="dg-edge dg-edge--accent" x1="228" y1="80" x2="228" y2="88"/>
+  <path class="dg-marker--accent" d="M223,88 L233,88 L228,96 Z"/>
+  <line class="dg-edge dg-edge--accent" x1="332" y1="80" x2="332" y2="88"/>
+  <path class="dg-marker--accent" d="M327,88 L337,88 L332,96 Z"/>
+  <line class="dg-edge dg-edge--accent" x1="436" y1="80" x2="436" y2="88"/>
+  <path class="dg-marker--accent" d="M431,88 L441,88 L436,96 Z"/>
+  <line class="dg-edge dg-edge--accent" x1="540" y1="80" x2="540" y2="88"/>
+  <path class="dg-marker--accent" d="M535,88 L545,88 L540,96 Z"/>
+  <line class="dg-edge dg-edge--accent" x1="644" y1="80" x2="644" y2="88"/>
+  <path class="dg-marker--accent" d="M639,88 L649,88 L644,96 Z"/>
+
+  <!-- 태스크 -->
+  <text class="dg-fs-sm dg-bold" x="12" y="114">태스크</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="130">6개 고정</text>
+  <g data-dg="t0"><rect class="dg-node dg-node--accent" x="80" y="98" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="124" y="121" text-anchor="middle">0_0</text></g>
+  <g data-dg="t1"><rect class="dg-node dg-node--accent" x="184" y="98" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="228" y="121" text-anchor="middle">0_1</text></g>
+  <g data-dg="t2"><rect class="dg-node dg-node--accent" x="288" y="98" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="332" y="121" text-anchor="middle">0_2</text></g>
+  <g data-dg="t3"><rect class="dg-node dg-node--accent" x="392" y="98" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="436" y="121" text-anchor="middle">0_3</text></g>
+  <g data-dg="t4"><rect class="dg-node dg-node--accent" x="496" y="98" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="540" y="121" text-anchor="middle">0_4</text></g>
+  <g data-dg="t5"><rect class="dg-node dg-node--accent" x="600" y="98" width="88" height="36" rx="3"/><text class="dg-fs-sm dg-mono dg-bold" x="644" y="121" text-anchor="middle">0_5</text></g>
+
+  <!-- 태스크 → 스레드 -->
+  <line class="dg-edge dg-edge--dotted" x1="124" y1="134" x2="124" y2="182"/>
+  <line class="dg-edge dg-edge--dotted" x1="228" y1="134" x2="228" y2="182"/>
+  <line class="dg-edge dg-edge--dotted" x1="332" y1="134" x2="332" y2="182"/>
+  <line class="dg-edge dg-edge--dotted" x1="436" y1="134" x2="436" y2="182"/>
+  <line class="dg-edge dg-edge--dotted" x1="540" y1="134" x2="540" y2="182"/>
+  <line class="dg-edge dg-edge--dotted" x1="644" y1="134" x2="644" y2="182"/>
+
+  <!-- 인스턴스 A -->
+  <rect class="dg-panel" x="12" y="150" width="368" height="112" rx="6"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="168">인스턴스 A — <tspan class="dg-mono">num.stream.threads=3</tspan></text>
+  <rect class="dg-node" x="80" y="182" width="88" height="68" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="124" y="202" text-anchor="middle">thread-1</text>
+  <rect class="dg-node dg-node--accent" x="90" y="212" width="68" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-mono" x="124" y="226" text-anchor="middle">0_0</text>
+  <text class="dg-fs-sm dg-muted" x="124" y="245" text-anchor="middle">태스크 1개</text>
+  <rect class="dg-node" x="184" y="182" width="88" height="68" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="228" y="202" text-anchor="middle">thread-2</text>
+  <rect class="dg-node dg-node--accent" x="194" y="212" width="68" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-mono" x="228" y="226" text-anchor="middle">0_1</text>
+  <text class="dg-fs-sm dg-muted" x="228" y="245" text-anchor="middle">태스크 1개</text>
+  <rect class="dg-node" x="288" y="182" width="88" height="68" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="332" y="202" text-anchor="middle">thread-3</text>
+  <rect class="dg-node dg-node--accent" x="298" y="212" width="68" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-mono" x="332" y="226" text-anchor="middle">0_2</text>
+  <text class="dg-fs-sm dg-muted" x="332" y="245" text-anchor="middle">태스크 1개</text>
+
+  <!-- 인스턴스 B -->
+  <rect class="dg-panel" x="388" y="150" width="320" height="112" rx="6"/>
+  <text class="dg-fs-sm dg-bold" x="398" y="168">인스턴스 B — <tspan class="dg-mono">num.stream.threads=3</tspan></text>
+  <rect class="dg-node" x="392" y="182" width="88" height="68" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="436" y="202" text-anchor="middle">thread-1</text>
+  <rect class="dg-node dg-node--accent" x="402" y="212" width="68" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-mono" x="436" y="226" text-anchor="middle">0_3</text>
+  <text class="dg-fs-sm dg-muted" x="436" y="245" text-anchor="middle">태스크 1개</text>
+  <rect class="dg-node" x="496" y="182" width="88" height="68" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="540" y="202" text-anchor="middle">thread-2</text>
+  <rect class="dg-node dg-node--accent" x="506" y="212" width="68" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-mono" x="540" y="226" text-anchor="middle">0_4</text>
+  <text class="dg-fs-sm dg-muted" x="540" y="245" text-anchor="middle">태스크 1개</text>
+  <rect class="dg-node" x="600" y="182" width="88" height="68" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="644" y="202" text-anchor="middle">thread-3</text>
+  <rect class="dg-node dg-node--accent" x="610" y="212" width="68" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-mono" x="644" y="226" text-anchor="middle">0_5</text>
+  <text class="dg-fs-sm dg-muted" x="644" y="245" text-anchor="middle">태스크 1개</text>
+
+  <!-- 규칙 -->
+  <rect class="dg-node dg-node--warn" x="12" y="272" width="696" height="94" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="290">규칙</text>
+  <text class="dg-fs-sm" x="22" y="308">태스크 수 = sub-topology 가 읽는 <tspan class="dg-bold">입력 토픽의 파티션 수</tspan>. 실행 중에는 바뀌지 않습니다.</text>
+  <text class="dg-fs-sm" x="22" y="326"><tspan class="dg-mono">num.stream.threads</tspan> <tspan class="dg-muted">(기본 1)</tspan> 는 인스턴스 하나가 동시에 돌릴 태스크 수입니다.</text>
+  <text class="dg-fs-sm" x="22" y="344">스레드 하나가 여러 태스크를 맡을 수도 있습니다.</text>
+  <text class="dg-fs-sm dg-bold" x="22" y="362">스레드 총합 &gt; 태스크 수 → 남는 스레드는 유휴 상태가 됩니다.</text>
+
+  <text class="dg-fs-sm dg-muted" x="12" y="384">인스턴스를 늘려도 <tspan class="dg-bold">파티션 수를 넘는 병렬성</tspan>은 얻지 못합니다. 처리량을 더 늘리려면 파티션 수를 늘려야 합니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="402">스레드끼리 공유하는 상태가 없으므로 스레드 간 조정도 필요하지 않습니다.</text>
+</svg>

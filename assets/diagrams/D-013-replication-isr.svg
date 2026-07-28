@@ -1,0 +1,83 @@
+<svg viewBox="0 0 720 366" role="img" class="kg-diagram"
+     aria-labelledby="d013-title d013-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d013-title">복제와 ISR — ISR 축소가 min.insync.replicas 에 걸리는 순간</title>
+  <desc id="d013-desc">replication.factor 3 인 파티션 orders-0 을 세 단계로 보여 줍니다.
+    1단계는 리더 broker-1 과 팔로워 broker-2, broker-3 이 모두 따라잡아 ISR 이 3 이고 acks=all 쓰기가 성공합니다.
+    2단계는 broker-3 이 replica.lag.time.max.ms 30000 밀리초 동안 따라오지 못해 ISR 에서 빠지고 ISR 이 2 로 줄지만
+    min.insync.replicas 가 2 이므로 아직 성공합니다.
+    3단계는 broker-2 까지 빠져 ISR 이 1 이 되어 min.insync.replicas 미달이 되고,
+    acks=all 프로듀서는 NOT_ENOUGH_REPLICAS 오류를 받습니다. 이때도 리더는 살아 있으므로 컨슈머 읽기는 계속됩니다.
+    replication.factor 는 3 그대로이고 줄어드는 것은 ISR 집합이라는 점이 핵심입니다.</desc>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">파티션 <tspan class="dg-mono">orders-0</tspan> · <tspan class="dg-mono">replication.factor=3</tspan> · <tspan class="dg-mono">min.insync.replicas=2</tspan> · <tspan class="dg-mono">acks=all</tspan></text>
+
+  <!-- ================= 1단계 : ISR 3 ================= -->
+  <rect class="dg-panel" x="8" y="32" width="228" height="238" rx="4"/>
+  <text x="20" y="52" class="dg-fs-sm dg-bold">① 정상 — ISR 3</text>
+
+  <rect class="dg-node dg-node--accent" x="20" y="60" width="204" height="30" rx="4"/>
+  <text x="30" y="79" class="dg-fs-sm dg-bold">리더 <tspan class="dg-mono">broker-1</tspan> · LEO 120</text>
+
+  <rect class="dg-node dg-node--ok" x="20" y="96" width="204" height="30" rx="4"/>
+  <text x="30" y="115" class="dg-fs-sm">팔로워 <tspan class="dg-mono">broker-2</tspan> · LEO 120</text>
+
+  <rect class="dg-node dg-node--ok" x="20" y="132" width="204" height="30" rx="4"/>
+  <text x="30" y="151" class="dg-fs-sm">팔로워 <tspan class="dg-mono">broker-3</tspan> · LEO 120</text>
+
+  <text x="20" y="184" class="dg-fs-sm dg-bold">ISR = {1, 2, 3} → 크기 3</text>
+  <text x="20" y="202" class="dg-fs-sm dg-muted">3 ≥ 2 (충족)</text>
+
+  <rect class="dg-node dg-node--ok" x="20" y="212" width="204" height="46" rx="4"/>
+  <text x="30" y="231" class="dg-fs-sm dg-bold">쓰기 성공</text>
+  <text x="30" y="249" class="dg-fs-sm">ISR 3대 전원이 응답</text>
+
+  <!-- ================= 2단계 : ISR 축소 ================= -->
+  <rect class="dg-panel" x="246" y="32" width="228" height="238" rx="4"/>
+  <text x="258" y="52" class="dg-fs-sm dg-bold">② ISR 축소 — 아직 충족</text>
+
+  <rect class="dg-node dg-node--accent" x="258" y="60" width="204" height="30" rx="4"/>
+  <text x="268" y="79" class="dg-fs-sm dg-bold">리더 <tspan class="dg-mono">broker-1</tspan> · LEO 168</text>
+
+  <rect class="dg-node dg-node--ok" x="258" y="96" width="204" height="30" rx="4"/>
+  <text x="268" y="115" class="dg-fs-sm">팔로워 <tspan class="dg-mono">broker-2</tspan> · LEO 168</text>
+
+  <rect class="dg-node dg-node--muted" x="258" y="132" width="204" height="30" rx="4"/>
+  <text x="268" y="151" class="dg-fs-sm dg-muted">팔로워 <tspan class="dg-mono">broker-3</tspan> · LEO 88 (지연)</text>
+  <text x="258" y="172" class="dg-fs-sm dg-muted">→ <tspan class="dg-mono">replica.lag.time.max.ms</tspan> 초과</text>
+
+  <text x="258" y="192" class="dg-fs-sm dg-bold">ISR = {1, 2} → 크기 2</text>
+  <text x="258" y="208" class="dg-fs-sm dg-muted">2 ≥ 2 (경계, 충족)</text>
+
+  <rect class="dg-node dg-node--warn" x="258" y="216" width="204" height="42" rx="4"/>
+  <text x="268" y="234" class="dg-fs-sm dg-bold">쓰기 성공 · 여유 0</text>
+  <text x="268" y="251" class="dg-fs-sm">한 대만 더 빠지면 중단</text>
+
+  <!-- ================= 3단계 : 미달 ================= -->
+  <rect class="dg-panel" x="484" y="32" width="228" height="238" rx="4"/>
+  <text x="496" y="52" class="dg-fs-sm dg-bold">③ 미달 — 쓰기 거부</text>
+
+  <rect class="dg-node dg-node--accent" x="496" y="60" width="204" height="30" rx="4"/>
+  <text x="506" y="79" class="dg-fs-sm dg-bold">리더 <tspan class="dg-mono">broker-1</tspan> · LEO 168</text>
+
+  <rect class="dg-node dg-node--muted" x="496" y="96" width="204" height="30" rx="4"/>
+  <text x="506" y="115" class="dg-fs-sm dg-muted">팔로워 <tspan class="dg-mono">broker-2</tspan> · 다운</text>
+  <path class="dg-x" d="M676,102 L692,118 M692,102 L676,118"/>
+
+  <rect class="dg-node dg-node--muted" x="496" y="132" width="204" height="30" rx="4"/>
+  <text x="506" y="151" class="dg-fs-sm dg-muted">팔로워 <tspan class="dg-mono">broker-3</tspan> · 지연</text>
+  <path class="dg-x" d="M676,138 L692,154 M692,138 L676,154"/>
+
+  <text x="496" y="184" class="dg-fs-sm dg-bold">ISR = {1} → 크기 1</text>
+  <text x="496" y="202" class="dg-fs-sm dg-muted">1 &lt; 2 (미달)</text>
+
+  <rect class="dg-node dg-node--danger" x="496" y="212" width="204" height="46" rx="4"/>
+  <text x="506" y="230" class="dg-fs-sm dg-bold">쓰기 거부</text>
+  <text x="506" y="248" class="dg-fs-sm dg-mono">NOT_ENOUGH_REPLICAS</text>
+
+  <!-- ================= 정리 ================= -->
+  <line class="dg-grid" x1="8" y1="284" x2="712" y2="284"/>
+  <text x="8" y="304" class="dg-fs-sm"><tspan class="dg-bold">줄어드는 것은 ISR 집합입니다.</tspan> <tspan class="dg-mono">replication.factor</tspan> 는 계속 3 이고, 레플리카가 따라잡으면 ISR 에 다시 들어옵니다.</text>
+  <text x="8" y="324" class="dg-fs-sm"><tspan class="dg-bold">거부되는 것은 쓰기뿐입니다.</tspan> 리더가 살아 있으므로 컨슈머는 high watermark 까지 계속 읽을 수 있습니다.</text>
+  <text x="8" y="344" class="dg-fs-sm dg-muted">③ 을 피하려면 <tspan class="dg-mono">replication.factor=3</tspan> + <tspan class="dg-mono">min.insync.replicas=2</tspan> 조합으로 레플리카 1대 손실을 허용합니다.</text>
+  <text x="8" y="362" class="dg-fs-sm dg-muted">쓰기 성공 조건: ISR 크기 ≥ <tspan class="dg-mono">min.insync.replicas</tspan> 이고, 그 ISR 전원이 응답. 지연 판정 기준은 <tspan class="dg-mono">30000</tspan>ms 입니다.</text>
+</svg>

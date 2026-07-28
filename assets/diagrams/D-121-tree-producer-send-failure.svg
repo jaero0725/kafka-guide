@@ -1,0 +1,108 @@
+<svg viewBox="0 0 720 840" role="img" class="kg-diagram"
+     aria-labelledby="d121-title d121-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d121-title">트러블슈팅 결정 트리 — 프로듀서 전송이 실패할 때</title>
+  <desc id="d121-desc">프로듀서 전송 실패를 예외 유형에서 출발해 좁혀 가는 결정 트리입니다. 마름모는 판단, 사각형은 조치입니다. RecordTooLargeException 이면 프로듀서 max.request.size 와 브로커·토픽 쪽 상한을 함께 확인합니다. NotEnoughReplicas 계열이면 ISR 이 min.insync.replicas 보다 적은 것이므로 --under-min-isr-partitions 로 확인합니다. TimeoutException 이면 delivery.timeout.ms 예산 안에서 전송을 마치지 못한 것이므로 메타데이터 조회 경로와 브로커 응답 지연을 봅니다. send 호출 자체가 블록되면 buffer.memory 가 고갈되어 max.block.ms 를 기다리는 상황입니다. TOPIC_AUTHORIZATION_FAILED 면 쓰기 권한을, UnknownTopicOrPartitionException 이면 토픽 존재 여부와 auto.create.topics.enable 을 확인합니다. 마지막으로 순서가 어긋나면 멱등성 설정과 max.in.flight.requests.per.connection 을 점검합니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">프로듀서 전송이 실패한다</text>
+<text class="dg-fs-sm dg-muted" x="8" y="40">먼저 예외 유형을 봅니다. 예외 이름이 곧 원인 분류입니다.</text>
+<g>
+<path class="dg-node dg-node--warn" d="M158,54 L308,96 L158,138 L8,96 Z"/>
+</g>
+<text class="dg-fs-sm dg-bold" x="158" y="92" text-anchor="middle">RecordTooLargeException?</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="158" y="110" text-anchor="middle">kafka-configs.sh</text>
+<rect class="dg-node dg-node--danger" x="352" y="57" width="360" height="78" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="364" y="76">크기 상한 불일치</text>
+<text class="dg-fs-sm" x="364" y="94">· 프로듀서 max.request.size 1048576</text>
+<text class="dg-fs-sm" x="364" y="112">· 브로커 message.max.bytes 1048588</text>
+<text class="dg-fs-sm" x="364" y="130">· 토픽까지 함께 올린다 → D-119</text>
+<path class="dg-edge dg-edge--danger" d="M310,96 L348,96" marker-end="url(#mk-arrow-danger)"/>
+<text class="dg-fs-sm dg-bold" x="330" y="90">예</text>
+<path class="dg-edge" d="M158,139 L158,158" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm" x="168" y="154">아니오</text>
+<g>
+<path class="dg-node dg-node--warn" d="M158,160 L308,202 L158,244 L8,202 Z"/>
+</g>
+<text class="dg-fs-sm dg-bold" x="158" y="198" text-anchor="middle">NotEnoughReplicas 계열?</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="158" y="216" text-anchor="middle">--under-min-isr</text>
+<rect class="dg-node dg-node--danger" x="352" y="172" width="360" height="60" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="364" y="191">ISR 이 min.insync 미달</text>
+<text class="dg-fs-sm" x="364" y="209">· 브로커 장애 또는 복제 지연</text>
+<text class="dg-fs-sm" x="364" y="227">· ISR 회복을 기다린다 → D-115</text>
+<path class="dg-edge dg-edge--danger" d="M310,202 L348,202" marker-end="url(#mk-arrow-danger)"/>
+<text class="dg-fs-sm dg-bold" x="330" y="196">예</text>
+<path class="dg-edge" d="M158,245 L158,264" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm" x="168" y="260">아니오</text>
+<g>
+<path class="dg-node dg-node--warn" d="M158,266 L308,308 L158,350 L8,308 Z"/>
+</g>
+<text class="dg-fs-sm dg-bold" x="158" y="304" text-anchor="middle">TimeoutException?</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="158" y="322" text-anchor="middle">delivery.timeout.ms 확인</text>
+<rect class="dg-node dg-node--warn" x="352" y="278" width="360" height="60" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="364" y="297">전송 예산을 넘겼다</text>
+<text class="dg-fs-sm" x="364" y="315">· 메타데이터를 못 받았을 수 있다</text>
+<text class="dg-fs-sm" x="364" y="333">· advertised.listeners 오설정 → D-101</text>
+<path class="dg-edge dg-edge--danger" d="M310,308 L348,308" marker-end="url(#mk-arrow-danger)"/>
+<text class="dg-fs-sm dg-bold" x="330" y="302">예</text>
+<path class="dg-edge" d="M158,351 L158,370" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm" x="168" y="366">아니오</text>
+<g>
+<path class="dg-node dg-node--warn" d="M158,372 L308,414 L158,456 L8,414 Z"/>
+</g>
+<text class="dg-fs-sm dg-bold" x="158" y="410" text-anchor="middle">send() 가 블록된다?</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="158" y="428" text-anchor="middle">buffer-available-bytes</text>
+<rect class="dg-node dg-node--warn" x="352" y="384" width="360" height="60" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="364" y="403">buffer.memory 고갈</text>
+<text class="dg-fs-sm" x="364" y="421">· max.block.ms(60000) 뒤 예외</text>
+<text class="dg-fs-sm" x="364" y="439">· 생산 속도 > 전송 속도</text>
+<path class="dg-edge dg-edge--danger" d="M310,414 L348,414" marker-end="url(#mk-arrow-danger)"/>
+<text class="dg-fs-sm dg-bold" x="330" y="408">예</text>
+<path class="dg-edge" d="M158,457 L158,476" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm" x="168" y="472">아니오</text>
+<g>
+<path class="dg-node dg-node--warn" d="M158,478 L308,520 L158,562 L8,520 Z"/>
+</g>
+<text class="dg-fs-sm dg-bold" x="158" y="516" text-anchor="middle">TOPIC_AUTHORIZATION_FAILED?</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="158" y="534" text-anchor="middle">kafka-acls.sh --list</text>
+<rect class="dg-node dg-node--danger" x="352" y="490" width="360" height="60" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="364" y="509">쓰기 권한이 없다</text>
+<text class="dg-fs-sm" x="364" y="527">· 토픽 Write 권한 필요</text>
+<text class="dg-fs-sm" x="364" y="545">· 트랜잭션은 TransactionalId 도 필요</text>
+<path class="dg-edge dg-edge--danger" d="M310,520 L348,520" marker-end="url(#mk-arrow-danger)"/>
+<text class="dg-fs-sm dg-bold" x="330" y="514">예</text>
+<path class="dg-edge" d="M158,563 L158,582" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm" x="168" y="578">아니오</text>
+<g>
+<path class="dg-node dg-node--warn" d="M158,584 L308,626 L158,668 L8,626 Z"/>
+</g>
+<text class="dg-fs-sm dg-bold" x="158" y="622" text-anchor="middle">UnknownTopicOrPartition?</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="158" y="640" text-anchor="middle">kafka-topics.sh --list</text>
+<rect class="dg-node dg-node--warn" x="352" y="596" width="360" height="60" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="364" y="615">토픽이 없다</text>
+<text class="dg-fs-sm" x="364" y="633">· 자동 생성이라도 첫 전송은 실패 가능</text>
+<text class="dg-fs-sm" x="364" y="651">· 토픽을 미리 만든다</text>
+<path class="dg-edge dg-edge--danger" d="M310,626 L348,626" marker-end="url(#mk-arrow-danger)"/>
+<text class="dg-fs-sm dg-bold" x="330" y="620">예</text>
+<path class="dg-edge" d="M158,669 L158,688" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm" x="168" y="684">아니오</text>
+<g>
+<path class="dg-node dg-node--warn" d="M158,690 L308,732 L158,774 L8,732 Z"/>
+</g>
+<text class="dg-fs-sm dg-bold" x="158" y="728" text-anchor="middle">순서가 어긋난다?</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="158" y="746" text-anchor="middle">producer 설정 확인</text>
+<rect class="dg-node dg-node--danger" x="352" y="702" width="360" height="60" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="364" y="721">재시도로 순서가 뒤집혔다</text>
+<text class="dg-fs-sm" x="364" y="739">· 멱등성 false + max.in.flight > 1</text>
+<text class="dg-fs-sm" x="364" y="757">· 기본값(true · 5)이면 순서 보장</text>
+<path class="dg-edge dg-edge--danger" d="M310,732 L348,732" marker-end="url(#mk-arrow-danger)"/>
+<text class="dg-fs-sm dg-bold" x="330" y="726">예</text>
+<line class="dg-grid" x1="8" y1="784" x2="712" y2="784"/>
+<text class="dg-fs-sm" x="8" y="804">프로듀서 예외는 재시도 가능과 불가능으로 갈립니다 — RecordTooLarge 는 재시도해도 성공하지 않습니다.</text>
+<text class="dg-fs-sm" x="8" y="822">콜백 onCompletion() 의 exception 을 꼭 로깅하세요. 예외 이름을 못 보면 판단을 시작할 수 없습니다.</text>
+</svg>

@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>케이스 7 · 재처리했더니 결제가 두 번 됐다 — Kafka Guide</title>
+  <meta name="description" content="장애 복구를 위해 오프셋을 되돌려 재처리했더니 외부 결제 API가 두 번 호출된 사고. Kafka EOS의 정확한 경계, at-least-once가 기본이라는 사실, 컨슈머 멱등성 구현 패턴을 다룹니다.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="cases" data-page="case07"></div>
+
+  <main id="main" class="page" data-page-id="cases/case07">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="case01.html">실수 케이스</a></li>
+        <li><span aria-current="page">케이스 7 · 결제가 두 번 됐다</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실수 케이스 · 7</p>
+      <h1>재처리했더니 결제가 두 번 됐다</h1>
+      <p class="page__lead">
+        누락된 4시간분을 복구하려고 오프셋을 되돌렸습니다.
+        결과는 <strong>이중 청구 3,180건</strong>이었습니다.
+        팀은 "우리는 exactly-once를 켰는데요"라고 했습니다. 맞습니다 — 켰습니다.
+        다만 <strong>EOS의 경계는 Kafka 토픽까지</strong>이고, 외부 결제 API는 그 밖에 있었습니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 케이스에서 얻어 갈 것</h2>
+      <ul>
+        <li>Kafka EOS가 성립하는 <strong>정확한 경계</strong>를 한 문장으로 말할 수 있습니다.</li>
+        <li>Kafka의 기본 전달 보장이 <strong>at-least-once</strong>이며, 그것이 무엇을 요구하는지 압니다.</li>
+        <li>멱등 프로듀서 · 트랜잭션 · 컨슈머 멱등성의 <strong>역할이 서로 다르다</strong>는 것을 구분할 수 있습니다.</li>
+        <li>외부 시스템에 대한 멱등성을 실제로 구현하는 세 가지 패턴을 압니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="situation">
+      <h2 id="situation">상황</h2>
+
+      <p>
+        결제 확정 파이프라인입니다. <code>payment-approved</code> 토픽은
+        <strong>파티션 12개, 복제 계수 3</strong>, 브로커 3대에서 <strong>일 40만 건</strong>을 받습니다.
+        컨슈머는 이벤트를 받아 <strong>PG사 결제 확정 API</strong>를 호출하고,
+        응답을 <code>payment-settled</code> 토픽에 발행합니다.
+      </p>
+      <p>
+        아키텍처는 Kafka Streams 기반이고 <code>processing.guarantee=exactly_once_v2</code>가 설정되어 있었습니다.
+        팀은 이 설정 덕분에 "중복 걱정은 없다"고 이해하고 있었습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>streams.properties — 설정 자체는 정확합니다</figcaption>
+        <pre><code class="lang-properties">application.id=payment-settlement
+processing.guarantee=exactly_once_v2
+# Streams 가 내부적으로 트랜잭션을 쓰고, 컨슈머는 read_committed 로 동작합니다</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>Processor 코드 — 문제는 여기입니다</figcaption>
+        <pre><code class="lang-java">public void process(Record&lt;String, PaymentApproved&gt; record) {
+    PaymentApproved approved = record.value();
+
+    // ★ 외부 호출. Kafka 트랜잭션 바깥입니다.
+    PgResult result = pgClient.confirmPayment(
+        approved.getOrderId(),
+        approved.getAmount());          // 멱등 키 없음
+
+    context().forward(record.withValue(toSettled(result)));
+}</code></pre>
+      </figure>
+
+      <p>
+        금요일 04:00~08:00 사이 업스트림 장애로 <code>payment-approved</code> 소비가 멈췄고,
+        복구 과정에서 오프셋이 잘못 전진해 <strong>68,000건이 처리되지 않은 채 건너뛰어졌습니다</strong>
+        (<a href="case01.html">케이스 1</a>과 같은 유형).
+      </p>
+      <p>
+        11:00, 팀은 누락을 복구하기로 결정했습니다.
+        <code>--reset-offsets --to-datetime 2026-07-24T04:00:00.000 --execute</code>로 4시간분을 되돌렸습니다.
+        그런데 <strong>그 4시간 안에는 이미 정상 처리된 3,180건도 포함되어 있었습니다.</strong>
+        재처리가 시작되자 PG사 결제 확정 API가 그 3,180건에 대해 <strong>두 번째로</strong> 호출됐습니다.
+      </p>
+      <p>
+        13:40에 PG사에서 "동일 주문 중복 승인 요청" 알림을 받았습니다.
+        환불 처리와 고객 안내에 4일이 걸렸습니다.
+      </p>
+
+      <aside class="note note--danger" data-label="EOS 의 경계를 한 문장으로">
+        <p>
+          Kafka의 exactly-once는 <strong>"Kafka 토픽을 읽고 처리해 Kafka 토픽에 쓰는" 경계 안에서만</strong> 성립합니다.
+          공식 설계 문서의 표현을 그대로 옮기면,
+          <strong>"다른 목적지 시스템에 대한 exactly-once 전달은 일반적으로 그 시스템과의 협력이 필요하다"</strong>이며
+          <strong>"그렇지 않으면 Kafka는 기본적으로 at-least-once 전달을 보장한다"</strong>입니다.
+        </p>
+        <p>
+          <code>pgClient.confirmPayment()</code>는 Kafka 트랜잭션의 원자성 범위 밖입니다.
+          트랜잭션이 abort 되더라도 <strong>이미 나간 HTTP 요청은 취소되지 않습니다.</strong>
+        </p>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-116">
+        <figcaption>
+          EOS 경계와 외부 호출 — Kafka 트랜잭션이 커버하는 범위(입력 오프셋 + 출력 토픽)와
+          그 밖에서 일어나는 외부 API 호출, 그리고 재처리 시 외부 호출만 두 번 일어나는 지점
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="symptoms">
+      <h2 id="symptoms">관측된 증상</h2>
+
+      <h3 id="metrics-shape">메트릭이 어떻게 보였는가</h3>
+      <ul>
+        <li><strong>Kafka 지표 전부 정상.</strong> lag이 68,000에서 0으로 정상 감소, 에러율 0, 리밸런스 없음.</li>
+        <li><strong><code>payment-settled</code> 토픽 유입</strong>: 재처리 구간에서 정상보다 높음. 이것이 유일한 Kafka 쪽 단서였습니다.</li>
+        <li><strong>PG API 호출 수</strong>: 11:00~11:40 사이 평소의 4.2배.</li>
+        <li><strong>PG사 중복 승인 알림</strong>: 3,180건. 이것이 사고 인지 경로였습니다.</li>
+      </ul>
+
+      <aside class="note note--warn" data-label="Kafka 로그로는 진단할 수 없습니다">
+        <p>
+          이 케이스에서 Kafka는 <strong>완벽하게 정상 동작</strong>했습니다.
+          <code>exactly_once_v2</code>도 정상 동작했습니다 —
+          <code>payment-settled</code> 토픽에는 중복이 없고, 오프셋 커밋도 원자적으로 처리됐습니다.
+        </p>
+        <p>
+          중복이 생긴 곳은 <strong>Kafka가 관여하지 않는 HTTP 호출</strong>이었습니다.
+          그래서 브로커 로그·클라이언트 로그·JMX 어디에도 단서가 없습니다.
+          <strong>이 사고는 외부 시스템 쪽 지표로만 감지됩니다.</strong>
+        </p>
+      </aside>
+
+      <h3 id="settled-topic">출력 토픽에서 본 증거</h3>
+      <p>
+        <code>payment-settled</code>에는 트랜잭션 덕분에 중복 레코드가 없지만,
+        <strong>PG 승인 번호가 다른 두 개의 레코드</strong>가 같은 주문에 대해 존재했습니다.
+        같은 주문을 두 번 승인받았다는 뜻입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>같은 주문에 대해 서로 다른 PG 승인 번호</figcaption>
+        <pre><code class="lang-bash">$ kafka-console-consumer.sh --bootstrap-server kafka-1:9092 \
+    --topic payment-settled --from-beginning --timeout-ms 60000 \
+    --isolation-level read_committed \
+    --property print.partition=true --property print.offset=true \
+    --property print.key=true | grep ORD-77412
+
+Partition:5	Offset:1180224	ORD-77412	{"orderId":"ORD-77412","pgApprovalNo":"A-8812043","amount":34900}
+Partition:5	Offset:1204881	ORD-77412	{"orderId":"ORD-77412","pgApprovalNo":"A-9014772","amount":34900}</code></pre>
+      </figure>
+
+      <aside class="note" data-label="read_committed 를 명시해야 합니다">
+        <p>
+          <code>isolation.level</code>의 기본값은 <strong><code>read_uncommitted</code></strong>입니다.
+          이 기본값에서는 <strong>abort 된 트랜잭션의 레코드까지 컨슈머에게 보입니다.</strong>
+          트랜잭션을 쓰는 파이프라인을 조사할 때는 CLI에도
+          <code>--isolation-level read_committed</code>를 반드시 붙이세요.
+          그러지 않으면 "중복이 있다"는 잘못된 결론에 도달합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="root-cause">
+      <h2 id="root-cause">원인 분석</h2>
+
+      <h3 id="step1-three-guarantees">1단계 — 세 가지 전달 보장을 정확히 구분한다</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>전달 보장 세 가지와 그것을 만드는 설정 조합</caption>
+          <thead>
+            <tr>
+              <th scope="col">보장</th>
+              <th scope="col">정의</th>
+              <th scope="col">만드는 방법</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">at-most-once</th>
+              <td>메시지가 <strong>유실될 수 있지만 재전달되지 않음</strong></td>
+              <td>프로듀서 재시도를 끄고, 컨슈머는 <strong>처리 전에</strong> 오프셋을 커밋</td>
+            </tr>
+            <tr>
+              <th scope="row">at-least-once<br><span class="badge">Kafka 기본</span></th>
+              <td>메시지가 <strong>유실되지 않지만 재전달될 수 있음</strong></td>
+              <td>컨슈머가 <strong>처리 후에</strong> 오프셋을 커밋. 별도 설정이 필요 없는 기본 동작</td>
+            </tr>
+            <tr>
+              <th scope="row">exactly-once</th>
+              <td>각 메시지가 <strong>정확히 한 번 처리됨</strong></td>
+              <td>Kafka 토픽 → Kafka 토픽 경계에서 트랜잭션 사용. <strong>외부 시스템은 별도 협력 필요</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="공식 문서가 못 박는 것">
+        <p>
+          공식 설계 문서는 <strong>"Kafka는 기본적으로 at-least-once 전달을 보장한다"</strong>고 명시합니다.
+          그리고 컨슈머의 두 가지 선택을 이렇게 설명합니다.
+        </p>
+        <ol>
+          <li>읽고 → <strong>위치를 저장하고</strong> → 처리한다 → <strong>at-most-once</strong> (처리 전에 죽으면 유실)</li>
+          <li>읽고 → 처리하고 → <strong>위치를 저장한다</strong> → <strong>at-least-once</strong> (커밋 전에 죽으면 재처리)</li>
+        </ol>
+        <p>
+          그리고 이어서 이렇게 씁니다 —
+          <strong>"많은 경우 메시지에는 primary key가 있어 갱신이 멱등적이다
+          (같은 메시지를 두 번 받아도 같은 레코드를 덮어쓸 뿐)."</strong>
+          즉 <strong>at-least-once를 안전하게 만드는 것은 소비 측 멱등성</strong>이라는 것이
+          Kafka 설계의 전제입니다.
+        </p>
+      </aside>
+
+      <h3 id="step2-what-eos-covers">2단계 — EOS가 실제로 무엇을 원자적으로 묶는가</h3>
+      <p>
+        Kafka 트랜잭션의 특이한 점은 <strong>프로듀서만 트랜잭션 주체</strong>라는 것입니다.
+        컨슈머는 트랜잭션에 참여하지 않고, 대신 프로듀서가
+        <strong>컨슈머의 커밋 오프셋까지 트랜잭션 안에서 갱신</strong>합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>트랜잭션이 원자적으로 묶는 두 가지 — consume-transform-produce</figcaption>
+        <pre><code class="lang-java">producer.initTransactions();          // transactional.id 등록, 이전 인스턴스의 트랜잭션 abort
+
+while (running) {
+    ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(500));
+    if (records.isEmpty()) continue;
+
+    producer.beginTransaction();
+    try {
+        for (ConsumerRecord&lt;String, String&gt; r : records) {
+            // ① 출력 토픽 쓰기 — 트랜잭션 안
+            producer.send(new ProducerRecord&lt;&gt;("output", r.key(), transform(r.value())));
+        }
+        // ② 입력 오프셋 커밋 — 트랜잭션 안
+        producer.sendOffsetsToTransaction(offsetsOf(records), consumer.groupMetadata());
+        producer.commitTransaction();     // ①과 ②가 함께 성공하거나 함께 실패
+    } catch (AbortableException e) {
+        producer.abortTransaction();
+        // ★ 중요: abort 후에는 컨슈머 위치를 명시적으로 되돌려야 합니다.
+        //   컨슈머는 자동으로 rewind 하지 않습니다.
+        resetConsumerPosition(consumer, records);
+    }
+}</code></pre>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>트랜잭션의 원자성 범위</caption>
+          <thead>
+            <tr><th scope="col">대상</th><th scope="col">원자성 보장</th><th scope="col">비고</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">출력 Kafka 토픽 쓰기</th><td class="t-center"><span class="mark-ok">보장</span></td><td>여러 토픽·파티션에 걸쳐도 원자적</td></tr>
+            <tr><th scope="row">입력 오프셋 커밋</th><td class="t-center"><span class="mark-ok">보장</span></td><td><code>sendOffsetsToTransaction</code>으로 같은 트랜잭션에 포함</td></tr>
+            <tr><th scope="row">외부 DB 쓰기</th><td class="t-center"><span class="mark-no">보장 없음</span></td><td>Kafka 트랜잭션과 분리된 트랜잭션</td></tr>
+            <tr><th scope="row">외부 HTTP·gRPC 호출</th><td class="t-center"><span class="mark-no">보장 없음</span></td><td><strong>abort 해도 호출은 취소되지 않음</strong></td></tr>
+            <tr><th scope="row">이메일·푸시 발송</th><td class="t-center"><span class="mark-no">보장 없음</span></td><td>되돌릴 수단이 아예 없음</td></tr>
+            <tr><th scope="row">파일·오브젝트 스토리지</th><td class="t-center"><span class="mark-no">보장 없음</span></td><td>Connect처럼 <strong>오프셋을 출력과 같은 곳에 저장</strong>하는 패턴이 필요</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="공식 문서가 제시하는 해법 방향">
+        <p>
+          공식 문서는 외부 시스템에 쓸 때의 한계를 이렇게 설명합니다 —
+          <strong>"컨슈머의 위치를 실제 저장된 출력과 조율해야 한다는 데 한계가 있다.
+          고전적 방법은 2단계 커밋이지만, 더 간단하고 일반적인 방법은
+          컨슈머가 자기 오프셋을 출력과 <em>같은 장소</em>에 저장하는 것이다."</strong>
+        </p>
+        <p>
+          예로 든 것이 <strong>Kafka Connect의 HDFS 커넥터</strong>입니다 —
+          데이터와 오프셋을 함께 기록해 "둘 다 갱신되거나 둘 다 갱신되지 않음"을 보장합니다.
+          이 아이디어가 아래 해결 섹션의 <strong>처리 이력 테이블 패턴</strong>의 근거입니다.
+        </p>
+      </aside>
+
+      <h3 id="step3-three-mechanisms">3단계 — 멱등 프로듀서 · 트랜잭션 · 컨슈머 멱등성은 다른 것이다</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>이름이 비슷해 가장 많이 혼동되는 세 가지</caption>
+          <thead>
+            <tr>
+              <th scope="col">기능</th>
+              <th scope="col">해결하는 문제</th>
+              <th scope="col">범위</th>
+              <th scope="col">설정</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">멱등 프로듀서</th>
+              <td>프로듀서 <strong>재시도</strong>로 인한 중복 append</td>
+              <td><strong>파티션 단위</strong>, 하나의 프로듀서 세션</td>
+              <td><code>enable.idempotence=true</code> (4.x 기본값)</td>
+            </tr>
+            <tr>
+              <th scope="row">트랜잭션</th>
+              <td>여러 파티션 쓰기 + 오프셋 커밋의 <strong>원자성</strong></td>
+              <td><strong>Kafka 내부</strong>. 여러 토픽·파티션에 걸침</td>
+              <td><code>transactional.id</code> (프로듀서 전용), 컨슈머는 <code>isolation.level=read_committed</code> + <code>enable.auto.commit=false</code></td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머 멱등성</th>
+              <td><strong>외부 시스템</strong>에 대한 중복 부작용</td>
+              <td>애플리케이션이 직접 구현</td>
+              <td>Kafka 설정이 아님. <strong>코드로 만들어야 함</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="핵심">
+        <p>
+          <strong>멱등 프로듀서는 파티션 단위 중복 제거이고, 트랜잭션과 다릅니다.</strong>
+          멱등 프로듀서는 "같은 배치를 재전송해도 로그에 두 번 들어가지 않는다"만 보장합니다.
+          프로세스가 재시작되면 새 프로듀서 세션이 되므로 그 보장도 끊깁니다.
+        </p>
+        <p>
+          그리고 <strong>둘 중 어느 것도 외부 시스템의 중복을 막지 못합니다.</strong>
+          그건 세 번째 항목이고, <strong>Kafka 설정으로는 켤 수 없습니다.</strong>
+        </p>
+      </aside>
+
+      <h3 id="step4-abort-does-not-undo">4단계 — abort 는 외부 호출을 되돌리지 않는다</h3>
+      <p>
+        4.x에서는 트랜잭션 프로듀서의 예외 처리가 <strong>카테고리로 표준화</strong>되었습니다.
+        공식 문서가 정의하는 6개 범주입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>트랜잭션 프로듀서 예외 범주 (Apache Kafka 4.x)</caption>
+          <thead>
+            <tr><th scope="col">범주</th><th scope="col">애플리케이션까지 올라오는가</th><th scope="col">필요한 처리</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>RetriableException</code></th><td>아니요</td><td>클라이언트가 자동 재시도</td></tr>
+            <tr><th scope="row"><code>RefreshRetriableException</code></th><td>아니요</td><td>메타데이터 갱신 후 클라이언트가 재시도</td></tr>
+            <tr><th scope="row"><code>AbortableException</code></th><td>예</td><td><strong>트랜잭션 abort + 컨슈머 위치 재설정</strong> 후 재처리</td></tr>
+            <tr><th scope="row"><code>ApplicationRecoverableException</code></th><td>예</td><td>애플리케이션이 복구 전략 구현. <strong>프로듀서 재시작 포함</strong></td></tr>
+            <tr><th scope="row"><code>InvalidConfigurationException</code></th><td>예</td><td>설정 수정. 프로듀서 재시작은 필수 아님</td></tr>
+            <tr><th scope="row"><code>KafkaException</code></th><td>예</td><td>위 범주에 속하지 않는 일반 예외</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        중요한 것은 <strong><code>AbortableException</code>을 만나 abort 했을 때
+        "그 트랜잭션 안에서 이미 실행한 외부 호출"은 그대로 남는다</strong>는 점입니다.
+        공식 문서도 abort 후에는 <strong>애플리케이션 상태와 컨슈머 위치를 명시적으로 재설정</strong>해
+        재처리해야 한다고 명시합니다. 재처리하면 외부 호출은 다시 일어납니다.
+      </p>
+      <p>
+        전달 보장과 트랜잭션의 전체 그림은 <a href="../basics/ch06.html">6장 전달 보장과 트랜잭션</a>에서,
+        동작하는 파이프라인은 <a href="../practice/ex05.html">예제 5 · Exactly-Once 파이프라인</a>에서 다룹니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="reproduce">
+      <h2 id="reproduce">재현 방법</h2>
+
+      <p>
+        단일 노드 KRaft 클러스터로 재현합니다. 아래 compose는 Apache Kafka의 공식 단일 노드 예제입니다
+        (3노드 구성은 <a href="../practice/ex01.html">예제 1</a>).
+        트랜잭션을 쓰므로 내부 토픽 복제 계수를 1로 낮춰 둡니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>docker-compose.yml — 단일 노드 KRaft (트랜잭션 사용 가능)</figcaption>
+        <pre><code class="lang-yaml">services:
+  broker:
+    image: apache/kafka:4.3.1
+    hostname: broker
+    container_name: broker
+    ports:
+      - '9092:9092'
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_LISTENERS: 'CONTROLLER://:29093,PLAINTEXT://:19092,PLAINTEXT_HOST://:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:19092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>SideEffectConsumer.java — 외부 부작용을 파일 append 로 대체한 최소 재현</figcaption>
+        <pre><code class="lang-java">import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import java.nio.file.*;
+import java.time.Duration;
+import java.util.List;
+import java.util.Properties;
+
+public class SideEffectConsumer {
+    public static void main(String[] args) throws Exception {
+        Path ledger = Path.of("external-ledger.txt");   // "외부 시스템" 역할
+
+        Properties p = new Properties();
+        p.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        p.put(ConsumerConfig.GROUP_ID_CONFIG, "settler");
+        p.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        p.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        p.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        p.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+
+        try (KafkaConsumer&lt;String, String&gt; c = new KafkaConsumer&lt;&gt;(p)) {
+            c.subscribe(List.of("payment-approved"));
+            while (true) {
+                ConsumerRecords&lt;String, String&gt; records = c.poll(Duration.ofSeconds(1));
+                for (ConsumerRecord&lt;String, String&gt; r : records) {
+                    // ★ 멱등성 없는 외부 부작용
+                    Files.writeString(ledger, "CHARGE " + r.key() + "\n",
+                        StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                }
+                if (!records.isEmpty()) c.commitSync();
+            }
+        }
+    }
+}</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>재현 절차 — 오프셋을 되돌리면 원장에 같은 청구가 두 번 생깁니다</figcaption>
+        <pre><code class="lang-bash">docker compose up -d
+K=/opt/kafka/bin
+
+# 1. 토픽 생성
+docker exec -it broker $K/kafka-topics.sh --create --topic payment-approved \
+  --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092
+
+# 2. 결제 승인 이벤트 5건 (키 = 주문 ID)
+for i in 1 2 3 4 5; do
+  echo "ORD-$i:{\"orderId\":\"ORD-$i\",\"amount\":10000}" | \
+  docker exec -i broker $K/kafka-console-producer.sh --topic payment-approved \
+    --bootstrap-server localhost:9092 \
+    --property parse.key=true --property key.separator=:
+done
+
+# 3. 컨슈머를 돌려 전부 처리한다
+java -cp kafka-clients-4.3.1.jar:. SideEffectConsumer &amp;
+sleep 10 && kill %1
+wc -l external-ledger.txt        # → 5
+
+# 4. 오프셋을 되돌린다 (그룹이 Empty 여야 합니다)
+docker exec -it broker $K/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+  --group settler --topic payment-approved --reset-offsets --to-earliest --execute
+
+# 5. 다시 돌린다 → 외부 원장에 같은 청구가 또 들어갑니다
+java -cp kafka-clients-4.3.1.jar:. SideEffectConsumer &amp;
+sleep 10 && kill %1
+wc -l external-ledger.txt        # → 10  ★ 이중 청구
+sort external-ledger.txt | uniq -c
+#   2 CHARGE ORD-1
+#   2 CHARGE ORD-2
+#   ...</code></pre>
+      </figure>
+
+      <aside class="note note--ok" data-label="여기서 확인할 것">
+        <p>
+          <code>isolation.level=read_committed</code>도, 트랜잭션도, 멱등 프로듀서도
+          <strong>이 중복을 막지 못합니다.</strong> 중복이 생긴 곳은 <code>external-ledger.txt</code>이고
+          Kafka는 그 존재를 모릅니다.
+        </p>
+        <p>
+          해결 섹션의 처리 이력 테이블 패턴을 적용한 뒤 4~5단계를 다시 실행하면
+          <code>wc -l</code>이 5에서 그대로 멈춥니다. 그것이 이 케이스의 정답입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="fix">
+      <h2 id="fix">해결</h2>
+
+      <h3 id="immediate">즉시 조치 — 되돌리기 전에 범위를 좁힌다</h3>
+      <p>
+        멱등성 구현은 배포가 필요합니다. 그 전에 재처리를 해야 한다면
+        <strong>"이미 처리한 것을 다시 처리하지 않도록" 범위를 좁히는 것</strong>이 유일한 방어입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>즉시 조치 — 누락 구간만 정확히 골라 재처리</figcaption>
+        <pre><code class="lang-bash"># 1. 외부 시스템에서 "처리 완료된 키 목록"을 먼저 확보한다
+psql -c "\copy (SELECT order_id FROM pg_confirmations
+                WHERE created_at BETWEEN '2026-07-24 04:00' AND '2026-07-24 08:00')
+         TO 'processed.csv' CSV"
+
+# 2. 전체 구간을 되돌리는 대신, 별도 그룹으로 재처리 전용 컨슈머를 띄운다.
+#    그 컨슈머가 processed.csv 를 읽어 이미 처리된 키를 건너뛰게 만듭니다.
+kafka-consumer-groups.sh --bootstrap-server kafka-1:9092 \
+  --group settler-replay-20260724 --topic payment-approved \
+  --reset-offsets --to-datetime 2026-07-24T04:00:00.000 --execute
+
+# 3. 재처리 컨슈머는 반드시 dry-run 모드를 먼저 지원해야 합니다.
+#    "몇 건이 실제로 외부 호출 대상인가"를 사람이 확인한 뒤 실행합니다.</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="되돌리기 전 체크">
+        <p>
+          <code>--reset-offsets</code>는 <strong>그룹이 비활성일 때만</strong> 동작합니다
+          (<a href="case01.html">케이스 1</a>).
+          그리고 되돌리기 전에 반드시 이 질문에 답하세요 —
+          <strong>"이 구간을 다시 처리하면 외부 시스템에 어떤 부작용이 몇 건 생기는가?"</strong>
+          답을 모르면 되돌리지 마세요.
+        </p>
+      </aside>
+
+      <h3 id="root-fix">근본 해결 1 — 외부 API의 멱등 키를 쓴다</h3>
+      <p>
+        가장 깨끗한 방법입니다. 대부분의 결제·정산 API는 멱등 키(idempotency key)를 지원합니다.
+        <strong>Kafka 레코드에서 안정적으로 파생되는 값</strong>을 키로 써야 합니다.
+      </p>
+
+      <div class="diff">
+        <div class="diff__before">
+          <p>
+            같은 주문에 대해 호출할 때마다 PG사는 <strong>새 승인 요청</strong>으로 처리합니다.
+            재처리는 곧 이중 청구입니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 전</figcaption>
+            <pre><code class="lang-java">PgResult result = pgClient.confirmPayment(
+    approved.getOrderId(),
+    approved.getAmount());</code></pre>
+          </figure>
+        </div>
+        <div class="diff__after">
+          <p>
+            멱등 키를 전달하면 PG사가 <strong>두 번째 요청에 첫 번째 결과를 그대로 반환</strong>합니다.
+            몇 번 재처리해도 승인은 한 번입니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 후</figcaption>
+            <pre><code class="lang-java">// 레코드에서 결정적으로 파생되는 키를 씁니다.
+// UUID.randomUUID() 는 절대 쓰지 마세요 — 재처리 때 값이 달라집니다.
+String idempotencyKey = "payment-approved:" + approved.getOrderId()
+                      + ":" + approved.getApprovalVersion();
+
+PgResult result = pgClient.confirmPayment(
+    approved.getOrderId(),
+    approved.getAmount(),
+    idempotencyKey);</code></pre>
+          </figure>
+        </div>
+      </div>
+
+      <aside class="note note--warn" data-label="멱등 키를 만들 때 흔한 실수">
+        <ul>
+          <li><strong><code>UUID.randomUUID()</code></strong> — 재처리마다 값이 바뀌어 멱등성이 없습니다.</li>
+          <li><strong><code>System.currentTimeMillis()</code></strong> — 같은 이유로 안 됩니다.</li>
+          <li>
+            <strong><code>topic-partition-offset</code></strong> — 매력적이지만 위험합니다.
+            <a href="case03.html">케이스 3</a>처럼 로그가 잘리거나
+            <a href="case05.html">케이스 5</a>처럼 토픽을 재적재하면 오프셋이 달라집니다.
+            <strong>비즈니스 식별자를 우선</strong>하세요.
+          </li>
+          <li>키가 <strong>너무 넓으면</strong>(주문 ID만) 정당한 재승인도 막힙니다. 버전·시퀀스를 포함하세요.</li>
+        </ul>
+      </aside>
+
+      <h3 id="root-fix-2">근본 해결 2 — 처리 이력 테이블 (외부 API가 멱등 키를 지원하지 않을 때)</h3>
+      <p>
+        공식 문서가 제시하는 방향, 즉 <strong>"오프셋(또는 처리 이력)을 출력과 같은 장소에 저장"</strong>하는
+        패턴입니다. DB 트랜잭션 하나로 "부작용 기록"과 "처리 표시"를 묶습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>처리 이력 테이블 — 유니크 제약이 멱등성을 만듭니다</figcaption>
+        <pre><code class="lang-sql">CREATE TABLE processed_events (
+  event_key    TEXT PRIMARY KEY,      -- 예: 'payment-approved:ORD-77412:1'
+  topic        TEXT NOT NULL,
+  partition_id INT  NOT NULL,
+  "offset"     BIGINT NOT NULL,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  result       JSONB
+);</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>처리 흐름 — 먼저 선점하고, 성공하면 결과를 기록한다</figcaption>
+        <pre><code class="lang-java">void handle(ConsumerRecord&lt;String, PaymentApproved&gt; record) {
+    String eventKey = eventKeyOf(record);   // 비즈니스 식별자 기반
+
+    // ① 선점: 이미 처리했으면 여기서 끝난다 (0 rows affected)
+    int claimed = jdbc.update(
+        "INSERT INTO processed_events (event_key, topic, partition_id, \"offset\") " +
+        "VALUES (?,?,?,?) ON CONFLICT (event_key) DO NOTHING",
+        eventKey, record.topic(), record.partition(), record.offset());
+
+    if (claimed == 0) {
+        metrics.counter("settlement.skipped_duplicate").increment();
+        return;                              // ★ 외부 호출을 하지 않습니다
+    }
+
+    // ② 외부 호출
+    PgResult result = pgClient.confirmPayment(...);
+
+    // ③ 결과 기록
+    jdbc.update("UPDATE processed_events SET result = ?::jsonb WHERE event_key = ?",
+                toJson(result), eventKey);
+}</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="이 패턴의 빈틈">
+        <p>
+          ①과 ② 사이에서 프로세스가 죽으면 <strong>"선점은 했지만 외부 호출은 안 된" 상태</strong>가 남습니다.
+          재처리 때 ①이 0을 반환해 건너뛰므로 <strong>유실</strong>이 됩니다.
+        </p>
+        <p>
+          이 빈틈을 막으려면 상태 컬럼을 두고
+          <code>CLAIMED</code> → <code>CALLED</code> → <code>DONE</code>으로 전이시키면서,
+          <code>CLAIMED</code> 상태로 일정 시간 이상 남은 행을 <strong>복구 배치가 재시도</strong>하게 만듭니다.
+          그 재시도가 안전하려면 외부 API의 <strong>조회 API</strong>로
+          "이미 승인됐는지" 확인할 수 있어야 합니다.
+        </p>
+        <p>
+          <strong>완벽한 exactly-once는 외부 시스템의 협력 없이 만들 수 없습니다.</strong>
+          이것이 공식 문서가 말하는 내용의 실무적 의미입니다.
+        </p>
+      </aside>
+
+      <h3 id="root-fix-3">근본 해결 3 — 부작용을 경계 밖으로 밀어낸다</h3>
+      <p>
+        구조적으로 가장 견고한 방법은 <strong>외부 호출을 파이프라인에서 분리</strong>하는 것입니다.
+        Kafka 안에서는 EOS를 온전히 쓰고, 외부 호출은 <strong>전용 컨슈머 하나</strong>가 담당하며
+        그 컨슈머에만 멱등성을 구현합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>구조 분리 — 외부 호출 지점을 하나로 줄인다</figcaption>
+        <pre><code class="lang-text">payment-approved
+   │
+   ├─(Streams, exactly_once_v2)─→ payment-command   ← Kafka 안. EOS 온전히 성립
+   │                                    │
+   │                                    └─(전용 컨슈머 1개)─→ PG API
+   │                                          · 멱등 키 사용
+   │                                          · 처리 이력 테이블
+   │                                          · 이 컨슈머만 검증하면 됨
+   └─→ ... 다른 소비자들</code></pre>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>세 가지 해결책 비교</caption>
+          <thead>
+            <tr><th scope="col">방법</th><th scope="col">적용 조건</th><th scope="col">평가</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">외부 API 멱등 키</th>
+              <td>API가 멱등 키를 지원할 때</td>
+              <td><span class="mark-ok">최선</span> — 코드가 가장 단순하고 빈틈이 없습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">처리 이력 테이블</th>
+              <td>멱등 키가 없고 조회 API가 있을 때</td>
+              <td>구현 가능하지만 상태 전이·복구 배치가 필요합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">부작용 지점 분리</th>
+              <td>항상 함께 적용 가능</td>
+              <td><span class="mark-ok">권장</span> — 검증해야 할 지점이 하나로 줄어듭니다</td>
+            </tr>
+            <tr>
+              <th scope="row">되돌릴 수 없는 부작용<br>(이메일·푸시)</th>
+              <td>—</td>
+              <td>멱등성 외에 <strong>발송 이력 기반 차단</strong>이 필수. 재처리 정책을 별도로 문서화하세요</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prevention">
+      <h2 id="prevention">예방 체크리스트</h2>
+
+      <ul>
+        <li><label><input type="checkbox"> 컨슈머의 <strong>모든 외부 부작용</strong>(HTTP·DB·큐·메일·파일)을 목록화했다</label></li>
+        <li><label><input type="checkbox"> 각 부작용에 대해 <strong>"두 번 실행되면 어떻게 되는가"</strong>를 답할 수 있다</label></li>
+        <li><label><input type="checkbox"> 되돌릴 수 없는 부작용(결제·메일·푸시)에 <strong>멱등 키 또는 처리 이력</strong>이 있다</label></li>
+        <li><label><input type="checkbox"> 멱등 키가 <strong>레코드에서 결정적으로 파생</strong>된다 (<code>UUID.randomUUID()</code>·타임스탬프 아님)</label></li>
+        <li><label><input type="checkbox"> 멱등 키에 <strong>오프셋을 쓰지 않는다</strong> (트렁케이션·재적재로 바뀔 수 있음)</label></li>
+        <li><label><input type="checkbox"> <code>processing.guarantee=exactly_once_v2</code>나 트랜잭션을 쓰더라도 <strong>외부 호출은 그 보장 밖</strong>임을 팀이 알고 있다</label></li>
+        <li><label><input type="checkbox"> 트랜잭션 컨슈머가 <code>isolation.level=read_committed</code> + <code>enable.auto.commit=false</code>다</label></li>
+        <li><label><input type="checkbox"> abort 후 <strong>컨슈머 위치를 명시적으로 재설정</strong>하는 코드가 있다 (자동 rewind 되지 않음)</label></li>
+        <li><label><input type="checkbox"> 오프셋 되돌리기 절차에 <strong>"외부 부작용 영향 범위 확인"</strong> 단계가 있다</label></li>
+        <li><label><input type="checkbox"> 재처리 전용 경로가 <strong>dry-run</strong>을 지원한다</label></li>
+        <li><label><input type="checkbox"> 중복 스킵 건수를 <strong>메트릭으로 노출</strong>한다 (멱등성이 실제로 동작하는지 확인 가능)</label></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트</h2>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <ul>
+          <li>
+            <strong>Kafka의 기본 전달 보장은 at-least-once</strong>입니다.
+            "exactly-once가 기본"을 고르면 오답입니다.
+          </li>
+          <li>
+            at-most-once를 만드는 방법 → <strong>프로듀서 재시도를 끄고 처리 전에 오프셋 커밋.</strong>
+            at-least-once → <strong>처리 후에 커밋.</strong> 순서를 바꿔 놓은 선택지가 오답으로 나옵니다.
+          </li>
+          <li>
+            <strong>EOS 경계</strong>: Kafka 토픽 → 처리 → Kafka 토픽.
+            "EOS를 켜면 DB 중복도 막힌다"는 대표적 오답입니다.
+          </li>
+          <li>
+            트랜잭션에서 <strong><code>transactional.id</code>는 프로듀서에만</strong> 있습니다.
+            컨슈머 쪽 필수 설정은 <code>isolation.level=read_committed</code>와
+            <code>enable.auto.commit=false</code>입니다.
+          </li>
+          <li>
+            <code>isolation.level</code> 기본값은 <strong><code>read_uncommitted</code></strong>입니다.
+            이 값에서는 <strong>abort 된 트랜잭션의 레코드도 보입니다.</strong>
+          </li>
+          <li>
+            API 순서: <code>initTransactions()</code> → <code>beginTransaction()</code> →
+            <code>send()</code>… → <code>sendOffsetsToTransaction()</code> →
+            <code>commitTransaction()</code> / <code>abortTransaction()</code>.
+            <strong>순서 배열 유형으로 자주 출제됩니다.</strong>
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · 세 가지 구분">
+        <p>
+          <strong>멱등 프로듀서 = 파티션 단위 중복 제거</strong>(재시도로 인한 중복 append 방지).<br>
+          <strong>트랜잭션 = 여러 파티션 쓰기 + 오프셋 커밋의 원자성</strong>(Kafka 내부).<br>
+          <strong>컨슈머 멱등성 = 외부 부작용 중복 방지</strong>(애플리케이션 코드).
+        </p>
+        <p>
+          "멱등 프로듀서를 켜면 exactly-once가 된다"는 오답입니다.
+          멱등 프로듀서는 <strong>하나의 프로듀서 세션 안에서 파티션 단위</strong>로만 동작합니다.
+          <code>enable.idempotence</code> 기본값은 <strong><code>true</code></strong>이고,
+          이때 <code>max.in.flight.requests.per.connection</code>은 <strong>5 이하</strong>여야 합니다.
+        </p>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Streams">
+        <p>
+          Streams의 EOS 설정 값은 <strong><code>processing.guarantee=exactly_once_v2</code></strong>입니다.
+          이 값은 <strong>Streams 애플리케이션 내부의 상태 저장소·리파티션 토픽·출력 토픽</strong>까지
+          원자적으로 묶어 줍니다. 그러나 <code>Processor</code> 안에서 호출한
+          <strong>외부 시스템은 여전히 그 밖</strong>입니다.
+        </p>
+        <p>
+          트랜잭션 프로듀서의 예외는 4.x에서 6개 범주로 표준화되었습니다.
+          그중 애플리케이션이 <strong>abort + 컨슈머 위치 재설정</strong>으로 대응해야 하는 것은
+          <code>AbortableException</code>이고, <strong>프로듀서 재시작</strong>이 필요한 것은
+          <code>ApplicationRecoverableException</code>입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch06.html">
+          <span class="card__title">6장 · 전달 보장과 트랜잭션</span>
+          <span class="card__desc">EOS의 경계, 트랜잭션 코디네이터, LSO와 <code>read_committed</code>.</span>
+          <span class="card__meta">CCDAK Application Development</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex05.html">
+          <span class="card__title">예제 5 · Exactly-Once 파이프라인</span>
+          <span class="card__desc">consume-transform-produce 를 트랜잭션으로 구현.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="case01.html">
+          <span class="card__title">케이스 1 · 데이터가 사라졌다</span>
+          <span class="card__desc">오프셋을 되돌리게 만든 원래 사고와 복구 절차.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="case02.html">
+          <span class="card__title">케이스 2 · 무한 리밸런스 루프</span>
+          <span class="card__desc">커밋 실패가 같은 레코드 재처리를 유발하는 경로.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex06.html">
+          <span class="card__title">예제 6 · DLQ + 재시도 패턴</span>
+          <span class="card__desc">재시도를 안전하게 만드는 구조와 멱등 처리.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch10.html">
+          <span class="card__title">10장 · Kafka Streams와 ksqlDB</span>
+          <span class="card__desc"><code>exactly_once_v2</code>가 상태 저장소까지 묶는 방식.</span>
+          <span class="card__meta">CCDAK Kafka Streams</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#semantics" rel="noopener noreferrer">Design — Message Delivery Semantics</a> — 세 가지 보장의 정의, at-least-once가 기본, 컨슈머 커밋 순서에 따른 분기, 외부 시스템에 대한 한계와 "오프셋을 출력과 같은 곳에 저장" 권고</li>
+        <li><a href="https://kafka.apache.org/documentation/#usingtransactions" rel="noopener noreferrer">Design — Using Transactions</a> — 프로듀서만 트랜잭션 주체, 컨슈머 필수 설정, abort 후 위치 재설정 필요, 4.x 예외 6범주</li>
+        <li><a href="https://kafka.apache.org/documentation/#consumerconfigs_isolation.level" rel="noopener noreferrer">Consumer Configs — <code>isolation.level</code></a> — 기본값 <code>read_uncommitted</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_transactional.id" rel="noopener noreferrer">Producer Configs — <code>transactional.id</code> · <code>enable.idempotence</code></a></li>
+        <li><a href="https://kafka.apache.org/documentation/streams/core-concepts" rel="noopener noreferrer">Kafka Streams — Core Concepts</a> — <code>processing.guarantee=exactly_once_v2</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#connect" rel="noopener noreferrer">Kafka Connect</a> — 데이터와 오프셋을 함께 기록해 원자성을 얻는 패턴</li>
+        <li><a href="https://github.com/apache/kafka" rel="noopener noreferrer">Apache Kafka 소스 (4.3)</a> — <code>TransactionalMessageCopier</code>, <code>TransactionalClientDemo</code> 예제 코드</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

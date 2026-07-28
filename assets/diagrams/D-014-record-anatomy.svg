@@ -1,0 +1,53 @@
+<svg viewBox="0 0 720 372" role="img" class="kg-diagram"
+     aria-labelledby="d014-title d014-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d014-title">레코드 구조 — key, value, timestamp, headers 와 브로커가 붙이는 메타데이터</title>
+  <desc id="d014-desc">왼쪽은 프로듀서가 만드는 ProducerRecord 입니다. key 는 파티션 결정과 컴팩션의 기준이 되는 바이트 배열, value 는 본문이며 null 이면 tombstone 이 됩니다. timestamp 를 비우면 전송 시각인 CreateTime 이 쓰이고, headers 는 키와 바이트 배열의 쌍을 여러 개 담을 수 있으며, partition 을 비우면 파티셔너가 결정합니다. 오른쪽은 컨슈머가 받는 ConsumerRecord 에서 브로커 쪽이 채우는 부분입니다. offset 은 파티션 리더가 append 하면서 부여하는 순번이고, timestampType 은 CreateTime 또는 LogAppendTime, leaderEpoch 는 리더가 바뀔 때마다 올라가는 세대 번호이며 직렬화된 key 와 value 의 바이트 크기도 함께 전달됩니다. key 와 value 는 브로커에게 단순한 바이트 배열이므로 스키마 검사는 브로커가 하지 않습니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">레코드 구조 — 프로듀서가 채우는 것과 브로커가 붙이는 것</text>
+<rect class="dg-panel" x="8" y="32" width="348" height="262" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="18" y="49">프로듀서가 만드는 부분 (ProducerRecord)</text>
+<rect class="dg-node dg-node--accent" x="20" y="56" width="324" height="38" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="32" y="72">key</text>
+<text class="dg-fs-sm dg-muted" x="32" y="88">byte[] · 파티션 결정과 컴팩션의 기준</text>
+<rect class="dg-node" x="20" y="102" width="324" height="38" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="32" y="118">value</text>
+<text class="dg-fs-sm dg-muted" x="32" y="134">byte[] · 본문. null 이면 tombstone</text>
+<rect class="dg-node" x="20" y="148" width="324" height="38" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="32" y="164">timestamp</text>
+<text class="dg-fs-sm dg-muted" x="32" y="180">long · 비우면 전송 시각(CreateTime)</text>
+<rect class="dg-node" x="20" y="194" width="324" height="38" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="32" y="210">headers</text>
+<text class="dg-fs-sm dg-muted" x="32" y="226">Iterable<Header> · key=byte[] 쌍 여러 개</text>
+<rect class="dg-node" x="20" y="240" width="324" height="38" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="32" y="256">topic / partition</text>
+<text class="dg-fs-sm dg-muted" x="32" y="272">partition 을 비우면 파티셔너가 결정</text>
+<rect class="dg-panel" x="364" y="32" width="348" height="262" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="374" y="49">브로커·컨슈머 쪽에서 채워지는 부분 (ConsumerRecord)</text>
+<rect class="dg-node dg-node--ok" x="376" y="56" width="324" height="38" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="388" y="72">offset</text>
+<text class="dg-fs-sm dg-muted" x="388" y="88">브로커가 파티션 안에서 부여하는 순번</text>
+<rect class="dg-node" x="376" y="102" width="324" height="38" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="388" y="118">timestampType</text>
+<text class="dg-fs-sm dg-muted" x="388" y="134">CreateTime 또는 LogAppendTime</text>
+<rect class="dg-node" x="376" y="148" width="324" height="38" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="388" y="164">leaderEpoch</text>
+<text class="dg-fs-sm dg-muted" x="388" y="180">리더가 바뀔 때마다 올라가는 세대 번호</text>
+<rect class="dg-node" x="376" y="194" width="324" height="38" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="388" y="210">serializedKeySize</text>
+<text class="dg-fs-sm dg-muted" x="388" y="226">직렬화된 바이트 수 (Size 계열)</text>
+<rect class="dg-node" x="376" y="240" width="324" height="38" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="388" y="256">serializedValueSize</text>
+<text class="dg-fs-sm dg-muted" x="388" y="272">역직렬화는 컨슈머의 Deserializer 가</text>
+<path class="dg-edge dg-edge--accent" d="M348,160 L372,160" marker-end="url(#mk-arrow-accent)"/>
+<text class="dg-fs-sm dg-bold" x="8" y="320">key 와 value 는 브로커에게 그냥 바이트 배열입니다 — 스키마 검사는 브로커가 하지 않습니다.</text>
+<text class="dg-fs-sm" x="8" y="340">offset 은 프로듀서가 정할 수 없습니다. 파티션 리더가 append 하면서 부여합니다.</text>
+<text class="dg-fs-sm" x="8" y="360">value 가 null 인 레코드는 컴팩션 토픽에서 그 키의 삭제 표시(tombstone)로 쓰입니다.</text>
+</svg>

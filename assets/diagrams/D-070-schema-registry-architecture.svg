@@ -1,0 +1,82 @@
+<svg viewBox="0 0 720 324" role="img" class="kg-diagram"
+     aria-labelledby="d070-title d070-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d070-title">Schema Registry 아키텍처 — 스키마는 레지스트리에, 메시지에는 id 만</title>
+  <desc id="d070-desc">프로듀서, Schema Registry, Kafka 토픽, 컨슈머의 관계를 6단계로 그린 그림입니다.
+    1단계로 프로듀서가 스키마를 subject 에 등록하면 2단계로 Schema Registry 가 schema id 를 돌려줍니다.
+    3단계로 프로듀서는 매직 바이트 1바이트와 schema id 4바이트를 앞에 붙인 레코드를 Kafka 토픽에 씁니다.
+    스키마 본문은 메시지에 들어가지 않습니다.
+    4단계로 컨슈머가 그 레코드를 받으면 5단계로 앞쪽 id 를 뽑아 Schema Registry 에 조회하고
+    6단계로 스키마를 받아 로컬에 캐시합니다.
+    양쪽 모두 캐시를 쓰기 때문에 메시지마다 REST 호출이 일어나지 않고 새 id 를 처음 볼 때만 조회합니다.
+    Schema Registry 는 스키마를 자신의 내부 토픽 _schemas 에 저장하고 subject 별 버전 관리와 호환성 검사를 담당합니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">Schema Registry — 스키마는 한 번 등록하고, 메시지에는 id 만 실립니다</text>
+
+  <!-- Schema Registry -->
+  <rect class="dg-node dg-node--accent" x="250" y="30" width="220" height="70" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="260" y="48">Schema Registry</text>
+  <text class="dg-fs-sm" x="260" y="66">subject 별 버전 · 호환성 검사</text>
+  <text class="dg-fs-sm dg-mono" x="260" y="86">내부 토픽 _schemas 에 저장</text>
+
+  <!-- ① 등록 -->
+  <line class="dg-edge dg-edge--accent" x1="100" y1="148" x2="100" y2="64"/>
+  <line class="dg-edge dg-edge--accent" x1="100" y1="64" x2="243" y2="64"/>
+  <path class="dg-marker--accent" d="M242,59 L250,64 L242,69 Z"/>
+  <text class="dg-fs-sm dg-bold" x="108" y="58">① 스키마 등록</text>
+
+  <!-- ② id 반환 -->
+  <line class="dg-edge" x1="250" y1="88" x2="124" y2="88"/>
+  <line class="dg-edge" x1="124" y1="88" x2="124" y2="145"/>
+  <path class="dg-marker" d="M119,144 L129,144 L124,152 Z"/>
+  <text class="dg-fs-sm" x="132" y="110">② <tspan class="dg-mono">schema id</tspan> 반환 (정수)</text>
+
+  <!-- ⑤ 조회 -->
+  <line class="dg-edge dg-edge--accent" x1="620" y1="148" x2="620" y2="64"/>
+  <line class="dg-edge dg-edge--accent" x1="620" y1="64" x2="477" y2="64"/>
+  <path class="dg-marker--accent" d="M478,59 L470,64 L478,69 Z"/>
+  <text class="dg-fs-sm dg-bold" x="612" y="58" text-anchor="end">⑤ id 로 조회</text>
+
+  <!-- ⑥ 스키마 반환 -->
+  <line class="dg-edge" x1="470" y1="88" x2="596" y2="88"/>
+  <line class="dg-edge" x1="596" y1="88" x2="596" y2="145"/>
+  <path class="dg-marker" d="M591,144 L601,144 L596,152 Z"/>
+  <text class="dg-fs-sm" x="588" y="110" text-anchor="end">⑥ 스키마 반환 → 캐시</text>
+
+  <!-- 프로듀서 -->
+  <rect class="dg-node" x="12" y="152" width="178" height="80" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="174">프로듀서</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="194">KafkaAvroSerializer</text>
+  <text class="dg-fs-sm dg-muted" x="22" y="212">스키마 → id 로컬 캐시</text>
+  <text class="dg-fs-sm dg-muted" x="22" y="226">같은 스키마는 다시 등록 안 함</text>
+
+  <!-- ③ -->
+  <line class="dg-edge dg-edge--accent" x1="190" y1="192" x2="243" y2="192"/>
+  <path class="dg-marker--accent" d="M242,187 L250,192 L242,197 Z"/>
+  <text class="dg-fs-sm dg-bold" x="216" y="184" text-anchor="middle">③</text>
+
+  <!-- Kafka 토픽 -->
+  <rect class="dg-node dg-node--alt" x="250" y="152" width="220" height="80" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="260" y="174">Kafka 토픽</text>
+  <text class="dg-fs-sm dg-mono" x="260" y="194">magic(1) + id(4) + payload</text>
+  <text class="dg-fs-sm dg-bold" x="260" y="214">스키마 본문은 실리지 않습니다</text>
+  <text class="dg-fs-sm dg-muted" x="260" y="228">오버헤드는 레코드당 5바이트</text>
+
+  <!-- ④ -->
+  <line class="dg-edge dg-edge--accent" x1="470" y1="192" x2="523" y2="192"/>
+  <path class="dg-marker--accent" d="M522,187 L530,192 L522,197 Z"/>
+  <text class="dg-fs-sm dg-bold" x="496" y="184" text-anchor="middle">④</text>
+
+  <!-- 컨슈머 -->
+  <rect class="dg-node" x="530" y="152" width="178" height="80" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="540" y="174">컨슈머</text>
+  <text class="dg-fs-sm dg-mono" x="540" y="194">KafkaAvroDeserializer</text>
+  <text class="dg-fs-sm dg-muted" x="540" y="212">id → 스키마 로컬 캐시</text>
+  <text class="dg-fs-sm dg-muted" x="540" y="226">처음 본 id 만 조회</text>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="246" x2="708" y2="246"/>
+  <text class="dg-fs-sm" x="12" y="264">메시지마다 REST 호출이 일어나지 않습니다. <tspan class="dg-bold">처음 보는 스키마·id 일 때만</tspan> 왕복하고 이후에는 캐시를 씁니다.</text>
+  <text class="dg-fs-sm" x="12" y="282">그래서 Schema Registry 가 잠시 죽어도 <tspan class="dg-bold">이미 캐시된 스키마로는 계속 처리</tspan>됩니다 — 새 스키마 등록·조회만 막힙니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="300">REST: 등록은 <tspan class="dg-mono">POST /subjects/{subject}/versions</tspan> · 조회는 <tspan class="dg-mono">GET /schemas/ids/{id}</tspan></text>
+  <text class="dg-fs-sm dg-muted" x="12" y="318">Schema Registry 는 Confluent 컴포넌트입니다. Apache Kafka 배포판에는 포함되지 않습니다.</text>
+</svg>

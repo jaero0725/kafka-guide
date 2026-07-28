@@ -1,0 +1,90 @@
+<svg viewBox="0 0 720 584" role="img" class="kg-diagram"
+     aria-labelledby="d131-title d131-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d131-title">CCDAK 도메인과 챕터 매핑 — 어느 도메인을 어느 장에서 공부하는가</title>
+  <desc id="d131-desc">왼쪽에 CCDAK 6개 도메인을 가중치 순서로 두고 오른쪽에 이 사이트의 장을 배치해 연결선으로 이었습니다. Application Development 28퍼센트는 ch04 Producer, ch05 Consumer, ch06 전달 보장과 트랜잭션으로 커버됩니다. Fundamentals 23퍼센트는 ch02 아키텍처, ch07 스토리지와 리텐션·컴팩션, ch08 스키마입니다. Kafka Connect 15퍼센트는 ch09, Application Observability 13퍼센트는 ch11 운영과 보안·모니터링이며 프로듀서·컨슈머 메트릭 부분은 ch04와 ch05에서 점선으로 부분 커버됩니다. Kafka Streams 12퍼센트는 ch10, Application Testing 8퍼센트는 ch10과 실무 예제입니다. ch01 개요와 ch03 KRaft는 직접 출제 비중이 낮은 기초 다지기 장으로 흐리게 표시했습니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">CCDAK 도메인 ↔ 이 사이트의 챕터 — 무엇부터 읽을지 정하는 지도</text>
+<text class="dg-fs-sm dg-muted" x="8" y="42">왼쪽 도메인의 가중치가 곧 읽는 순서입니다. 위에서 아래로 읽으면 가중치 순서가 됩니다.</text>
+<rect class="dg-node" x="430" y="68" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="88">ch04</text>
+<text class="dg-fs-sm" x="518" y="88">Producer</text>
+<rect class="dg-node" x="430" y="104" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="124">ch05</text>
+<text class="dg-fs-sm" x="518" y="124">Consumer</text>
+<rect class="dg-node" x="430" y="140" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="160">ch06</text>
+<text class="dg-fs-sm" x="518" y="160">전달 보장 · 트랜잭션</text>
+<rect class="dg-node" x="430" y="176" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="196">ch02</text>
+<text class="dg-fs-sm" x="518" y="196">아키텍처</text>
+<rect class="dg-node" x="430" y="212" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="232">ch07</text>
+<text class="dg-fs-sm" x="518" y="232">스토리지 · 리텐션 · 컴팩션</text>
+<rect class="dg-node" x="430" y="248" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="268">ch08</text>
+<text class="dg-fs-sm" x="518" y="268">스키마 (Schema Registry)</text>
+<rect class="dg-node" x="430" y="284" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="304">ch09</text>
+<text class="dg-fs-sm" x="518" y="304">Kafka Connect</text>
+<rect class="dg-node" x="430" y="320" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="340">ch11</text>
+<text class="dg-fs-sm" x="518" y="340">운영 · 보안 · 모니터링</text>
+<rect class="dg-node" x="430" y="356" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="376">ch10</text>
+<text class="dg-fs-sm" x="518" y="376">Kafka Streams</text>
+<rect class="dg-node" x="430" y="392" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="412">practice</text>
+<text class="dg-fs-sm" x="518" y="412">실무 예제 ex01–ex12</text>
+<rect class="dg-node dg-node--muted" x="430" y="428" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="448">ch01</text>
+<text class="dg-fs-sm" x="518" y="448">Kafka 개요</text>
+<rect class="dg-node dg-node--muted" x="430" y="464" width="282" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="442" y="484">ch03</text>
+<text class="dg-fs-sm" x="518" y="484">KRaft</text>
+<rect class="dg-node dg-node--accent" x="8" y="101" width="236" height="36" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="20" y="118">Application Development</text>
+<text class="dg-fs-sm dg-muted" x="20" y="134">28% · 최우선</text>
+<path class="dg-edge dg-edge--accent" d="M246,119 L284,119 L284,83 L426,83" marker-end="url(#mk-arrow-accent)"/>
+<path class="dg-edge dg-edge--accent" d="M246,119 L284,119 L284,119 L426,119" marker-end="url(#mk-arrow-accent)"/>
+<path class="dg-edge dg-edge--accent" d="M246,119 L284,119 L284,155 L426,155" marker-end="url(#mk-arrow-accent)"/>
+<rect class="dg-node dg-node--accent" x="8" y="209" width="236" height="36" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="20" y="226">Fundamentals</text>
+<text class="dg-fs-sm dg-muted" x="20" y="242">23% · 최우선</text>
+<path class="dg-edge dg-edge--accent" d="M246,227 L284,227 L284,191 L426,191" marker-end="url(#mk-arrow-accent)"/>
+<path class="dg-edge dg-edge--accent" d="M246,227 L284,227 L284,227 L426,227" marker-end="url(#mk-arrow-accent)"/>
+<path class="dg-edge dg-edge--accent" d="M246,227 L284,227 L284,263 L426,263" marker-end="url(#mk-arrow-accent)"/>
+<rect class="dg-node" x="8" y="281" width="236" height="36" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="20" y="298">Kafka Connect</text>
+<text class="dg-fs-sm dg-muted" x="20" y="314">15%</text>
+<path class="dg-edge" d="M246,299 L284,299 L284,299 L426,299" marker-end="url(#mk-arrow)"/>
+<rect class="dg-node" x="8" y="325" width="236" height="52" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="20" y="342">Application Observability</text>
+<text class="dg-fs-sm dg-muted" x="20" y="358">13%</text>
+<text class="dg-fs-sm dg-muted" x="20" y="372">+ ch04 · ch05 의 메트릭 절</text>
+<path class="dg-edge" d="M246,351 L284,351 L284,335 L426,335" marker-end="url(#mk-arrow)"/>
+<rect class="dg-node" x="8" y="385" width="236" height="36" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="20" y="402">Kafka Streams</text>
+<text class="dg-fs-sm dg-muted" x="20" y="418">12%</text>
+<path class="dg-edge" d="M246,403 L284,403 L284,371 L426,371" marker-end="url(#mk-arrow)"/>
+<rect class="dg-node" x="8" y="429" width="236" height="52" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="20" y="446">Application Testing</text>
+<text class="dg-fs-sm dg-muted" x="20" y="462">8%</text>
+<text class="dg-fs-sm dg-muted" x="20" y="476">점선 = ch10 TopologyTestDriver</text>
+<path class="dg-edge" d="M246,455 L284,455 L284,407 L426,407" marker-end="url(#mk-arrow)"/>
+<path class="dg-edge dg-edge--muted dg-edge--dotted" d="M246,455 L310,455 L310,371 L426,371" marker-end="url(#mk-arrow-muted)"/>
+<line class="dg-grid" x1="8" y1="504" x2="712" y2="504"/>
+<line class="dg-edge dg-edge--accent" x1="8" y1="516" x2="30" y2="516"/>
+<text class="dg-fs-sm" x="36" y="521">실선 = 도메인 문항이 그 장에서 직접 나옵니다</text>
+<line class="dg-edge dg-edge--muted dg-edge--dotted" x1="388" y1="516" x2="410" y2="516"/>
+<text class="dg-fs-sm" x="416" y="521">점선 = 부분 커버 (해당 장의 메트릭 절)</text>
+<rect class="dg-node dg-node--muted" x="8" y="534" width="16" height="12" rx="3"/>
+<text class="dg-fs-sm" x="30" y="545">ch01 · ch03 은 직접 출제 비중이 낮은 기초 다지기 장입니다</text>
+<text class="dg-fs-sm" x="8" y="572">Application Testing 은 ch10 의 TopologyTestDriver 와 실무 예제의 테스트 절에서 다룹니다.</text>
+</svg>

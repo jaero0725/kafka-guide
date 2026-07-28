@@ -1,0 +1,1074 @@
+{
+  "setId": "ccdak-streams",
+  "title": "CCDAK — Kafka Streams (12%)",
+  "exam": "CCDAK",
+  "domain": "Kafka Streams",
+  "kafkaVersion": "4.3",
+  "questions": [
+    {
+      "id": "ccdak-streams-001",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "공식 문서가 명시하는 co-partitioning 요구사항은 무엇인가?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "양쪽 입력의 키 타입이 같아야 한다는 것 하나뿐이다." },
+        { "id": "B", "text": "파티션 수 동일 · 파티셔너 동일 · 복제 계수 동일 세 가지다." },
+        { "id": "C", "text": "파티션 수 동일과 파티셔닝 전략 동일 두 가지다." },
+        { "id": "D", "text": "파티션 수 동일 · 파티셔너 동일 · 리텐션 정책 동일 세 가지다." }
+      ],
+      "answer": ["C"],
+      "explanation": "문서는 co-partitioning 요구사항을 두 항목으로 제시합니다. 조인 양쪽 입력 토픽의 파티션 수가 같아야 하고, 그 토픽들에 쓰는 모든 애플리케이션이 같은 파티셔닝 전략(같은 `partitioner.class` 또는 같은 `StreamPartitioner`)을 써야 합니다. \"양쪽 키가 같아야 한다\"는 것은 요구사항 목록이 아니라 equi-join 이 `leftRecord.key == rightRecord.key` 로 수행되기 때문에 성립하는 전제입니다. 복제 계수나 리텐션은 조인 정확성과 무관합니다.",
+      "distractorNotes": {
+        "A": "키 타입 일치는 컴파일·직렬화 차원의 문제이고, co-partitioning 요구사항 자체는 파티션 배치에 관한 것입니다.",
+        "B": "복제 계수는 내구성 설정입니다. 같은 키가 같은 파티션 번호에 놓이는지와 무관합니다.",
+        "D": "리텐션은 데이터 보관 기간이며 조인 대상 레코드의 파티션 배치와 무관합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Join co-partitioning requirements", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stream-join", "co-partitioning", "partitioning"]
+    },
+    {
+      "id": "ccdak-streams-002",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "두 토픽의 파티션 수는 같지만 서로 다른 커스텀 파티셔너로 쓰였다. 이 두 토픽을 조인하면?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "예외 없이 실행되지만 같은 키의 레코드가 다른 태스크로 가서 조인 결과가 조용히 누락된다." },
+        { "id": "B", "text": "파티션 할당 단계에서 `TopologyBuilderException` 이 발생한다." },
+        { "id": "C", "text": "Streams 가 파티셔너 불일치를 감지해 자동으로 리파티션 토픽을 만든다." },
+        { "id": "D", "text": "조인은 정상 동작한다. 파티셔너는 co-partitioning 과 무관하다." }
+      ],
+      "answer": ["A"],
+      "explanation": "문서는 Streams 가 co-partitioning 을 **부분적으로만** 검증한다고 명시합니다. 런타임의 파티션 할당 단계에서 양쪽 파티션 수가 같은지는 검사하지만, 파티셔닝 전략이 일치하는지는 검사할 수 없고 사용자 책임으로 남깁니다. 따라서 파티셔너가 다르면 예외 없이 실행되고, 같은 키의 레코드가 서로 다른 파티션 번호에 놓여 다른 태스크로 배정되면서 조인이 조용히 실패합니다. \"조인 결과가 일부만 나온다\"는 증상의 대표적 원인이며, 예외가 없으므로 발견이 가장 늦습니다.",
+      "distractorNotes": {
+        "B": "그 예외는 파티션 **수**가 다를 때 발생합니다. 여기서는 수가 같으므로 검증을 통과합니다.",
+        "C": "자동 감지·자동 리파티션은 없습니다. 리파티션은 토폴로지에서 명시적으로 지시해야 합니다.",
+        "D": "파티셔너 일치는 공식 요구사항 두 개 중 하나입니다. 무관하지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Join co-partitioning requirements", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stream-join", "co-partitioning", "partitioning"]
+    },
+    {
+      "id": "ccdak-streams-003",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "조인 양쪽 입력 토픽의 파티션 수가 다를 때 Streams 가 던지는 예외와 그 시점은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`TopologyException` — `builder.build()` 호출 시점" },
+        { "id": "B", "text": "`TopologyBuilderException` — 런타임의 파티션 할당 단계" },
+        { "id": "C", "text": "`InvalidPartitionsException` — 첫 레코드를 처리할 때" },
+        { "id": "D", "text": "`StreamsException` — 애플리케이션 종료 시점" }
+      ],
+      "answer": ["B"],
+      "explanation": "파티션 수 검증은 토폴로지를 만드는 시점이 아니라 실행 중 파티션 할당 단계에서 이루어집니다. 토픽의 실제 파티션 수는 클러스터 메타데이터를 조회해야 알 수 있기 때문입니다. 이때 양쪽 수가 다르면 런타임 예외인 `TopologyBuilderException` 이 발생하며, 이름이 `Builder` 인데 런타임에 던져진다는 점이 혼동 지점입니다. 반대로 파티셔닝 전략 불일치는 어떤 예외도 발생시키지 않습니다.",
+      "distractorNotes": {
+        "A": "`TopologyException` 은 이 상황의 예외 이름이 아닙니다. 이름을 짧게 기억해 두면 틀리는 대표 지점입니다.",
+        "C": "그런 이름의 예외는 이 맥락에서 사용되지 않습니다.",
+        "D": "종료 시점에 검증하면 의미가 없습니다. 할당 단계에서 즉시 실패합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Join co-partitioning requirements", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stream-join", "co-partitioning", "exceptions"]
+    },
+    {
+      "id": "ccdak-streams-004",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "co-partitioning 이 필요하지 않은 조인은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "윈도우를 지정한 KStream-KStream 조인" },
+        { "id": "B", "text": "KStream-KTable 조인" },
+        { "id": "C", "text": "키 기준 KTable-KTable 조인" },
+        { "id": "D", "text": "KStream-GlobalKTable 조인과 KTable-KTable 외래키(FK) 조인" }
+      ],
+      "answer": ["D"],
+      "explanation": "문서는 이 요구가 면제되는 예외를 정확히 두 가지로 명시합니다. GlobalKTable 조인은 모든 인스턴스가 changelog 전체 사본을 갖기 때문에 필요 없고, 게다가 `KeyValueMapper` 로 키가 아닌 값으로도 조인할 수 있습니다. KTable-KTable 외래키 조인은 Streams 가 내부적으로 co-partitioning 을 처리해 줍니다. 나머지 키 기준 조인(KStream-KStream, KStream-KTable, KTable-KTable)은 모두 co-partitioning 이 필요합니다.",
+      "distractorNotes": {
+        "A": "윈도우는 시간 경계를 주는 것이며 파티션 배치 요구를 없애 주지 않습니다.",
+        "B": "KStream-KTable 조인은 키 기준이므로 co-partitioning 이 필요합니다.",
+        "C": "키 기준 KTable-KTable 조인도 co-partitioning 이 필요합니다. 면제되는 것은 외래키 조인입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Join co-partitioning requirements", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stream-join", "co-partitioning", "kstream-vs-ktable"]
+    },
+    {
+      "id": "ccdak-streams-005",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "KStream-KStream 조인을 정의할 때 반드시 지정해야 하는 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`JoinWindows` — 두 스트림의 시간 근접성을 정의하는 윈도우" },
+        { "id": "B", "text": "`Materialized` — 조인 결과를 담을 상태 저장소 이름" },
+        { "id": "C", "text": "`StreamPartitioner` — 조인 전 재분배 전략" },
+        { "id": "D", "text": "`Grouped` — 조인 전 그룹핑 방식" }
+      ],
+      "answer": ["A"],
+      "explanation": "두 무한 스트림을 조인하려면 \"어느 시간 범위 안에서 만난 레코드를 짝지을 것인가\"를 정해야 하므로 윈도우가 필수입니다. 윈도우가 없으면 상태를 무한히 보관해야 하고 조인 대상이 정의되지 않습니다. 반면 KStream-KTable, KStream-GlobalKTable, KTable-KTable 조인은 한쪽이 최신 상태를 나타내는 테이블이므로 윈도우가 필요하지 않습니다. \"조인이 안 되니 윈도우를 추가한다\"는 대응이 테이블 조인에서는 오답이 되는 이유입니다.",
+      "distractorNotes": {
+        "B": "결과 저장소 지정은 선택 사항이며 조인의 필수 요소가 아닙니다.",
+        "C": "파티셔너 지정은 `repartition()`·`to()` 같은 연산의 선택 인자입니다.",
+        "D": "`Grouped` 는 `groupBy`·`groupByKey` 에 쓰는 설정이며 조인과 무관합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Joining", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stream-join", "windowing", "kstream-vs-ktable"]
+    },
+    {
+      "id": "ccdak-streams-006",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "KStream-KTable 조인에서 결과가 생성되는 시점은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "양쪽 어느 레코드가 도착하든 결과가 생성된다." },
+        { "id": "B", "text": "KTable 쪽이 갱신될 때만 결과가 생성된다." },
+        { "id": "C", "text": "KStream 쪽 레코드가 도착할 때만 결과가 생성된다." },
+        { "id": "D", "text": "윈도우가 닫힐 때 한 번에 결과가 생성된다." }
+      ],
+      "answer": ["C"],
+      "explanation": "KStream-KTable 조인은 스트림 레코드가 도착할 때 그 시점의 테이블 상태를 조회하는 \"lookup\" 의미론입니다. 따라서 테이블만 갱신되어도 새 출력이 나오지 않습니다. 반대로 KTable-KTable 조인은 양쪽 갱신 모두가 결과를 트리거하고, KStream-KStream 조인은 양쪽 어느 레코드가 와도 윈도우 안에서 짝을 찾습니다. 이 트리거 차이를 모르면 \"참조 데이터를 갱신했는데 결과가 다시 나오지 않는다\"를 버그로 오해하게 됩니다.",
+      "distractorNotes": {
+        "A": "그것은 KStream-KStream 과 KTable-KTable 조인의 동작입니다.",
+        "B": "방향이 반대입니다. 테이블 갱신은 조회 대상만 바꿉니다.",
+        "D": "KStream-KTable 조인에는 윈도우가 없습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Joining", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stream-join", "kstream-vs-ktable", "co-partitioning"]
+    },
+    {
+      "id": "ccdak-streams-007",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "`orders` 는 파티션 12개, `customers` 는 파티션 3개다. 아래 코드의 결과는?",
+      "code": {
+        "lang": "java",
+        "caption": "Topology.java",
+        "body": "KStream<String, Order> orders = builder.stream(\"orders\");\nKTable<String, Customer> customers = builder.table(\"customers\");\n\nKStream<String, Enriched> enriched = orders.join(\n    customers,\n    (order, customer) -> new Enriched(order, customer));"
+      },
+      "choices": [
+        { "id": "A", "text": "정상 동작한다. KTable 은 파티션 수와 무관하게 전체가 조회 가능하다." },
+        { "id": "B", "text": "파티션 할당 단계에서 `TopologyBuilderException` 이 발생한다." },
+        { "id": "C", "text": "예외 없이 실행되지만 파티션 0~2 의 레코드만 조인된다." },
+        { "id": "D", "text": "Streams 가 `customers` 를 자동으로 12 파티션으로 리파티션한다." }
+      ],
+      "answer": ["B"],
+      "explanation": "KStream-KTable 조인은 키 기준 조인이므로 co-partitioning 이 필요하고, Streams 는 파티션 할당 단계에서 양쪽 파티션 수를 검증합니다. 12와 3은 다르므로 런타임 예외 `TopologyBuilderException` 이 발생합니다. 해결책은 두 가지인데, `customers` 를 `GlobalKTable` 로 읽어 co-partitioning 요구를 없애거나, 적은 쪽을 많은 쪽에 맞춰 리파티션하는 것입니다. 문서는 병목을 피하기 위해 적은 쪽을 많은 쪽에 맞추라고 권고하며, stream-table 조인에서는 KTable 대신 KStream 을 리파티션하는 편이 낫다고 안내합니다.",
+      "distractorNotes": {
+        "A": "전체 사본을 갖는 것은 `GlobalKTable` 입니다. 일반 KTable 은 파티션 단위로 분산됩니다.",
+        "C": "예외가 발생하므로 부분 조인 상태로 실행되지 않습니다. 조용한 누락은 파티셔너가 다를 때의 증상입니다.",
+        "D": "자동 리파티션은 없습니다. 명시적으로 `repartition()` 을 호출해야 합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Join co-partitioning requirements", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stream-join", "co-partitioning", "kstream-vs-ktable"]
+    },
+    {
+      "id": "ccdak-streams-008",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 조인 종류를 그 요구사항과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        { "id": "p1", "left": "KStream ⋈ KStream", "right": "윈도우 필수 · co-partitioning 필요" },
+        { "id": "p2", "left": "KStream ⋈ KTable", "right": "윈도우 없음 · co-partitioning 필요 · KStream 레코드만 트리거" },
+        { "id": "p3", "left": "KStream ⋈ GlobalKTable", "right": "윈도우 없음 · co-partitioning 불필요 · 값으로도 조인 가능" },
+        { "id": "p4", "left": "KTable ⋈ KTable (외래키 조인)", "right": "윈도우 없음 · co-partitioning 불필요 (Streams 가 내부 처리)" }
+      ],
+      "extraRights": [
+        "윈도우 필수 · co-partitioning 불필요",
+        "윈도우 선택 · 양쪽 어느 갱신에도 트리거"
+      ],
+      "explanation": "조인 매트릭스는 두 축으로 외웁니다. 윈도우는 양쪽이 모두 스트림일 때만 필수이고, co-partitioning 은 GlobalKTable 조인과 KTable-KTable 외래키 조인에서만 면제됩니다. 트리거 방향도 함께 기억해야 하는데, 스트림-테이블 조인은 스트림 쪽만, 테이블-테이블 조인은 양쪽 갱신 모두가 결과를 만듭니다. GlobalKTable 조인은 `KeyValueMapper` 덕분에 키가 아닌 값으로 조인할 수 있다는 점이 유일하게 특별합니다.",
+      "distractorNotes": {
+        "p3": "GlobalKTable 을 일반 KTable 처럼 보고 co-partitioning 이 필요하다고 답하기 쉽습니다.",
+        "p4": "키 기준 KTable-KTable 조인과 구별해야 합니다. 면제되는 것은 외래키 조인입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Joining", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stream-join", "co-partitioning", "kstream-vs-ktable"]
+    },
+    {
+      "id": "ccdak-streams-009",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "파티션 수가 다른 두 토픽을 조인해야 한다. 유효한 해결책을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "파티션이 적은 쪽 스트림에 `repartition()` 을 적용해 많은 쪽 파티션 수에 맞춘다." },
+        { "id": "B", "text": "참조 데이터가 작다면 그 쪽을 `GlobalKTable` 로 읽어 co-partitioning 요구를 없앤다." },
+        { "id": "C", "text": "조인에 `JoinWindows` 를 추가해 시간 경계를 준다." },
+        { "id": "D", "text": "`num.stream.threads` 를 파티션 수의 최소공배수로 맞춘다." },
+        { "id": "E", "text": "`topology.optimization=all` 을 켜면 Streams 가 파티션 수를 자동으로 맞춘다." }
+      ],
+      "answer": ["A", "B"],
+      "explanation": "co-partitioning 을 만족시키는 방법은 파티션 배치를 실제로 바꾸거나, 배치 요구가 없는 조인 형태로 바꾸는 것입니다. 전자가 `repartition()` 이고 후자가 `GlobalKTable`(또는 KTable-KTable 외래키 조인)입니다. 문서는 병목을 피하기 위해 적은 쪽을 많은 쪽에 맞추라고 권고하며, stream-table 조인이라면 KTable 대신 KStream 을 리파티션하는 편이 상태 저장소를 하나 더 만들지 않아 유리합니다. 윈도우 추가나 스레드 수 조정은 파티션 배치와 무관합니다.",
+      "distractorNotes": {
+        "C": "윈도우는 시간 경계를 정의할 뿐 파티션 배치를 바꾸지 않습니다. 테이블 조인에는 윈도우 자체가 없습니다.",
+        "D": "스레드 수는 한 인스턴스가 태스크를 몇 개 병렬로 돌릴지의 문제입니다. 조인 요구와 무관합니다.",
+        "E": "토폴로지 최적화는 불필요한 리파티션 토픽을 줄이는 기능이며 파티션 수를 맞추지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Join co-partitioning requirements", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stream-join", "co-partitioning", "repartition"]
+    },
+    {
+      "id": "ccdak-streams-010",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "값만 변환하면서 리파티션을 피하려면 어떤 연산을 써야 하는가?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`map` — 키와 값을 함께 반환하면 Streams 가 키 변경 여부를 판단해 리파티션을 생략한다." },
+        { "id": "B", "text": "`selectKey` — 같은 키를 다시 지정하면 리파티션이 생략된다." },
+        { "id": "C", "text": "`flatMap` — 값만 바꾸면 리파티션이 생략된다." },
+        { "id": "D", "text": "`mapValues` — 값만 바꾸므로 키 기반 파티션 배치가 유지된다." }
+      ],
+      "answer": ["D"],
+      "explanation": "Streams 는 연산의 시그니처만 보고 키가 바뀔 수 있는지를 판단합니다. `map`·`flatMap`·`selectKey` 는 키를 반환할 수 있으므로 실제로 같은 키를 돌려주더라도 스트림을 \"리파티션 필요\"로 표시합니다. `mapValues`·`flatMapValues` 는 키를 건드릴 방법이 없으므로 표시하지 않고, 같은 키가 같은 파티션에 있다는 보장이 유지됩니다. 값만 바꾸는 곳에 `map` 을 쓰는 것이 불필요한 리파티션 토픽을 만드는 가장 흔한 원인입니다.",
+      "distractorNotes": {
+        "A": "런타임에 키가 바뀌었는지 확인하지 않습니다. 시그니처만으로 판단하므로 항상 표시됩니다.",
+        "B": "`selectKey` 는 키 변경을 명시하는 연산이므로 언제나 리파티션 필요로 표시됩니다.",
+        "C": "`flatMap` 도 키를 반환할 수 있어 표시됩니다. 값만 다루려면 `flatMapValues` 를 씁니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Stateless transformations", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stateless-stateful", "repartition", "dsl"]
+    },
+    {
+      "id": "ccdak-streams-011",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "`groupByKey()` 와 `groupBy()` 의 차이로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`groupByKey()` 는 기존 키를 그대로 쓰므로 리파티션이 없고, `groupBy()` 는 키를 새로 정하므로 리파티션이 발생한다." },
+        { "id": "B", "text": "`groupByKey()` 는 stateful, `groupBy()` 는 stateless 연산이다." },
+        { "id": "C", "text": "`groupBy()` 는 윈도우 집계에만 쓸 수 있고 `groupByKey()` 는 쓸 수 없다." },
+        { "id": "D", "text": "두 연산은 동일하며 `groupBy()` 는 deprecated 별칭이다." }
+      ],
+      "answer": ["A"],
+      "explanation": "집계는 키 단위로 이루어지므로 같은 키가 같은 태스크에 모여야 합니다. `groupByKey()` 는 이미 있는 키를 쓰기 때문에 배치가 그대로 유지되어 리파티션이 필요 없습니다. `groupBy()` 는 새 키를 계산하므로 배치가 깨지고 항상 리파티션이 발생합니다. 그래서 키가 이미 원하는 값이라면 `groupByKey()` 를 쓰는 것이 네트워크·디스크·지연 모두에서 유리합니다.",
+      "distractorNotes": {
+        "B": "두 연산 자체는 집계 준비 단계이며 상태를 만들지 않습니다. 상태는 뒤에 오는 `count`·`reduce`·`aggregate` 가 만듭니다.",
+        "C": "둘 다 윈도우 집계와 비윈도우 집계에 모두 쓸 수 있습니다.",
+        "D": "서로 다른 연산이며 어느 쪽도 deprecated 가 아닙니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Aggregating", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stateless-stateful", "repartition", "dsl"]
+    },
+    {
+      "id": "ccdak-streams-012",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "아래 토폴로지에서 생성되는 리파티션 토픽의 개수는?",
+      "code": {
+        "lang": "java",
+        "caption": "Topology.java",
+        "body": "builder.stream(\"clicks\")          // key = sessionId\n       .filter((k, v) -> v.getStatus() == 200)\n       .mapValues(v -> v.getUrl())\n       .selectKey((k, url) -> url)\n       .groupByKey()\n       .count()\n       .toStream()\n       .to(\"url-counts\");"
+      },
+      "choices": [
+        { "id": "A", "text": "0개 — `groupByKey()` 는 리파티션을 유발하지 않는다." },
+        { "id": "B", "text": "1개 — `selectKey` 가 표시하고 뒤이은 키 기반 집계에서 생성된다." },
+        { "id": "C", "text": "2개 — `mapValues` 와 `selectKey` 가 각각 하나씩 만든다." },
+        { "id": "D", "text": "3개 — `filter`·`mapValues`·`selectKey` 가 각각 하나씩 만든다." }
+      ],
+      "answer": ["B"],
+      "explanation": "`filter` 와 `mapValues` 는 키를 바꿀 수 없으므로 아무 표시도 하지 않습니다. `selectKey` 가 스트림을 \"리파티션 필요\"로 표시하고, 실제 리파티션 토픽은 그 뒤에 키 기반 연산이 올 때 만들어지므로 `groupByKey().count()` 지점에서 하나가 생성됩니다. 즉 표시하는 연산과 토픽을 만드는 지점이 다르다는 점이 핵심이며, `selectKey` 뒤에 바로 `to()` 만 있었다면 리파티션 토픽은 만들어지지 않습니다. 이 리파티션 토픽은 `cleanup.policy=delete` 이고 리텐션이 무한(-1)으로 설정됩니다.",
+      "distractorNotes": {
+        "A": "`groupByKey()` 자체는 리파티션을 유발하지 않지만, 앞의 `selectKey` 가 남긴 표시 때문에 이 지점에서 토픽이 생성됩니다.",
+        "C": "`mapValues` 는 값만 바꾸므로 리파티션과 무관합니다.",
+        "D": "`filter` 는 레코드를 걸러낼 뿐 키를 바꾸지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Stateless transformations", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" },
+        { "title": "Apache Kafka — Managing Streams Application Topics", "url": "https://kafka.apache.org/documentation/streams/developer-guide/manage-topics.html" }
+      ],
+      "tags": ["repartition", "stateless-stateful", "dsl"]
+    },
+    {
+      "id": "ccdak-streams-013",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "multiple",
+      "question": "리파티션을 유발할 수 있는(스트림을 \"리파티션 필요\"로 표시하는) 연산을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`mapValues`" },
+        { "id": "B", "text": "`selectKey`" },
+        { "id": "C", "text": "`filter`" },
+        { "id": "D", "text": "`groupBy`" },
+        { "id": "E", "text": "`peek`" }
+      ],
+      "answer": ["B", "D"],
+      "explanation": "키를 바꿀 수 있는 연산만 스트림을 리파티션 필요로 표시합니다. `selectKey` 는 키 변경을 명시하는 연산이고 `groupBy` 는 새 그룹 키를 계산하므로 항상 리파티션을 유발합니다. `map`·`flatMap` 도 같은 부류입니다. 반면 `mapValues`·`flatMapValues`·`filter`·`filterNot`·`peek`·`foreach`·`groupByKey` 는 키를 건드리지 않으므로 배치가 유지됩니다.",
+      "distractorNotes": {
+        "A": "값만 바꾸므로 키 기반 배치가 유지됩니다. `map` 과의 차이가 이 도메인 최다 출제 지점입니다.",
+        "C": "레코드를 통과시키거나 버릴 뿐 키를 바꾸지 않습니다.",
+        "E": "부수 효과만 실행하는 통과 연산이며 레코드를 변경하지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Stateless transformations", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["repartition", "stateless-stateful", "dsl"]
+    },
+    {
+      "id": "ccdak-streams-014",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "multiple",
+      "question": "stateful 연산을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`branch` / `split`" },
+        { "id": "B", "text": "`aggregate`" },
+        { "id": "C", "text": "`merge`" },
+        { "id": "D", "text": "`suppress`" },
+        { "id": "E", "text": "`flatMapValues`" }
+      ],
+      "answer": ["B", "D"],
+      "explanation": "stateful 연산은 과거 레코드의 정보를 유지해야 하는 연산이며, 로컬 상태 저장소와 changelog 토픽을 만듭니다. `count`·`reduce`·`aggregate`, 모든 윈도우 연산, 모든 조인, 그리고 중간 결과를 버퍼링하는 `suppress` 가 여기 속합니다. 반면 `branch`·`merge`·`flatMapValues` 는 레코드 하나만 보고 판단하므로 stateless 입니다. stateful 여부는 곧 \"복구 시간이 필요한가\"와 직결되므로 운영 관점에서도 중요합니다.",
+      "distractorNotes": {
+        "A": "조건에 따라 스트림을 나누는 연산이며 과거 레코드를 기억하지 않습니다.",
+        "C": "두 스트림을 하나로 합치는 통과 연산입니다. 상태가 없습니다.",
+        "E": "값 하나를 여러 값으로 펼치는 stateless 변환입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Stateful transformations", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stateless-stateful", "state-store", "dsl"]
+    },
+    {
+      "id": "ccdak-streams-015",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "matching",
+      "question": "각 DSL 연산을 그 성질과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        { "id": "p1", "left": "`mapValues`", "right": "stateless · 리파티션을 유발하지 않는다" },
+        { "id": "p2", "left": "`selectKey`", "right": "stateless · 스트림을 \"리파티션 필요\"로 표시한다" },
+        { "id": "p3", "left": "`count`", "right": "stateful · 상태 저장소와 changelog 토픽을 만든다" },
+        { "id": "p4", "left": "`groupByKey`", "right": "키를 바꾸지 않으므로 리파티션 없이 집계를 준비한다" },
+        { "id": "p5", "left": "`suppress`", "right": "stateful · 중간 결과를 버퍼링해 최종 결과만 내보낸다" }
+      ],
+      "extraRights": [
+        "stateless · 두 스트림을 하나로 합친다",
+        "stateful · 조인 대상 양쪽 레코드를 윈도우 동안 보관한다"
+      ],
+      "explanation": "연산 분류는 세 축으로 봅니다. 상태를 갖는가, 키를 바꾸는가, 그리고 리파티션을 유발하는가입니다. 키를 바꿀 수 있으면 리파티션 필요로 표시되고, 상태를 가지면 changelog 토픽과 복구 시간이 따라옵니다. `groupByKey` 는 특이하게 상태도 만들지 않고 리파티션도 유발하지 않는 준비 단계입니다. 미끼로 넣은 두 설명은 각각 `merge` 와 KStream-KStream 조인의 성질입니다.",
+      "distractorNotes": {
+        "p2": "`mapValues` 와 짝을 이루는 함정입니다. 키를 바꾸는 연산은 항상 표시됩니다.",
+        "p4": "`groupBy` 와 혼동하기 쉽습니다. `groupBy` 는 새 키를 계산하므로 항상 리파티션이 발생합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["stateless-stateful", "repartition", "dsl"]
+    },
+    {
+      "id": "ccdak-streams-016",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "결제 이벤트 토픽을 `builder.table(\"payments\")` 로 읽어 사용자별 결제 금액을 합산했더니 합계가 실제보다 작게 나왔다. 원인은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "KTable 은 집계를 지원하지 않으므로 결과가 부분적으로만 나온다." },
+        { "id": "B", "text": "KTable 은 리파티션을 하지 않아 일부 파티션이 누락되었다." },
+        { "id": "C", "text": "KTable 은 tombstone 만 처리하므로 값이 있는 레코드가 무시되었다." },
+        { "id": "D", "text": "KTable 은 upsert 의미론이라 같은 사용자의 이전 결제가 새 결제로 덮어써졌다." }
+      ],
+      "answer": ["D"],
+      "explanation": "KTable 은 changelog 스트림으로 해석되어 같은 키의 새 레코드가 이전 값을 갱신합니다. 결제 이벤트는 같은 사용자가 여러 번 결제할 수 있고 각 건이 모두 독립적인 사실이므로 KStream 으로 읽어야 합니다. KTable 로 읽으면 마지막 결제만 남아 합계가 작아지고, 예외도 로그도 없어 발견이 늦습니다. 판단 기준은 \"같은 키가 반복될 때 두 값이 모두 의미가 있는가\"이며, 있으면 KStream, 최신만 의미가 있으면 KTable 입니다.",
+      "distractorNotes": {
+        "A": "KTable 도 집계를 지원합니다. 문제는 집계 이전에 입력 해석이 잘못된 것입니다.",
+        "B": "KTable 도 파티션 단위로 분산 처리되며 파티션이 누락되지 않습니다.",
+        "C": "tombstone(값이 null)은 삭제를 뜻하지만 값이 있는 레코드도 정상적으로 갱신 처리됩니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Core Concepts: Duality of Streams and Tables", "url": "https://kafka.apache.org/documentation/streams/core-concepts" }
+      ],
+      "tags": ["kstream-vs-ktable", "dsl", "aggregation"]
+    },
+    {
+      "id": "ccdak-streams-017",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "GlobalKTable 의 특성으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "모든 애플리케이션 인스턴스가 전체 데이터의 사본을 갖는다." },
+        { "id": "B", "text": "파티션 단위로 인스턴스에 분산되며 조인 시 co-partitioning 이 필요하다." },
+        { "id": "C", "text": "append-only 스트림이므로 같은 키의 레코드가 각각 별개 이벤트로 취급된다." },
+        { "id": "D", "text": "상태를 로컬에 두지 않고 매번 브로커에서 조회한다." }
+      ],
+      "answer": ["A"],
+      "explanation": "GlobalKTable 은 소스 토픽의 모든 파티션을 각 인스턴스가 전부 읽어 완전한 사본을 만듭니다. 그래서 조인 시 co-partitioning 이 필요하지 않고, `KeyValueMapper` 로 키가 아닌 값으로도 조인할 수 있습니다. 대가는 인스턴스마다 전체 데이터를 메모리·디스크에 적재해야 한다는 점이며, 큰 테이블을 GlobalKTable 로 만들면 시작 시간과 자원 사용량이 폭증합니다. 그래서 국가 코드·환율·카테고리 마스터처럼 작고 자주 변하지 않는 참조 데이터에만 씁니다.",
+      "distractorNotes": {
+        "B": "그것은 일반 KTable 의 특성입니다. GlobalKTable 은 전체 복제이므로 면제됩니다.",
+        "C": "그것은 KStream 의 의미론입니다. GlobalKTable 은 upsert 로 해석됩니다.",
+        "D": "상태는 로컬 저장소에 유지됩니다. 매번 브로커를 조회하지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: KTable and GlobalKTable", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["kstream-vs-ktable", "co-partitioning", "state-store"]
+    },
+    {
+      "id": "ccdak-streams-018",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "KStream · KTable · GlobalKTable 의 의미론에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "KStream 에서 값이 null 인 레코드는 삭제(tombstone)로 해석된다." },
+        { "id": "B", "text": "KTable 에서 값이 null 인 레코드는 그 키의 삭제로 해석된다." },
+        { "id": "C", "text": "KStream 은 같은 키의 레코드를 각각 독립된 이벤트로 취급한다." },
+        { "id": "D", "text": "GlobalKTable 은 크기 제약이 없어 대용량 테이블에 적합하다." },
+        { "id": "E", "text": "KTable 은 전체 데이터가 한 인스턴스에 들어가야 한다." }
+      ],
+      "answer": ["B", "C"],
+      "explanation": "KStream 은 레코드 스트림(append-only)이라 같은 키가 반복되면 각각 별개의 사실이고, null 값도 \"값이 null 인 이벤트\"일 뿐입니다. KTable 과 GlobalKTable 은 changelog 스트림이라 같은 키가 오면 갱신이고 null 은 tombstone 으로 삭제를 뜻합니다. 크기 제약은 GlobalKTable 쪽에 있습니다. 각 인스턴스가 전체를 적재해야 하므로 작은 참조 데이터에만 적합하고, 일반 KTable 은 파티션 단위로 분산되어 크기 제약이 없습니다.",
+      "distractorNotes": {
+        "A": "tombstone 해석은 테이블 의미론입니다. KStream 에서는 값이 null 인 레코드일 뿐입니다.",
+        "D": "반대입니다. 전체 복제이므로 크기 제약이 가장 강한 추상입니다.",
+        "E": "KTable 은 파티션 단위로 인스턴스에 분산됩니다. 전체 적재가 필요한 것은 GlobalKTable 입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Core Concepts", "url": "https://kafka.apache.org/documentation/streams/core-concepts" },
+        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["kstream-vs-ktable", "dsl", "compaction"]
+    },
+    {
+      "id": "ccdak-streams-019",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "key-value 상태 저장소의 changelog 토픽에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "이름은 `{application.id}-{store}-repartition` 이고 정책은 `delete` 다." },
+        { "id": "B", "text": "사용자가 직접 만들어야 하며 Streams 는 자동 생성하지 않는다." },
+        { "id": "C", "text": "이름은 `{application.id}-{store}-changelog` 이고 정책은 `compact` 다." },
+        { "id": "D", "text": "상태 저장소와 별개로 유지되며 복구에는 쓰이지 않는다." }
+      ],
+      "answer": ["C"],
+      "explanation": "Streams 의 내부 토픽은 `<application.id>-<operatorName>-<suffix>` 규칙을 따르고, 단순 키-값 저장소의 백업 토픽은 `compact` 정책으로 만들어집니다. 키별 최신 값만 있으면 상태를 그대로 재구성할 수 있기 때문입니다. 이 토픽을 사람이 삭제하거나 정책을 `delete` 로 바꾸면 오래된 키의 상태가 사라져 복구 시 데이터가 누락됩니다. 윈도우 저장소의 changelog 는 예외적으로 `delete,compact` 이며 리텐션이 24시간 + 윈도우 저장소 설정으로 잡힙니다.",
+      "distractorNotes": {
+        "A": "`-repartition` 접미어와 `delete` 정책은 리파티션 토픽의 특성입니다. 리파티션 토픽의 리텐션은 무한(-1)입니다.",
+        "B": "Streams 애플리케이션이 내부 토픽을 자동 생성합니다. 사용자 토픽만 사전 생성이 필요합니다.",
+        "D": "복구의 유일한 근거가 changelog 입니다. 인스턴스가 죽으면 이 토픽을 재생해 상태를 복원합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Managing Streams Application Topics", "url": "https://kafka.apache.org/documentation/streams/developer-guide/manage-topics.html" }
+      ],
+      "tags": ["state-store", "changelog", "compaction"]
+    },
+    {
+      "id": "ccdak-streams-020",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "리파티션 토픽에 적용되는 기본 설정으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`cleanup.policy=compact`, 리텐션 7일" },
+        { "id": "B", "text": "`cleanup.policy=delete`, 리텐션 무한(-1)" },
+        { "id": "C", "text": "`cleanup.policy=compact,delete`, 리텐션 24시간" },
+        { "id": "D", "text": "`cleanup.policy=delete`, 리텐션 24시간" }
+      ],
+      "answer": ["B"],
+      "explanation": "리파티션 토픽은 키를 다시 분배하기 위한 중간 데이터이므로 키별 최신 값을 남기는 컴팩션이 아니라 `delete` 정책을 씁니다. 다만 리텐션을 시간으로 잡으면 아직 처리하지 못한 중간 데이터가 지워질 수 있어 기본 리텐션이 무한(-1)으로 설정됩니다. 대신 Streams 는 처리 완료된 구간을 `repartition.purge.interval.ms` 주기로 직접 삭제 요청해 공간을 회수합니다. 반면 윈도우 저장소의 changelog 는 `delete,compact` 이고 리텐션이 24시간 + 윈도우 설정입니다.",
+      "distractorNotes": {
+        "A": "컴팩션은 상태 저장소 changelog 에 쓰는 정책입니다. 중간 데이터에는 부적절합니다.",
+        "C": "`delete,compact` 조합과 24시간 리텐션은 윈도우 저장소 changelog 의 설정입니다.",
+        "D": "정책은 맞지만 리텐션이 다릅니다. 시간 기반 삭제는 미처리 중간 데이터를 잃을 위험이 있습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Managing Streams Application Topics", "url": "https://kafka.apache.org/documentation/streams/developer-guide/manage-topics.html" }
+      ],
+      "tags": ["repartition", "changelog", "compaction"]
+    },
+    {
+      "id": "ccdak-streams-021",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "Streams 내부 토픽에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "내부 토픽 이름은 `<application.id>-<operatorName>-<suffix>` 규칙을 따른다." },
+        { "id": "B", "text": "changelog 토픽을 삭제하면 다음 기동 시 입력 토픽에서 상태가 자동 재계산된다." },
+        { "id": "C", "text": "key-value 저장소의 changelog 는 `compact`, 윈도우 저장소의 changelog 는 `delete,compact` 다." },
+        { "id": "D", "text": "입력·출력 토픽도 Streams 가 자동 생성하므로 미리 만들 필요가 없다." },
+        { "id": "E", "text": "내부 토픽은 여러 애플리케이션이 `application.id` 와 무관하게 공유한다." }
+      ],
+      "answer": ["A", "C"],
+      "explanation": "내부 토픽 이름에는 `application.id` 가 접두어로 붙으므로 애플리케이션마다 격리됩니다. 정책은 저장소 종류에 따라 갈리는데, key-value 저장소는 `compact`, 윈도우 저장소는 `delete,compact`(리텐션 24시간 + 윈도우 설정), 리파티션 토픽은 `delete`(리텐션 무한)입니다. changelog 를 삭제하면 상태를 재구성할 근거가 사라지며, 입력 토픽부터 다시 읽는 것은 오프셋 초기화까지 함께 해야 하는 별도 작업입니다. 사용자 토픽인 입력·출력 토픽은 사전에 직접 만들어 관리해야 합니다.",
+      "distractorNotes": {
+        "B": "자동 재계산은 없습니다. 입력을 다시 읽으려면 리셋 도구로 오프셋과 내부 토픽을 함께 정리해야 합니다.",
+        "D": "입력·출력 토픽은 사용자 토픽이므로 사전에 만들어야 합니다. 브로커 자동 생성에 의존하지 말라고 권고됩니다.",
+        "E": "내부 토픽은 그 애플리케이션만 사용합니다. 이름에 `application.id` 가 들어가 격리됩니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Managing Streams Application Topics", "url": "https://kafka.apache.org/documentation/streams/developer-guide/manage-topics.html" }
+      ],
+      "tags": ["changelog", "state-store", "application.id"]
+    },
+    {
+      "id": "ccdak-streams-022",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "size 10분, advance 5분인 hopping 윈도우에서 레코드 하나가 속하는 윈도우 개수는?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "1개 — 어떤 윈도우 타입이든 레코드는 하나의 윈도우에만 속한다." },
+        { "id": "B", "text": "5개 — advance 값이 개수를 결정한다." },
+        { "id": "C", "text": "2개 — size ÷ advance 만큼의 윈도우가 겹친다." },
+        { "id": "D", "text": "데이터 분포에 따라 달라져 고정되지 않는다." }
+      ],
+      "answer": ["C"],
+      "explanation": "hopping 윈도우는 size 만큼의 폭을 advance 간격으로 전진시키므로 윈도우들이 겹치고, 한 레코드는 `size ÷ advance` 개의 윈도우에 동시에 속합니다. 여기서는 10분 ÷ 5분 = 2개입니다. advance 가 size 와 같아지면 겹침이 없어져 tumbling 윈도우가 되므로, tumbling 은 hopping 의 특수한 경우입니다. 겹치는 윈도우를 tumbling 으로 착각하면 집계가 중복 계산된 것으로 오해하게 됩니다.",
+      "distractorNotes": {
+        "A": "tumbling 과 session 윈도우에서는 맞지만 hopping·sliding 은 겹칩니다.",
+        "B": "advance 값 자체가 개수가 되는 것이 아니라 size 를 advance 로 나눈 값이 개수입니다.",
+        "D": "가변적인 것은 sliding 윈도우와 session 윈도우입니다. hopping 은 고정 크기·고정 간격입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Windowing", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["windowing", "aggregation", "dsl"]
+    },
+    {
+      "id": "ccdak-streams-023",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "matching",
+      "question": "각 윈도우 타입을 그 특성과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        { "id": "p1", "left": "Tumbling", "right": "고정 크기, 겹치지 않음 — 한 레코드가 정확히 1개 윈도우에 속한다" },
+        { "id": "p2", "left": "Hopping", "right": "고정 크기, advance 간격으로 겹침 — 한 레코드가 여러 윈도우에 속한다" },
+        { "id": "p3", "left": "Sliding", "right": "레코드 시각을 기준으로 실제 데이터가 있는 구간만 만든다" },
+        { "id": "p4", "left": "Session", "right": "비활성 gap 으로 구분되며 크기가 가변이고 세션이 병합될 수 있다" }
+      ],
+      "extraRights": [
+        "윈도우 경계 없이 전체 기간을 하나로 집계한다",
+        "처리 시각(wall clock)을 기준으로 경계를 정한다"
+      ],
+      "explanation": "윈도우는 \"겹치는가\"와 \"크기가 고정인가\" 두 축으로 구분하면 정리됩니다. tumbling 과 session 은 겹치지 않고, hopping 과 sliding 은 겹칩니다. 크기가 가변인 것은 session 뿐이며, gap 안에 이벤트가 계속 오면 세션이 늘어나고 늦게 온 이벤트가 두 세션 사이를 메우면 병합됩니다. 미끼로 넣은 두 설명은 각각 비윈도우 집계와 processing-time 기준 처리를 가리키며, Streams 의 기본 시간 개념은 event time 입니다.",
+      "distractorNotes": {
+        "p2": "tumbling 과 혼동하기 쉽습니다. advance < size 이면 hopping 이고 결과가 겹칩니다.",
+        "p4": "\"사용자 활동 구간을 묶는다\"는 요구에 대응하는 유일한 윈도우입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Windowing", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["windowing", "aggregation", "event-time"]
+    },
+    {
+      "id": "ccdak-streams-024",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "`TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5))` 로 집계할 때, 윈도우가 지난 뒤 도착한 레코드는?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "다음 윈도우에 편입되어 집계된다." },
+        { "id": "B", "text": "grace period 가 0이므로 버려진다." },
+        { "id": "C", "text": "타임스탬프가 현재 시각으로 교체되어 처리된다." },
+        { "id": "D", "text": "예외가 발생하고 태스크가 중단된다." }
+      ],
+      "answer": ["B"],
+      "explanation": "grace period 는 윈도우의 끝 시각이 지난 뒤에도 늦게 도착한 레코드를 받아 주는 유예 기간입니다. `…WithNoGrace(…)` 계열 팩토리는 이 유예를 0으로 두므로 윈도우가 곧바로 닫히고 이후 도착한 레코드는 버려집니다. grace 를 크게 주면 정확도가 오르지만 결과 확정이 늦어지고 상태 크기가 커지는 절충이 생깁니다. 중간 결과를 억제하고 최종 결과만 내보내려면 `suppress()` 를 함께 씁니다.",
+      "distractorNotes": {
+        "A": "윈도우 배정은 레코드의 event time 이 결정합니다. 늦게 도착했다고 다른 윈도우로 옮겨지지 않습니다.",
+        "C": "타임스탬프 교체는 `WallclockTimestampExtractor` 를 쓸 때의 동작이며 grace 와 별개입니다.",
+        "D": "지연 레코드는 조용히 버려집니다. 예외로 처리되지 않으므로 관측이 필요합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Windowing", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+      ],
+      "tags": ["windowing", "grace-period", "event-time"]
+    },
+    {
+      "id": "ccdak-streams-025",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "Streams 의 시간 개념과 grace period 에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "Streams 의 기본 시간 기준은 레코드에 기록된 event time 이다." },
+        { "id": "B", "text": "`default.timestamp.extractor` 기본값은 `WallclockTimestampExtractor` 다." },
+        { "id": "C", "text": "grace period 를 늘리면 결과 확정이 늦어지고 상태 크기가 커진다." },
+        { "id": "D", "text": "grace period 는 processing time 기준으로만 적용된다." },
+        { "id": "E", "text": "`advanceWallClockTime()` 을 호출하면 event-time 윈도우가 닫힌다." }
+      ],
+      "answer": ["A", "C"],
+      "explanation": "Streams 는 기본적으로 레코드 타임스탬프(event time)를 기준으로 윈도우를 배정하고 스트림 시각을 진행시킵니다. `default.timestamp.extractor` 의 기본값은 `FailOnInvalidTimestamp` 이며, 무효한 음수 타임스탬프를 만나면 예외를 던집니다. grace period 는 event time 기준으로 윈도우 끝 이후의 유예를 정의하고, 값을 늘리면 늦은 데이터를 더 받아들이는 대신 결과가 늦어지고 버퍼링해야 하는 상태가 커집니다. 레거시 데이터를 다룰 때는 `LogAndSkipOnInvalidTimestamp` 나 `WallclockTimestampExtractor` 로 바꾸는 선택지를 씁니다.",
+      "distractorNotes": {
+        "B": "기본값은 `FailOnInvalidTimestamp` 입니다. wall-clock 기준은 명시적으로 선택해야 합니다.",
+        "D": "grace 는 event time 기준입니다. 스트림 시각이 윈도우 끝 + grace 를 지나면 윈도우가 닫힙니다.",
+        "E": "`advanceWallClockTime()` 은 wall-clock punctuation 전용입니다. event-time 윈도우를 닫아 주지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Core Concepts: Time", "url": "https://kafka.apache.org/documentation/streams/core-concepts" },
+        { "title": "Apache Kafka — Streams Configs", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" }
+      ],
+      "tags": ["event-time", "grace-period", "windowing"]
+    },
+    {
+      "id": "ccdak-streams-026",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "ordering",
+      "question": "event-time 윈도우 집계에서 하나의 윈도우가 최종 확정되기까지의 단계를 올바른 순서로 배열하세요.",
+      "code": null,
+      "items": [
+        { "id": "i3", "text": "grace period 동안 도착한 늦은 레코드도 그 윈도우에 반영된다" },
+        { "id": "i1", "text": "레코드가 자신의 event time 에 따라 해당 윈도우에 배정된다" },
+        { "id": "i4", "text": "grace period 가 끝나 윈도우가 닫히고, 이후 도착한 레코드는 버려진다" },
+        { "id": "i2", "text": "스트림 시각이 그 윈도우의 끝 시각을 지난다" }
+      ],
+      "answer": ["i1", "i2", "i3", "i4"],
+      "explanation": "윈도우 처리는 event time 을 좌표로 삼아 진행됩니다. 레코드는 자기 타임스탬프가 속하는 윈도우에 배정되고, 스트림 시각이 윈도우의 끝을 지나면 그때부터 grace period 가 흐릅니다. grace 동안 도착한 늦은 레코드까지 반영된 뒤에야 윈도우가 닫히고 결과가 확정되며, 그 이후에 온 레코드는 조용히 버려집니다. `…WithNoGrace(…)` 를 쓰면 두 번째와 네 번째 단계가 붙어 버리므로 지연 데이터가 전혀 반영되지 않습니다.",
+      "distractorNotes": {
+        "i4": "\"윈도우 끝 시각에 닫힌다\"고 생각하기 쉽습니다. 닫히는 시점은 끝 시각 + grace period 입니다.",
+        "i3": "grace 를 윈도우 시작 전의 여유로 오해하기 쉽습니다. 윈도우가 끝난 뒤의 유예입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams DSL: Windowing", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" },
+        { "title": "Apache Kafka — Streams Core Concepts: Time", "url": "https://kafka.apache.org/documentation/streams/core-concepts" }
+      ],
+      "tags": ["windowing", "grace-period", "event-time"]
+    },
+    {
+      "id": "ccdak-streams-027",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Kafka Streams 애플리케이션의 `num.stream.threads` 기본값과 그 의미는?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "1 — 명시하지 않으면 한 인스턴스가 스레드 하나로 모든 태스크를 처리한다." },
+        { "id": "B", "text": "입력 토픽 파티션 수 — 태스크 수에 맞춰 자동 설정된다." },
+        { "id": "C", "text": "사용 가능한 CPU 코어 수" },
+        { "id": "D", "text": "0 — 스레드를 만들지 않고 호출 스레드에서 처리한다." }
+      ],
+      "answer": ["A"],
+      "explanation": "`num.stream.threads` 의 기본값은 1 이므로 설정하지 않으면 단일 스레드로 동작합니다. 태스크 수는 입력 토픽의 파티션 수로 결정되고, 그 태스크들이 인스턴스와 스레드에 배분되므로 스레드가 1개면 모든 태스크를 순차 처리합니다. 반대로 인스턴스 × 스레드 수가 태스크 수를 넘으면 남는 스레드는 유휴 상태가 되어 자원만 낭비합니다. 즉 병렬성의 상한은 항상 파티션 수이며 스레드 설정으로 그 상한을 넘길 수 없습니다.",
+      "distractorNotes": {
+        "B": "자동 설정되지 않습니다. 파티션 수는 태스크 수를 정할 뿐 스레드 수와 무관합니다.",
+        "C": "CPU 기반 자동 산정은 없습니다. 명시적으로 지정해야 합니다.",
+        "D": "0은 유효한 값이 아닙니다. 기본값은 1입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Configs", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" },
+        { "title": "Apache Kafka — Streams Core Concepts: Parallelism Model", "url": "https://kafka.apache.org/documentation/streams/core-concepts" }
+      ],
+      "tags": ["num.stream.threads", "defaults", "parallelism"]
+    },
+    {
+      "id": "ccdak-streams-028",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "입력 토픽이 파티션 6개인 Streams 애플리케이션을 인스턴스 4대 × 스레드 3개로 배포했다. 결과는?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "태스크가 12개로 늘어나 파티션당 2개 태스크가 병렬 처리한다." },
+        { "id": "B", "text": "태스크는 6개이고 12개 스레드 중 6개만 일하며 나머지는 유휴 상태다." },
+        { "id": "C", "text": "인스턴스 4대 중 2대가 대기 상태(standby)로 전환된다." },
+        { "id": "D", "text": "파티션 수보다 스레드가 많아 리밸런스가 무한 반복된다." }
+      ],
+      "answer": ["B"],
+      "explanation": "태스크 수는 sub-topology 별로 입력 토픽의 파티션 수만큼 만들어지므로 여기서는 6개입니다. 태스크는 스레드에 배분되며 하나의 태스크가 동시에 두 스레드에서 실행되지는 않습니다. 따라서 총 12개 스레드 중 6개만 태스크를 받고 나머지는 유휴 상태로 남아 메모리만 차지합니다. 처리량을 더 올리려면 스레드나 인스턴스가 아니라 입력 토픽의 파티션을 늘려야 합니다.",
+      "distractorNotes": {
+        "A": "태스크 수는 파티션 수에 묶여 있어 설정으로 늘릴 수 없습니다.",
+        "C": "standby 태스크는 `num.standby.replicas`(기본 0)로 별도 지정하는 개념이며 자동 전환이 아닙니다.",
+        "D": "스레드가 남는 것은 정상 상태입니다. 리밸런스가 반복되는 원인이 아닙니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Core Concepts: Parallelism Model", "url": "https://kafka.apache.org/documentation/streams/core-concepts" }
+      ],
+      "tags": ["parallelism", "num.stream.threads", "state-store"]
+    },
+    {
+      "id": "ccdak-streams-029",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "Streams 애플리케이션의 병렬성과 상태 복구에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`num.standby.replicas` 기본값이 0이므로 인스턴스 교체 시 changelog 를 전량 재생해야 한다." },
+        { "id": "B", "text": "`state.dir` 기본값이 영속 경로이므로 컨테이너 재시작에도 상태가 유지된다." },
+        { "id": "C", "text": "태스크 수의 상한은 입력 토픽의 파티션 수다." },
+        { "id": "D", "text": "인스턴스를 늘리면 태스크 수도 함께 늘어난다." },
+        { "id": "E", "text": "standby 레플리카는 활성 태스크와 함께 출력 토픽에 결과를 쓴다." }
+      ],
+      "answer": ["A", "C"],
+      "explanation": "standby 레플리카 기본값이 0 이라는 것은 예비 사본이 없다는 뜻이므로, 태스크가 다른 인스턴스로 옮겨가면 changelog 를 처음부터 재생해 상태를 만들어야 하고 그 시간이 그대로 다운타임이 됩니다. 태스크 수는 파티션 수로 고정되므로 인스턴스를 늘리는 것은 태스크를 나눠 담을 자리를 늘리는 것일 뿐입니다. `state.dir` 의 기본값은 `${java.io.tmpdir}` 라서 컨테이너에서 그대로 쓰면 재시작마다 상태가 사라집니다. standby 는 상태만 따뜻하게 유지하며 결과를 출력하지 않습니다.",
+      "distractorNotes": {
+        "B": "기본값은 임시 디렉터리입니다. 영속 볼륨 경로로 반드시 바꿔야 합니다.",
+        "D": "태스크 수는 파티션 수로 결정됩니다. 인스턴스 수와 무관합니다.",
+        "E": "standby 는 changelog 를 따라 상태만 복제합니다. 출력은 활성 태스크만 담당합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Configs", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" },
+        { "title": "Apache Kafka — Streams Core Concepts", "url": "https://kafka.apache.org/documentation/streams/core-concepts" }
+      ],
+      "tags": ["num.standby.replicas", "state.dir", "parallelism"]
+    },
+    {
+      "id": "ccdak-streams-030",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "stateful 태스크를 맡은 인스턴스가 죽었을 때 다른 인스턴스가 상태를 복구하는 과정을 올바른 순서로 배열하세요.",
+      "code": null,
+      "items": [
+        { "id": "i3", "text": "부족한 부분을 changelog 토픽에서 재생해 상태 저장소를 복원한다" },
+        { "id": "i1", "text": "리밸런스가 일어나 그 태스크가 다른 인스턴스에 재배정된다" },
+        { "id": "i4", "text": "복원이 `acceptable.recovery.lag` 이내로 따라잡으면 태스크가 레코드 처리를 시작한다" },
+        { "id": "i2", "text": "새 인스턴스가 로컬 `state.dir` 에 재사용 가능한 상태가 있는지 확인한다" }
+      ],
+      "answer": ["i1", "i2", "i3", "i4"],
+      "explanation": "복구는 태스크 재배정에서 시작합니다. 배정을 받은 인스턴스는 먼저 로컬 디스크에 남아 있는 상태를 확인해 재생할 양을 줄이려 하고, 없거나 부족한 부분만 changelog 에서 읽어 채웁니다. 복원이 `acceptable.recovery.lag`(기본 10000) 이내로 따라잡았다고 판단되면 그 태스크가 활성으로 전환되어 처리를 시작합니다. `state.dir` 가 임시 디렉터리이거나 standby 가 0이면 두 번째 단계에서 재사용할 것이 없어 전량 재생이 발생합니다.",
+      "distractorNotes": {
+        "i2": "\"항상 changelog 를 전량 재생한다\"고 생각하기 쉽습니다. 로컬 상태가 남아 있으면 그만큼 재생을 건너뜁니다.",
+        "i4": "복원 중에도 처리가 이루어진다고 오해하기 쉽습니다. 복원이 끝나야 활성 태스크가 됩니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Configs", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" },
+        { "title": "Apache Kafka — Managing Streams Application Topics", "url": "https://kafka.apache.org/documentation/streams/developer-guide/manage-topics.html" }
+      ],
+      "tags": ["state-store", "changelog", "num.standby.replicas"]
+    },
+    {
+      "id": "ccdak-streams-031",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "브로커 1대인 개발 환경에서 아래 설정으로 애플리케이션을 띄웠다. 결과와 그 이유는?",
+      "code": {
+        "lang": "properties",
+        "caption": "streams.properties",
+        "body": "application.id=fraud-detector\nbootstrap.servers=localhost:9092\nprocessing.guarantee=exactly_once_v2\ndefault.key.serde=org.apache.kafka.common.serialization.Serdes$StringSerde\ndefault.value.serde=org.apache.kafka.common.serialization.Serdes$StringSerde"
+      },
+      "choices": [
+        { "id": "A", "text": "정상 동작한다. EOS 는 브로커 수와 무관하다." },
+        { "id": "B", "text": "`processing.guarantee` 를 `exactly_once` 로 바꿔야 단일 브로커에서 동작한다." },
+        { "id": "C", "text": "`commit.interval.ms` 를 명시하지 않았으므로 30000 이 적용되어 트랜잭션이 타임아웃된다." },
+        { "id": "D", "text": "실패한다. `__transaction_state` 의 기본 복제 계수 3과 min ISR 2를 단일 브로커가 만족할 수 없다." }
+      ],
+      "answer": ["D"],
+      "explanation": "문서는 기본적으로 exactly-once 처리가 브로커 3대 이상 클러스터를 요구한다고 명시하며, 그 이유는 `transaction.state.log.replication.factor=3` 과 `transaction.state.log.min.isr=2` 입니다. 브로커가 1대면 이 조건을 만족할 수 없어 트랜잭션 상태 토픽 생성이나 트랜잭션 초기화가 실패합니다. 개발 환경에서는 이 두 **브로커** 설정을 1로 낮춰야 하며, Streams 쪽 설정을 바꾸는 것은 해결책이 아닙니다. 참고로 EOS 를 켜면 `commit.interval.ms` 기본값이 100ms 로 바뀌고 컨슈머는 `read_committed`, 프로듀서는 `enable.idempotence=true` 로 설정됩니다.",
+      "distractorNotes": {
+        "A": "브로커 수와 무관하지 않습니다. 트랜잭션 상태 토픽의 복제 요건이 걸립니다.",
+        "B": "`exactly_once` 는 deprecated 값이며 복제 요건 문제를 해결하지도 못합니다.",
+        "C": "EOS 를 켜면 `commit.interval.ms` 기본값이 100ms 로 바뀝니다. 30000 이 적용되지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Configs: processing.guarantee", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" },
+        { "title": "Apache Kafka — Broker Configs: transaction.state.log.replication.factor", "url": "https://kafka.apache.org/documentation/#brokerconfigs_transaction.state.log.replication.factor" }
+      ],
+      "tags": ["exactly-once", "processing.guarantee", "defaults"]
+    },
+    {
+      "id": "ccdak-streams-032",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "`processing.guarantee=exactly_once_v2` 로 바꾸면 함께 달라지는 것으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`num.standby.replicas` 기본값이 1로 올라간다." },
+        { "id": "B", "text": "`num.stream.threads` 기본값이 파티션 수로 바뀐다." },
+        { "id": "C", "text": "`commit.interval.ms` 기본값이 100ms 로 바뀌고, 내부 컨슈머는 `read_committed` 가 된다." },
+        { "id": "D", "text": "changelog 토픽의 `cleanup.policy` 가 `delete` 로 바뀐다." }
+      ],
+      "answer": ["C"],
+      "explanation": "EOS 를 켜면 트랜잭션 경계가 커밋 주기와 연결되므로 `commit.interval.ms` 기본값이 30000 에서 100 으로 내려갑니다. 커밋이 잦아지는 만큼 지연은 줄지만 트랜잭션 오버헤드가 늘어납니다. 동시에 내부 컨슈머는 `isolation.level=read_committed` 로, 내부 프로듀서는 `enable.idempotence=true` 로 설정되어 커밋되지 않은 중간 결과를 읽지 않습니다. 또한 EOS 는 Kafka 경계 안에서만 성립하므로 `foreach` 안의 외부 API 호출은 트랜잭션에 포함되지 않습니다.",
+      "distractorNotes": {
+        "A": "standby 레플리카 기본값은 EOS 여부와 무관하게 0 입니다.",
+        "B": "스레드 수 기본값은 항상 1 입니다. EOS 가 바꾸지 않습니다.",
+        "D": "changelog 정책은 저장소 종류가 결정합니다. 처리 보장 수준과 무관합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Configs: processing.guarantee", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" },
+        { "title": "Apache Kafka — Streams Core Concepts: Processing Guarantees", "url": "https://kafka.apache.org/documentation/streams/core-concepts" }
+      ],
+      "tags": ["exactly-once", "processing.guarantee", "isolation-level"]
+    },
+    {
+      "id": "ccdak-streams-033",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "Streams 의 exactly-once 처리에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`processing.guarantee` 의 기본값은 `at_least_once` 다." },
+        { "id": "B", "text": "`foreach` 안에서 호출한 외부 REST API 도 트랜잭션에 포함되어 롤백된다." },
+        { "id": "C", "text": "EOS 는 Kafka 토픽 읽기·쓰기와 상태 저장소 갱신 사이에서만 원자성을 보장한다." },
+        { "id": "D", "text": "EOS 를 켜면 리밸런스가 발생하지 않는다." },
+        { "id": "E", "text": "`exactly_once_v2` 대신 `exactly_once` 를 쓰는 것이 현행 권장 방식이다." }
+      ],
+      "answer": ["A", "C"],
+      "explanation": "기본값은 `at_least_once` 이므로 EOS 는 명시적으로 켜야 합니다. Streams 의 EOS 는 입력 오프셋 커밋, 상태 저장소 갱신, 출력 토픽 쓰기를 하나의 Kafka 트랜잭션으로 묶는 것이므로 보장 범위가 Kafka 경계 안으로 한정됩니다. 따라서 외부 시스템 호출은 롤백되지 않고, 그런 부수 효과가 필요하면 멱등한 설계로 만들어야 합니다. `exactly_once` 와 `exactly_once_beta` 는 deprecated 값이며 현행 값은 `exactly_once_v2` 입니다.",
+      "distractorNotes": {
+        "B": "외부 호출은 Kafka 트랜잭션 밖입니다. 롤백되지 않습니다.",
+        "D": "EOS 와 리밸런스는 별개 축입니다. 인스턴스 변화나 파티션 변화는 여전히 리밸런스를 유발합니다.",
+        "E": "`exactly_once` 는 deprecated 입니다. `exactly_once_v2` 를 씁니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Core Concepts: Processing Guarantees", "url": "https://kafka.apache.org/documentation/streams/core-concepts" },
+        { "title": "Apache Kafka — Streams Configs: processing.guarantee", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" }
+      ],
+      "tags": ["exactly-once", "processing.guarantee", "state-store"]
+    },
+    {
+      "id": "ccdak-streams-034",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "Streams 설정 `application.id` 가 동시에 수행하는 역할이 아닌 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "내부 컨슈머 그룹의 `group.id`" },
+        { "id": "B", "text": "changelog·repartition 등 내부 토픽 이름의 접두어" },
+        { "id": "C", "text": "상태 저장소 파일이 놓일 디스크 경로 자체" },
+        { "id": "D", "text": "클라이언트 `client.id` 의 접두어" }
+      ],
+      "answer": ["C"],
+      "explanation": "`application.id` 는 컨슈머 그룹 ID, 내부 토픽 이름 접두어, 클라이언트 ID 접두어 세 역할을 동시에 합니다. 상태 저장소가 놓일 경로를 정하는 것은 `state.dir`(기본값 `${java.io.tmpdir}`)이며, `application.id` 는 그 아래 하위 디렉터리 이름의 일부로만 쓰입니다. 세 역할이 겹쳐 있기 때문에 `application.id` 를 바꾸면 새 컨슈머 그룹과 새 내부 토픽 세트가 만들어져 사실상 처음부터 다시 읽습니다. 그래서 배포 중 이 값을 바꾸는 것은 재처리를 유발하는 위험한 변경입니다.",
+      "distractorNotes": {
+        "A": "Streams 는 내부적으로 컨슈머 그룹을 쓰고 그 ID 가 `application.id` 입니다.",
+        "B": "내부 토픽 이름은 `<application.id>-<operatorName>-<suffix>` 규칙을 따릅니다.",
+        "D": "`client.id` 기본값이 `<application.id>-<random-UUID>` 형태여서 접두어로 쓰입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Configs: application.id", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" },
+        { "title": "Apache Kafka — Managing Streams Application Topics", "url": "https://kafka.apache.org/documentation/streams/developer-guide/manage-topics.html" }
+      ],
+      "tags": ["application.id", "state.dir", "changelog"]
+    },
+    {
+      "id": "ccdak-streams-035",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "쿠버네티스에서 Streams 파드를 재시작할 때마다 상태 복구가 오래 걸린다. 가장 직접적인 원인은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`commit.interval.ms` 기본값 30000 이 커서 커밋이 밀린다." },
+        { "id": "B", "text": "`num.stream.threads` 기본값 1 때문에 복구가 단일 스레드로 진행된다." },
+        { "id": "C", "text": "`statestore.cache.max.bytes` 기본값 10MiB 가 작아 캐시 미스가 많다." },
+        { "id": "D", "text": "`state.dir` 기본값이 `${java.io.tmpdir}` 라서 파드 교체 시 로컬 상태가 사라진다." }
+      ],
+      "answer": ["D"],
+      "explanation": "`state.dir` 의 기본값은 임시 디렉터리이므로 컨테이너가 교체되면 로컬 상태가 함께 사라집니다. 그러면 재사용할 것이 없어 changelog 를 전량 재생해야 하고, 상태가 클수록 복구 시간이 길어집니다. 여기에 `num.standby.replicas` 기본값 0 이 겹치면 따뜻한 예비 사본조차 없어 복구 시간이 그대로 다운타임이 됩니다. 처방은 영속 볼륨 경로를 `state.dir` 로 지정하고 필요하면 standby 를 1 이상으로 올리는 것입니다.",
+      "distractorNotes": {
+        "A": "커밋 주기는 오프셋 기록 간격입니다. 상태 복구 시간과 직접 관계가 없습니다.",
+        "B": "스레드 수는 정상 처리 병렬성에 영향을 주지만 로컬 상태 소실의 원인은 아닙니다.",
+        "C": "캐시 크기는 하위로 흐르는 갱신 수에 영향을 줍니다. 복구 시간의 근본 원인이 아닙니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Configs: state.dir", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" }
+      ],
+      "tags": ["state.dir", "num.standby.replicas", "state-store"]
+    },
+    {
+      "id": "ccdak-streams-036",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "Kafka Streams 설정을 4.3 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        { "id": "p1", "left": "`num.stream.threads`", "right": "1" },
+        { "id": "p2", "left": "`num.standby.replicas`", "right": "0" },
+        { "id": "p3", "left": "`commit.interval.ms` (at-least-once)", "right": "30000" },
+        { "id": "p4", "left": "`processing.guarantee`", "right": "at_least_once" },
+        { "id": "p5", "left": "`statestore.cache.max.bytes`", "right": "10485760" }
+      ],
+      "extraRights": ["2", "100", "exactly_once_v2", "-1"],
+      "explanation": "이 다섯 기본값의 조합이 \"기본 설정 그대로 배포하면 단일 스레드·예비 사본 없음·at-least-once\"라는 상태를 만듭니다. `commit.interval.ms` 는 at-least-once 에서 30000 이지만 EOS 를 켜면 100 으로 바뀌므로 조건부 기본값이라는 점을 함께 외워야 합니다. `replication.factor` 의 기본값 `-1` 은 \"브로커 기본값을 따른다\"는 뜻이므로 내부 토픽 RF 를 3으로 두려면 명시해야 합니다. 상태 저장소 캐시 기본값 10MiB 는 0으로 두면 모든 갱신이 즉시 하위로 흘러 결과 레코드 수가 크게 늘어납니다.",
+      "distractorNotes": {
+        "p3": "EOS 기준 값 100 을 고르기 쉽습니다. at-least-once 에서는 30000 입니다.",
+        "p2": "\"고가용성이 기본\"이라고 생각해 1 이상을 고르기 쉽지만 기본값은 0 입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Configs", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" },
+        { "title": "Apache Kafka — Streams Configs (표)", "url": "https://kafka.apache.org/documentation/#streamsconfigs" }
+      ],
+      "tags": ["defaults", "num.stream.threads", "processing.guarantee"]
+    },
+    {
+      "id": "ccdak-streams-037",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "Kafka 4.3 문서 기준 Streams Rebalance Protocol(KIP-1071)에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "4.1 에서 도입되었고 4.3 에서도 여전히 Early Access 상태다." },
+        { "id": "B", "text": "4.1 Early Access 를 거쳐 4.2 에서 핵심 기능이 production-ready 가 되었고, 클라이언트는 `group.protocol=streams` 로 활성화한다." },
+        { "id": "C", "text": "브로커에서만 설정하며 클라이언트 설정은 필요하지 않다." },
+        { "id": "D", "text": "활성화하면 `num.stream.threads` 가 브로커에서 관리되는 그룹 레벨 설정이 된다." }
+      ],
+      "answer": ["B"],
+      "explanation": "KIP-1071 은 4.1 에서 Early Access 로 도입된 뒤 4.2 에서 핵심 기능 세트가 production-ready 로 선언되었습니다. KIP-848 이 컨슈머 리밸런스를 브로커로 옮긴 것과 같은 방식으로 Streams 태스크 배정을 브로커가 수행합니다. 클라이언트 쪽 `group.protocol` 기본값은 여전히 `classic` 이므로 `streams` 로 명시해야 활성화되고, 브로커와 클라이언트 모두 4.2 이상이어야 합니다. 활성화하면 `session.timeout.ms`·`heartbeat.interval.ms`·`num.standby.replicas` 가 그룹 레벨 설정이 되어 클라이언트 값이 무시되므로 `kafka-configs.sh` 로 지정해야 합니다.",
+      "distractorNotes": {
+        "A": "4.2 에서 핵심 기능 세트가 production-ready 로 선언되었습니다. 4.3 에서 EA 가 아닙니다.",
+        "C": "클라이언트에서 `group.protocol=streams` 를 지정해야 합니다. 기본값은 `classic` 입니다.",
+        "D": "그룹 레벨로 옮겨가는 것은 `session.timeout.ms`·`heartbeat.interval.ms`·`num.standby.replicas` 입니다. 스레드 수는 여전히 클라이언트 설정입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Rebalance Protocol", "url": "https://kafka.apache.org/documentation/streams/developer-guide/streams-rebalance-protocol.html" },
+        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" }
+      ],
+      "tags": ["kip-1071", "group.protocol", "rebalance-triggers"]
+    },
+    {
+      "id": "ccdak-streams-038",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "Streams 태스크가 레코드 하나를 처리할 때 일어나는 단계를 올바른 순서로 배열하세요.",
+      "code": null,
+      "items": [
+        { "id": "i4", "text": "상태 변경이 changelog 토픽에 기록된다" },
+        { "id": "i2", "text": "Serde 가 키와 값을 Java 객체로 역직렬화한다" },
+        { "id": "i5", "text": "`commit.interval.ms` 주기가 되면 입력 오프셋이 커밋된다" },
+        { "id": "i1", "text": "내부 컨슈머가 입력 토픽에서 레코드를 poll 한다" },
+        { "id": "i3", "text": "토폴로지의 프로세서 노드들이 레코드를 처리하고 상태 저장소를 갱신한다" }
+      ],
+      "answer": ["i1", "i2", "i3", "i4", "i5"],
+      "explanation": "Streams 는 내부적으로 표준 컨슈머·프로듀서를 쓰므로 처리 흐름도 그 순서를 따릅니다. 바이트를 읽어 역직렬화한 뒤에야 프로세서 노드가 객체를 다룰 수 있고, 상태가 갱신되면 그 변경이 changelog 로 흘러 복구 근거가 만들어집니다. 오프셋 커밋은 커밋 주기마다 별도로 일어나며, at-least-once 에서는 30000ms, EOS 에서는 100ms 가 기본입니다. 역직렬화 단계에서 실패하면 `deserialization.exception.handler`(기본 `LogAndFailExceptionHandler`)에 따라 애플리케이션이 중단됩니다.",
+      "distractorNotes": {
+        "i2": "역직렬화를 처리 뒤로 두는 것으로 착각하기 쉽습니다. Serde 가 없으면 프로세서가 값을 다룰 수 없습니다.",
+        "i5": "레코드마다 커밋된다고 오해하기 쉽습니다. 커밋은 주기적으로 일어납니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Streams Core Concepts", "url": "https://kafka.apache.org/documentation/streams/core-concepts" },
+        { "title": "Apache Kafka — Streams Configs", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" }
+      ],
+      "tags": ["changelog", "commit.interval.ms", "state-store"]
+    }
+  ]
+}

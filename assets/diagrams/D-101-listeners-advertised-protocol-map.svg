@@ -1,0 +1,69 @@
+<svg viewBox="0 0 720 614" role="img" class="kg-diagram"
+     aria-labelledby="d101-title d101-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d101-title">listeners · advertised.listeners · listener.security.protocol.map 의 관계</title>
+  <desc id="d101-desc">세 설정이 각각 다른 질문에 답한다는 점을 보여 줍니다. listeners 는 어느 주소와 포트에 바인딩할지, advertised.listeners 는 클라이언트에게 어디로 오라고 알려 줄지, listener.security.protocol.map 은 리스너 이름별 보안 프로토콜이 무엇인지를 정합니다. 예시 설정에서 브로커는 INTERNAL 9092 와 EXTERNAL 9094 두 리스너를 열고 각각 SASL_SSL 로 매핑하며 브로커 간 통신은 INTERNAL 을 씁니다. 내부 클라이언트는 broker1.internal 9092 로, 외부 클라이언트는 kafka.example.com 9094 로 붙습니다. 정상 동작에서 접속은 두 번 일어납니다. 먼저 bootstrap.servers 주소로 붙어 메타데이터를 받고, 브로커가 돌려준 advertised.listeners 주소로 다시 붙어 실제 전송을 합니다. 가장 흔한 실수는 advertised.listeners 를 내부 호스트명으로만 두는 것입니다. 이때 bootstrap 은 성공하지만 외부 클라이언트가 해석할 수 없는 내부 이름을 받아 가서 두 번째 접속에서 타임아웃이 나므로 연결은 되는데 곧 끊기는 것처럼 보입니다. KRaft 에서는 controller.listener.names 를 따로 두며 inter.broker.listener.name 과 같은 값일 수 없습니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">listeners · advertised.listeners · listener.security.protocol.map</text>
+<text class="dg-fs-sm dg-muted" x="8" y="40">운영자가 가장 많이 틀리는 지점입니다. 세 설정은 각각 다른 질문에 답합니다.</text>
+<rect class="dg-panel" x="8" y="52" width="704" height="132" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="18" y="69">broker-1 의 server.properties — 내부·외부를 분리한 예</text>
+<text class="dg-fs-sm dg-mono" x="24" y="88">listeners=INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094</text>
+<text class="dg-fs-sm dg-mono" x="24" y="106">advertised.listeners=INTERNAL://broker1.internal:9092,</text>
+<text class="dg-fs-sm dg-mono" x="24" y="124">                     EXTERNAL://kafka.example.com:9094</text>
+<text class="dg-fs-sm dg-mono" x="24" y="142">listener.security.protocol.map=INTERNAL:SASL_SSL,EXTERNAL:SASL_SSL</text>
+<text class="dg-fs-sm dg-mono" x="24" y="160">inter.broker.listener.name=INTERNAL</text>
+<rect class="dg-node" x="8" y="196" width="228" height="68" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="18" y="216">listeners</text>
+<text class="dg-fs-sm" x="18" y="236">어느 주소·포트에 바인딩할까</text>
+<rect class="dg-node dg-node--accent" x="244" y="196" width="228" height="68" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="254" y="216">advertised.listeners</text>
+<text class="dg-fs-sm" x="254" y="236">어디로 오라고 알려 줄까</text>
+<rect class="dg-node" x="480" y="196" width="228" height="68" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="490" y="216">listener.security.</text>
+<text class="dg-fs-sm dg-bold dg-mono" x="490" y="232">protocol.map</text>
+<text class="dg-fs-sm" x="490" y="250">이름별 보안 프로토콜은 무엇일까</text>
+<g>
+<rect class="dg-node" x="8" y="278" width="190" height="84" rx="4"/>
+<text class="dg-fs-sm" x="103" y="308.6" text-anchor="middle">내부 클라이언트</text>
+<text class="dg-fs-sm" x="103" y="324.6" text-anchor="middle">같은 네트워크의 앱</text>
+<text class="dg-fs-sm" x="103" y="340.6" text-anchor="middle">broker1.internal:9092</text>
+</g>
+<rect class="dg-node dg-node--alt" x="238" y="272" width="244" height="96" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="360" y="290" text-anchor="middle">broker-1</text>
+<g>
+<rect class="dg-node dg-node--ok" x="250" y="298" width="220" height="28" rx="4"/>
+<text class="dg-fs-sm" x="360" y="316.6" text-anchor="middle">INTERNAL  9092</text>
+</g>
+<g>
+<rect class="dg-node dg-node--accent" x="250" y="332" width="220" height="28" rx="4"/>
+<text class="dg-fs-sm" x="360" y="350.6" text-anchor="middle">EXTERNAL  9094</text>
+</g>
+<g>
+<rect class="dg-node" x="522" y="278" width="190" height="84" rx="4"/>
+<text class="dg-fs-sm" x="617" y="308.6" text-anchor="middle">외부 클라이언트</text>
+<text class="dg-fs-sm" x="617" y="324.6" text-anchor="middle">인터넷·다른 VPC 의 앱</text>
+<text class="dg-fs-sm" x="617" y="340.6" text-anchor="middle">kafka.example.com:9094</text>
+</g>
+<path class="dg-edge dg-edge--ok" d="M200,312 L246,312" marker-end="url(#mk-arrow-ok)"/>
+<path class="dg-edge dg-edge--accent" d="M520,346 L474,346" marker-end="url(#mk-arrow-accent)"/>
+<rect class="dg-node dg-node--ok" x="8" y="380" width="704" height="86" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="401">정상 동작 — 접속은 두 번 일어납니다</text>
+<text class="dg-fs-sm" x="24" y="422">1) 클라이언트가 bootstrap.servers 주소로 붙어 메타데이터를 요청합니다.</text>
+<text class="dg-fs-sm" x="24" y="440">2) 브로커는 자기가 붙은 리스너에 해당하는 advertised.listeners 값을 돌려줍니다.</text>
+<text class="dg-fs-sm" x="24" y="458">3) 클라이언트는 그 주소로 다시 붙어 실제 produce·fetch 를 합니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="478" width="704" height="104" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="499">가장 흔한 실수 — "연결은 되는데 곧 끊긴다"</text>
+<text class="dg-fs-sm" x="24" y="520">advertised.listeners 를 비우거나 내부 호스트명으로만 두면, 1) 단계는 성공하고 2) 단계에서</text>
+<text class="dg-fs-sm" x="24" y="538">외부 클라이언트가 broker1.internal 을 받아 갑니다. 그 이름은 외부에서 해석되지 않으므로</text>
+<text class="dg-fs-sm" x="24" y="556">3) 단계에서 타임아웃이 납니다 — bootstrap 은 됐으니 "연결은 된다"고 보이는 것입니다.</text>
+<text class="dg-fs-sm" x="24" y="574">컨테이너·클라우드 환경에서 0.0.0.0 을 advertised 로 두는 것도 같은 이유로 잘못입니다.</text>
+<text class="dg-fs-sm dg-bold" x="8" y="602">KRaft 에서는 controller.listener.names 를 따로 두며 inter.broker.listener.name 과 같은 값일 수 없습니다.</text>
+</svg>

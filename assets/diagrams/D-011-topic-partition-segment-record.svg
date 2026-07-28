@@ -1,0 +1,54 @@
+<svg viewBox="0 0 720 456" role="img" class="kg-diagram"
+     aria-labelledby="d011-title d011-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d011-title">토픽에서 파티션, 세그먼트, 레코드까지의 4단 중첩 구조</title>
+  <desc id="d011-desc">가장 바깥이 토픽 orders 이며 토픽은 논리적 이름일 뿐 물리 실체가 아닙니다. 그 안에 파티션 0 이 있고 파티션은 디스크의 디렉터리 orders-0 에 대응하며 순서 보장은 파티션 안에서만 성립합니다. 파티션 안에는 세그먼트가 여러 개 있고 각 세그먼트는 확장자가 .log, .index, .timeindex 인 파일 묶음으로 이루어집니다. 파일 이름은 그 세그먼트의 첫 오프셋인 베이스 오프셋이며, 마지막 세그먼트만 활성 세그먼트로 현재 쓰기가 일어나는 곳입니다. .index 는 오프셋에서 파일 위치를, .timeindex 는 타임스탬프에서 오프셋을 찾는 희소 인덱스입니다. 맨 아래에는 활성 세그먼트 안의 레코드가 오프셋 8192부터 8196까지 나열되고 다음 쓰기 위치가 LEO 임을 보여 줍니다. retention 삭제와 컴팩션은 세그먼트 단위로 일어나며 활성 세그먼트는 대상이 아닙니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">토픽 → 파티션 → 세그먼트 → 레코드 — 4단 중첩 구조</text>
+<rect class="dg-panel" x="8" y="32" width="704" height="300" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="18" y="49">토픽  orders   (논리적 이름 · 물리 실체가 아님)</text>
+<rect class="dg-panel" x="20" y="56" width="680" height="210" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="30" y="73">파티션 0   —   디렉터리 /var/lib/kafka/orders-0   (순서는 파티션 안에서만 보장)</text>
+<rect class="dg-node" x="32" y="80" width="656" height="50" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="44" y="100">00000000000000000000.log</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="44" y="118">00000000000000000000.index   00000000000000000000.timeindex</text>
+<text class="dg-fs-sm" x="676" y="100" text-anchor="end">봉인됨</text>
+<text class="dg-fs-sm dg-num dg-muted" x="676" y="118" text-anchor="end">베이스 오프셋 0</text>
+<rect class="dg-node" x="32" y="138" width="656" height="50" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="44" y="158">00000000000000004096.log</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="44" y="176">00000000000000004096.index   00000000000000004096.timeindex</text>
+<text class="dg-fs-sm" x="676" y="158" text-anchor="end">봉인됨</text>
+<text class="dg-fs-sm dg-num dg-muted" x="676" y="176" text-anchor="end">베이스 오프셋 4096</text>
+<rect class="dg-node dg-node--accent" x="32" y="196" width="656" height="50" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="44" y="216">00000000000000008192.log</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="44" y="234">00000000000000008192.index   00000000000000008192.timeindex</text>
+<text class="dg-fs-sm" x="676" y="216" text-anchor="end">활성 세그먼트 (지금 쓰는 곳)</text>
+<text class="dg-fs-sm dg-num dg-muted" x="676" y="234" text-anchor="end">베이스 오프셋 8192</text>
+<text class="dg-fs-sm dg-muted" x="20" y="284">파티션 1 · 파티션 2 도 같은 구조입니다 (그림에서는 생략).</text>
+<text class="dg-fs-sm" x="20" y="306">.index 는 오프셋 → 파일 위치, .timeindex 는 타임스탬프 → 오프셋을 찾는 희소 인덱스입니다.</text>
+<text class="dg-fs-sm dg-bold" x="8" y="356">활성 세그먼트 안의 레코드</text>
+<rect class="dg-node" x="8" y="366" width="90" height="34" rx="2"/>
+<text class="dg-fs-sm dg-num" x="53" y="387.5" text-anchor="middle">8192</text>
+<rect class="dg-node" x="98" y="366" width="90" height="34" rx="2"/>
+<text class="dg-fs-sm dg-num" x="143" y="387.5" text-anchor="middle">8193</text>
+<rect class="dg-node" x="188" y="366" width="90" height="34" rx="2"/>
+<text class="dg-fs-sm dg-num" x="233" y="387.5" text-anchor="middle">8194</text>
+<rect class="dg-node" x="278" y="366" width="90" height="34" rx="2"/>
+<text class="dg-fs-sm dg-num" x="323" y="387.5" text-anchor="middle">8195</text>
+<rect class="dg-node dg-node--accent" x="368" y="366" width="90" height="34" rx="2"/>
+<text class="dg-fs-sm dg-num" x="413" y="387.5" text-anchor="middle">8196</text>
+<path class="dg-edge dg-edge--accent" d="M503,383 L540,383" marker-end="url(#mk-arrow-accent)"/>
+<g>
+<rect class="dg-node dg-node--accent" x="548" y="366" width="164" height="34" rx="4"/>
+<text class="dg-fs-sm" x="630" y="387.6" text-anchor="middle">다음 쓰기 위치 = LEO</text>
+</g>
+<text class="dg-fs-sm" x="8" y="424">오프셋은 파티션 안에서만 순차적입니다. 세그먼트 파일 이름은 그 세그먼트의 첫 오프셋(베이스 오프셋)입니다.</text>
+<text class="dg-fs-sm dg-bold" x="8" y="444">retention 삭제와 컴팩션은 세그먼트 단위로 일어나며 활성 세그먼트는 그 대상이 아닙니다.</text>
+</svg>

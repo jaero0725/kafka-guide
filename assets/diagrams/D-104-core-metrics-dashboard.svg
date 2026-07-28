@@ -1,0 +1,50 @@
+<svg viewBox="0 0 720 448" role="img" class="kg-diagram"
+     aria-labelledby="d104-title d104-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d104-title">핵심 메트릭 대시보드 — URP, UnderMinIsr, OfflinePartitions, ActiveController, 요청 처리 유휴율, 컨슈머 lag</title>
+  <desc id="d104-desc">여섯 개의 지표를 정상 기준과 함께 배치했습니다. UnderReplicatedPartitions 는 kafka.server type ReplicaManager 에 있고 정상값은 0 이며 0 이 아니면 ISR 이 전체 레플리카보다 적어 복제가 밀리는 상태입니다. UnderMinIsrPartitionCount 도 같은 빈에 있고 정상값 0 이며 min.insync.replicas 미달이므로 쓰기가 거부되기 시작합니다. OfflinePartitionsCount 는 kafka.controller type KafkaController 에 있고 정상값 0 이며 리더가 없는 파티션이 있으면 읽기와 쓰기가 모두 불가능합니다. ActiveControllerCount 는 클러스터 전체 합이 정확히 1 이어야 하고 0 이면 컨트롤러가 없고 2 이상이면 분열 상태입니다. RequestHandlerAvgIdlePercent 는 0 과 1 사이 값으로 0.3 이상을 권하며 0 에 가까우면 요청 처리 스레드가 포화된 것입니다. records-lag-max 는 컨슈머 쪽 지표로 얼마나 뒤처졌는지를 나타냅니다. IsrShrinksPerSec 는 UnderReplicated 보다 먼저 움직이는 조기 신호입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">핵심 메트릭 대시보드 — 이 여섯 개만 보면 클러스터 상태를 압니다</text>
+<text class="dg-fs-sm dg-muted" x="8" y="40">값은 정상 기준입니다. 하나라도 벗어나면 그 줄의 "의미"부터 확인하세요.</text>
+<rect class="dg-node dg-node--danger" x="8" y="56" width="348" height="92" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="78">UnderReplicatedPartitions</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="20" y="98">kafka.server:type=ReplicaManager</text>
+<text class="dg-fs-sm dg-bold" x="20" y="118">정상: 0</text>
+<text class="dg-fs-sm" x="20" y="138">ISR < 전체 레플리카 — 복제가 밀린다</text>
+<rect class="dg-node dg-node--danger" x="364" y="56" width="348" height="92" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="376" y="78">UnderMinIsrPartitionCount</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="376" y="98">kafka.server:type=ReplicaManager</text>
+<text class="dg-fs-sm dg-bold" x="376" y="118">정상: 0</text>
+<text class="dg-fs-sm" x="376" y="138">ISR < min.insync.replicas — 쓰기 거부 시작</text>
+<rect class="dg-node dg-node--danger" x="8" y="160" width="348" height="92" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="182">OfflinePartitionsCount</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="20" y="202">kafka.controller:type=KafkaController</text>
+<text class="dg-fs-sm dg-bold" x="20" y="222">정상: 0</text>
+<text class="dg-fs-sm" x="20" y="242">리더 없는 파티션 — 읽기·쓰기 모두 불가</text>
+<rect class="dg-node dg-node--warn" x="364" y="160" width="348" height="92" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="376" y="182">ActiveControllerCount</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="376" y="202">kafka.controller:type=KafkaController</text>
+<text class="dg-fs-sm dg-bold" x="376" y="222">정상: 클러스터 합 1</text>
+<text class="dg-fs-sm" x="376" y="242">0 이면 컨트롤러 없음 · 2 이상이면 split brain</text>
+<rect class="dg-node dg-node--warn" x="8" y="264" width="348" height="92" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="286">RequestHandlerAvgIdlePercent</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="20" y="306">kafka.server:type=KafkaRequestHandlerPool</text>
+<text class="dg-fs-sm dg-bold" x="20" y="326">정상: 0.3 이상</text>
+<text class="dg-fs-sm" x="20" y="346">0 에 가까우면 요청 처리 스레드 포화</text>
+<rect class="dg-node dg-node--accent" x="364" y="264" width="348" height="92" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="376" y="286">records-lag-max</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="376" y="306">consumer-fetch-manager-metrics (클라이언트)</text>
+<text class="dg-fs-sm dg-bold" x="376" y="326">정상: 업무 기준 이내</text>
+<text class="dg-fs-sm" x="376" y="346">컨슈머가 얼마나 뒤처졌는지 (클라이언트 지표)</text>
+<line class="dg-grid" x1="8" y1="374" x2="712" y2="374"/>
+<text class="dg-fs-sm" x="8" y="396">IsrShrinksPerSec 가 오르면 브로커 한 대가 뒤처지는 신호입니다 — UnderReplicated 보다 먼저 움직입니다.</text>
+<text class="dg-fs-sm" x="8" y="416">lag 은 브로커가 아니라 컨슈머 쪽 지표입니다 — CLI 로는 kafka-consumer-groups.sh --describe 로 봅니다.</text>
+<text class="dg-fs-sm dg-muted" x="8" y="436">records-lag-max 의 전체 이름은 kafka.consumer:type=consumer-fetch-manager-metrics 입니다.</text>
+</svg>

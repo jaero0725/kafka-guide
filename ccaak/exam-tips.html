@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CCAAK · 시험 당일 전략 — Kafka Guide</title>
+  <meta name="description" content="CCAAK 시험 당일 전략. 운영 시나리오 판단 문제 대비법, 증상별 먼저 확인할 것 패턴 정리, 문항 유형 3종별 접근법, 반드시 외울 숫자, 오답 유도 패턴과 최종 체크리스트.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccaak" data-page="exam-tips"></div>
+
+  <main id="main" class="page" data-page-id="ccaak/exam-tips">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCAAK</a></li>
+        <li><span aria-current="page">시험 당일 전략</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCAAK · D-1</p>
+      <h1>시험 당일 전략</h1>
+      <p class="page__lead">
+        CCAAK는 지식을 묻는 시험이 아니라 <strong>판단 순서를 묻는 시험</strong>입니다.
+        같은 증상에 대해 세 가지 조치가 모두 "틀리지 않은" 선택지로 제시되고,
+        그중 <strong>가장 먼저 해야 할 것</strong>을 고르게 합니다.
+        이 페이지는 그 판단을 빠르게 만드는 패턴표와, 시험장에서의 시간 운영 방법을 정리합니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 페이지의 사용법</h2>
+      <ul>
+        <li>시험 <strong>전날</strong>: <a href="#symptom-patterns">증상별 패턴표</a>와 <a href="#numbers">외울 숫자</a>만 반복해서 봅니다.</li>
+        <li>시험 <strong>직전 10분</strong>: <a href="#final-checklist">최종 체크리스트</a>만 봅니다.</li>
+        <li>시험 <strong>중</strong>: <a href="#answering-strategy">선택지 소거 원칙</a>을 머릿속에 두고 읽습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-conditions">
+      <h2 id="exam-conditions">시험 조건 — 확인된 것만</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>CCAAK 응시 조건. 미공개 항목은 추측하지 않습니다.</caption>
+          <thead>
+            <tr><th scope="col">항목</th><th scope="col">값</th><th scope="col">시험 운영에 주는 영향</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">시간</th>
+              <td>90분</td>
+              <td>원격 프록터링. 환경 점검에 시간을 쓰지 않도록 <strong>전날 미리</strong> 확인하세요.</td>
+            </tr>
+            <tr>
+              <th scope="row">문항 유형</th>
+              <td>multiple-choice · matching · list order</td>
+              <td>matching과 list order는 <strong>부분 점수를 기대하기 어렵습니다.</strong> 확실히 아는 것부터 채우세요.</td>
+            </tr>
+            <tr>
+              <th scope="row">문항 수</th>
+              <td><strong>미공개</strong></td>
+              <td>"문항당 N초"를 미리 계산할 수 없습니다. 대신 <a href="#time-management">진행률 기준</a>으로 운영합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">합격 점수</th>
+              <td><strong>미공개</strong></td>
+              <td>"몇 개 틀려도 된다"는 계산이 불가능합니다. <strong>전 섹션 고르게</strong>가 유일한 전략입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">재응시</th>
+              <td>7일 대기</td>
+              <td>실패해도 일주일 뒤 재도전이 가능합니다. 첫 시도에서 <strong>취약 섹션을 기록</strong>해 두세요.</td>
+            </tr>
+            <tr>
+              <th scope="row">유효 기간</th>
+              <td>2년</td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="섹션 가중치">
+        <p>
+          이 가이드는 CCAAK 섹션별 퍼센트 가중치를 표기하지 않습니다.
+          섹션 이름 7개는 확정된 값이지만 공개 자료의 가중치 숫자가 출처마다 다르고,
+          <strong>Confluent 공식 Exam Guide 기준으로 재확인이 필요합니다.</strong>
+          따라서 "가중치가 큰 섹션에 시간을 더 쓴다"는 전략은 쓸 수 없습니다.
+          대신 <a href="index.html#study-order">실습 난이도와 장애 빈도</a>를 기준으로 준비하세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="symptom-patterns">
+      <h2 id="symptom-patterns">증상별 "먼저 확인할 것" 패턴</h2>
+
+      <p>
+        이 표가 이 페이지의 핵심입니다. 시나리오 문항의 지문은 대개 아래 왼쪽 열의 형태로 오고,
+        정답은 대개 가운데 열입니다. 오른쪽 열은 <strong>결국 필요하지만 지금은 아닌 조치</strong>로,
+        오답 선택지에 자주 등장합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>증상 → 먼저 확인할 것 → 나중에 할 것</caption>
+          <thead>
+            <tr>
+              <th scope="col">증상</th>
+              <th scope="col">먼저 (정답 후보)</th>
+              <th scope="col">나중 (오답 후보)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">토픽 생성·설정 변경이 전부 타임아웃</th>
+              <td><code>ActiveControllerCount</code> 합계와 쿼럼 과반</td>
+              <td>브로커 재시작, 토픽 재생성</td>
+            </tr>
+            <tr>
+              <th scope="row">프로듀서가 <code>NotEnoughReplicas</code></th>
+              <td><code>UnderMinIsrPartitionCount</code>, 죽은 브로커 수</td>
+              <td><code>acks</code>를 1로 낮추기, unclean 선출 켜기</td>
+            </tr>
+            <tr>
+              <th scope="row">URP가 0으로 안 돌아온다</th>
+              <td>남은 복제 스로틀 확인, 어느 브로커가 빠졌는지</td>
+              <td><code>replica.lag.time.max.ms</code> 상향</td>
+            </tr>
+            <tr>
+              <th scope="row">읽기·쓰기가 모두 안 되는 파티션</th>
+              <td><code>OfflinePartitionsCount</code>, 레플리카 위치</td>
+              <td>unclean 선출 활성화(최후 수단)</td>
+            </tr>
+            <tr>
+              <th scope="row">브로커 전체 지연이 동시에 나빠짐</th>
+              <td><code>RequestHandlerAvgIdlePercent</code>, <code>RequestQueueTimeMs</code></td>
+              <td>브로커 추가, 파티션 증설</td>
+            </tr>
+            <tr>
+              <th scope="row">디스크가 찬다</th>
+              <td>무엇이 공간을 먹는지 분류 → 리텐션 동적 축소</td>
+              <td>세그먼트 파일 직접 삭제, 토픽 삭제</td>
+            </tr>
+            <tr>
+              <th scope="row">리텐션을 줄였는데 공간이 안 준다</th>
+              <td>세그먼트 롤 여부, <code>log.retention.check.interval.ms</code>(5분)</td>
+              <td>브로커 재시작</td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머가 계속 리밸런스</th>
+              <td>배치 처리 시간과 <code>max.poll.interval.ms</code>, 멤버 수 변동</td>
+              <td><code>session.timeout.ms</code>만 늘리기</td>
+            </tr>
+            <tr>
+              <th scope="row">lag이 계속 늘어난다</th>
+              <td>파티션별 lag 분포, URP 여부, 유입량 변화</td>
+              <td>컨슈머를 파티션 수 이상으로 늘리기, 오프셋 리셋</td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머가 죽었는데 lag 알림이 없었다</th>
+              <td><code>records-lag-max</code>가 <strong>컨슈머 발행</strong>임을 확인</td>
+              <td>알림 임계값 하향</td>
+            </tr>
+            <tr>
+              <th scope="row">외부 클라이언트가 붙지 못한다</th>
+              <td><code>advertised.listeners</code>와 인증서 SAN</td>
+              <td>포트 변경, 리스너 추가</td>
+            </tr>
+            <tr>
+              <th scope="row">인증에 실패한다</th>
+              <td><code>security.protocol</code> 일치 → <code>sasl.mechanism</code> 허용 여부 → 자격증명 존재</td>
+              <td><code>allow.everyone.if.no.acl.found=true</code></td>
+            </tr>
+            <tr>
+              <th scope="row">프로듀서는 되고 컨슈머만 실패</th>
+              <td>오류 이름(<code>GROUP_AUTHORIZATION_FAILED</code>) 확인 → 그룹 ACL</td>
+              <td>토픽 ACL 재부여</td>
+            </tr>
+            <tr>
+              <th scope="row">보안을 켠 뒤 브로커가 안 뜬다</th>
+              <td>리스너 이름이 map에 있는지, 컨트롤러 리스너 충돌</td>
+              <td>인증서 재발급</td>
+            </tr>
+            <tr>
+              <th scope="row">Connect 워커가 죽었다. 예외를 보려면</th>
+              <td>죽은 노드 로컬 로그 + 다른 워커의 <code>status</code> 응답 <code>trace</code></td>
+              <td>죽은 워커의 REST 호출</td>
+            </tr>
+            <tr>
+              <th scope="row">Connect REST가 <code>409</code></th>
+              <td>리밸런스 진행 여부 → 잠시 후 재시도</td>
+              <td>커넥터 삭제·재생성</td>
+            </tr>
+            <tr>
+              <th scope="row">워커를 늘렸는데 처리량이 그대로</th>
+              <td><code>tasks.max</code>(기본 <strong>1</strong>)와 실제 태스크 수</td>
+              <td>워커 추가</td>
+            </tr>
+            <tr>
+              <th scope="row">MM2 페일오버 후 컨슈머가 처음부터 읽음</th>
+              <td><code>sync.group.offsets.enabled</code>(기본 <strong>false</strong>)</td>
+              <td>오프셋 수동 리셋</td>
+            </tr>
+            <tr>
+              <th scope="row">롤링 재시작 후 특정 브로커만 CPU 높음</th>
+              <td><code>PreferredReplicaImbalanceCount</code></td>
+              <td>파티션 재할당</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · 전 섹션 공통">
+        <p>
+          이 표를 관통하는 원칙은 하나입니다 —
+          <strong>진단이 조치보다 먼저, 가역적인 조치가 비가역적인 조치보다 먼저.</strong>
+          선택지 중에 "확인한다 / 조회한다 / 메트릭을 본다"가 있고
+          나머지가 "바꾼다 / 재시작한다 / 삭제한다"라면, 앞의 것이 정답일 확률이 높습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="question-type-strategy">
+      <h2 id="question-type-strategy">문항 유형 3종별 접근법</h2>
+
+      <h3 id="type-mc">multiple-choice</h3>
+      <ul>
+        <li><strong>"먼저", "가장 적절한", "우선"</strong>이라는 단어를 먼저 찾으세요. 이 단어가 있으면 순서를 묻는 문항입니다.</li>
+        <li>선택지에 <strong>절대적 표현</strong>("항상", "절대", "모든", "전혀")이 있으면 오답일 가능성이 높습니다.</li>
+        <li>설정 이름이 나오면 <strong>소속</strong>을 확인하세요. 브로커 설정을 컨슈머 설정처럼 써 놓은 오답이 흔합니다.</li>
+        <li>기본값이 나오면 <strong>미묘하게 틀린 값</strong>을 경계하세요 —
+            1048576과 1048588, 30000과 300000, 3과 5가 대표적입니다.</li>
+      </ul>
+
+      <h3 id="type-matching">matching (연결형)</h3>
+      <ul>
+        <li>확실한 쌍부터 채우고, 남은 것을 소거로 맞춥니다. <strong>먼저 확실한 것을 고정</strong>하는 것이 핵심입니다.</li>
+        <li>이 유형에서 나오는 축은 대개 셋입니다 —
+            <strong>메트릭 ↔ 의미</strong>, <strong>설정 ↔ 소속(브로커/토픽/클라이언트)</strong>,
+            <strong>CLI 옵션 ↔ 목적</strong>.</li>
+        <li>보기가 정답 수보다 많을 수 있습니다(미끼). 1:1 대응을 가정해 역추론하지 마세요.</li>
+        <li>가장 자주 나오는 혼동 쌍:
+            <code>UnderReplicatedPartitions</code> vs <code>UnderMinIsrPartitionCount</code>,
+            <code>SASL_PLAINTEXT</code> vs <code>SASL_SSL</code>,
+            <code>listeners</code> vs <code>advertised.listeners</code>,
+            source 오프셋 저장 위치 vs sink 오프셋 저장 위치.</li>
+      </ul>
+
+      <h3 id="type-ordering">list order (순서 배열)</h3>
+      <ul>
+        <li><strong>첫 단계와 마지막 단계를 먼저 확정</strong>하면 가운데는 대개 자동으로 정해집니다.</li>
+        <li>Kafka 운영 절차의 공통 골격은
+            <strong>확인 → 준비 → 실행 → 검증 → 원복/해제</strong>입니다. 이 골격에 맞춰 배열하세요.</li>
+        <li>반드시 외울 절차 4개:
+          <ol>
+            <li><strong>파티션 재할당</strong>: 계획 생성(<code>--generate</code>) → 현재 배치 저장 →
+                실행(<code>--execute --throttle</code>) → 확인 및 스로틀 해제(<code>--verify</code>)</li>
+            <li><strong>4.3 롤링 업그레이드</strong>: 전제 확인(KRaft·최소 3.3.x) → 브로커 한 대씩 교체·재시작 →
+                동작·성능 검증 → <code>kafka-features.sh upgrade --release-version 4.3</code>로 확정</li>
+            <li><strong>컨트롤러 추가</strong>: 동적 쿼럼 확인 → <code>--no-initial-controllers</code>로 포맷 →
+                기동 → <code>describe --replication</code>으로 따라잡기 확인 → <code>add-controller</code></li>
+            <li><strong>무중단 보안 적용</strong>: 보안 리스너 추가 + 롤링 → 클라이언트 이전 →
+                브로커 간 통신 전환 + 롤링 → 기존 리스너 제거 + 롤링</li>
+          </ol>
+        </li>
+        <li>컨트롤러 <strong>제거</strong>는 순서가 반대입니다 —
+            <code>remove-controller</code>를 먼저, 노드 종료는 그 다음입니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="numbers">
+      <h2 id="numbers">반드시 외울 숫자</h2>
+
+      <p>
+        운영자 시험에서 확실하게 득점할 수 있는 부분입니다. 근사값으로 외우면 경계값 문항에서 틀립니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Kafka 4.3 기준 — 시험에 자주 나오는 값</caption>
+          <thead>
+            <tr><th scope="col">항목</th><th scope="col">값</th><th scope="col">함정</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>message.max.bytes</code></th><td><strong>1048588</strong></td><td>1MB(1048576)가 아닙니다. <strong>압축 후 배치</strong> 기준</td></tr>
+            <tr><th scope="row"><code>retention.ms</code></th><td>604800000 (7일)</td><td><code>segment.ms</code>도 같은 값입니다</td></tr>
+            <tr><th scope="row"><code>retention.bytes</code></th><td><strong>-1</strong> (무제한)</td><td>크기 리텐션은 기본적으로 <strong>꺼져 있습니다</strong></td></tr>
+            <tr><th scope="row"><code>log.segment.bytes</code></th><td>1073741824 (1 GiB)</td><td>—</td></tr>
+            <tr><th scope="row"><code>log.retention.check.interval.ms</code></th><td>300000 (5분)</td><td>리텐션이 즉시 안 듣는 이유</td></tr>
+            <tr><th scope="row"><code>num.partitions</code> / <code>default.replication.factor</code></th><td>1 / <strong>1</strong></td><td>자동 생성 토픽이 RF=1이 되는 원인</td></tr>
+            <tr><th scope="row"><code>min.insync.replicas</code></th><td><strong>1</strong></td><td>RF=3이어도 기본값이면 <code>acks=all</code>이 리더 하나로 성공</td></tr>
+            <tr><th scope="row"><code>unclean.leader.election.enable</code></th><td>false</td><td>—</td></tr>
+            <tr><th scope="row"><code>replica.lag.time.max.ms</code></th><td>30000</td><td><code>read-only</code> — 동적으로 못 바꿉니다</td></tr>
+            <tr><th scope="row"><code>offsets.topic.replication.factor</code></th><td>3</td><td>브로커 3대 미만이면 실습에서 실패합니다</td></tr>
+            <tr><th scope="row"><code>transaction.state.log.replication.factor</code> / <code>.min.isr</code></th><td>3 / <strong>2</strong></td><td>둘이 다릅니다</td></tr>
+            <tr><th scope="row"><code>num.io.threads</code> / <code>num.network.threads</code></th><td>8 / 3</td><td>바꿔 놓은 오답이 자주 나옵니다</td></tr>
+            <tr><th scope="row"><code>num.replica.fetchers</code></th><td><strong>1</strong></td><td>복제가 느릴 때 첫 후보</td></tr>
+            <tr><th scope="row">Idle percent 기준</th><td><strong>&gt; 0.3</strong></td><td>유휴 비율이므로 <strong>높은 게 좋습니다</strong></td></tr>
+            <tr><th scope="row">컨트롤러 수</th><td><strong>3 또는 5</strong> (<code>2N+1</code>)</td><td>4대는 3대와 내결함성이 같습니다</td></tr>
+            <tr><th scope="row">컨트롤러 리소스</th><td>메모리 5GB · 디스크 5GB</td><td>—</td></tr>
+            <tr><th scope="row"><code>controller.quorum.fetch.timeout.ms</code></th><td>2000</td><td><code>election.timeout.ms</code>는 1000</td></tr>
+            <tr><th scope="row">랙 분산</th><td><code>min(랙 수, RF)</code></td><td>나중에 <code>broker.rack</code>을 붙여도 기존 배치는 안 바뀝니다</td></tr>
+            <tr><th scope="row">파일 디스크립터</th><td>최소 100000</td><td>세그먼트 1개 = map area <strong>2개</strong></td></tr>
+            <tr><th scope="row">Java</th><td>17 · 21 · 25</td><td>8은 4.0에서 제거. 브로커 최소 17</td></tr>
+            <tr><th scope="row">4.3 업그레이드 최소 버전</th><td>3.3.x</td><td>더 오래된 KRaft는 3.9.x 경유 권장</td></tr>
+            <tr><th scope="row">Connect 내부 토픽 파티션</th><td>config <strong>1</strong> / offset 25 / status 5</td><td>config는 반드시 1</td></tr>
+            <tr><th scope="row"><code>scheduled.rebalance.max.delay.ms</code></th><td>300000 (5분)</td><td>워커 이탈 후 태스크가 5분간 미할당</td></tr>
+            <tr><th scope="row"><code>tasks.max</code></th><td><strong>1</strong></td><td>Connect 스케일링 사고 1위</td></tr>
+            <tr><th scope="row"><code>errors.tolerance</code></th><td><code>none</code></td><td>첫 오류에 태스크 FAILED</td></tr>
+            <tr><th scope="row">MM2 <code>replication.factor</code></th><td><strong>2</strong></td><td>3이 아닙니다</td></tr>
+            <tr><th scope="row">MM2 <code>sync.group.offsets.enabled</code></th><td><strong>false</strong></td><td>페일오버 사고의 원인</td></tr>
+            <tr><th scope="row"><code>max.poll.interval.ms</code> / <code>max.poll.records</code></th><td>300000 / 500</td><td>리밸런스 스톰의 두 축</td></tr>
+            <tr><th scope="row"><code>session.timeout.ms</code> / <code>heartbeat.interval.ms</code></th><td>45000 / 3000</td><td>세션은 3.x에서 10000이었습니다</td></tr>
+            <tr><th scope="row"><code>group.protocol</code></th><td><strong><code>classic</code></strong></td><td>KIP-848은 4.0 GA지만 <strong>기본값 아님</strong></td></tr>
+            <tr><th scope="row">SCRAM 반복 횟수</th><td>기본·최소 <strong>4096</strong></td><td>—</td></tr>
+            <tr><th scope="row"><code>ssl.client.auth</code></th><td><code>none</code></td><td>mTLS를 켜도 이걸 안 바꾸면 인증 안 됩니다</td></tr>
+            <tr><th scope="row"><code>sasl.enabled.mechanisms</code></th><td><code>GSSAPI</code></td><td>SCRAM은 명시해야 열립니다</td></tr>
+            <tr><th scope="row"><code>super.users</code> 구분자</th><td><strong>세미콜론</strong></td><td>콤마가 아닙니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="answering-strategy">
+      <h2 id="answering-strategy">선택지 소거 원칙</h2>
+
+      <div class="table-scroll">
+        <table>
+          <caption>오답 유도 패턴과 식별법</caption>
+          <thead>
+            <tr><th scope="col">패턴</th><th scope="col">예</th><th scope="col">식별법</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">순서를 뒤집은 선택지</th>
+              <td>"<code>--verify</code> 후 <code>--execute</code>"</td>
+              <td>절차 문항은 골격(확인 → 준비 → 실행 → 검증)에 맞는지 봅니다</td>
+            </tr>
+            <tr>
+              <th scope="row">비가역 조치를 앞세운 선택지</th>
+              <td>"먼저 unclean 선출을 활성화한다"</td>
+              <td>유실·삭제를 동반하는 조치는 첫 단계가 아닙니다</td>
+            </tr>
+            <tr>
+              <th scope="row">재시작으로 해결하는 선택지</th>
+              <td>"브로커를 재시작한다"</td>
+              <td>진단 단계를 건너뛴 조치입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">설정 소속을 바꿔 놓은 선택지</th>
+              <td>컨슈머의 <code>max.poll.records</code>를 브로커 설정으로 서술</td>
+              <td>설정이 브로커/토픽/프로듀서/컨슈머 중 어디 것인지 확인합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">기본값을 미묘하게 바꾼 선택지</th>
+              <td>1048576 / 30000 / RF 3</td>
+              <td><a href="#numbers">숫자 표</a>를 그대로 외워 둡니다</td>
+            </tr>
+            <tr>
+              <th scope="row">인증과 인가를 섞은 선택지</th>
+              <td>"인증을 켰으니 ACL도 적용된다"</td>
+              <td>둘은 <strong>별개의 스위치</strong>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">현행이 아닌 아키텍처를 전제한 선택지</th>
+              <td>메타데이터를 외부 코디네이션 서비스에서 조회한다는 서술</td>
+              <td>4.x는 KRaft 전용입니다. 메타데이터는 <code>__cluster_metadata</code>에 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">절대적 표현</th>
+              <td>"항상", "모든 경우에", "절대"</td>
+              <td>Kafka는 거의 모든 동작에 조건이 붙습니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="time-management">시간 운영 — 문항 수를 모를 때</h3>
+
+      <p>
+        문항 수가 공개되지 않으므로 "문항당 몇 초"를 계산할 수 없습니다.
+        대신 <strong>진행률 기준</strong>으로 운영합니다.
+      </p>
+
+      <ol>
+        <li><strong>1차 통과</strong>: 전체를 한 번 훑으며 <strong>즉시 답이 보이는 것만</strong> 답합니다.
+            망설이면 표시하고 넘어갑니다. 목표는 <strong>전체 시간의 절반 안에 끝까지 도달</strong>하는 것입니다.</li>
+        <li><strong>2차 통과</strong>: 표시한 문항을 다시 봅니다.
+            시나리오 문항은 여기서 <a href="#symptom-patterns">패턴표</a>를 떠올려 풉니다.</li>
+        <li><strong>3차 통과</strong>: 남은 시간에 list order와 matching을 재검토합니다.
+            이 두 유형은 한 칸만 어긋나도 전체가 틀리므로 검산 효과가 가장 큽니다.</li>
+        <li><strong>빈칸을 남기지 않습니다.</strong> 오답 감점 정책은 공개되어 있지 않으므로 비워 두는 것이 이득일 근거가 없습니다.</li>
+      </ol>
+
+      <aside class="note" data-label="긴 지문 읽는 법">
+        <p>
+          시나리오 지문은 <strong>뒤에서부터</strong> 읽는 것이 빠릅니다.
+          마지막 문장이 질문(무엇을 먼저 하는가 / 원인은 무엇인가 / 어떤 설정인가)이고,
+          그것을 먼저 알면 지문에서 찾아야 할 정보가 정해집니다.
+          지문의 숫자와 메트릭 이름에 표시를 하며 읽으세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="final-checklist">
+      <h2 id="final-checklist">최종 체크리스트</h2>
+
+      <p>시험 직전 10분에 이것만 확인하세요. 하나라도 막히면 해당 섹션 페이지의 요약 표만 다시 봅니다.</p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>섹션별 자기 점검 질문</caption>
+          <thead>
+            <tr><th scope="col">섹션</th><th scope="col">이 질문에 즉시 답할 수 있는가</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><a href="domain-fundamentals.html">Kafka Fundamentals</a></th>
+              <td>high watermark는 어떻게 결정되는가. RF=3 · <code>min.insync.replicas=2</code>에서 브로커 2대를 잃으면 쓰기와 데이터는 각각 어떻게 되는가.</td>
+            </tr>
+            <tr>
+              <th scope="row"><a href="domain-security.html">Kafka Security</a></th>
+              <td>4개 보안 프로토콜 중 자격증명이 평문으로 흐르는 것은. ACL이 없는 리소스의 기본 동작은.</td>
+            </tr>
+            <tr>
+              <th scope="row"><a href="domain-connect.html">Kafka Connect</a></th>
+              <td>죽은 워커의 태스크 예외를 어디서 보는가. 내부 토픽 3종의 파티션 요구는.</td>
+            </tr>
+            <tr>
+              <th scope="row"><a href="domain-deployment.html">Deployment Architecture</a></th>
+              <td>컨트롤러 5대는 몇 대까지 잃어도 되는가. combined 모드가 권장되지 않는 이유는.</td>
+            </tr>
+            <tr>
+              <th scope="row"><a href="domain-cluster-config.html">Cluster Configuration</a></th>
+              <td>재할당 3단계와 스로틀 해제 시점은. 파티션 수는 줄일 수 있는가.</td>
+            </tr>
+            <tr>
+              <th scope="row"><a href="domain-observability.html">Observability</a></th>
+              <td><code>ActiveControllerCount</code>의 정상값은. <code>records-lag-max</code>는 누가 발행하는가.</td>
+            </tr>
+            <tr>
+              <th scope="row"><a href="domain-troubleshooting.html">Troubleshooting</a></th>
+              <td>디스크가 찼을 때 가장 먼저 하는 것과 절대 하지 말아야 할 것은.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--ok" data-label="시험장에 들고 가는 세 문장">
+        <p>
+          ① <strong>진단이 조치보다 먼저다.</strong>
+          ② <strong>가역적인 조치가 비가역적인 조치보다 먼저다.</strong>
+          ③ <strong>기본값이 안전한 쪽일 것이라 가정하지 않는다</strong>
+          (<code>min.insync.replicas=1</code>, <code>ssl.client.auth=none</code>,
+          <code>authorizer.class.name</code> 비어 있음, <code>retention.bytes=-1</code>).
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="index.html">
+          <span class="card__title">CCAAK 개요 · 학습 플랜</span>
+          <span class="card__desc">시험 조건, CCDAK와의 차이, 4주 플랜과 실습 필수 항목.</span>
+          <span class="card__meta">되돌아가기</span>
+        </a></li>
+        <li><a class="card" href="domain-troubleshooting.html">
+          <span class="card__title">Troubleshooting</span>
+          <span class="card__desc">여섯 시나리오의 전체 절차. 시나리오 문항 대비의 본진.</span>
+          <span class="card__meta">최우선 복습</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/troubleshooting.html">
+          <span class="card__title">트러블슈팅 결정 트리</span>
+          <span class="card__desc">증상별 분기 플로우차트 모음.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정값 치트시트</span>
+          <span class="card__desc">기본값 전체 목록. 숫자 암기 확인용.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/metrics.html">
+          <span class="card__title">JMX 메트릭 치트시트</span>
+          <span class="card__desc">메트릭 이름과 정상값. matching 대비.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../quiz/index.html">
+          <span class="card__title">문제 풀이 허브</span>
+          <span class="card__desc">7개 섹션 미니 퀴즈를 한곳에서 이어서 풉니다.</span>
+          <span class="card__meta">마무리</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://www.confluent.io/certification/" rel="noopener noreferrer">Confluent Certification for Apache Kafka</a> — 90분, USD 150, 문항 유형 3종, 재응시 7일, 유효 기간 2년. 문항 수·합격 점수는 공개되지 않습니다</li>
+        <li><a href="https://kafka.apache.org/documentation/#monitoring" rel="noopener noreferrer">Monitoring</a> — 메트릭 이름과 정상값</li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops" rel="noopener noreferrer">Basic Kafka Operations</a> — 재할당·쿼터·오프셋 리셋 절차</li>
+        <li><a href="https://kafka.apache.org/documentation/#kraft" rel="noopener noreferrer">KRaft</a> — 컨트롤러 사이징과 멤버십 변경 절차</li>
+        <li><a href="https://kafka.apache.org/documentation/#upgrade" rel="noopener noreferrer">Upgrading Apache Kafka</a> — 롤링 업그레이드 절차와 최소 버전</li>
+        <li><a href="https://kafka.apache.org/documentation/#security" rel="noopener noreferrer">Security</a> — 프로토콜·SASL·ACL 기본 동작</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect" rel="noopener noreferrer">Kafka Connect</a> — 워커 운영과 REST</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

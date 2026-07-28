@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>케이스 4 · 같은 주문의 상태가 뒤바뀌어 저장됐다 — Kafka Guide</title>
+  <meta name="description" content="메시지 키를 지정하지 않아 같은 주문의 상태 전이 이벤트가 여러 파티션으로 흩어지고 순서 보장이 사라진 사고. 기본 파티셔너 동작, 순서 보장의 실제 단위, 키 도입 시 발생하는 마이그레이션 문제를 다룹니다.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="cases" data-page="case04"></div>
+
+  <main id="main" class="page" data-page-id="cases/case04">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="case01.html">실수 케이스</a></li>
+        <li><span aria-current="page">케이스 4 · 상태가 뒤바뀌어 저장됐다</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실수 케이스 · 4</p>
+      <h1>같은 주문의 상태가 뒤바뀌어 저장됐다</h1>
+      <p class="page__lead">
+        "배송중이던 주문이 갑자기 결제완료로 돌아갔다"는 CS 문의가 하루 200건 들어왔습니다.
+        코드에는 버그가 없었고, Kafka에도 에러가 하나도 없었습니다.
+        원인은 <code>ProducerRecord</code>에 <strong>키를 넣지 않았다</strong>는 것 하나였습니다.
+        Kafka의 순서 보장은 토픽이 아니라 <strong>파티션 단위</strong>이고, 키가 없으면 그 근거 자체가 없어집니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 케이스에서 얻어 갈 것</h2>
+      <ul>
+        <li>순서 보장의 단위가 <strong>토픽-파티션</strong>이며, 키가 없으면 순서를 기대할 근거가 없다는 것을 설명할 수 있습니다.</li>
+        <li>4.x 기본 파티셔너가 <strong>키가 없을 때</strong> 어떻게 파티션을 고르는지 정확히 압니다.</li>
+        <li>파티션 내부에서도 순서가 깨질 수 있는 조건(<code>max.in.flight</code>과 재시도)을 구분할 수 있습니다.</li>
+        <li>키를 뒤늦게 도입할 때 생기는 <strong>과거 데이터와의 불일치 문제</strong>를 어떻게 다룰지 압니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="situation">
+      <h2 id="situation">상황</h2>
+
+      <p>
+        주문 상태 파이프라인입니다. <code>order-status</code> 토픽은
+        <strong>파티션 24개, 복제 계수 3</strong>, 브로커 3대에서 <strong>일 120만 건</strong>의 상태 전이 이벤트를 받습니다.
+        주문 하나는 평균 6번 상태가 바뀝니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>상태 전이 — 순서가 뒤집히면 의미가 완전히 달라집니다</figcaption>
+        <pre><code class="lang-text">CREATED → PAID → PREPARING → SHIPPED → DELIVERED
+                     ↘ CANCELLED</code></pre>
+      </figure>
+
+      <p>
+        컨슈머는 이벤트를 받아 주문 조회용 읽기 모델(PostgreSQL)에 <code>UPSERT</code>합니다.
+        컨슈머 파드는 <strong>8개</strong>이고 각각 파티션 3개를 맡습니다.
+        주문량이 늘면 파드를 늘리는 방식으로 3년 동안 잘 운영됐습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>OrderStatusProducer.java — 이 한 줄이 사고의 전부입니다</figcaption>
+        <pre><code class="lang-java">public void publish(OrderStatusChanged event) {
+    // 키를 지정하지 않았습니다.
+    // 같은 주문의 이벤트가 서로 다른 파티션으로 흩어집니다.
+    producer.send(new ProducerRecord&lt;&gt;("order-status", toJson(event)));
+}</code></pre>
+      </figure>
+
+      <p>
+        문제는 트래픽이 늘면서 드러났습니다. 파티션 수를 12에서 24로 늘리고 컨슈머 파드를 4개에서 8개로 올린 뒤,
+        <strong>같은 주문의 두 이벤트가 서로 다른 파티션에 들어가 서로 다른 파드에서 동시에 처리될 확률</strong>이 크게 올라갔습니다.
+        <code>SHIPPED</code>를 처리한 파드가 먼저 커밋하고, 몇십 밀리초 뒤 다른 파드가 <code>PAID</code>를 처리해
+        읽기 모델을 덮어썼습니다.
+      </p>
+
+      <aside class="note note--danger" data-label="이 사고의 성질">
+        <p>
+          이 사고는 <strong>확률적으로 발생합니다.</strong> 트래픽이 적으면 거의 나타나지 않고,
+          늘어나면 비율이 올라갑니다. 그래서 "부하가 커지니까 생긴 새로운 버그"로 오진하기 쉽습니다.
+          실제로는 <strong>3년 전부터 있었던 설계 결함</strong>이며, 파티션과 컨슈머를 늘리면서 확률이 드러난 것뿐입니다.
+        </p>
+        <p>
+          Kafka는 어떤 에러도 남기지 않습니다. 프로듀서·컨슈머·브로커 모두 정상 동작이기 때문입니다.
+          <strong>이 케이스는 로그로 진단할 수 없고 데이터로만 진단됩니다.</strong>
+        </p>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-113">
+        <figcaption>
+          키가 없을 때 순서 보장이 사라지는 경로 —
+          같은 주문의 이벤트가 여러 파티션으로 분산되고, 파티션별로 다른 컨슈머가 병렬 처리하면서 적용 순서가 역전됩니다
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="symptoms">
+      <h2 id="symptoms">관측된 증상</h2>
+
+      <h3 id="metrics-shape">메트릭이 어떻게 보였는가</h3>
+      <ul>
+        <li><strong>Kafka 지표 전부 정상.</strong> lag 0, 리밸런스 없음, 프로듀서 에러율 0, 컨슈머 에러율 0.</li>
+        <li><strong>CS 문의 건수</strong>: 파티션 증설 배포 다음 날부터 하루 40건 → 200건으로 증가.</li>
+        <li><strong>DB 감사 로그</strong>: 같은 <code>order_id</code>에 대해 상태가 <strong>역행</strong>한 <code>UPDATE</code>가 하루 1,800건. 전체의 약 0.15%.</li>
+        <li><strong>이벤트 <code>event_time</code> vs DB <code>updated_at</code></strong>: 두 값의 순서가 어긋난 행이 존재. 이것이 결정적 단서였습니다.</li>
+      </ul>
+
+      <h3 id="db-evidence">DB에서 본 증거</h3>
+      <figure class="code">
+        <figcaption>읽기 모델에서 역행을 찾는 쿼리</figcaption>
+        <pre><code class="lang-sql">-- 상태 전이 순서를 숫자로 정의해 두고 역행을 찾습니다
+WITH ordered AS (
+  SELECT order_id, status, event_time, applied_at,
+         LAG(status)     OVER (PARTITION BY order_id ORDER BY applied_at) AS prev_status,
+         LAG(event_time) OVER (PARTITION BY order_id ORDER BY applied_at) AS prev_event_time
+  FROM order_status_audit
+)
+SELECT order_id, prev_status, status, prev_event_time, event_time
+FROM ordered
+WHERE event_time &lt; prev_event_time     -- 나중에 적용된 이벤트가 더 과거에 발생함
+ORDER BY applied_at DESC
+LIMIT 20;
+
+ order_id  | prev_status | status | prev_event_time         | event_time
+-----------+-------------+--------+-------------------------+-------------------------
+ ORD-91882 | SHIPPED     | PAID   | 2026-07-24 11:04:19.221 | 2026-07-24 11:04:18.907
+ ORD-91903 | DELIVERED   | SHIPPED| 2026-07-24 11:04:22.010 | 2026-07-24 11:04:21.664
+ ORD-92014 | CANCELLED   | PAID   | 2026-07-24 11:05:02.338 | 2026-07-24 11:05:01.995</code></pre>
+      </figure>
+
+      <h3 id="kafka-evidence">Kafka에서 본 증거</h3>
+      <p>
+        문제 주문 하나를 골라 토픽 전체를 뒤졌습니다.
+        <code>kafka-console-consumer</code>의 formatter 속성으로 파티션·오프셋·타임스탬프·키를 함께 출력하면
+        <strong>같은 주문이 여러 파티션에 흩어진 것</strong>이 바로 보입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>파티션·오프셋·키를 모두 출력해 확인</figcaption>
+        <pre><code class="lang-bash">$ kafka-console-consumer.sh --bootstrap-server kafka-1:9092 \
+    --topic order-status --from-beginning --timeout-ms 60000 \
+    --property print.timestamp=true \
+    --property print.partition=true \
+    --property print.offset=true \
+    --property print.key=true \
+    | grep ORD-91882
+
+CreateTime:1761296658907	Partition:17	Offset:2044119	null	{"orderId":"ORD-91882","status":"PAID","eventTime":"2026-07-24T11:04:18.907"}
+CreateTime:1761296659221	Partition:4	Offset:1980332	null	{"orderId":"ORD-91882","status":"SHIPPED","eventTime":"2026-07-24T11:04:19.221"}
+CreateTime:1761296657441	Partition:17	Offset:2044101	null	{"orderId":"ORD-91882","status":"CREATED","eventTime":"2026-07-24T11:04:17.441"}</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="이 출력에서 읽을 것">
+        <ul>
+          <li><strong><code>null</code></strong> — 키가 없습니다. 이것이 원인입니다.</li>
+          <li><strong><code>Partition:17</code>과 <code>Partition:4</code></strong> — 같은 주문의 이벤트가 두 파티션에 나뉘어 있습니다.</li>
+          <li>
+            파티션이 다르면 <strong>Kafka는 두 레코드의 상대 순서에 대해 어떤 보장도 하지 않습니다.</strong>
+            컨슈머 파드가 다르면 처리 순서는 완전히 우연에 맡겨집니다.
+          </li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="root-cause">
+      <h2 id="root-cause">원인 분석</h2>
+
+      <h3 id="step1-ordering-scope">1단계 — 순서 보장의 범위를 정확히 안다</h3>
+      <p>
+        Kafka는 <strong>특정 토픽-파티션의 컨슈머가 그 파티션의 레코드를 기록된 순서 그대로 읽는 것</strong>을 보장합니다.
+        보장 범위는 여기까지입니다. 토픽 전체를 가로지르는 전역 순서는 존재하지 않고, 전역 오프셋도 없습니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>순서가 보장되는 범위와 그것을 깨는 조건</caption>
+          <thead>
+            <tr>
+              <th scope="col">범위</th>
+              <th scope="col">보장</th>
+              <th scope="col">깨지는 조건</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">같은 파티션 안</th>
+              <td class="t-center"><span class="mark-ok">보장</span></td>
+              <td>멱등성을 끄고 <code>max.in.flight.requests.per.connection &gt; 1</code>로 재시도가 일어난 경우</td>
+            </tr>
+            <tr>
+              <th scope="row">같은 키 (파티션 수 고정)</th>
+              <td class="t-center"><span class="mark-ok">보장</span></td>
+              <td><strong>파티션 수를 늘리면 키의 배치가 바뀜</strong> — 그 시점을 경계로 순서 근거가 끊김</td>
+            </tr>
+            <tr>
+              <th scope="row">서로 다른 파티션 사이</th>
+              <td class="t-center"><span class="mark-no">보장 없음</span></td>
+              <td>항상. 애초에 보장 대상이 아님</td>
+            </tr>
+            <tr>
+              <th scope="row">키 없는 레코드 사이</th>
+              <td class="t-center"><span class="mark-no">보장 없음</span></td>
+              <td>항상. 파티셔너가 파티션을 자유롭게 바꿈</td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머가 워커 풀로 넘긴 뒤</th>
+              <td class="t-center"><span class="mark-no">보장 없음</span></td>
+              <td>병렬 처리하는 순간 파티션 내 순서도 무의미해짐</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="step2-partitioner">2단계 — 기본 파티셔너가 키 없는 레코드를 어떻게 다루는가</h3>
+      <p>
+        <code>partitioner.class</code>의 기본값은 <strong><code>null</code></strong>이며,
+        이때 내장 기본 파티셔닝 로직이 쓰입니다. 공식 설명은 다음 세 갈래입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>기본 파티셔닝 로직 (<code>partitioner.class</code> 미지정 시)</caption>
+          <thead>
+            <tr><th scope="col">입력</th><th scope="col">파티션 결정 방식</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">파티션을 명시했다</th>
+              <td>그 파티션을 그대로 사용</td>
+            </tr>
+            <tr>
+              <th scope="row">파티션은 없고 <strong>키가 있다</strong></th>
+              <td><strong>키의 해시</strong>로 파티션을 선택 → 같은 키는 항상 같은 파티션</td>
+            </tr>
+            <tr>
+              <th scope="row">파티션도 키도 없다</th>
+              <td><strong>sticky 파티션</strong>을 사용하며, 그 파티션에 <code>batch.size</code> 바이트 이상이 쌓이면 다른 파티션으로 바뀜</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="sticky 는 순서 보장이 아닙니다">
+        <p>
+          키가 없을 때 sticky 파티셔닝이 동작하므로 <strong>연속한 몇 건은 우연히 같은 파티션에 들어갑니다.</strong>
+          그래서 저부하에서는 사고가 거의 나타나지 않습니다.
+          하지만 sticky 파티션은 <code>batch.size</code>(기본 16384바이트)만큼 쌓이면 <strong>바뀝니다.</strong>
+          주문 하나의 상태 전이가 몇 초에 걸쳐 발생한다면 그 사이 sticky 파티션은 수십 번 바뀝니다.
+          <strong>sticky는 배치 효율을 위한 것이고 순서 보장 장치가 아닙니다.</strong>
+        </p>
+      </aside>
+
+      <h3 id="step3-in-flight">3단계 — 파티션 안에서도 순서가 깨질 수 있다</h3>
+      <p>
+        키를 넣어 같은 파티션에 보내더라도 프로듀서 설정에 따라 순서가 뒤집힐 수 있습니다.
+        공식 문서가 명시하는 조건입니다.
+      </p>
+
+      <aside class="note note--danger" data-label="순서를 깨는 프로듀서 설정 조합">
+        <p>
+          <code>enable.idempotence=false</code>이고 재시도가 허용되며
+          <code>max.in.flight.requests.per.connection &gt; 1</code>이면,
+          같은 파티션으로 보낸 두 배치 중 <strong>첫 번째가 실패해 재시도되고 두 번째가 성공</strong>하는 경우
+          두 번째 배치의 레코드가 먼저 로그에 들어갑니다.
+        </p>
+        <p>
+          4.x 기본값은 <code>enable.idempotence=true</code>,
+          <code>max.in.flight.requests.per.connection=5</code>입니다.
+          <strong>멱등성이 켜져 있으면 in-flight 5까지 순서가 보장됩니다.</strong>
+          시퀀스 번호로 브로커가 순서를 강제하기 때문입니다.
+          즉 <strong>기본값을 건드리지 않는 것이 가장 안전합니다.</strong>
+        </p>
+      </aside>
+
+      <p>
+        멱등 프로듀서와 시퀀스 번호의 동작은 <a href="../basics/ch04.html">4장 Producer 심화</a>에서,
+        전달 보장 전체 그림은 <a href="../basics/ch06.html">6장 전달 보장과 트랜잭션</a>에서 다룹니다.
+      </p>
+
+      <h3 id="step4-partition-change">4단계 — 파티션 증설이 순서 근거를 끊는다</h3>
+      <p>
+        이 사고에서 키를 도입하기로 결정한 뒤 두 번째 문제가 나왔습니다.
+        <strong>키가 있어도 파티션 수가 바뀌면 같은 키가 다른 파티션으로 갑니다.</strong>
+        공식 운영 문서가 이 부작용을 명시합니다.
+      </p>
+
+      <aside class="note note--warn" data-label="공식 문서가 경고하는 파티션 증설 부작용">
+        <ul>
+          <li>
+            <strong>키 분배 변화</strong> — 기본 파티셔너의 매핑 로직이 파티션 수에 의존하므로,
+            증설 후 <strong>같은 키가 다른 파티션으로 라우팅</strong>될 수 있고 기존 키의 순서 보장이 영향을 받습니다.
+            Kafka는 기존 데이터를 <strong>자동 재분배하지 않습니다.</strong>
+          </li>
+          <li>
+            <strong><code>auto.offset.reset=latest</code> 컨슈머의 유실 위험</strong> —
+            새 파티션 생성과 컨슈머가 그것을 인식하는 사이에 들어온 메시지를 놓칠 수 있습니다
+            (<a href="case01.html">케이스 1</a>).
+          </li>
+          <li>
+            <strong>메타데이터 전파 지연</strong> — <code>metadata.max.age.ms</code> 주기 때문에
+            새 파티션이 즉시 보이지 않아 분배가 불균등해지거나 lag이 생깁니다.
+          </li>
+          <li>
+            <strong>내부 토픽 금지</strong> — <code>__consumer_offsets</code>, <code>__transaction_state</code>,
+            <code>__share_group_state</code>, <code>__cluster_metadata</code>의 파티션 수를
+            <strong>절대 수동으로 늘리지 마세요.</strong> 코디네이터 매핑이 깨져 데이터 손상으로 이어질 수 있습니다.
+          </li>
+        </ul>
+        <p>그리고 <strong>파티션 수는 줄일 수 없습니다.</strong></p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="reproduce">
+      <h2 id="reproduce">재현 방법</h2>
+
+      <p>
+        단일 노드 KRaft 클러스터로 충분합니다. 아래 compose는 Apache Kafka의 공식 단일 노드 예제입니다.
+        3노드 구성은 <a href="../practice/ex01.html">예제 1 · 로컬 KRaft 클러스터</a>를 쓰세요.
+      </p>
+
+      <figure class="code">
+        <figcaption>docker-compose.yml — 단일 노드 KRaft</figcaption>
+        <pre><code class="lang-yaml">services:
+  broker:
+    image: apache/kafka:4.3.1
+    hostname: broker
+    container_name: broker
+    ports:
+      - '9092:9092'
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_LISTENERS: 'CONTROLLER://:29093,PLAINTEXT://:19092,PLAINTEXT_HOST://:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:19092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>재현 절차 — 키 없음 / 키 있음을 나란히 비교합니다</figcaption>
+        <pre><code class="lang-bash">docker compose up -d
+K=/opt/kafka/bin
+
+# 1. 파티션 6개 토픽
+docker exec -it broker $K/kafka-topics.sh --create --topic order-status \
+  --partitions 6 --replication-factor 1 --bootstrap-server localhost:9092
+
+# 2. 키 없이 같은 주문의 상태 전이 5건을 보낸다
+#    linger.ms=0, batch.size=1 로 두면 sticky 파티션이 매 건 바뀌어
+#    "흩어짐"이 즉시 재현됩니다
+for s in CREATED PAID PREPARING SHIPPED DELIVERED; do
+  echo "{\"orderId\":\"ORD-1\",\"status\":\"$s\"}" | \
+  docker exec -i broker $K/kafka-console-producer.sh --topic order-status \
+    --bootstrap-server localhost:9092 \
+    --producer-property linger.ms=0 --producer-property batch.size=1
+done
+
+# 3. 파티션을 함께 출력해 본다 → 여러 파티션에 흩어져 있습니다
+docker exec -it broker $K/kafka-console-consumer.sh --topic order-status \
+  --from-beginning --timeout-ms 8000 --bootstrap-server localhost:9092 \
+  --property print.partition=true --property print.offset=true \
+  --property print.key=true
+
+# CreateTime 생략
+# Partition:3	Offset:0	null	{"orderId":"ORD-1","status":"CREATED"}
+# Partition:0	Offset:0	null	{"orderId":"ORD-1","status":"PAID"}
+# Partition:5	Offset:0	null	{"orderId":"ORD-1","status":"PREPARING"}
+# Partition:1	Offset:0	null	{"orderId":"ORD-1","status":"SHIPPED"}
+# Partition:4	Offset:0	null	{"orderId":"ORD-1","status":"DELIVERED"}
+#   → 5건이 5개 파티션. 순서를 보장할 방법이 없습니다.
+
+# 4. 이제 키를 넣어 다시 보낸다
+for s in CREATED PAID PREPARING SHIPPED DELIVERED; do
+  echo "ORD-2:{\"orderId\":\"ORD-2\",\"status\":\"$s\"}" | \
+  docker exec -i broker $K/kafka-console-producer.sh --topic order-status \
+    --bootstrap-server localhost:9092 \
+    --property parse.key=true --property key.separator=: \
+    --producer-property linger.ms=0 --producer-property batch.size=1
+done
+
+# 5. 다시 확인 → ORD-2 는 전부 같은 파티션, 오프셋이 순서대로입니다
+docker exec -it broker $K/kafka-console-consumer.sh --topic order-status \
+  --from-beginning --timeout-ms 8000 --bootstrap-server localhost:9092 \
+  --property print.partition=true --property print.offset=true \
+  --property print.key=true | grep ORD-2
+
+# Partition:2	Offset:0	ORD-2	{"orderId":"ORD-2","status":"CREATED"}
+# Partition:2	Offset:1	ORD-2	{"orderId":"ORD-2","status":"PAID"}
+# Partition:2	Offset:2	ORD-2	{"orderId":"ORD-2","status":"PREPARING"}
+# Partition:2	Offset:3	ORD-2	{"orderId":"ORD-2","status":"SHIPPED"}
+# Partition:2	Offset:4	ORD-2	{"orderId":"ORD-2","status":"DELIVERED"}</code></pre>
+      </figure>
+
+      <h3 id="reproduce-repartition">변형 — 파티션 증설로 키 배치가 바뀌는 것을 확인</h3>
+      <figure class="code">
+        <figcaption>같은 키가 증설 후 다른 파티션으로 가는지 확인</figcaption>
+        <pre><code class="lang-bash"># 증설 전 ORD-2 의 파티션을 기록한 뒤
+docker exec -it broker $K/kafka-topics.sh --alter --topic order-status \
+  --partitions 12 --bootstrap-server localhost:9092
+
+# 같은 키로 다시 보내고 파티션을 비교합니다
+echo "ORD-2:{\"orderId\":\"ORD-2\",\"status\":\"REFUNDED\"}" | \
+docker exec -i broker $K/kafka-console-producer.sh --topic order-status \
+  --bootstrap-server localhost:9092 \
+  --property parse.key=true --property key.separator=:
+
+docker exec -it broker $K/kafka-console-consumer.sh --topic order-status \
+  --from-beginning --timeout-ms 8000 --bootstrap-server localhost:9092 \
+  --property print.partition=true --property print.key=true | grep ORD-2
+#   → REFUNDED 가 다른 파티션에 있을 수 있습니다.
+#     기존 데이터는 이동하지 않으므로 한 키의 이력이 두 파티션에 걸칩니다.</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="fix">
+      <h2 id="fix">해결</h2>
+
+      <h3 id="immediate">즉시 조치 — 애플리케이션에서 순서를 방어한다</h3>
+      <p>
+        키를 넣는 배포는 며칠이 걸립니다. 그동안 데이터 오염을 멈춰야 합니다.
+        읽기 모델 갱신을 <strong>이벤트 시각 기준 조건부 UPDATE</strong>로 바꿔
+        과거 이벤트가 최신 상태를 덮어쓰지 못하게 만듭니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>즉시 조치 — 역행 UPDATE 를 DB 레벨에서 차단</figcaption>
+        <pre><code class="lang-sql">-- 더 최신 이벤트가 이미 적용되어 있으면 무시합니다
+INSERT INTO order_read_model (order_id, status, event_time, updated_at)
+VALUES (:orderId, :status, :eventTime, now())
+ON CONFLICT (order_id) DO UPDATE
+SET status     = EXCLUDED.status,
+    event_time = EXCLUDED.event_time,
+    updated_at = now()
+WHERE order_read_model.event_time &lt; EXCLUDED.event_time;</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="이건 임시 방편입니다">
+        <p>
+          이 방어는 <strong>"마지막 상태"만 맞추는</strong> 조치입니다.
+          상태 전이 이력을 순서대로 읽어야 하는 처리(예: 상태별 소요 시간 집계, 상태 전이 검증)는 여전히 깨집니다.
+          또한 <code>event_time</code>이 서로 다른 서버에서 생성되면 시계 오차 문제가 남습니다.
+          단조 증가하는 버전(주문별 시퀀스 번호)이 있으면 그것을 쓰는 편이 안전합니다.
+        </p>
+      </aside>
+
+      <h3 id="root-fix">근본 해결 — 키를 넣는다</h3>
+
+      <div class="diff">
+        <div class="diff__before">
+          <p>
+            키가 없어 파티션이 매번 달라집니다.
+            <code>enable.idempotence</code>를 끈 설정까지 있으면 파티션 안에서도 순서가 위험합니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 전</figcaption>
+            <pre><code class="lang-java">producer.send(new ProducerRecord&lt;&gt;("order-status", toJson(event)));</code></pre>
+          </figure>
+          <figure class="code">
+            <figcaption>producer.properties (변경 전)</figcaption>
+            <pre><code class="lang-properties">acks=1
+enable.idempotence=false
+max.in.flight.requests.per.connection=10</code></pre>
+          </figure>
+        </div>
+        <div class="diff__after">
+          <p>
+            <strong>순서를 보장해야 하는 단위</strong>를 키로 씁니다. 여기서는 주문 ID입니다.
+            프로듀서 설정은 4.x 기본값을 그대로 씁니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 후</figcaption>
+            <pre><code class="lang-java">producer.send(new ProducerRecord&lt;&gt;(
+    "order-status",
+    event.getOrderId(),        // ← 순서 보장 단위를 키로
+    toJson(event)));</code></pre>
+          </figure>
+          <figure class="code">
+            <figcaption>producer.properties (변경 후)</figcaption>
+            <pre><code class="lang-properties">acks=all                                   # 4.x 기본값
+enable.idempotence=true                    # 4.x 기본값
+max.in.flight.requests.per.connection=5    # 4.x 기본값 (멱등성 켜면 5 이하에서 순서 보장)</code></pre>
+          </figure>
+        </div>
+      </div>
+
+      <aside class="note note--ok" data-label="키 선택 기준">
+        <p>
+          <strong>키는 "순서가 지켜져야 하는 범위"의 식별자</strong>입니다.
+          주문 상태라면 주문 ID, 사용자 활동이라면 사용자 ID, 계좌 원장이라면 계좌 번호입니다.
+          "무엇으로 파티셔닝할까"가 아니라 <strong>"무엇 안에서 순서가 필요한가"</strong>로 물으면 답이 쉽게 나옵니다.
+        </p>
+        <p>
+          키를 넣으면 <strong>파티션 쏠림(hot partition)</strong>이 생길 수 있습니다.
+          특정 키의 비중이 크면 그 파티션만 바빠집니다.
+          그 경우에도 키를 빼는 것이 답이 아니고, 키 설계를 바꾸거나(복합 키) 파티션 수를 조정합니다.
+        </p>
+      </aside>
+
+      <h3 id="consumer-side">컨슈머 쪽에서 지켜야 할 것</h3>
+      <p>
+        프로듀서가 키를 넣어도 컨슈머가 병렬 처리하면 순서는 다시 깨집니다.
+        <a href="case02.html">케이스 2</a>에서 소개한 워커 풀 패턴을 쓴다면
+        <strong>같은 키는 반드시 같은 워커</strong>로 보내야 합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>키 기준 워커 고정 — 순서를 유지하면서 병렬성을 얻는 방법</figcaption>
+        <pre><code class="lang-java">// 파티션 단위 순차 처리를 유지하려면 파티션 하나당 워커 하나
+int workerIndex = Math.abs(record.key().hashCode()) % workers.length;
+workers[workerIndex].submit(() -&gt; process(record));</code></pre>
+      </figure>
+
+      <h3 id="migration">키 도입 시의 마이그레이션 문제</h3>
+      <p>
+        키를 넣기 시작한 시점을 경계로 <strong>같은 주문의 이력이 여러 파티션에 걸칩니다.</strong>
+        기존 데이터는 이동하지 않기 때문입니다. 선택지는 세 가지입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>키 도입 마이그레이션 전략 비교</caption>
+          <thead>
+            <tr>
+              <th scope="col">전략</th>
+              <th scope="col">방법</th>
+              <th scope="col">장점 / 단점</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">그냥 전환</th>
+              <td>키를 넣어 배포하고, 과거 데이터는 그대로 둔다</td>
+              <td>가장 간단. 전환 시점 전후에 걸친 주문의 순서는 여전히 보장되지 않음</td>
+            </tr>
+            <tr>
+              <th scope="row">새 토픽으로 전환</th>
+              <td><code>order-status-v2</code>를 파티션 수 확정 후 만들고 프로듀서를 옮긴다. 컨슈머는 두 토픽을 잠시 함께 구독</td>
+              <td>깨끗한 경계. 컨슈머가 두 토픽을 다루는 기간이 필요하고 운영 복잡도가 오름</td>
+            </tr>
+            <tr>
+              <th scope="row">재적재</th>
+              <td>과거 데이터를 키를 붙여 새 토픽으로 다시 넣는다 (Streams 또는 배치 잡)</td>
+              <td>이력까지 정합. 재적재 비용이 크고 재처리 부작용을 통제해야 함 (<a href="case07.html">케이스 7</a>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        어떤 전략을 택하든 <strong>파티션 수를 먼저 확정</strong>해야 합니다.
+        나중에 늘리면 같은 문제가 반복됩니다. 파티션 수를 크게 잡는 것도 답이 아닙니다 —
+        그 비용은 <a href="case05.html">케이스 5</a>에서 다룹니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prevention">
+      <h2 id="prevention">예방 체크리스트</h2>
+
+      <ul>
+        <li><label><input type="checkbox"> 토픽마다 <strong>"순서가 필요한 단위가 무엇인가"</strong>를 문서화했고, 그것이 메시지 키다</label></li>
+        <li><label><input type="checkbox"> 순서가 필요 없는 토픽(메트릭·로그)은 키 없음이 <strong>의도된 선택</strong>임을 명시했다</label></li>
+        <li><label><input type="checkbox"> <code>enable.idempotence</code>를 끈 곳이 없다 (4.x 기본값 <code>true</code>)</label></li>
+        <li><label><input type="checkbox"> <code>max.in.flight.requests.per.connection</code>이 5 이하다 (멱등성 사용 시 필수)</label></li>
+        <li><label><input type="checkbox"> 컨슈머가 병렬 처리한다면 <strong>같은 키가 같은 워커</strong>로 가도록 보장했다</label></li>
+        <li><label><input type="checkbox"> 읽기 모델 갱신이 <strong>순서에 방어적</strong>이다 (이벤트 시각 또는 버전 비교)</label></li>
+        <li><label><input type="checkbox"> 파티션 수를 늘리는 변경은 <strong>키 배치 변경</strong>과 순서 보장 단절을 검토한 뒤 진행한다</label></li>
+        <li><label><input type="checkbox"> 내부 토픽(<code>__consumer_offsets</code> 등)의 파티션 수를 손대지 않는다</label></li>
+        <li><label><input type="checkbox"> 상태 역행을 감지하는 <strong>데이터 품질 알림</strong>이 있다 (Kafka 지표로는 잡히지 않음)</label></li>
+        <li><label><input type="checkbox"> 부하 테스트를 <strong>같은 키가 짧은 시간에 여러 번 갱신되는 패턴</strong>으로도 해 봤다</label></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트</h2>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <ul>
+          <li>
+            <strong>순서 보장의 단위는 파티션</strong>입니다. "토픽 전체"를 고른 답은 오답입니다.
+            전역 오프셋도 존재하지 않습니다.
+          </li>
+          <li>
+            "같은 키를 가진 레코드는 같은 파티션에 기록된다" — 단, <strong>파티션 수가 바뀌지 않는 동안</strong>입니다.
+            파티션 수를 늘리면 매핑이 바뀝니다.
+          </li>
+          <li>
+            <strong>파티션 수는 늘릴 수만 있고 줄일 수 없습니다.</strong>
+          </li>
+          <li>
+            키가 <code>null</code>일 때 기본 파티셔너 동작 → <strong>sticky 파티션</strong>을 쓰고
+            <code>batch.size</code>만큼 쌓이면 바꿉니다. "라운드로빈"을 고르면 4.x 기준으로는 오답입니다
+            (<code>RoundRobinPartitioner</code>는 별도 클래스로 명시해야 사용됩니다).
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <ul>
+          <li>
+            "순서를 보장하려면 어떤 프로듀서 설정이 필요한가?" →
+            <code>enable.idempotence=true</code>이고
+            <code>max.in.flight.requests.per.connection</code>이 <strong>5 이하</strong>.
+            멱등성을 켠 상태에서 6 이상으로 두면 <code>ConfigException</code>이 발생합니다.
+          </li>
+          <li>
+            "<code>retries=0</code>으로 두면 순서가 보장된다"는 흔한 오답입니다.
+            4.x에서 <code>retries</code> 기본값은 <strong>2147483647</strong>이고,
+            재시도 총 시간은 <code>delivery.timeout.ms</code>(기본 120000)로 통제하는 것이 권장 방식입니다.
+          </li>
+          <li>
+            커스텀 파티셔너는 <code>Partitioner</code> 인터페이스를 구현하고
+            <code>partitioner.class</code>로 지정합니다. 기본값은 <code>null</code>(내장 로직)입니다.
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · 함정 패턴">
+        <p>
+          "컨슈머를 늘렸는데 순서가 깨졌다"는 문항이 나오면
+          <strong>파티션 수를 늘렸는지, 키가 있는지</strong>를 먼저 확인하는 것이 정답 경로입니다.
+          컨슈머 수를 늘리는 것 자체는 파티션 내 순서를 깨지 않습니다
+          (한 파티션은 그룹 내 한 컨슈머에게만 할당되므로).
+          <strong>깨는 것은 키 부재, 파티션 증설, 애플리케이션 내부 병렬 처리</strong> 세 가지입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch04.html">
+          <span class="card__title">4장 · Producer 심화</span>
+          <span class="card__desc">파티셔너, 멱등성, in-flight와 순서 보장의 관계.</span>
+          <span class="card__meta">CCDAK Application Development</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch02.html">
+          <span class="card__title">2장 · 아키텍처와 핵심 개념</span>
+          <span class="card__desc">파티션·오프셋·순서 보장의 기본 모델.</span>
+          <span class="card__meta">CCDAK Fundamentals</span>
+        </a></li>
+        <li><a class="card" href="case05.html">
+          <span class="card__title">케이스 5 · 파티션을 1000개로 늘렸더니 느려졌다</span>
+          <span class="card__desc">"파티션을 크게 잡아 두면 된다"가 왜 답이 아닌가.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="case02.html">
+          <span class="card__title">케이스 2 · 무한 리밸런스 루프</span>
+          <span class="card__desc">워커 풀로 처리를 분리할 때의 순서 문제.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex02.html">
+          <span class="card__title">예제 2 · Spring Boot Producer/Consumer</span>
+          <span class="card__desc">키를 포함한 기본 발행·소비 코드.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/cli.html">
+          <span class="card__title">CLI 치트시트</span>
+          <span class="card__desc"><code>print.partition</code>·<code>parse.key</code> 등 console 도구 옵션.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#intro_concepts_and_terms" rel="noopener noreferrer">Introduction — Topics and Partitions</a> — 같은 키는 같은 파티션, 파티션 단위 순서 보장</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_partitioner.class" rel="noopener noreferrer">Producer Configs — <code>partitioner.class</code></a> — 기본값 <code>null</code>과 내장 파티셔닝 로직 3갈래</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_max.in.flight.requests.per.connection" rel="noopener noreferrer">Producer Configs — <code>max.in.flight.requests.per.connection</code></a> — 재시도 시 순서가 뒤바뀌는 조건</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_enable.idempotence" rel="noopener noreferrer">Producer Configs — <code>enable.idempotence</code></a> — 기본값 <code>true</code>, in-flight 제약</li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops_modify_topic" rel="noopener noreferrer">Operations — Modifying topics</a> — 파티션 증설의 4가지 부작용, 파티션 축소 불가, 내부 토픽 경고</li>
+        <li><a href="https://kafka.apache.org/documentation/#semantics" rel="noopener noreferrer">Design — Message Delivery Semantics</a> — 순서와 전달 보장의 관계</li>
+        <li><a href="https://github.com/apache/kafka" rel="noopener noreferrer">Apache Kafka 소스 (4.3)</a> — <code>DefaultMessageFormatter</code>의 출력 속성(<code>print.partition</code>, <code>print.offset</code>, <code>print.key</code>)</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

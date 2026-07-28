@@ -1,0 +1,134 @@
+<svg viewBox="0 0 720 424" role="img" class="kg-diagram"
+     aria-labelledby="d051-title d051-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d051-title">트랜잭션 흐름 — initTransactions 부터 commit 또는 abort 까지</title>
+  <desc id="d051-desc">트랜잭션 프로듀서의 API 호출 순서와 각 호출이 트랜잭션 코디네이터에서 무엇을 하는지,
+    그 결과가 어디에 기록되는지를 6단계로 보여줍니다.
+    1단계 initTransactions 는 코디네이터를 찾아 PID 와 epoch 를 발급받고 이전 인스턴스의 미완 트랜잭션을 정리합니다.
+    2단계 beginTransaction 은 클라이언트 로컬 상태 전환이라 브로커와 통신하지 않습니다.
+    3단계 첫 send 전에 AddPartitionsToTxn 으로 대상 파티션이 __transaction_state 에 등록되고 레코드가 데이터 파티션에 기록됩니다.
+    4단계 sendOffsetsToTransaction 은 AddOffsetsToTxn 과 TxnOffsetCommit 으로 컨슈머 오프셋을 같은 트랜잭션 안에서 __consumer_offsets 에 씁니다.
+    5단계 commitTransaction 은 EndTxn 요청으로 코디네이터가 PREPARE_COMMIT 을 기록하고 관련된 모든 파티션에 커밋 마커를 쓴 뒤 COMPLETE_COMMIT 으로 끝냅니다.
+    6단계 abortTransaction 은 같은 경로로 abort 마커를 쓰며, read_committed 컨슈머가 그 레코드를 건너뜁니다.
+    코디네이터의 상태는 내부 토픽 __transaction_state 에 저장됩니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">트랜잭션 흐름 — 프로듀서 호출 · 코디네이터 동작 · 기록 위치</text>
+
+  <!-- 열 헤더 -->
+  <text x="48" y="38" class="dg-fs-sm dg-bold">프로듀서 API 호출</text>
+  <text x="286" y="38" class="dg-fs-sm dg-bold">트랜잭션 코디네이터</text>
+  <text x="520" y="38" class="dg-fs-sm dg-bold">기록 위치</text>
+
+  <!-- ============ 1단계 ============ -->
+  <g data-dg="step-1">
+    <circle class="dg-node" cx="26" cy="68" r="13"/>
+    <text class="dg-fs-sm dg-bold dg-num" x="26" y="73" text-anchor="middle">1</text>
+    <rect class="dg-node" x="48" y="46" width="210" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="58" y="66">initTransactions()</text>
+    <text class="dg-fs-sm dg-muted" x="58" y="83">앱 시작 시 한 번만</text>
+    <path class="dg-marker" d="M274,63 L282,68 L274,73 Z"/>
+    <line class="dg-edge" x1="258" y1="68" x2="275" y2="68"/>
+    <rect class="dg-node" x="286" y="46" width="206" height="44" rx="4"/>
+    <text class="dg-fs-sm" x="294" y="64">코디네이터 찾기 →</text>
+    <text class="dg-fs-sm" x="294" y="81"><tspan class="dg-bold">PID · epoch 발급</tspan>, 미완 정리</text>
+    <path class="dg-marker" d="M508,63 L516,68 L508,73 Z"/>
+    <line class="dg-edge" x1="492" y1="68" x2="509" y2="68"/>
+    <rect class="dg-node dg-node--alt" x="520" y="46" width="188" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono" x="528" y="66">__transaction_state</text>
+    <text class="dg-fs-sm dg-muted" x="528" y="83">Empty 상태로 초기화</text>
+  </g>
+
+  <!-- ============ 2단계 ============ -->
+  <g data-dg="step-2">
+    <circle class="dg-node" cx="26" cy="120" r="13"/>
+    <text class="dg-fs-sm dg-bold dg-num" x="26" y="125" text-anchor="middle">2</text>
+    <rect class="dg-node" x="48" y="98" width="210" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="58" y="118">beginTransaction()</text>
+    <text class="dg-fs-sm dg-muted" x="58" y="135">트랜잭션마다 호출</text>
+    <line class="dg-edge dg-edge--muted dg-edge--dotted" x1="258" y1="120" x2="286" y2="120"/>
+    <rect class="dg-node--empty" x="286" y="98" width="422" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-bold" x="298" y="118">브로커와 통신하지 않습니다 — 클라이언트 로컬 상태만 바뀝니다</text>
+    <text class="dg-fs-sm dg-muted" x="298" y="135">코디네이터에는 첫 send() 시점에 처음 기록됩니다</text>
+  </g>
+
+  <!-- ============ 3단계 ============ -->
+  <g data-dg="step-3">
+    <circle class="dg-node" cx="26" cy="172" r="13"/>
+    <text class="dg-fs-sm dg-bold dg-num" x="26" y="177" text-anchor="middle">3</text>
+    <rect class="dg-node" x="48" y="150" width="210" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="58" y="170">send(record)</text>
+    <text class="dg-fs-sm dg-muted" x="58" y="187">여러 토픽·파티션 가능</text>
+    <path class="dg-marker" d="M274,167 L282,172 L274,177 Z"/>
+    <line class="dg-edge" x1="258" y1="172" x2="275" y2="172"/>
+    <rect class="dg-node" x="286" y="150" width="206" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono" x="294" y="168">AddPartitionsToTxn</text>
+    <text class="dg-fs-sm dg-muted" x="294" y="185">참여 파티션 목록을 기록</text>
+    <path class="dg-marker" d="M508,167 L516,172 L508,177 Z"/>
+    <line class="dg-edge" x1="492" y1="172" x2="509" y2="172"/>
+    <rect class="dg-node dg-node--alt" x="520" y="150" width="188" height="44" rx="4"/>
+    <text class="dg-fs-sm" x="528" y="168">대상 토픽 파티션</text>
+    <text class="dg-fs-sm dg-muted" x="528" y="185">이미 로그에 있지만 미확정</text>
+  </g>
+
+  <!-- ============ 4단계 ============ -->
+  <g data-dg="step-4">
+    <circle class="dg-node" cx="26" cy="224" r="13"/>
+    <text class="dg-fs-sm dg-bold dg-num" x="26" y="229" text-anchor="middle">4</text>
+    <rect class="dg-node" x="48" y="202" width="210" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="58" y="222">sendOffsets</text>
+    <text class="dg-fs-sm dg-mono dg-bold" x="58" y="239">ToTransaction()</text>
+    <path class="dg-marker" d="M274,219 L282,224 L274,229 Z"/>
+    <line class="dg-edge" x1="258" y1="224" x2="275" y2="224"/>
+    <rect class="dg-node" x="286" y="202" width="206" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono" x="294" y="220">AddOffsetsToTxn</text>
+    <text class="dg-fs-sm dg-mono" x="294" y="237">TxnOffsetCommit</text>
+    <path class="dg-marker" d="M508,219 L516,224 L508,229 Z"/>
+    <line class="dg-edge" x1="492" y1="224" x2="509" y2="224"/>
+    <rect class="dg-node dg-node--alt" x="520" y="202" width="188" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono" x="528" y="220">__consumer_offsets</text>
+    <text class="dg-fs-sm dg-bold" x="528" y="237">같은 트랜잭션 안에서</text>
+  </g>
+
+  <!-- ============ 5단계 (핵심 · 강조) ============ -->
+  <g data-dg="step-5">
+    <circle class="dg-node dg-node--accent" cx="26" cy="276" r="13"/>
+    <text class="dg-fs-sm dg-bold dg-num" x="26" y="281" text-anchor="middle">5</text>
+    <rect class="dg-node dg-node--accent" x="48" y="254" width="210" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="58" y="274">commitTransaction()</text>
+    <text class="dg-fs-sm" x="58" y="291">여기서 원자성이 확정</text>
+    <path class="dg-marker--accent" d="M274,271 L282,276 L274,281 Z"/>
+    <line class="dg-edge dg-edge--accent" x1="258" y1="276" x2="275" y2="276"/>
+    <rect class="dg-node dg-node--accent" x="286" y="254" width="206" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono" x="294" y="272">EndTxn</text>
+    <text class="dg-fs-sm" x="294" y="289">PREPARE → 마커 → 완료</text>
+    <path class="dg-marker--accent" d="M508,271 L516,276 L508,281 Z"/>
+    <line class="dg-edge dg-edge--accent" x1="492" y1="276" x2="509" y2="276"/>
+    <rect class="dg-node dg-node--accent" x="520" y="254" width="188" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-bold" x="528" y="272">모든 참여 파티션에</text>
+    <text class="dg-fs-sm" x="528" y="289">COMMIT 마커 기록</text>
+  </g>
+
+  <!-- ============ 6단계 (abort) ============ -->
+  <g data-dg="step-6">
+    <circle class="dg-node dg-node--danger" cx="26" cy="328" r="13"/>
+    <text class="dg-fs-sm dg-bold dg-num" x="26" y="333" text-anchor="middle">6</text>
+    <rect class="dg-node dg-node--danger" x="48" y="306" width="210" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="58" y="326">abortTransaction()</text>
+    <text class="dg-fs-sm dg-muted" x="58" y="343">예외 처리 경로</text>
+    <path class="dg-marker--danger" d="M274,323 L282,328 L274,333 Z"/>
+    <line class="dg-edge dg-edge--danger" x1="258" y1="328" x2="275" y2="328"/>
+    <rect class="dg-node dg-node--danger" x="286" y="306" width="206" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-mono" x="294" y="324">EndTxn (ABORT)</text>
+    <text class="dg-fs-sm dg-muted" x="294" y="341">오프셋 커밋도 함께 무효</text>
+    <path class="dg-marker--danger" d="M508,323 L516,328 L508,333 Z"/>
+    <line class="dg-edge dg-edge--danger" x1="492" y1="328" x2="509" y2="328"/>
+    <rect class="dg-node dg-node--danger" x="520" y="306" width="188" height="44" rx="4"/>
+    <text class="dg-fs-sm dg-bold" x="528" y="324">ABORT 마커 기록</text>
+    <text class="dg-fs-sm dg-muted" x="528" y="341">read_committed 가 건너뜀</text>
+  </g>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="362" x2="708" y2="362"/>
+  <text class="dg-fs-sm" x="12" y="380">레코드는 <tspan class="dg-bold">기록된 뒤에 마커로 확정</tspan>됩니다. 그래서 abort 된 레코드도 로그에는 남아 있고, 컨슈머가 걸러냅니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="398"><tspan class="dg-mono">transaction.timeout.ms</tspan> 기본 60000 · <tspan class="dg-mono">transactional.id.expiration.ms</tspan> 기본 604800000</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="416"><tspan class="dg-mono">transaction.state.log.replication.factor</tspan> 기본 3 · <tspan class="dg-mono">transaction.state.log.min.isr</tspan> 기본 2</text>
+</svg>

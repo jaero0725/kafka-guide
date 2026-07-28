@@ -1,0 +1,482 @@
+{
+  "deckId": "ccdak-app-development",
+  "title": "CCDAK — Application Development",
+  "exam": "CCDAK",
+  "kafkaVersion": "4.3",
+  "cards": [
+    {
+      "id": "fc-appdev-001",
+      "deck": "ccdak-app-development",
+      "front": "`send()` 가 실제 네트워크 전송을 수행하는 스레드는?",
+      "back": "**Sender(I/O) 스레드**\n`send()` 는 누적 버퍼에 넣고 즉시 반환하고, 배치 전송은 백그라운드 Sender 스레드가 담당합니다.",
+      "tags": [
+        "producer-callback",
+        "send",
+        "async"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-002",
+      "deck": "ccdak-app-development",
+      "front": "비동기인 `send()` 가 블로킹될 수 있는 두 경우는?",
+      "back": "**버퍼 고갈**과 **메타데이터 미확보**\n두 경우 모두 `max.block.ms`(60000)까지 기다린 뒤 `TimeoutException` 이 발생합니다.",
+      "tags": [
+        "max.block.ms",
+        "buffer.memory",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-003",
+      "deck": "ccdak-app-development",
+      "front": "`onCompletion()` 콜백이 실행되는 스레드는?",
+      "back": "**Sender 스레드**\n그래서 콜백 안에서 블로킹 작업을 하면 그 프로듀서의 전송 파이프라인 전체가 지연됩니다.",
+      "tags": [
+        "producer-callback",
+        "sender-thread",
+        "async"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-004",
+      "deck": "ccdak-app-development",
+      "front": "콜백 인자 `(metadata, exception)` 에 적용되는 규칙은?",
+      "back": "**둘 중 하나는 항상 `null`**\n실패한 경우 `metadata` 의 필드는 전부 `-1` 로 채워집니다.",
+      "tags": [
+        "producer-callback",
+        "error-handling"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-005",
+      "deck": "ccdak-app-development",
+      "front": "프로듀서 콜백의 순서가 보장되는 범위는?",
+      "back": "**같은 파티션 안에서만**\n서로 다른 파티션의 콜백 사이에는 순서 보장이 없습니다.",
+      "tags": [
+        "producer-callback",
+        "ordering"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-006",
+      "deck": "ccdak-app-development",
+      "front": "`SerializationException` 은 콜백으로 전달되는가?",
+      "back": "**아니요. `send()` 호출부에서 동기로 던져집니다.**\n직렬화는 버퍼에 넣기 전 단계여서 브로커 응답 경로를 타지 않습니다.",
+      "tags": [
+        "retriable-errors",
+        "serialization",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-007",
+      "deck": "ccdak-app-development",
+      "front": "멱등 프로듀서가 중복을 판별하는 근거는?",
+      "back": "**PID + 파티션별 시퀀스 번호**\n브로커가 파티션마다 최근 배치의 시퀀스를 기억해 재전송된 배치를 폐기합니다.",
+      "tags": [
+        "idempotence-inflight",
+        "idempotence",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-008",
+      "deck": "ccdak-app-development",
+      "front": "멱등성이 보장하는 범위는?",
+      "back": "**한 프로듀서 세션 × 한 파티션**\n애플리케이션이 두 번 `send()` 한 것이나 프로듀서 재시작은 막지 못합니다.",
+      "tags": [
+        "idempotence-inflight",
+        "idempotence",
+        "eos"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-009",
+      "deck": "ccdak-app-development",
+      "front": "멱등성을 켜고 in-flight를 6 이상으로 명시하면?",
+      "back": "**기동 시 `ConfigException`**\n멱등성은 순서와 중복 제거를 위해 in-flight를 5 이하로 요구합니다.",
+      "tags": [
+        "idempotence-inflight",
+        "max.in.flight.requests.per.connection"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-010",
+      "deck": "ccdak-app-development",
+      "front": "키가 있는 레코드의 파티션 결정식은?",
+      "back": "**murmur2(key) % 파티션 수**\n결정적이므로 같은 키는 항상 같은 파티션으로 가고, 그 안에서 순서가 유지됩니다.",
+      "tags": [
+        "partitioning",
+        "producer",
+        "ordering"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-011",
+      "deck": "ccdak-app-development",
+      "front": "키가 `null` 인 레코드는 어떻게 분배되는가?",
+      "back": "**배치 단위 sticky**\n레코드 단위 라운드로빈이 아니라 한 파티션으로 배치를 채운 뒤 다음 파티션으로 전환합니다.",
+      "tags": [
+        "partitioning",
+        "producer",
+        "sticky"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-012",
+      "deck": "ccdak-app-development",
+      "front": "Kafka 4.0에서 제거된 파티셔너 클래스 두 개는?",
+      "back": "**`DefaultPartitioner`, `UniformStickyPartitioner`**\n내장 로직으로 통합되었으므로 `partitioner.class` 를 비워 두면 됩니다.",
+      "tags": [
+        "partitioning",
+        "removed-api",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-013",
+      "deck": "ccdak-app-development",
+      "front": "4.x에서 재시도의 실질적 상한을 정하는 설정은?",
+      "back": "**`delivery.timeout.ms`**(120000)\n`retries` 기본값이 사실상 무한이라 횟수가 아니라 시간이 종료 조건입니다.",
+      "tags": [
+        "retriable-errors",
+        "delivery.timeout.ms",
+        "retries"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-014",
+      "deck": "ccdak-app-development",
+      "front": "브로커 `message.max.bytes` 를 초과한 배치에 프로듀서가 하는 일은?",
+      "back": "**배치를 분할해 재전송하며 재시도 횟수를 소모하지 않습니다.**\n단일 레코드 배치는 더 쪼갤 수 없어 최종 실패합니다.",
+      "tags": [
+        "message-size",
+        "retriable-errors",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-015",
+      "deck": "ccdak-app-development",
+      "front": "`bootstrap.servers` 에 여러 브로커를 적는 이유는?",
+      "back": "**초기 연결의 이중화**\n부하 분산 목적이 아닙니다. 하나만 연결되면 메타데이터로 전체 클러스터를 알아냅니다.",
+      "tags": [
+        "bootstrap-servers",
+        "producer",
+        "metadata"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-appdev-016",
+      "deck": "ccdak-app-development",
+      "front": "`subscribe()` 의 세 가지 성질은?",
+      "back": "**그룹 참여 · 리밸런스 발생 · `group.id` 필수**\n파티션 할당을 코디네이터가 관리하므로 인스턴스를 늘리면 자동으로 분배됩니다.",
+      "tags": [
+        "assign-vs-subscribe",
+        "consumer",
+        "rebalance-triggers"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-017",
+      "deck": "ccdak-app-development",
+      "front": "`assign()` 의 네 가지 성질은?",
+      "back": "**수동 지정 · 리밸런스 없음 · `group.id` 불필요 · 파티션 증가 미감지**\n확장성을 포기하고 완전한 통제를 얻는 선택입니다.",
+      "tags": [
+        "assign-vs-subscribe",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-018",
+      "deck": "ccdak-app-development",
+      "front": "한 컨슈머에서 `assign()` 과 `subscribe()` 를 섞으면?",
+      "back": "**`IllegalStateException`**\n토픽 구독·패턴 구독·수동 할당 세 가지는 상호 배타적입니다.",
+      "tags": [
+        "assign-vs-subscribe",
+        "exception",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-019",
+      "deck": "ccdak-app-development",
+      "front": "컨슈머 생존 판정의 \"하트비트 축\" 설정 두 개는?",
+      "back": "**`heartbeat.interval.ms`(3000) · `session.timeout.ms`(45000)**\n백그라운드 하트비트 스레드가 멈췄는지를 봅니다.",
+      "tags": [
+        "max-poll-interval",
+        "session.timeout.ms",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-020",
+      "deck": "ccdak-app-development",
+      "front": "컨슈머 생존 판정의 \"poll 축\" 설정 두 개는?",
+      "back": "**`max.poll.interval.ms`(300000) · `max.poll.records`(500)**\n애플리케이션 스레드가 얼마나 자주 `poll()` 로 돌아오는지를 봅니다.",
+      "tags": [
+        "max-poll-interval",
+        "max.poll.records",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-021",
+      "deck": "ccdak-app-development",
+      "front": "\"프로세스는 살아 있는데 그룹에서 빠진다\" 의 1차 처방은?",
+      "back": "**`max.poll.records` 를 줄인다**\npoll 축의 문제이므로 `session.timeout.ms` 를 올리면 증상은 그대로이고 장애 감지만 늦어집니다.",
+      "tags": [
+        "max-poll-interval",
+        "rebalance-triggers",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-022",
+      "deck": "ccdak-app-development",
+      "front": "리밸런스를 유발하는 토픽 쪽 변화 두 가지는?",
+      "back": "**파티션 수 증가**, **구독 패턴에 매칭되는 새 토픽 생성**\n파티션 수는 늘릴 수만 있고 늘리는 순간 리밸런스가 일어납니다.",
+      "tags": [
+        "rebalance-triggers",
+        "consumer",
+        "partitions"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-023",
+      "deck": "ccdak-app-development",
+      "front": "`auto.offset.reset` 이 발동하는 조건은?",
+      "back": "**커밋된 오프셋이 없을 때, 또는 오프셋이 로그 범위를 벗어났을 때만**\n정상 커밋이 있으면 값을 바꿔도 아무 일도 일어나지 않습니다.",
+      "tags": [
+        "offset-reset",
+        "auto.offset.reset",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-024",
+      "deck": "ccdak-app-development",
+      "front": "커밋된 컨슈머 오프셋이 만료되는 기준은?",
+      "back": "**`offsets.retention.minutes`(10080 = 7일)**\n만료 후 재기동하면 `auto.offset.reset` 이 발동해 `latest` 면 그 사이 데이터를 건너뜁니다.",
+      "tags": [
+        "offset-reset",
+        "offsets.retention.minutes",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-025",
+      "deck": "ccdak-app-development",
+      "front": "권장되는 커밋 조합은?",
+      "back": "**루프에서 `commitAsync()`, 종료 `finally` 에서 `commitSync()`**\n평시에는 처리량을 지키고 종료 시점에만 확실히 반영합니다.",
+      "tags": [
+        "commit-strategy",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-026",
+      "deck": "ccdak-app-development",
+      "front": "처리 **전에** 커밋하면 얻는 전달 보장은?",
+      "back": "**at-most-once** (유실 가능, 중복 없음)\n커밋 후 처리 중 크래시하면 그 배치는 다시 읽히지 않습니다.",
+      "tags": [
+        "commit-strategy",
+        "delivery-semantics",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-027",
+      "deck": "ccdak-app-development",
+      "front": "처리 **후에** 커밋하면 얻는 전달 보장은?",
+      "back": "**at-least-once** (중복 가능, 유실 없음)\n커밋 전에 크래시하면 같은 구간을 다시 읽으므로 처리는 멱등해야 합니다.",
+      "tags": [
+        "commit-strategy",
+        "delivery-semantics",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-028",
+      "deck": "ccdak-app-development",
+      "front": "`enable.auto.commit=true` 일 때 실제로 커밋되는 시점은?",
+      "back": "**`poll()` 호출 시점에 직전 반환분**\n처리 완료를 기다리지 않으므로 처리 중 크래시하면 이미 커밋된 레코드가 유실됩니다.",
+      "tags": [
+        "commit-strategy",
+        "enable.auto.commit",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-029",
+      "deck": "ccdak-app-development",
+      "front": "cooperative 리밸런스가 eager와 다른 점은?",
+      "back": "**전체 반납 없이 옮길 파티션만 두 라운드로 재할당**\n영향 없는 파티션은 계속 소비되므로 stop-the-world가 없습니다.",
+      "tags": [
+        "sticky-assignor",
+        "rebalance-triggers",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-030",
+      "deck": "ccdak-app-development",
+      "front": "eager에서 cooperative로 전환하는 방법은?",
+      "back": "**두 단계 롤링 배포**\n한 번에 바꾸면 그룹 멤버 간 프로토콜 협상이 실패합니다.",
+      "tags": [
+        "sticky-assignor",
+        "partition.assignment.strategy"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-031",
+      "deck": "ccdak-app-development",
+      "front": "`group.protocol=consumer` 에서 무시되는 컨슈머 설정은?",
+      "back": "**`session.timeout.ms` · `heartbeat.interval.ms` · `partition.assignment.strategy`**\n할당을 브로커가 계산하므로 할당자는 `group.remote.assignor` 로 지정합니다.",
+      "tags": [
+        "group.protocol",
+        "consumer",
+        "kip-848"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-032",
+      "deck": "ccdak-app-development",
+      "front": "트랜잭션 프로듀서의 API 호출 순서는?",
+      "back": "**`initTransactions()` → `beginTransaction()` → `send()` → `sendOffsetsToTransaction()` → `commitTransaction()`**\n순서를 어기면 `InvalidTxnStateException` 입니다.",
+      "tags": [
+        "transactions",
+        "eos",
+        "producer"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-appdev-033",
+      "deck": "ccdak-app-development",
+      "front": "`initTransactions()` 를 호출하는 횟수는?",
+      "back": "**프로듀서 생애에 한 번**\n트랜잭션마다 호출하는 것이 아니라 초기화 시 1회이며, 미완료 트랜잭션을 정리하고 epoch를 올립니다.",
+      "tags": [
+        "transactions",
+        "eos",
+        "producer"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-appdev-034",
+      "deck": "ccdak-app-development",
+      "front": "consume-transform-produce EOS에 필요한 세 요소는?",
+      "back": "**프로듀서 `transactional.id` · 컨슈머 `read_committed` · `sendOffsetsToTransaction()`**\n셋 중 하나라도 빠지면 정확히 한 번이 성립하지 않습니다.",
+      "tags": [
+        "isolation-level",
+        "transactions",
+        "eos"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-appdev-035",
+      "deck": "ccdak-app-development",
+      "front": "`read_committed` 컨슈머가 읽을 수 있는 상한은?",
+      "back": "**LSO(Last Stable Offset)**\n열린 트랜잭션이 있으면 그 뒤에 커밋된 메시지까지 대기하므로 지연이 늘어납니다.",
+      "tags": [
+        "isolation-level",
+        "transactions",
+        "consumer"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-appdev-036",
+      "deck": "ccdak-app-development",
+      "front": "Kafka EOS가 보장하지 못하는 범위는?",
+      "back": "**Kafka 토픽 경계 밖 (외부 DB·API 호출)**\n외부 시스템 중복은 멱등 키·UPSERT·dedup 저장소로 애플리케이션이 직접 막아야 합니다.",
+      "tags": [
+        "transactions",
+        "eos",
+        "idempotence"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-appdev-037",
+      "deck": "ccdak-app-development",
+      "front": "트랜잭션을 쓸 때 컨슈머의 `enable.auto.commit` 은?",
+      "back": "**`false`**\n오프셋 커밋이 트랜잭션 안에 들어가야 하므로 자동 커밋이 켜져 있으면 원자성이 깨집니다.",
+      "tags": [
+        "transactions",
+        "enable.auto.commit",
+        "eos"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-appdev-038",
+      "deck": "ccdak-app-development",
+      "front": "4.3에서 deprecated된 `Consumer.close(Duration)` 의 대체는?",
+      "back": "**`close(CloseOptions)`**\n종료 시 그룹 이탈 여부까지 지정할 수 있도록 옵션 객체 방식으로 바뀌었습니다.",
+      "tags": [
+        "consumer",
+        "deprecated",
+        "api-change"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-appdev-039",
+      "deck": "ccdak-app-development",
+      "front": "4.3에서 제거된 `sendOffsetsToTransaction` 오버로드는?",
+      "back": "**`(Map, String)` 형태**\n`ConsumerGroupMetadata` 를 받는 변형만 남았습니다. 좀비 펜싱에 그룹 메타데이터가 필요하기 때문입니다.",
+      "tags": [
+        "transactions",
+        "removed-api",
+        "api-change"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-appdev-040",
+      "deck": "ccdak-app-development",
+      "front": "`ConsumerRecords#nextOffsets()` 가 4.3에서 추가된 이유는?",
+      "back": "**리더 에포크까지 포함한 커밋 오프셋을 제공하기 위해**\n마지막 오프셋에 1을 더해 직접 만드는 관용구의 실수를 없애 줍니다.",
+      "tags": [
+        "consumer",
+        "api-change",
+        "commit-strategy"
+      ],
+      "chapter": "ch05"
+    }
+  ]
+}

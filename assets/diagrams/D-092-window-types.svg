@@ -1,0 +1,102 @@
+<svg viewBox="0 0 720 498" role="img" class="kg-diagram"
+     aria-labelledby="d092-title d092-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d092-title">윈도우 4종 비교 — 같은 이벤트 열이 어떻게 묶이는가</title>
+  <desc id="d092-desc">같은 키의 이벤트가 6초, 8초, 9초, 14초에 도착했을 때
+    tumbling, hopping, sliding, session 네 가지 윈도우가 각각 어떻게 묶는지 비교한 그림입니다.
+    tumbling 은 크기 5초이고 에포크에 정렬되므로 0에서 5, 5에서 10, 10에서 15, 15에서 20 구간이 겹치지 않게 이어집니다.
+    6, 8, 9 는 5에서 10 구간에, 14 는 10에서 15 구간에 들어가고 각 이벤트는 정확히 한 윈도우에만 속합니다.
+    hopping 은 크기 5초에 전진 간격 3초이므로 윈도우가 겹칩니다.
+    3에서 8 은 6 을, 6에서 11 은 6과 8과 9 를, 9에서 14 는 9 를, 12에서 17 은 14 를 담습니다.
+    한 이벤트가 여러 윈도우에 들어갑니다.
+    sliding 은 시간 차 5초 기준이며 윈도우 경계가 에포크가 아니라 레코드 타임스탬프에 정렬되고 양 끝이 모두 포함됩니다.
+    레코드가 윈도우에 들어올 때와 빠져나갈 때마다 새 윈도우가 생겨 1에서 6, 3에서 8, 4에서 9, 7에서 12, 9에서 14, 10에서 15 여섯 개가 만들어집니다.
+    session 은 비활동 간격 3초 기준입니다.
+    6, 8, 9 는 간격이 3 이하라 하나의 세션 6에서 9 로 합쳐지고,
+    9와 14 사이 간격이 5로 3보다 크므로 14 는 자기 혼자 세션이 됩니다.
+    session 윈도우는 크기가 고정되어 있지 않고 데이터가 크기를 정합니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">윈도우 4종 — 같은 이벤트 열, 다른 묶음</text>
+  <text x="12" y="38" class="dg-fs-sm">이벤트 (같은 키) 도착 시각 = <tspan class="dg-mono dg-bold">6s · 8s · 9s · 14s</tspan> · 시간 윈도우 크기 5s · hopping 전진 3s · session 비활동 간격 3s</text>
+
+  <!-- 이벤트 안내선 -->
+  <line class="dg-edge dg-edge--muted dg-edge--dotted" x1="280" y1="54" x2="280" y2="400"/>
+  <line class="dg-edge dg-edge--muted dg-edge--dotted" x1="340" y1="54" x2="340" y2="400"/>
+  <line class="dg-edge dg-edge--muted dg-edge--dotted" x1="370" y1="54" x2="370" y2="400"/>
+  <line class="dg-edge dg-edge--muted dg-edge--dotted" x1="520" y1="54" x2="520" y2="400"/>
+
+  <!-- 이벤트 점 -->
+  <text class="dg-fs-sm dg-bold" x="12" y="62">이벤트</text>
+  <circle class="dg-node dg-node--accent" cx="280" cy="60" r="6"/>
+  <circle class="dg-node dg-node--accent" cx="340" cy="60" r="6"/>
+  <circle class="dg-node dg-node--accent" cx="370" cy="60" r="6"/>
+  <circle class="dg-node dg-node--accent" cx="520" cy="60" r="6"/>
+  <text class="dg-fs-sm dg-bold dg-num" x="280" y="50" text-anchor="middle">6</text>
+  <text class="dg-fs-sm dg-bold dg-num" x="340" y="50" text-anchor="middle">8</text>
+  <text class="dg-fs-sm dg-bold dg-num" x="370" y="50" text-anchor="middle">9</text>
+  <text class="dg-fs-sm dg-bold dg-num" x="520" y="50" text-anchor="middle">14</text>
+
+  <!-- 시간축 -->
+  <line class="dg-grid" x1="100" y1="72" x2="700" y2="72"/>
+  <line class="dg-grid" x1="100" y1="68" x2="100" y2="76"/>
+  <line class="dg-grid" x1="250" y1="68" x2="250" y2="76"/>
+  <line class="dg-grid" x1="400" y1="68" x2="400" y2="76"/>
+  <line class="dg-grid" x1="550" y1="68" x2="550" y2="76"/>
+  <line class="dg-grid" x1="700" y1="68" x2="700" y2="76"/>
+  <text class="dg-fs-sm dg-muted dg-num" x="100" y="88" text-anchor="middle">0s</text>
+  <text class="dg-fs-sm dg-muted dg-num" x="250" y="88" text-anchor="middle">5s</text>
+  <text class="dg-fs-sm dg-muted dg-num" x="400" y="88" text-anchor="middle">10s</text>
+  <text class="dg-fs-sm dg-muted dg-num" x="550" y="88" text-anchor="middle">15s</text>
+  <text class="dg-fs-sm dg-muted dg-num" x="700" y="88" text-anchor="middle">20s</text>
+
+  <!-- ① tumbling -->
+  <text class="dg-fs-sm dg-bold" x="12" y="106">① tumbling — 고정 크기 · 겹치지 않음 · 에포크 정렬 · 이벤트는 한 윈도우에만</text>
+  <rect class="dg-node--empty" x="100" y="110" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm dg-muted" x="175" y="123" text-anchor="middle">[0,5) 없음</text>
+  <rect class="dg-node dg-node--ok" x="250" y="110" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm dg-bold" x="325" y="123" text-anchor="middle">[5,10) → 6·8·9</text>
+  <rect class="dg-node dg-node--ok" x="400" y="110" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm dg-bold" x="475" y="123" text-anchor="middle">[10,15) → 14</text>
+  <rect class="dg-node--empty" x="550" y="110" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm dg-muted" x="625" y="123" text-anchor="middle">[15,20) 없음</text>
+
+  <!-- ② hopping -->
+  <text class="dg-fs-sm dg-bold" x="12" y="146">② hopping — 고정 크기 · 3초마다 전진 · 겹침 · 한 이벤트가 여러 윈도우에</text>
+  <rect class="dg-node dg-node--warn" x="190" y="150" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm" x="265" y="163" text-anchor="middle">[3,8) → 6</text>
+  <rect class="dg-node dg-node--warn" x="280" y="169" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm" x="355" y="182" text-anchor="middle">[6,11) → 6·8·9</text>
+  <rect class="dg-node dg-node--warn" x="370" y="188" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm" x="445" y="201" text-anchor="middle">[9,14) → 9</text>
+  <rect class="dg-node dg-node--warn" x="460" y="207" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm" x="535" y="220" text-anchor="middle">[12,17) → 14</text>
+
+  <!-- ③ sliding -->
+  <text class="dg-fs-sm dg-bold" x="12" y="243">③ sliding — 크기 고정 · 경계가 <tspan class="dg-bold">레코드 타임스탬프</tspan>에 정렬 · 양 끝 포함</text>
+  <rect class="dg-node dg-node--accent" x="130" y="247" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm" x="205" y="260" text-anchor="middle">[1,6] → 6</text>
+  <rect class="dg-node dg-node--accent" x="190" y="266" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm" x="265" y="279" text-anchor="middle">[3,8] → 6·8</text>
+  <rect class="dg-node dg-node--accent" x="220" y="285" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm" x="295" y="298" text-anchor="middle">[4,9] → 6·8·9</text>
+  <rect class="dg-node dg-node--accent" x="310" y="304" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm" x="385" y="317" text-anchor="middle">[7,12] → 8·9</text>
+  <rect class="dg-node dg-node--accent" x="370" y="323" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm" x="445" y="336" text-anchor="middle">[9,14] → 9·14</text>
+  <rect class="dg-node dg-node--accent" x="400" y="342" width="150" height="16" rx="2"/>
+  <text class="dg-fs-sm" x="475" y="355" text-anchor="middle">[10,15] → 14</text>
+
+  <!-- ④ session -->
+  <text class="dg-fs-sm dg-bold" x="12" y="378">④ session — 크기 가변 · 비활동 간격이 기준 · 데이터가 크기를 정함</text>
+  <rect class="dg-node dg-node--danger" x="280" y="382" width="90" height="16" rx="2"/>
+  <text class="dg-fs-sm dg-bold" x="325" y="395" text-anchor="middle">[6,9]</text>
+  <text class="dg-fs-sm" x="378" y="395">6·8·9 병합</text>
+  <rect class="dg-node dg-node--danger" x="516" y="382" width="10" height="16" rx="2"/>
+  <text class="dg-fs-sm" x="532" y="395">[14,14] 단독 세션</text>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="414" x2="708" y2="414"/>
+  <text class="dg-fs-sm" x="12" y="432">tumbling 은 hopping 의 특수한 경우입니다 — <tspan class="dg-bold">크기 = 전진 간격</tspan> 이면 tumbling 이 됩니다.</text>
+  <text class="dg-fs-sm" x="12" y="450">session — 간격이 3 이하면 같은 세션으로 병합됩니다. 9 에서 14 는 간격 5 로 3보다 크므로 새 세션이 열립니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="468">시간 윈도우 <tspan class="dg-mono">[a,b)</tspan> 는 시작 포함·끝 제외, sliding <tspan class="dg-mono">[a,b]</tspan> 는 양쪽 포함입니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="486">session 윈도우는 키마다 시작·끝이 다르고 크기도 서로 다릅니다.</text>
+</svg>

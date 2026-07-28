@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>부록 · 버전 표기와 레거시 — Kafka Guide</title>
+  <meta name="description" content="kafka_2.13-4.3.1.tgz 파일명 읽는 법(2.13은 Scala 버전), 2.0에서 4.3까지의 주요 변경 타임라인, ZooKeeper 기반 2.x/3.x 운영 안내, 2.x → 3.9 → 4.x 업그레이드 경로, 그리고 옛 명령·설정이 지금은 무엇으로 바뀌었는지 정리합니다.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="basics" data-page="appendix-legacy"></div>
+
+  <main id="main" class="page" data-page-id="basics/appendix-legacy">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="ch01.html">기본개념</a></li>
+        <li><span aria-current="page">부록 · 버전 표기와 레거시</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">기본개념 · 부록</p>
+      <h1>버전 표기와 레거시</h1>
+      <p class="page__lead">
+        이 가이드의 본문은 <strong>Apache Kafka 4.3.x</strong>를 기준으로 씌어 있습니다.
+        하지만 현실의 많은 조직이 아직 2.x나 3.x를 운영하고 있고, 그 시절 자료를 읽다가
+        <code>kafka_2.13</code>을 Kafka 버전으로 착각하는 일이 매우 흔합니다.
+        이 페이지는 그 두 가지 — <strong>버전 표기 읽는 법</strong>과
+        <strong>레거시 환경에서 4.x로 오는 길</strong> — 을 다룹니다.
+      </p>
+      <p class="page__meta">
+        이 페이지는 <strong>ZooKeeper 기반 운영을 서술하는 유일한 페이지</strong>입니다.
+        다른 장에서 ZooKeeper가 등장하면 "3.x 이전에는 …였다"는 역사적 맥락뿐입니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li><code>kafka_2.13-4.3.1.tgz</code>를 읽고 <strong><code>2.13</code>이 Scala 버전임</strong>을 설명할 수 있습니다.</li>
+        <li>2.0부터 4.3까지 어느 버전에서 무엇이 바뀌었는지 타임라인으로 짚을 수 있습니다.</li>
+        <li>ZooKeeper 시대에 무엇이 어디에 저장됐고 어떤 장애가 잦았는지 설명할 수 있습니다.</li>
+        <li><strong>2.x → 3.9 → 4.x</strong> 경로가 왜 필요한지, 각 단계에서 무엇을 확인해야 하는지 말할 수 있습니다.</li>
+        <li>옛 명령·설정을 보고 현행 대응물을 찾을 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="version-notation">
+      <h2 id="version-notation">버전 표기 읽는 법</h2>
+
+      <p>
+        Apache 아카이브의 4.3.1 디렉터리에는 배포 파일이 하나만 올라와 있습니다.
+        <code>kafka_2.13-4.3.1.tgz</code>입니다. 이 한 줄에 <strong>버전 번호가 두 개</strong> 들어 있어서
+        오해가 끊이지 않습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>배포 파일명 분해</figcaption>
+        <pre><code class="lang-text">kafka_2.13-4.3.1.tgz
+      ────  ─────
+      Scala  Kafka
+      2.13   4.3.1</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="핵심">
+        <p>
+          <strong><code>_2.13</code>은 이 배포판이 컴파일된 Scala 버전입니다.</strong>
+          Kafka 버전은 뒤쪽의 <code>4.3.1</code>입니다.
+          <strong>Kafka 2.13이라는 버전은 존재하지 않습니다</strong> — Kafka는 2.8 다음이 3.0입니다.
+        </p>
+        <p>
+          Scala를 직접 쓰지 않는다면 고민할 것 없이 <code>_2.13</code>을 고르면 됩니다.
+          현행 Kafka는 <strong>Scala 2.13용 배포판만 제공</strong>하며,
+          브로커는 JVM 바이너리로 동작하므로 Java만 있으면 됩니다.
+          Scala 버전은 Java 클라이언트 API와 무관합니다.
+        </p>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-003">
+        <figcaption>
+          버전 표기 분해 — <code>kafka_2.13-4.3.1.tgz</code>의 각 부분이 Scala 버전과 Kafka 버전 중
+          무엇을 의미하는지 지시선으로 분해
+        </figcaption>
+      </figure>
+
+      <div class="table-scroll">
+        <table>
+          <caption>배포 파일명에서 마주치는 표기들</caption>
+          <thead><tr><th scope="col">표기</th><th scope="col">의미</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>kafka_2.13</code></th><td><strong>Scala 2.13</strong>으로 컴파일된 배포판. 현행 Kafka가 제공하는 유일한 Scala 버전입니다</td></tr>
+            <tr><th scope="row"><code>-4.3.1</code></th><td><strong>Apache Kafka 버전</strong></td></tr>
+            <tr><th scope="row"><code>_2.12</code></th><td>Scala 2.12 빌드. 3.9까지 함께 배포되었고 <strong>Scala 2.12 지원은 Kafka 4.0에서 제거</strong>되었습니다(KIP-751)</td></tr>
+            <tr><th scope="row"><code>_2.11</code></th><td>더 오래된 배포판. <strong>2.0에는 있었고 2.8 배포에서는 이미 사라졌습니다</strong> (아카이브 확인)</td></tr>
+            <tr><th scope="row"><code>kafka-4.3.1-src.tgz</code></th><td>소스 배포판. <strong>Scala 접두어가 없습니다</strong> — 접두어 유무로 바이너리/소스를 구분할 수 있습니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="왜 Scala 버전이 파일명에 있는가">
+        <p>
+          Kafka 브로커의 상당 부분이 Scala로 작성되어 있고, Scala는 <strong>메이저·마이너 버전 간
+          바이너리 호환이 보장되지 않습니다.</strong> 그래서 같은 Kafka 버전이라도
+          Scala 버전별로 별도 빌드를 배포해 왔습니다.
+        </p>
+        <p>
+          <strong>이것이 문제가 되는 경우는 하나뿐입니다</strong> —
+          Scala로 작성한 애플리케이션이 Kafka의 Scala 라이브러리를 직접 참조하는 경우입니다.
+          Java 클라이언트(<code>kafka-clients</code>)를 쓰는 대부분의 애플리케이션은
+          <strong>Scala 접두어가 없는 아티팩트</strong>를 쓰므로 영향이 없습니다.
+        </p>
+        <p>
+          참고로 <code>kafka-streams-scala</code> 라이브러리는 <strong>Kafka 4.3에서 deprecated</strong>되었고
+          <strong>5.0에서 제거</strong>될 예정입니다. Scala DSL을 쓰고 있다면 마이그레이션 계획이 필요합니다.
+        </p>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCDAK Fundamentals">
+        <p>
+          이 내용은 <strong>문제은행과 실제 시험 양쪽에서 직접 출제되는 지점</strong>입니다.
+          출제 형태는 대략 셋입니다.
+        </p>
+        <ul>
+          <li>
+            "<code>kafka_2.13-4.3.1.tgz</code>에서 <code>2.13</code>은 무엇인가?" →
+            <strong>Scala 버전</strong>입니다. <em>Kafka 마이너 버전</em>·<em>프로토콜 버전</em>·<em>Java 버전</em>은 모두 오답 선택지입니다.
+          </li>
+          <li>
+            "Kafka 2.8 다음 릴리스는?" → <strong>3.0</strong>입니다.
+            <strong>2.9 · 2.13 같은 버전은 존재하지 않습니다.</strong>
+          </li>
+          <li>
+            "Java 애플리케이션에서 Kafka를 쓰려면 어떤 아티팩트가 필요한가?" →
+            <code>kafka-clients</code>이며 <strong>Scala 접두어가 붙지 않습니다.</strong>
+            Scala 접두어가 필요한 것은 <code>kafka-streams-scala_2.13</code>처럼 Scala API를 쓰는 경우뿐입니다.
+          </li>
+        </ul>
+      </aside>
+
+      <h3 id="which-artifact">무엇을 내려받아야 하는가</h3>
+
+      <div class="table-scroll">
+        <table>
+          <caption>상황별 선택</caption>
+          <thead><tr><th scope="col">하려는 일</th><th scope="col">필요한 것</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">브로커·컨트롤러 운영, CLI 도구 사용</th><td><code>kafka_2.13-4.3.1.tgz</code> (바이너리 배포판). <strong>Java 17 이상</strong>이 필요합니다</td></tr>
+            <tr><th scope="row">Java/Kotlin 애플리케이션에서 produce·consume</th><td>Maven/Gradle 의존성 <code>org.apache.kafka:kafka-clients:4.3.1</code>. <strong>Scala 접두어가 없습니다</strong></td></tr>
+            <tr><th scope="row">Kafka Streams 애플리케이션</th><td><code>org.apache.kafka:kafka-streams:4.3.1</code>. 테스트에는 <code>kafka-streams-test-utils</code>(<a href="ch10.html">10장</a>)</td></tr>
+            <tr><th scope="row">Scala DSL로 Streams 작성</th><td><code>org.apache.kafka:kafka-streams-scala_2.13</code> — 여기가 Scala 접두어가 필요한 드문 경우입니다. <strong>4.3에서 deprecated</strong></td></tr>
+            <tr><th scope="row">소스 빌드</th><td><code>kafka-4.3.1-src.tgz</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="version-timeline">
+      <h2 id="version-timeline">버전별 주요 변경 타임라인 (2.0 → 4.3)</h2>
+
+      <figure class="diagram" data-diagram="D-106">
+        <figcaption>
+          버전 타임라인 — 2.0부터 4.3까지 KRaft 성숙, 프로듀서 기본값 변경, 리밸런스 프로토콜 세대 교체,
+          Tiered Storage, Share Groups가 어느 버전에 놓이는지 가로 타임라인
+        </figcaption>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table config-table--plain">
+          <caption>
+            주요 변경 타임라인. 4.x 항목은 Apache Kafka 4.3 업그레이드 문서에서 직접 확인했고,
+            3.x 이하는 공식 릴리스 발표와 KIP으로 교차 확인했습니다.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">버전</th>
+              <th scope="col">시기</th>
+              <th scope="col">이 버전에서 바뀐 것</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">2.0</th>
+              <td>2018-07</td>
+              <td>이 표의 출발점. <strong>SASL/OAUTHBEARER 지원이 이 버전에서 시작</strong>됩니다. ZooKeeper가 필수인 시대입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">2.4</th>
+              <td>2019-12</td>
+              <td>
+                <strong>증분 협력적 리밸런스(KIP-429)와 <code>CooperativeStickyAssignor</code> 도입.</strong>
+                다만 기본값은 여전히 eager 프로토콜이라, 쓰려면 명시해야 했습니다.
+                <strong>sticky 파티셔너(KIP-480)</strong>도 이 버전입니다 — 키 없는 메시지의 분배 방식이 여기서 바뀝니다(<a href="ch04.html">4장</a>)
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">2.8</th>
+              <td>2021-04</td>
+              <td><strong>KRaft early access (KIP-500).</strong> ZooKeeper 없이 돌려 볼 수 있게 되었지만 구현이 미완이라 프로덕션 금지였습니다. Kafka Streams는 이 버전부터 <strong>스트림 스레드를 동적으로 추가·제거</strong>할 수 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">3.0</th>
+              <td>2021-09</td>
+              <td>
+                <strong>프로듀서 기본값이 가장 강한 보장으로 바뀝니다(KIP-679)</strong> —
+                <code>acks=1</code> → <code>all</code>, <code>enable.idempotence=false</code> → <code>true</code>.
+                컨슈머 <code>partition.assignment.strategy</code> 기본값도
+                <code>RangeAssignor</code> → <code>[RangeAssignor, CooperativeStickyAssignor]</code>로 바뀝니다(KIP-726).
+                <strong>관리 도구에서 <code>--zookeeper</code> 플래그가 제거</strong>됩니다(KIP-604).
+                Kafka Streams의 1세대 <code>exactly_once</code>가 deprecated됩니다
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">3.3</th>
+              <td>2022-09</td>
+              <td>
+                <strong>KRaft가 신규 클러스터에 대해 production-ready (KIP-833).</strong>
+                4.3 업그레이드 문서가 <strong>"KRaft 모드가 production ready로 판정된 첫 버전"</strong>이라고
+                3.3.x를 지목하며, 그래서 <strong>4.x 업그레이드의 메타데이터 하한선</strong>이 됩니다.
+                <strong>Kafka Connect의 source 커넥터 exactly-once</strong>도 이 버전부터입니다(<a href="ch09.html">9장</a>)
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">3.5</th>
+              <td>2023-06</td>
+              <td><strong>ZooKeeper → KRaft 마이그레이션의 bridge release.</strong> ZooKeeper 모드가 deprecated로 표시됩니다. Connect에 <code>stop</code> API가 추가됩니다(<a href="ch09.html">9장</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">3.6</th>
+              <td>2023-10</td>
+              <td><strong>Tiered Storage early access (KIP-405)</strong> — 프로덕션 권장은 아니었습니다. Connect의 <code>plugin.discovery</code>가 설정 가능해지고 기본값이 <code>hybrid_warn</code>이 됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row">3.9</th>
+              <td>2024-11</td>
+              <td>
+                <strong>ZooKeeper 모드를 지원하는 마지막 릴리스.</strong>
+                Tiered Storage가 production-ready가 되고, 동적 KRaft 쿼럼(KIP-853)이 들어옵니다.
+                <strong>4.x로 가는 모든 레거시 클러스터의 경유지</strong>입니다 —
+                4.3 업그레이드 문서가 3.3.x보다 오래된 KRaft 클러스터에 대해
+                <strong>"3.9.x로 먼저 올릴 것을 권장"</strong>합니다
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">4.0</th>
+              <td>2025-03</td>
+              <td>
+                <strong>ZooKeeper 모드 완전 제거. KRaft만 지원합니다.</strong>
+                <strong>KIP-848 새 컨슈머 리밸런스 프로토콜 GA</strong>(서버 쪽은 4.0 확정 시 자동 활성,
+                <strong>클라이언트 <code>group.protocol</code> 기본값은 여전히 <code>classic</code></strong>).
+                새 그룹 코디네이터 구현, <strong>KIP-890 트랜잭션 서버 사이드 방어</strong>,
+                <strong>Eligible Leader Replicas(KIP-966 part 1)</strong>.
+                <strong><code>linger.ms</code> 기본값 <code>0</code> → <code>5</code></strong>.
+                <strong>Scala 2.12 지원 제거</strong>(KIP-751), Java 8 제거 —
+                clients·streams는 Java 11+, <strong>브로커·Connect·tools는 Java 17+</strong>(KIP-750·KIP-1013).
+                Log4j → Log4j2 전환. <code>DefaultPartitioner</code>·<code>UniformStickyPartitioner</code> 제거.
+                <code>segment.bytes</code> 최소값 14바이트 → <strong>1MB</strong>,
+                <code>num.recovery.threads.per.data.dir</code> 1 → <strong>2</strong>,
+                <code>message.timestamp.after.max.ms</code> <code>Long.MAX</code> → <strong>1시간</strong>(KIP-1030)
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">4.1</th>
+              <td>2025-09</td>
+              <td>
+                <strong>Queues for Kafka (KIP-932) preview.</strong> <code>kafka-features.sh</code>로
+                <code>share.version=1</code>을 명시해야 켰습니다.
+                <strong>Streams Rebalance Protocol(KIP-1071) Early Access</strong> — 기본 비활성, 프로덕션 금지.
+                <strong>ELR이 신규 클러스터에서 기본 활성</strong>.
+                <code>log.cleaner.enable</code> deprecated.
+                프로듀서 <code>flush()</code>가 콜백 안에서의 호출을 금지하고 데드락을 감지합니다
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">4.2</th>
+              <td>2026-02</td>
+              <td>
+                <strong>Queues for Kafka (KIP-932) production-ready.</strong> <code>RENEW</code> ack 타입이 추가됩니다(<a href="ch11.html">11장</a>).
+                <strong>Streams Rebalance Protocol(KIP-1071)도 핵심 기능 집합이 production-ready</strong> —
+                단 4.2.0의 오프라인 마이그레이션 버그(KAFKA-20254) 때문에 마이그레이션은 4.2.1에서 해야 합니다.
+                Connect의 <code>connector.client.config.override.policy</code>에
+                <code>Allowlist</code>가 추가되고 권장 설정이 됩니다.
+                <code>controller.quorum.auto.join.enable</code> 추가(KIP-853).
+                <code>KafkaPrincipalBuilder</code>가 <code>KafkaPrincipalSerde</code>를 상속하도록 변경(KIP-1157)
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">4.3</th>
+              <td>2026-05</td>
+              <td>
+                현행 기준 버전. <strong><code>kafka-streams-scala</code> deprecated</strong>(5.0에서 제거 예정).
+                Kafka Streams에 <strong>headers-aware 상태 저장소</strong>(<code>dsl.store.format</code>, KIP-1285).
+                <strong>로그 디렉터리 cordoning</strong>(KIP-1066).
+                <code>group.coordinator.rebalance.protocols</code> deprecated —
+                5.0부터 feature version(<code>group.version</code>·<code>streams.version</code>·<code>share.version</code>)으로만 제어(KIP-1237).
+                share group 설정 3종 추가(KIP-1240).
+                <code>remote.log.metadata.topic.min.isr</code> 신설(기본 2, KIP-1235).
+                tiered storage 팔로워 부트스트랩 최적화 <code>follower.fetch.last.tiered.offset.enable</code>(기본 <code>false</code>, KIP-1023).
+                동적 쿼럼 컨트롤러의 동적 설정 변경 지원
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="3.0·3.1의 멱등성 기본값 버그">
+        <p>
+          KIP-679가 <code>enable.idempotence=true</code>를 기본값으로 만들었지만,
+          <strong>3.0.0과 3.1.0에는 이 기본값이 실제로 적용되지 않는 버그가 있었습니다.</strong>
+          사용자가 명시적으로 <code>true</code>를 설정하지 않으면 여전히 비활성이었습니다.
+          <strong><code>acks=all</code> 변경은 영향을 받지 않았습니다.</strong>
+          이 버그는 <strong>3.0.1 · 3.1.1 · 3.2.0에서 수정</strong>되었습니다.
+        </p>
+        <p>
+          실무 함의: <strong>3.0.0/3.1.0을 쓰고 있으면서 "3.0부터 기본 멱등성"이라고 믿고 있다면
+          실제로는 멱등성이 꺼져 있을 수 있습니다.</strong>
+          <code>enable.idempotence</code>를 명시적으로 지정하는 것이 안전합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="zookeeper-era">
+      <h2 id="zookeeper-era">Kafka 2.x / 3.x를 아직 쓰는 조직을 위한 안내</h2>
+
+      <aside class="note" data-label="이 절의 범위">
+        <p>
+          아래는 <strong>Kafka 3.9 이하에서만 유효한 서술</strong>입니다.
+          4.0부터 ZooKeeper 모드가 제거되었으므로, 4.x에서는 아래 내용 중 어느 것도 적용되지 않습니다.
+          현행 아키텍처는 <a href="ch03.html">3장 KRaft와 클러스터 메타데이터</a>를 보세요.
+        </p>
+      </aside>
+
+      <h3 id="zk-ensemble">ZooKeeper 앙상블 구성</h3>
+
+      <p>
+        ZooKeeper는 과반수 기반 합의를 쓰므로 <strong>앙상블 크기를 홀수로 두는 것이 관례</strong>였습니다.
+        3대면 1대 장애, 5대면 2대 장애를 견딥니다.
+        운영 관점의 핵심은 <strong>Kafka 브로커와 ZooKeeper 노드를 같은 머신에 두지 않는 것</strong>과
+        <strong>ZooKeeper의 트랜잭션 로그를 별도 디스크에 두는 것</strong>이었습니다 —
+        ZooKeeper는 쓰기마다 fsync를 하므로 디스크 지연에 매우 민감했습니다.
+      </p>
+
+      <p>
+        이 <strong>"두 개의 분산 시스템을 함께 운영해야 한다"</strong>는 부담이
+        KIP-500(ZooKeeper 제거)의 출발점이었습니다.
+        Kafka를 운영하려면 Kafka와 ZooKeeper 양쪽의 튜닝·모니터링·보안·업그레이드를 모두 알아야 했습니다.
+      </p>
+
+      <h3 id="zk-stored">ZooKeeper에 저장되던 것들</h3>
+
+      <div class="table-scroll">
+        <table>
+          <caption>ZooKeeper 시대에 ZooKeeper가 보관했던 상태와, 4.x에서 그것이 어디로 갔는지</caption>
+          <thead>
+            <tr><th scope="col">저장 대상</th><th scope="col">ZooKeeper 시대</th><th scope="col">4.x (KRaft)</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">브로커 등록·생존</th>
+              <td>브로커가 ZooKeeper에 ephemeral 노드로 자신을 등록. 세션이 끊기면 노드가 사라져 이탈로 판정</td>
+              <td>브로커가 <strong>컨트롤러에 주기적 하트비트</strong>를 보냅니다. <code>broker.session.timeout.ms</code> 안에 도착하지 않으면 오프라인 처리</td>
+            </tr>
+            <tr>
+              <th scope="row">브로커 ID 생성</th>
+              <td><code>broker.id.generation.enable</code>·<code>reserved.broker.max.id</code>로 ZooKeeper가 자동 생성</td>
+              <td><strong>제거됨.</strong> <code>node.id</code>로 서버를 식별합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">컨트롤러 선출</th>
+              <td>ZooKeeper 노드 생성 경쟁으로 컨트롤러 한 대를 뽑음. 컨트롤러 페일오버 시 <strong>메타데이터 전체를 ZooKeeper에서 다시 읽어야</strong> 했고 클러스터가 클수록 오래 걸렸습니다</td>
+              <td><strong>컨트롤러 쿼럼이 Raft로 합의</strong>합니다. 메타데이터가 <code>__cluster_metadata</code> 로그에 있어 페일오버가 빠릅니다(<a href="ch03.html">3장</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">토픽 메타데이터·토픽 설정</th>
+              <td>ZooKeeper znode</td>
+              <td>메타데이터 로그</td>
+            </tr>
+            <tr>
+              <th scope="row">ACL</th>
+              <td>ZooKeeper znode (<code>AclAuthorizer</code>)</td>
+              <td><strong>클러스터 메타데이터 로그</strong> (<code>StandardAuthorizer</code>, <a href="ch11.html">11장</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">동적 브로커 설정</th>
+              <td>ZooKeeper znode. 민감 값은 <code>password.encoder.*</code> 설정으로 암호화해 저장</td>
+              <td>메타데이터 레코드. <strong><code>password.encoder.*</code> 설정 6개는 제거</strong>되었고, KRaft는 민감 데이터를 레코드에 <strong>암호화하지 않고</strong> 저장합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">쿼터·SCRAM 자격증명</th>
+              <td>ZooKeeper znode</td>
+              <td>메타데이터 레코드 (<code>kafka-configs.sh</code>로 동일하게 관리)</td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머 오프셋</th>
+              <td><strong>0.9 이전에는 ZooKeeper</strong>, 이후 <code>__consumer_offsets</code> 토픽</td>
+              <td><code>__consumer_offsets</code> 토픽 (변화 없음)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="KRaft에서 사라진 ZooKeeper 관련 설정">
+        <p>
+          공식 문서의 "KRaft와 ZooKeeper 모드의 차이" 문서가 제거된 설정을 명시합니다.
+          레거시 설정 파일을 4.x로 가져올 때 <strong>아래 항목이 남아 있으면 정리해야 합니다.</strong>
+        </p>
+        <figure class="code">
+          <figcaption>4.x에서 제거된 ZooKeeper 관련 설정</figcaption>
+          <pre><code class="lang-properties"># ZooKeeper 접속 자체
+zookeeper.connect
+zookeeper.session.timeout.ms
+zookeeper.connection.timeout.ms
+zookeeper.set.acl
+zookeeper.max.in.flight.requests
+zookeeper.ssl.client.enable
+zookeeper.clientCnxnSocket
+zookeeper.ssl.keystore.location
+zookeeper.ssl.keystore.password
+zookeeper.ssl.keystore.type
+zookeeper.ssl.truststore.location
+zookeeper.ssl.truststore.password
+zookeeper.ssl.truststore.type
+zookeeper.ssl.protocol
+zookeeper.ssl.enabled.protocols
+zookeeper.ssl.cipher.suites
+zookeeper.ssl.endpoint.identification.algorithm
+zookeeper.ssl.crl.enable
+zookeeper.ssl.ocsp.enable
+
+# 민감 데이터 암호화 (ZooKeeper 저장용이었음)
+password.encoder.secret
+password.encoder.old.secret
+password.encoder.keyfactory.algorithm
+password.encoder.cipher.algorithm
+password.encoder.key.length
+password.encoder.iterations
+
+# 내부 control plane (ZooKeeper 시대의 브로커-컨트롤러 통신)
+control.plane.listener.name
+
+# 브로커 ID 자동 생성
+broker.id.generation.enable
+reserved.broker.max.id
+
+# graceful shutdown 재시도
+controlled.shutdown.max.retries
+controlled.shutdown.retry.backoff.ms
+
+# 브로커 간 프로토콜 버전 → metadata.version 으로 대체
+inter.broker.protocol.version
+
+# ZooKeeper 기반 동적 설정이었던 것
+advertised.listeners          # KRaft 에서는 재시작이 필요합니다
+leader.imbalance.per.broker.percentage</code></pre>
+        </figure>
+      </aside>
+
+      <h3 id="zk-cli">--zookeeper CLI의 시대</h3>
+
+      <p>
+        2.x 자료를 보면 아래와 같은 명령이 흔히 나옵니다.
+        <strong>이 명령들은 현행 Kafka에서 동작하지 않습니다.</strong>
+        관리 도구의 <code>--zookeeper</code> 플래그는 KIP-555로 deprecated되고
+        <strong>Kafka 3.0에서 제거</strong>되었습니다(KIP-604).
+      </p>
+
+      <div class="diff">
+        <div class="diff__before">
+          <p><strong>Kafka 2.x 시절</strong> — ZooKeeper에 직접 접속해 메타데이터를 고쳤습니다.
+            클라이언트가 브로커를 거치지 않으므로 ACL·인증을 우회하는 문제도 있었습니다.</p>
+          <figure class="code">
+            <figcaption>2.x 명령 (현행에서는 동작하지 않습니다)</figcaption>
+            <pre><code class="lang-bash">bin/kafka-topics.sh --zookeeper localhost:2181 \
+  --create --topic orders --partitions 6 --replication-factor 3
+
+bin/kafka-topics.sh --zookeeper localhost:2181 --list
+
+bin/kafka-configs.sh --zookeeper localhost:2181 \
+  --entity-type topics --entity-name orders --describe
+
+bin/kafka-acls.sh \
+  --authorizer-properties zookeeper.connect=localhost:2181 --list</code></pre>
+          </figure>
+        </div>
+        <div class="diff__after">
+          <p><strong>Kafka 4.x</strong> — 모든 관리 요청이 브로커(또는 컨트롤러)를 거칩니다.
+            인증·인가가 일관되게 적용되고, 클라이언트가 알아야 할 엔드포인트가 하나로 줄었습니다.</p>
+          <figure class="code">
+            <figcaption>4.x 명령</figcaption>
+            <pre><code class="lang-bash">bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+  --create --topic orders --partitions 6 --replication-factor 3
+
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+  --entity-type topics --entity-name orders --describe
+
+bin/kafka-acls.sh --bootstrap-server localhost:9092 --list</code></pre>
+          </figure>
+        </div>
+      </div>
+
+      <p>
+        4.0에서는 남아 있던 ZooKeeper 흔적까지 정리되었습니다 —
+        <code>kafka-acls</code>의 <code>--authorizer</code>·<code>--authorizer-properties</code>·<code>--zk-tls-config-file</code>
+        옵션이 제거되고 <code>--bootstrap-server</code> 또는 <code>--bootstrap-controller</code>를 쓰게 되었으며,
+        <code>kafka.admin.ZkSecurityMigrator</code> 도구도 제거되었습니다.
+        또한 <strong>KRaft 모드용 설정 파일이 별도의 <code>config/kraft</code> 디렉터리에 있던 관행도 끝나
+        모든 설정 파일이 <code>config</code> 디렉터리로 통합</strong>되었습니다.
+      </p>
+
+      <h3 id="zk-failures">ZooKeeper 시대의 흔한 장애</h3>
+
+      <p>
+        어떤 장애가 잦았는지는 <strong>Kafka가 그 시절 어떤 메트릭을 노출했는지</strong>를 보면 드러납니다.
+        아래 메트릭들은 모두 <strong>4.x에서 제거</strong>되었지만, 그 이름이 곧 당시의 걱정거리 목록입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>ZooKeeper 시대의 장애 유형과 그것을 감시했던 메트릭 (모두 4.x에서 제거됨)</caption>
+          <thead>
+            <tr><th scope="col">장애</th><th scope="col">무슨 일이 일어나는가</th><th scope="col">당시의 메트릭</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">ZooKeeper 세션 만료</th>
+              <td>
+                GC 정지, 네트워크 순단, ZooKeeper 과부하로 브로커의 ZooKeeper 세션이 만료됩니다.
+                브로커는 살아 있는데 <strong>클러스터에서 이탈한 것으로 처리</strong>되어
+                리더 선출과 ISR 축소가 연쇄로 일어납니다.
+                <code>zookeeper.session.timeout.ms</code>가 너무 짧으면 이 현상이 잦아졌습니다
+              </td>
+              <td>
+                <code>SessionExpireListener.ZooKeeperExpiresPerSec</code>,
+                <code>SessionExpireListener.SessionState</code>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">ZooKeeper 연결 끊김</th>
+              <td>세션 만료까지 가지 않아도 재연결이 반복되면 메타데이터 갱신이 지연되고 컨트롤러 동작이 불안정해졌습니다</td>
+              <td>
+                <code>SessionExpireListener.ZooKeeperDisconnectsPerSec</code>,
+                <code>SessionExpireListener.ZooKeeperSyncConnectsPerSec</code>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">ZooKeeper 디스크 압박</th>
+              <td>
+                ZooKeeper는 <strong>쓰기마다 트랜잭션 로그를 디스크에 sync</strong>합니다.
+                스냅샷·로그 정리(<code>autopurge</code>)가 안 되어 디스크가 차거나 디스크가 느리면
+                ZooKeeper 응답 지연 → 브로커 세션 위험으로 이어졌습니다
+              </td>
+              <td><code>ZooKeeperClientMetrics.ZooKeeperRequestLatencyMs</code></td>
+            </tr>
+            <tr>
+              <th scope="row">인증 실패</th>
+              <td>ZooKeeper에 SASL 인증을 켠 환경에서 자격증명 문제로 브로커가 ZooKeeper에 붙지 못했습니다</td>
+              <td><code>SessionExpireListener.ZooKeeperAuthFailuresPerSec</code></td>
+            </tr>
+            <tr>
+              <th scope="row">컨트롤러 이슈 · split-brain 우려</th>
+              <td>
+                컨트롤러 페일오버 시 <strong>메타데이터 전체를 ZooKeeper에서 다시 읽어야</strong> 했으므로
+                파티션이 많은 클러스터에서 페일오버가 오래 걸렸고, 그 사이 파티션이 오프라인으로 남았습니다.
+                옛 컨트롤러가 자신이 여전히 컨트롤러라고 믿는 상황(zombie controller)을
+                컨트롤러 epoch로 걸러 내야 했습니다
+              </td>
+              <td>
+                <code>ControllerStats.ControllerChangeRateAndTimeMs</code>,
+                <code>ControllerStats.ControllerShutdownRateAndTimeMs</code>,
+                <code>KafkaController.ControllerState</code>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">마이그레이션 상태 추적</th>
+              <td>ZooKeeper → KRaft 마이그레이션 중에는 브로커가 어느 단계에 있는지 확인해야 했습니다</td>
+              <td>
+                <code>KafkaController.ZkMigrationState</code>,
+                <code>KafkaController.MigratingZkBrokerCount</code>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · 버전 차이">
+        <p>
+          시험은 <strong>4.x 기준</strong>으로 출제되므로, 위 내용은
+          <strong>"KRaft가 무엇을 개선했는가"</strong>를 설명하는 근거로 쓰입니다.
+          출제 형태로 정리하면:
+        </p>
+        <ul>
+          <li>KRaft 도입 이유 3가지 — <strong>이중 운영 부담 / 메타데이터 확장 한계 / 컨트롤러 페일오버 지연</strong></li>
+          <li>브로커 생존 판정: ZooKeeper 시대는 <strong>ZooKeeper 세션</strong>, KRaft는 <strong>컨트롤러 하트비트</strong></li>
+          <li>ACL 저장 위치: ZooKeeper znode → <strong>클러스터 메타데이터 로그</strong></li>
+          <li><code>inter.broker.protocol.version</code> → <strong><code>metadata.version</code></strong> (<code>kafka-features.sh</code>로 관리)</li>
+          <li><strong><code>--zookeeper</code> 옵션은 존재하지 않습니다.</strong> 모든 명령은 <code>--bootstrap-server</code>(또는 컨트롤러 대상이면 <code>--bootstrap-controller</code>)입니다</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="upgrade-path">
+      <h2 id="upgrade-path">업그레이드 경로 — 2.x → 3.9 → 4.x</h2>
+
+      <figure class="diagram" data-diagram="D-107">
+        <figcaption>
+          업그레이드 경로 — 2.x에서 4.x까지 3.9를 경유하는 흐름과,
+          ZooKeeper 모드 클러스터가 KRaft로 마이그레이션되는 지점
+        </figcaption>
+      </figure>
+
+      <h3 id="why-39">왜 3.9를 경유해야 하는가</h3>
+
+      <p>
+        4.3 업그레이드 문서의 서술을 정리하면 이유가 세 겹입니다.
+      </p>
+
+      <ol>
+        <li>
+          <strong>4.x는 KRaft만 지원합니다.</strong>
+          문서는 <strong>"ZooKeeper 모드 클러스터는 4.3.x로 업그레이드하기 전에 반드시 KRaft로 마이그레이션되어야 한다"</strong>고
+          명시합니다. 그리고 <strong>ZooKeeper → KRaft 마이그레이션 기능이 있는 마지막 버전이 3.9</strong>입니다.
+          4.0 이후에는 마이그레이션 경로 자체가 없습니다.
+        </li>
+        <li>
+          <strong>4.x 브로커 업그레이드는 소프트웨어·메타데이터 버전이 최소 3.3.x여야 합니다.</strong>
+          문서는 이를 <strong>"KRaft 모드가 production ready로 판정된 첫 버전"</strong>이라는 이유로 설명합니다.
+          3.3.x보다 오래된 KRaft 클러스터에는 <strong>3.9.x로 먼저 올리는 것을 권장</strong>합니다.
+        </li>
+        <li>
+          <strong>클라이언트는 4.0 이전에 2.1 이상이어야 합니다.</strong>
+          4.0에서 오래된 프로토콜 API 버전이 제거되었기 때문입니다(KIP-896).
+          Connect와 Kafka Streams도 내부적으로 클라이언트를 쓰므로 함께 해당됩니다.
+        </li>
+      </ol>
+
+      <aside class="note note--danger" data-label="순서를 바꾸면 되돌릴 수 없습니다">
+        <p>
+          <strong>ZooKeeper 모드에서 곧바로 4.x 바이너리로 브로커를 교체하면 기동되지 않습니다.</strong>
+          그리고 4.3은 <strong>클러스터 메타데이터 다운그레이드를 지원하지 않습니다</strong> —
+          <code>IPB_4_3_IV0</code>에 메타데이터 변경이 포함되어 있기 때문입니다.
+          업그레이드 확정(<code>kafka-features.sh upgrade --release-version 4.3</code>)은
+          <strong>되돌릴 수 없는 단계</strong>이므로, 그 전에 클러스터 동작과 성능을 충분히 검증해야 합니다.
+        </p>
+        <p>
+          참고로 4.2는 메타데이터 변경이 없어(<code>IBP_4_2_IV1</code>) 다운그레이드가 가능했습니다.
+          <strong>버전마다 다르므로 반드시 해당 버전의 업그레이드 문서를 확인</strong>하세요.
+        </p>
+      </aside>
+
+      <h3 id="upgrade-steps">단계별 절차</h3>
+
+      <div class="table-scroll">
+        <table>
+          <caption>레거시 클러스터를 4.3으로 올리는 큰 흐름</caption>
+          <thead>
+            <tr><th scope="col">단계</th><th scope="col">무엇을 하는가</th><th scope="col">확인 사항</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">① 클라이언트 정비</th>
+              <td>모든 프로듀서·컨슈머·Connect·Streams 클라이언트를 <strong>최소 2.1 이상</strong>으로 올립니다. 가능하면 더 최신으로</td>
+              <td>4.0에서 제거된 API를 쓰고 있지 않은지. Apache Kafka 외부의 서드파티 클라이언트도 KIP-896을 확인해야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">② 3.9로 롤링 업그레이드 (ZooKeeper 모드 유지)</th>
+              <td>브로커를 하나씩 3.9로 교체합니다. 아직 ZooKeeper 모드입니다</td>
+              <td>ZooKeeper 모드에서는 <code>inter.broker.protocol.version</code>을 <strong>단계적으로 상향</strong>합니다 — 먼저 모든 브로커의 바이너리를 교체하고, 전부 정상 동작을 확인한 뒤 이 값을 올려 다시 롤링합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">③ ZooKeeper → KRaft 마이그레이션 (3.9에서)</th>
+              <td>KRaft 컨트롤러 쿼럼을 구성하고 브로커를 마이그레이션 모드로 전환한 뒤, 메타데이터를 KRaft로 옮기고 ZooKeeper 의존을 끊습니다</td>
+              <td><strong>3.9의 공식 마이그레이션 문서를 그대로 따르세요.</strong> 컨트롤러 수는 <strong>3 또는 5</strong>(<a href="ch03.html">3장</a>). <code>KafkaController.ZkMigrationState</code> 메트릭으로 진행을 확인합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">④ 4.x로 롤링 업그레이드</th>
+              <td>브로커를 하나씩 정지 → 코드 교체 → 재시작합니다. 이 시점에는 이미 KRaft 모드입니다</td>
+              <td><code>UnderReplicatedPartitions</code>가 0으로 돌아온 뒤 다음 브로커로 넘어가세요(<a href="ch11.html">11장</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">⑤ 업그레이드 확정</th>
+              <td><code>bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.3</code></td>
+              <td><strong>되돌릴 수 없습니다.</strong> 클러스터 동작·성능을 먼저 충분히 검증하세요</td>
+            </tr>
+            <tr>
+              <th scope="row">⑥ 설정·기본값 정리</th>
+              <td>제거된 ZooKeeper 관련 설정을 지우고, 바뀐 기본값이 의도와 맞는지 확인합니다</td>
+              <td><code>linger.ms</code> 5, <code>acks</code> <code>all</code>, <code>enable.idempotence</code> <code>true</code>, <code>num.recovery.threads.per.data.dir</code> 2, <code>message.timestamp.after.max.ms</code> 1시간, <code>segment.bytes</code> 최소 1MB</td>
+            </tr>
+            <tr>
+              <th scope="row">⑦ 신기능 선택 적용</th>
+              <td>KIP-848 컨슈머 프로토콜, Share Groups, Streams Rebalance Protocol을 필요에 따라 켭니다</td>
+              <td>모두 <strong>클라이언트 쪽 기본값이 아닙니다.</strong> <code>group.protocol=consumer</code>(<a href="ch05.html">5장</a>), <code>share.version=1</code>·<code>group.protocol=streams</code>(<a href="ch11.html">11장</a>·<a href="ch10.html">10장</a>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="code">
+        <figcaption>4.x 롤링 업그레이드 — 공식 문서의 3단계</figcaption>
+        <pre><code class="lang-bash"># 1. 브로커를 하나씩: 정지 → 코드 교체 → 재시작
+#    전부 끝나면 클러스터 동작과 성능이 기대와 맞는지 검증합니다.
+
+# 2. 검증이 끝나면 업그레이드를 확정합니다 (되돌릴 수 없습니다)
+bin/kafka-features.sh --bootstrap-server localhost:9092 \
+  upgrade --release-version 4.3
+
+# 3. 현재 feature 레벨 확인
+bin/kafka-features.sh --bootstrap-server localhost:9092 describe
+
+# (참고) 4.x 에서는 inter.broker.protocol.version 이 아니라
+#        metadata.version 을 feature 로 관리합니다.</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="롤링 업그레이드 시 주의점">
+        <ul>
+          <li>
+            <strong>한 번에 한 대씩.</strong> 다음 브로커로 넘어가기 전에
+            <code>UnderReplicatedPartitions</code>가 0으로 돌아오고 ISR이 복구됐는지 확인하세요.
+          </li>
+          <li>
+            <strong><code>min.insync.replicas</code>와 브로커 수의 관계를 먼저 계산하세요.</strong>
+            RF=3, <code>min.insync.replicas=2</code>에서 브로커 한 대를 내리면 여유가 0입니다 —
+            그 사이 다른 브로커에 문제가 생기면 <code>acks=all</code> 쓰기가 거부됩니다.
+          </li>
+          <li>
+            <strong>Connect 워커의 <code>scheduled.rebalance.max.delay.ms</code>(기본 5분)</strong>를 고려하세요.
+            워커를 내리고 5분 안에 복귀하지 않으면 태스크가 재배치되고, 그 사이 태스크는 미배정 상태입니다(<a href="ch09.html">9장</a>).
+          </li>
+          <li>
+            <strong>컨슈머 그룹 리밸런스를 줄이려면</strong> static membership(<code>group.instance.id</code>)이나
+            KIP-848 프로토콜을 검토하세요(<a href="ch05.html">5장</a>).
+          </li>
+          <li>
+            <strong>Kafka Streams는 별도로 확인하세요.</strong> 4.0에서 3.6 이전에 deprecated된
+            public API가 대량 제거되었습니다. Streams 업그레이드 가이드를 따로 읽어야 합니다.
+          </li>
+          <li>
+            <strong>4.1.0의 Streams 메모리 누수(KAFKA-19748)</strong>가 range scan과 일부 DSL 연산자
+            (session window, sliding window, stream-stream join, foreign-key join)에 영향을 주었습니다.
+            공식 문서는 <strong>4.1.1로 직행할 것을 권고</strong>합니다.
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Deployment Architecture">
+        <p>업그레이드 경로에서 출제되는 숫자는 네 개입니다. 이것만 정확히 외우면 됩니다.</p>
+        <div class="table-scroll">
+          <table class="config-table config-table--plain">
+            <tbody>
+              <tr><th scope="row">3.3</th><td><strong>KRaft가 production-ready가 된 첫 버전.</strong> 그래서 4.x 업그레이드의 <strong>메타데이터·소프트웨어 최소 버전</strong>입니다</td></tr>
+              <tr><th scope="row">3.5</th><td>ZooKeeper → KRaft 마이그레이션의 <strong>bridge release</strong>. ZooKeeper 모드가 deprecated로 표시된 버전</td></tr>
+              <tr><th scope="row">3.9</th><td><strong>ZooKeeper 모드를 지원하는 마지막 버전.</strong> 모든 레거시 클러스터의 <strong>경유지</strong>입니다</td></tr>
+              <tr><th scope="row">4.0</th><td><strong>ZooKeeper 모드 제거.</strong> 이후 버전에는 마이그레이션 경로 자체가 없습니다</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          자주 나오는 함정: <strong>"ZooKeeper 클러스터를 4.x로 바로 업그레이드한 뒤 KRaft로 마이그레이션한다"</strong>는
+          선택지입니다. <strong>순서가 반대</strong>입니다 —
+          <strong>KRaft 마이그레이션을 3.9에서 먼저 끝낸 뒤</strong> 4.x로 올립니다.
+          그리고 <strong>클라이언트는 4.0 이전에 2.1 이상</strong>이어야 합니다(KIP-896).
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="legacy-mapping">
+      <h2 id="legacy-mapping">레거시 → 현행 대응표</h2>
+
+      <p>
+        옛 자료나 사내 위키에서 아래 왼쪽 항목을 만나면 오른쪽으로 옮겨 읽으세요.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>명령·설정·개념의 대응 관계</caption>
+          <thead>
+            <tr><th scope="col">레거시 (2.x / 3.x)</th><th scope="col">현행 (4.3)</th><th scope="col">비고</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>--zookeeper localhost:2181</code></th>
+              <td><code>--bootstrap-server localhost:9092</code></td>
+              <td>관리 도구에서 <strong>3.0에 제거</strong>(KIP-604). 컨트롤러를 직접 겨냥해야 하면 <code>--bootstrap-controller</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>zookeeper.connect=…</code></th>
+              <td><code>controller.quorum.bootstrap.servers</code> (또는 정적 쿼럼이면 <code>controller.quorum.voters</code>)</td>
+              <td>브로커가 컨트롤러를 찾는 방법입니다(<a href="ch03.html">3장</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>broker.id</code> 자동 생성</th>
+              <td><code>node.id</code> 명시</td>
+              <td><code>broker.id.generation.enable</code>·<code>reserved.broker.max.id</code>가 제거되었습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>inter.broker.protocol.version</code> 단계적 상향</th>
+              <td><code>bin/kafka-features.sh upgrade --release-version X.Y</code></td>
+              <td>KRaft에서는 <strong><code>metadata.version</code></strong>이 클러스터 기능 레벨을 제어합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.message.format.version</code> / <code>message.format.version</code></th>
+              <td>(없음)</td>
+              <td><strong>4.0에서 제거</strong>되었습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>control.plane.listener.name</code></th>
+              <td><code>controller.listener.names</code> + <code>listeners</code> + <code>listener.security.protocol.map</code></td>
+              <td>KRaft에서는 컨트롤 플레인이 Kafka 자체에 통합되었습니다(<a href="ch11.html">11장</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.security.authorizer.AclAuthorizer</code></th>
+              <td><code>org.apache.kafka.metadata.authorizer.StandardAuthorizer</code></td>
+              <td>ACL이 ZooKeeper가 아니라 <strong>메타데이터 로그</strong>에 저장됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka-acls.sh --authorizer-properties zookeeper.connect=…</code></th>
+              <td><code>kafka-acls.sh --bootstrap-server …</code></td>
+              <td><code>--authorizer</code>·<code>--authorizer-properties</code>·<code>--zk-tls-config-file</code>이 <strong>4.0에서 제거</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.admin.ZkSecurityMigrator</code></th>
+              <td>(없음)</td>
+              <td><strong>4.0에서 제거</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>config/kraft/server.properties</code></th>
+              <td><code>config/server.properties</code></td>
+              <td>ZooKeeper 제거로 <strong>설정 파일이 <code>config</code>로 통합</strong>되었습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>password.encoder.*</code></th>
+              <td>(없음)</td>
+              <td>KRaft는 민감 데이터를 레코드로 저장하며 <strong>암호화하지 않습니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>DefaultPartitioner</code> / <code>UniformStickyPartitioner</code></th>
+              <td>(클래스 제거 — 기본 파티셔너 동작이 내장)</td>
+              <td><strong>4.0에서 제거</strong>. 커스텀 파티셔너는 <code>Partitioner</code> 구현으로(<a href="ch04.html">4장</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>Partitioner.onNewBatch()</code></th>
+              <td>(없음)</td>
+              <td><strong>4.0에서 제거</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>NotLeaderForPartitionException</code></th>
+              <td><code>NotLeaderOrFollowerException</code></td>
+              <td><strong>4.0에서 클래스 제거</strong>. 재시도 가능한 예외입니다(<a href="ch04.html">4장</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>consumer.poll(long)</code></th>
+              <td><code>consumer.poll(Duration)</code></td>
+              <td><strong>4.0에서 제거.</strong> 동작이 다릅니다 — <code>poll(Duration)</code>은 파티션 배정을 기다리며 타임아웃을 넘기지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>Admin.alterConfigs()</code></th>
+              <td><code>Admin.incrementalAlterConfigs()</code></td>
+              <td><strong>4.0에서 제거.</strong> <code>kafka-configs.sh</code>도 내부적으로 후자를 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row">MirrorMaker 1 (<code>kafka-mirror-maker.sh</code>)</th>
+              <td>MirrorMaker 2 (Connect 기반)</td>
+              <td><strong>4.0에서 MM1과 관련 클래스가 제거</strong>되었습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>--whitelist</code> / <code>--blacklist</code> 계열 옵션</th>
+              <td><code>--include</code> / <code>--exclude</code> 계열</td>
+              <td>예: <code>kafka-console-consumer</code>의 <code>--whitelist</code> → <code>--include</code>. MirrorMaker의 <code>topics.blacklist</code> → <code>topics.exclude</code></td>
+            </tr>
+            <tr>
+              <th scope="row">Log4j 1 설정 (<code>log4j.properties</code>)</th>
+              <td>Log4j2 설정 (<code>log4j2.yaml</code>)</td>
+              <td><strong>4.0에서 Log4j2로 전환.</strong> <code>KafkaLog4jAppender</code>도 제거되었습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">브로커 로그 레벨을 재시작으로 변경</th>
+              <td><code>kafka-configs.sh --entity-type broker-loggers --alter --add-config …</code></td>
+              <td>컨트롤러 대상이면 <strong><code>--bootstrap-controller</code></strong>를 쓰고, <code>--entity-type</code>은 그래도 <code>broker-loggers</code>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ControlPlaneNetworkProcessorAvgIdlePercent</code></th>
+              <td><code>NetworkProcessorAvgIdlePercent</code></td>
+              <td>ZooKeeper 시대의 control plane 전용 메트릭이 제거되었습니다(<a href="ch11.html">11장</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>Admin.listConsumerGroups()</code></th>
+              <td><code>Admin.listGroups(ListGroupsOptions.forConsumerGroups())</code></td>
+              <td>4.1에서 deprecated. share group·streams group이 생겨 그룹 종류가 늘었기 때문입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ConsumerGroupState</code></th>
+              <td><code>GroupState</code></td>
+              <td>4.0에서 deprecated. 모든 그룹 종류에 적용됩니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="version-matrix">
+      <h2 id="version-matrix">버전 병기 항목 — 트랙별 값</h2>
+
+      <p>
+        본문에서 <code>.note--version</code>으로 병기하는 항목들을 한 표에 모았습니다.
+        <strong>기억에 의존해 3.x 기준으로 답하면 틀리는 항목들</strong>입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table config-table--plain">
+          <caption>버전 트랙별 값 비교. 4.x 열은 Apache Kafka 4.3 문서·소스에서 직접 확인했습니다.</caption>
+          <thead>
+            <tr>
+              <th scope="col">항목</th>
+              <th scope="col">2.x (2.0~2.8)</th>
+              <th scope="col">3.x (3.0~3.9)</th>
+              <th scope="col">4.x (4.3 현행)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">메타데이터 저장소</th>
+              <td>ZooKeeper (필수)</td>
+              <td>ZooKeeper / KRaft 공존. <strong>3.3부터 KRaft production-ready</strong>, 3.9가 마지막 ZooKeeper 지원</td>
+              <td><strong>KRaft 전용</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>enable.idempotence</code> 기본값</th>
+              <td><code>false</code></td>
+              <td><strong>3.0부터 <code>true</code></strong> (단 3.0.0·3.1.0은 버그로 미적용, 3.0.1·3.1.1·3.2.0에서 수정)</td>
+              <td><code>true</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>acks</code> 기본값</th>
+              <td><code>1</code></td>
+              <td><strong>3.0부터 <code>all</code></strong></td>
+              <td><code>all</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>linger.ms</code> 기본값</th>
+              <td><code>0</code></td>
+              <td><code>0</code></td>
+              <td><strong><code>5</code></strong> (4.0에서 변경)</td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머 리밸런스 프로토콜</th>
+              <td>eager 중심. <strong>2.4에 cooperative 도입(KIP-429)</strong>이나 기본값은 아님</td>
+              <td>cooperative 확산</td>
+              <td><strong>KIP-848 GA (4.0).</strong> 단 클라이언트 <code>group.protocol</code> 기본값은 여전히 <strong><code>classic</code></strong></td>
+            </tr>
+            <tr>
+              <th scope="row">파티션 할당 기본 전략<br>(<code>partition.assignment.strategy</code>)</th>
+              <td><code>RangeAssignor</code></td>
+              <td><strong>3.0부터 <code>[RangeAssignor, CooperativeStickyAssignor]</code></strong> (KIP-726)</td>
+              <td><code>[RangeAssignor, CooperativeStickyAssignor]</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>--zookeeper</code> CLI 옵션</th>
+              <td>사용. 후반에 deprecated (KIP-555)</td>
+              <td><strong>3.0에서 관리 도구에서 제거</strong> (KIP-604)</td>
+              <td><strong>존재하지 않습니다.</strong> <code>kafka-acls</code>의 ZooKeeper 잔여 옵션과 <code>ZkSecurityMigrator</code>도 4.0에서 제거</td>
+            </tr>
+            <tr>
+              <th scope="row">Queues / Share Groups (KIP-932)</th>
+              <td>없음</td>
+              <td>없음</td>
+              <td><strong>4.1 preview → 4.2 production-ready</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">Streams Rebalance Protocol (KIP-1071)</th>
+              <td>없음</td>
+              <td>없음</td>
+              <td><strong>4.1 Early Access → 4.2 production-ready</strong> (신규 4.2+ 클러스터는 브로커 쪽 기본 활성, 클라이언트 기본값은 <code>classic</code>)</td>
+            </tr>
+            <tr>
+              <th scope="row">Tiered Storage (KIP-405)</th>
+              <td>없음</td>
+              <td><strong>3.6 early access → 3.9 production-ready</strong></td>
+              <td>지원</td>
+            </tr>
+            <tr>
+              <th scope="row">Java 최소·지원 버전</th>
+              <td>8</td>
+              <td>8 / 11</td>
+              <td><strong>Java 17 · 21 · 25 완전 지원.</strong> Java 11은 clients·streams 등 일부 모듈만. <strong>Java 8은 4.0에서 제거</strong>되었고 브로커·Connect·tools는 <strong>17 이상</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">Scala 배포판</th>
+              <td>2.0은 <strong>2.11 / 2.12</strong>. <strong>2.4에 2.13이 추가</strong>되고(2.11/2.12/2.13 셋), 2.8에서 <strong>2.11이 사라져</strong> 2.12/2.13</td>
+              <td>2.12 / 2.13 (3.0~3.9 전부)</td>
+              <td><strong><code>kafka_2.13-4.3.1.tgz</code> 단일.</strong> Scala 2.12 지원은 4.0에서 제거(KIP-751)</td>
+            </tr>
+            <tr>
+              <th scope="row">Kafka Streams EOS 설정값</th>
+              <td><code>exactly_once</code></td>
+              <td><strong>2.6에 <code>exactly_once_v2</code>(KIP-447), 3.0에서 <code>exactly_once</code> deprecated</strong></td>
+              <td><code>at_least_once</code>(기본) 또는 <strong><code>exactly_once_v2</code></strong></td>
+            </tr>
+            <tr>
+              <th scope="row">Connect exactly-once</th>
+              <td>sink만 (0.11.0부터)</td>
+              <td><strong>3.3.0부터 source도 지원</strong> (distributed 모드 전용)</td>
+              <td>동일. <code>exactly.once.source.support</code> 기본값은 <code>disabled</code></td>
+            </tr>
+            <tr>
+              <th scope="row">Connect 리밸런스 프로토콜</th>
+              <td><strong>2.3.0부터 증분 협력적</strong>이 기본 (그 이전은 전량 재배치)</td>
+              <td>동일</td>
+              <td><code>connect.protocol</code> 기본값 <code>sessioned</code>. <code>eager</code>로 옛 동작 복귀 가능</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · 버전에 따라 답이 갈리는 문항">
+        <p>
+          문제문에 <strong>버전이 명시되어 있는지 먼저 확인</strong>하세요.
+          "<code>acks</code>의 기본값은?"처럼 버전이 없으면 <strong>최신(4.x) 기준</strong>으로 답합니다.
+        </p>
+        <ul>
+          <li><strong><code>linger.ms</code>는 5</strong>입니다. 시중 자료가 대부분 <code>0</code>으로 적혀 있어 가장 많이 틀립니다.</li>
+          <li><strong><code>group.protocol</code>은 <code>classic</code></strong>입니다. KIP-848이 4.0 GA인 것과 기본값인 것은 다릅니다.</li>
+          <li><strong><code>processing.guarantee</code>는 <code>at_least_once</code></strong>이고 EOS 값 이름은 <code>exactly_once_v2</code>입니다.</li>
+          <li><strong><code>isolation.level</code>은 <code>read_uncommitted</code></strong>입니다.</li>
+          <li><strong>Share Groups는 4.2 GA</strong>(4.1은 preview)입니다.</li>
+          <li><strong>KRaft production-ready는 3.3</strong>, <strong>ZooKeeper 마지막 지원은 3.9</strong>, <strong>제거는 4.0</strong>입니다.</li>
+          <li><strong><code>2.13</code>은 Scala 버전</strong>입니다. Kafka 2.13은 존재하지 않습니다.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="check-quiz">
+      <h2 id="check-quiz">확인 문제</h2>
+      <p>
+        버전 표기와 타임라인을 확인하는 문항입니다.
+        실무 이관에서 자주 걸리는 지점이자, 시험에서도 버전 차이를 직접 묻는 문항이 나옵니다.
+      </p>
+      <div class="quiz-embed" data-set="basics-appendix-legacy" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="ch03.html">
+          <span class="card__title">3장 · KRaft와 클러스터 메타데이터</span>
+          <span class="card__desc">현행 아키텍처. 컨트롤러 쿼럼, 노드 롤, 부트스트랩 절차.</span>
+          <span class="card__meta">CCAAK 중심</span>
+        </a></li>
+        <li><a class="card" href="ch11.html">
+          <span class="card__title">11장 · 운영 기초</span>
+          <span class="card__desc">보안·모니터링·성능 튜닝, 파티션 재할당, Share Groups.</span>
+          <span class="card__meta">CCAAK 중심</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/cli.html">
+          <span class="card__title">CLI 치트시트</span>
+          <span class="card__desc">목적별 명령 표. 모든 명령이 --bootstrap-server 기준입니다.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc">6개 영역 설정 표와 처리량·지연·내구성 프리셋 3종.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex01.html">
+          <span class="card__title">예제 1 · 로컬 KRaft 클러스터</span>
+          <span class="card__desc">ZooKeeper 없는 3노드 클러스터를 직접 띄워 봅니다.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="ch01.html">
+          <span class="card__title">1장 · Kafka 개요</span>
+          <span class="card__desc">4.x가 이전과 다른 점 요약과 조용히 바뀐 기본값들.</span>
+          <span class="card__meta">기본개념</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>
+        타임라인의 각 항목은 아래에서 확인했습니다.
+        4.x 항목은 Apache Kafka 4.3 업그레이드 문서에 직접 기재된 내용이고,
+        3.x 이하는 공식 릴리스 발표와 KIP으로 교차 확인했습니다.
+      </p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#upgrade" rel="noopener noreferrer">Upgrading Apache Kafka</a> — <strong>4.0 · 4.1 · 4.2 · 4.3의 notable changes 전문</strong>, 4.3 업그레이드 요건(KRaft 필수·최소 3.3.x·3.9.x 경유 권장·ZooKeeper 사전 마이그레이션), 메타데이터 다운그레이드 가능 여부, 클라이언트 2.1+ 요건, <code>linger.ms</code> 0→5, Scala 2.12 제거, Java 요구사항 변경, 4.1.0 Streams 메모리 누수 권고</li>
+        <li><a href="https://kafka.apache.org/documentation/#zk2kraft" rel="noopener noreferrer">Differences Between KRaft mode and ZooKeeper mode</a> — <strong>제거된 ZooKeeper 관련 설정·메트릭 전체 목록</strong>, <code>inter.broker.protocol.version</code> → <code>metadata.version</code>, <code>advertised.listeners</code>의 동적 변경 불가, 동적 로그 레벨 변경 명령, KRaft의 <code>KafkaPrincipalSerde</code> 요구</li>
+        <li><a href="https://kafka.apache.org/downloads" rel="noopener noreferrer">Downloads</a> — <code>kafka_2.13-4.3.1.tgz</code> 단일 바이너리 배포, 소스 배포판 이름</li>
+        <li><a href="https://kafka.apache.org/documentation/#java" rel="noopener noreferrer">Java Version</a> — Java 17·21·25 완전 지원, Java 11은 일부 모듈</li>
+        <li><a href="https://kafka.apache.org/documentation/#security_overview" rel="noopener noreferrer">Security Overview</a> — SASL 메커니즘별 도입 버전 (OAUTHBEARER는 2.0)</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_exactlyonce" rel="noopener noreferrer">Connect Exactly-once support</a> — sink 0.11.0 / <strong>source 3.3.0</strong></li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_administration" rel="noopener noreferrer">Connect Administration</a> — <strong>2.3.0부터 증분 협력적 리밸런스가 기본</strong>, <code>connect.protocol=eager</code>로 복귀</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_running" rel="noopener noreferrer">Connect Plugin Discovery</a> — <strong>3.6부터 <code>plugin.discovery</code> 설정 가능, 기본 <code>hybrid_warn</code></strong></li>
+        <li><a href="https://kafka.apache.org/documentation/streams/core-concepts" rel="noopener noreferrer">Streams Processing Guarantees</a> — <strong>2.6의 exactly-once v2(KIP-447), 3.0에서 1세대 deprecated</strong></li>
+        <li><a href="https://kafka.apache.org/blog/releases/" rel="noopener noreferrer">Release Announcements</a> — 각 버전의 발표 시기</li>
+        <li><a href="https://kafka.apache.org/blog/2025/03/18/apache-kafka-4.0.0-release-announcement/" rel="noopener noreferrer">Apache Kafka 4.0.0 Release Announcement</a> — ZooKeeper 제거, KIP-848 GA, Queues 초기 작업</li>
+        <li><a href="https://kafka.apache.org/blog/2024/11/06/apache-kafka-3.9.0-release-announcement/" rel="noopener noreferrer">Apache Kafka 3.9.0 Release Announcement</a> — <strong>ZooKeeper 모드를 지원하는 마지막 릴리스</strong>, 동적 KRaft 쿼럼(KIP-853), Tiered Storage production-ready</li>
+        <li><a href="https://kafka.apache.org/blog/2023/10/10/apache-kafka-3.6.0-release-announcement/" rel="noopener noreferrer">Apache Kafka 3.6.0 Release Announcement</a> — <strong>Tiered Storage early access (KIP-405)</strong></li>
+        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum" rel="noopener noreferrer">KIP-500 — Replace ZooKeeper with a Self-Managed Metadata Quorum</a> — 2.8 early access의 근거와 ZooKeeper 제거 동기</li>
+        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-833%3A+Mark+KRaft+as+Production+Ready" rel="noopener noreferrer">KIP-833 — Mark KRaft as Production Ready</a> — <strong>3.3에서 KRaft production-ready, 3.5를 bridge release로 지정</strong></li>
+        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default" rel="noopener noreferrer">KIP-679 — Producer will enable the strongest delivery guarantee by default</a> — <strong>3.0의 <code>acks=all</code>·<code>enable.idempotence=true</code></strong></li>
+        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-726%3A+Make+the+%22cooperative-sticky%2C+range%22+as+the+default+assignor" rel="noopener noreferrer">KIP-726 — Change the default assignor</a> — <strong><code>partition.assignment.strategy</code> 기본값 변경</strong></li>
+        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-429%3A+Kafka+Consumer+Incremental+Rebalance+Protocol" rel="noopener noreferrer">KIP-429 — Kafka Consumer Incremental Rebalance Protocol</a> — <strong>2.4의 <code>CooperativeStickyAssignor</code></strong></li>
+        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-604%3A+Remove+ZooKeeper+Flags+from+the+Administrative+Tools" rel="noopener noreferrer">KIP-604 — Remove ZooKeeper Flags from the Administrative Tools</a> — <strong><code>--zookeeper</code>가 3.0에서 제거</strong></li>
+        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-932%3A+Queues+for+Kafka" rel="noopener noreferrer">KIP-932 — Queues for Kafka</a> — Share Groups 설계</li>
+        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-405%3A+Kafka+Tiered+Storage" rel="noopener noreferrer">KIP-405 — Kafka Tiered Storage</a></li>
+        <li><a href="https://archive.apache.org/dist/kafka/" rel="noopener noreferrer">Apache Kafka Release Archive</a> — 각 버전의 배포 파일 목록과 파일명 규칙 확인</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

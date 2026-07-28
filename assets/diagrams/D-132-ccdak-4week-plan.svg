@@ -1,0 +1,63 @@
+<svg viewBox="0 0 720 564" role="img" class="kg-diagram"
+     aria-labelledby="d132-title d132-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d132-title">CCDAK 4주 학습 플랜 간트 — 학습·실습·문제풀이 배치</title>
+  <desc id="d132-desc">가로축이 4주, 세로축이 학습·실습·문제풀이·복습 항목인 간트 차트입니다. 1주차는 ch01부터 ch03까지 개요와 아키텍처, 2주차는 ch04 Producer와 ch05 Consumer, 3주차는 ch06 전달 보장부터 ch08 스키마까지, 4주차 전반은 ch09 Connect부터 ch11 운영까지 읽습니다. 실무 예제는 1주차 중반부터 4주차 초반까지, 실수 사례는 3주차 중반부터 이어집니다. 장별 확인문제는 읽은 직후 바로 풀고, 도메인별 문제은행은 2주차부터, 모의고사 두 회는 4주차에 배치합니다. 오답노트와 플래시카드는 2주차부터 매일 병행하고, 마지막 이틀은 벼락치기 요약과 설정값 관계도만 봅니다. 주 14시간, 하루 2시간 기준의 예시 일정입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">CCDAK 4주 학습 플랜 — 주 14시간(하루 2시간) 기준 예시</text>
+<text class="dg-fs-sm dg-muted" x="8" y="42">학습 · 실습 · 문제풀이를 겹쳐 진행합니다. 다 읽고 나서 몰아서 푸는 방식은 4주 안에 끝나지 않습니다.</text>
+<rect class="dg-node dg-node--alt" x="216" y="58" width="124" height="26" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="278" y="76" text-anchor="middle">1주차</text>
+<rect class="dg-node dg-node--alt" x="340" y="58" width="124" height="26" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="402" y="76" text-anchor="middle">2주차</text>
+<rect class="dg-node dg-node--alt" x="464" y="58" width="124" height="26" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="526" y="76" text-anchor="middle">3주차</text>
+<rect class="dg-node dg-node--alt" x="588" y="58" width="124" height="26" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="650" y="76" text-anchor="middle">4주차</text>
+<text class="dg-fs-sm dg-bold" x="8" y="76">항목 / 주차 →</text>
+<line class="dg-grid" x1="216" y1="84" x2="216" y2="516"/>
+<line class="dg-grid" x1="340" y1="84" x2="340" y2="516"/>
+<line class="dg-grid" x1="464" y1="84" x2="464" y2="516"/>
+<line class="dg-grid" x1="588" y1="84" x2="588" y2="516"/>
+<line class="dg-grid" x1="712" y1="84" x2="712" y2="516"/>
+<text class="dg-fs-sm dg-bold" x="8" y="110">학습 · ch01–ch03</text>
+<text class="dg-fs-sm dg-muted" x="8" y="126">개요 · 아키텍처 · KRaft</text>
+<rect class="dg-node" x="216" y="100" width="124" height="24" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="8" y="148">학습 · ch04–ch05</text>
+<text class="dg-fs-sm dg-muted" x="8" y="164">Producer · Consumer</text>
+<rect class="dg-node dg-node--accent" x="340" y="138" width="142.6" height="24" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="8" y="186">학습 · ch06–ch08</text>
+<text class="dg-fs-sm dg-muted" x="8" y="202">전달보장 · 스토리지 · 스키마</text>
+<rect class="dg-node dg-node--accent" x="482.6" y="176" width="117.8" height="24" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="8" y="224">학습 · ch09–ch11</text>
+<text class="dg-fs-sm dg-muted" x="8" y="240">Connect · Streams · 운영</text>
+<rect class="dg-node" x="600.4" y="214" width="74.4" height="24" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="8" y="262">실습 · practice</text>
+<text class="dg-fs-sm dg-muted" x="8" y="278">ex01–ex12</text>
+<rect class="dg-node" x="278" y="252" width="359.6" height="24" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="8" y="300">실습 · cases</text>
+<text class="dg-fs-sm dg-muted" x="8" y="316">case01–case10 실수 사례</text>
+<rect class="dg-node" x="538.4" y="290" width="148.8" height="24" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="8" y="338">문제 · 장별 확인문제</text>
+<text class="dg-fs-sm dg-muted" x="8" y="354">읽은 장은 그날 바로</text>
+<rect class="dg-node" x="234.6" y="328" width="452.6" height="24" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="8" y="376">문제 · 도메인 문제은행</text>
+<text class="dg-fs-sm dg-muted" x="8" y="392">AppDev · Fundamentals 먼저</text>
+<rect class="dg-node dg-node--accent" x="364.8" y="366" width="347.2" height="24" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="8" y="414">문제 · 모의고사</text>
+<text class="dg-fs-sm dg-muted" x="8" y="430">60문항 × 2회</text>
+<rect class="dg-node" x="625.2" y="404" width="86.8" height="24" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="8" y="452">복습 · 오답노트</text>
+<text class="dg-fs-sm dg-muted" x="8" y="468">플래시카드 매일 20분</text>
+<rect class="dg-node" x="340" y="442" width="372" height="24" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="8" y="490">복습 · 벼락치기</text>
+<text class="dg-fs-sm dg-muted" x="8" y="506">cram + D-133 관계도</text>
+<rect class="dg-node dg-node--ok" x="681" y="480" width="31" height="24" rx="3"/>
+<line class="dg-grid" x1="8" y1="520" x2="712" y2="520"/>
+<rect class="dg-node dg-node--accent" x="8" y="528" width="16" height="12" rx="3"/>
+<text class="dg-fs-sm" x="30" y="539">강조 = 가중치 51% 를 차지하는 구간 (가장 오래 붙어야 하는 곳)</text>
+<rect class="dg-node dg-node--ok" x="8" y="552" width="16" height="12" rx="3"/>
+<text class="dg-fs-sm" x="30" y="563">마지막 이틀은 새 내용을 넣지 말고 요약 · 오답만 봅니다</text>
+</svg>

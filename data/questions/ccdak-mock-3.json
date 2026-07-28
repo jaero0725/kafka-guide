@@ -1,0 +1,3257 @@
+{
+  "setId": "ccdak-mock-3",
+  "title": "CCDAK 모의고사 3 — 설정값·API 세부 집중",
+  "exam": "CCDAK",
+  "domain": "Mixed",
+  "kafkaVersion": "4.3",
+  "mock": true,
+  "questions": [
+    {
+      "id": "ccdak-mock-3-001",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch04",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Apache Kafka 4.3 프로듀서에서 `linger.ms` 의 기본값과 `batch.size` 와의 관계로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "기본값 0이며, 배치를 기다리지 않고 레코드마다 즉시 전송한다."
+        },
+        {
+          "id": "B",
+          "text": "기본값 5이며, `batch.size` 와 AND 조건이라 둘 다 충족돼야 전송한다."
+        },
+        {
+          "id": "C",
+          "text": "기본값 5이며, `batch.size` 와 OR 조건이라 먼저 충족되는 쪽에서 전송한다."
+        },
+        {
+          "id": "D",
+          "text": "기본값 100이며, `retry.backoff.ms` 와 같은 값으로 맞춰져 있다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "`linger.ms` 는 Kafka 4.0에서 기본값이 0에서 5로 바뀌었습니다. 배치는 `batch.size` 가 채워지거나 `linger.ms` 가 경과하면 전송되므로 두 조건은 OR 관계입니다. 즉 트래픽이 적어 배치가 차지 않아도 5ms 뒤에는 전송이 일어납니다. 지연을 최소화하려면 `linger.ms=0` 을 명시해야 하며, 3.x 기준 자료를 그대로 믿으면 기본값을 틀리게 됩니다.",
+      "distractorNotes": {
+        "A": "0은 3.x까지의 기본값입니다. 4.0부터 5로 변경되었습니다.",
+        "B": "AND가 아니라 OR입니다. 둘 중 먼저 충족되는 쪽에서 배치가 마감됩니다.",
+        "D": "100은 `retry.backoff.ms` 의 기본값이고 `linger.ms` 와는 무관합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Producer Configs: linger.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_linger.ms"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs: batch.size",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_batch.size"
+        }
+      ],
+      "tags": [
+        "linger.ms",
+        "defaults",
+        "batch.size",
+        "producer"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-002",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "복제 계수(RF) 3으로 토픽을 만들고 다른 설정은 건드리지 않았다. 이 토픽에 적용되는 `min.insync.replicas` 값은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "3 — RF와 같은 값이 토픽 생성 시 자동으로 채워진다."
+        },
+        {
+          "id": "B",
+          "text": "1 — 브로커 기본값이 1이며 RF와 무관하게 적용된다."
+        },
+        {
+          "id": "C",
+          "text": "2 — RF의 과반수가 토픽 생성 시 자동으로 계산된다."
+        },
+        {
+          "id": "D",
+          "text": "값이 없어 `acks=all` 쓰기가 거부된다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "`min.insync.replicas` 의 기본값은 RF와 무관하게 1입니다. 따라서 RF=3으로 만들어도 ISR이 1로 줄어든 상태에서 `acks=all` 쓰기가 성공하고, 그 리더가 유실되면 데이터가 사라질 수 있습니다. 내구성을 원한다면 토픽 또는 브로커 레벨에서 2로 올려야 합니다. RF=3 · `min.insync.replicas=2` 조합이 쓰기 가능한 장애 대수 1대(RF − minISR)를 보장하는 표준 구성입니다.",
+      "distractorNotes": {
+        "A": "RF를 따라가지 않습니다. minISR=RF로 두면 브로커 한 대만 빠져도 쓰기가 멈춥니다.",
+        "C": "과반수를 자동 계산하는 로직은 없습니다. 명시적으로 지정해야 합니다.",
+        "D": "기본값이 존재하므로 값이 비어 있는 상태는 발생하지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Topic Configs: min.insync.replicas",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas"
+        }
+      ],
+      "tags": [
+        "min.insync.replicas",
+        "defaults",
+        "acks-isr",
+        "durability"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-003",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "아래 워커 설정으로 Kafka 4.3 Connect를 기동했는데 8083 포트에서 REST API가 서비스되지 않는다. 원인과 조치로 옳은 것은?",
+      "code": {
+        "lang": "properties",
+        "caption": "connect-distributed.properties (3.x 설정을 그대로 가져옴)",
+        "body": "bootstrap.servers=kafka-1:9092\ngroup.id=connect-cluster\nrest.port=8083"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "`rest.port` 는 `listeners` 보다 우선순위가 낮아 무시된다. `listeners` 를 지우면 적용된다."
+        },
+        {
+          "id": "B",
+          "text": "`rest.port` 는 브로커 설정이므로 워커에서는 `advertised.port` 를 지정해야 한다."
+        },
+        {
+          "id": "C",
+          "text": "`rest.port` 는 4.x 워커 설정에 존재하지 않는다. `listeners=http://:8083` 을 써야 한다."
+        },
+        {
+          "id": "D",
+          "text": "`rest.host.name` 을 함께 지정해야 `rest.port` 가 적용된다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "`rest.port` 와 `rest.host.name` 은 오래전에 deprecated 되었고 4.x 워커 설정에는 존재하지 않습니다. 4.3에서는 `listeners` 하나로 프로토콜·호스트·포트를 함께 지정하며, 지정하지 않으면 기본값이 `http://:8083` 입니다. 관리용 엔드포인트를 분리하려면 `admin.listeners` 를 따로 둡니다. 존재하지 않는 키는 조용히 무시되므로 기본 포트로 뜬 것처럼 보여 원인 파악이 늦어집니다.",
+      "distractorNotes": {
+        "A": "우선순위 문제가 아니라 키 자체가 없습니다. 이 설정에는 `listeners` 가 지정되어 있지도 않습니다.",
+        "B": "`advertised.port` 도 워커 설정이 아닙니다. 광고 주소는 `rest.advertised.host.name` 계열로 다뤘고 현재는 `listeners` 로 통합되었습니다.",
+        "D": "`rest.host.name` 역시 4.x에 없는 키입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Kafka Connect Configs",
+          "url": "https://kafka.apache.org/documentation/#connectconfigs"
+        },
+        {
+          "title": "Apache Kafka — Connect REST Interface",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
+      ],
+      "tags": [
+        "connect",
+        "listeners",
+        "defaults",
+        "version-4x"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-004",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch04",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "각 예외를 프로듀서 관점의 재시도 분류와 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`RecordTooLargeException`",
+          "right": "재시도 불가 — 클라이언트 크기 상한 초과로 즉시 실패"
+        },
+        {
+          "id": "p2",
+          "left": "`NotEnoughReplicasException`",
+          "right": "재시도 가능 — ISR이 `min.insync.replicas` 미만"
+        },
+        {
+          "id": "p3",
+          "left": "`SerializationException`",
+          "right": "재시도 불가 — `send()` 가 동기로 던진다"
+        },
+        {
+          "id": "p4",
+          "left": "`CoordinatorNotAvailableException`",
+          "right": "재시도 가능 — 코디네이터를 찾을 수 없는 일시 상태"
+        },
+        {
+          "id": "p5",
+          "left": "`ProducerFencedException`",
+          "right": "재시도 불가 — 프로듀서를 닫고 프로세스를 종료해야 한다"
+        }
+      ],
+      "extraRights": [
+        "재시도 가능 — 브로커가 배치를 쪼개 재전송하며 재시도 횟수를 소모하지 않는다",
+        "재시도 불가 — 기동 시 설정 검증에서 실패"
+      ],
+      "explanation": "재시도 가능 여부의 기준은 예외가 `RetriableException` 을 상속하는지입니다. 데이터·설정·권한 문제(크기, 직렬화, 인가)는 재시도해도 영구히 실패하므로 코드나 설정을 고쳐야 합니다. 클러스터 상태가 일시적으로 나쁜 경우(리더 이동, ISR 부족, 코디네이터 부재)는 재시도로 해결되며, 실질 상한은 `retries` 가 아니라 `delivery.timeout.ms` 입니다. `ProducerFencedException` 은 재시도 대상이 아니라 같은 `transactional.id` 로 새 세션이 떴다는 신호이므로 해당 프로듀서를 닫아야 합니다.",
+      "distractorNotes": {
+        "p1": "브로커 `message.max.bytes` 초과와 혼동하기 쉽습니다. 브로커 쪽 초과는 배치 분할 재전송으로 처리되고, 클라이언트 `max.request.size` 초과가 이 예외입니다.",
+        "p3": "직렬화 실패를 콜백으로 받으려는 코드가 많지만, 직렬화는 `send()` 안에서 먼저 일어나므로 동기로 던져집니다.",
+        "p5": "이름이 비슷한 `NotEnoughReplicasException` 과 달리 재시도 대상이 아닙니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Producer Callback (Javadoc)",
+          "url": "https://kafka.apache.org/documentation/#producerapi"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs: delivery.timeout.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_delivery.timeout.ms"
+        }
+      ],
+      "tags": [
+        "retriable-errors",
+        "exceptions",
+        "producer",
+        "transactions"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-005",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "chapter": "ch11",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "`records-lag-max` 메트릭에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "컨슈머 프로세스가 직접 발행하는 클라이언트 메트릭이며, 컨슈머가 죽으면 메트릭도 사라진다."
+        },
+        {
+          "id": "B",
+          "text": "브로커가 파티션별로 발행하며 컨슈머 그룹 전체의 lag을 집계한 값이다."
+        },
+        {
+          "id": "C",
+          "text": "컨트롤러가 발행하며 ISR 복제가 지연된 레코드 수를 나타낸다."
+        },
+        {
+          "id": "D",
+          "text": "`kafka-consumer-groups.sh` 가 계산해 `__consumer_offsets` 에 저장하는 값이다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "공식 문서는 이 지표를 컨슈머 fetch manager 메트릭으로 분류합니다. 즉 발행 주체가 컨슈머 프로세스이므로, 프로세스가 죽으면 지표 자체가 수집되지 않습니다. \"lag이 0\"과 \"컨슈머가 없음\"을 구분하지 못하는 것이 이 지표의 대표적인 사각지대입니다. 컨슈머 사망까지 잡으려면 AdminClient로 커밋 오프셋과 최신 오프셋의 차이를 외부에서 계산하거나, 할당 파티션 수 지표를 함께 봐야 합니다.",
+      "distractorNotes": {
+        "B": "브로커 메트릭이 아닙니다. 브로커에는 컨슈머 그룹 lag을 집계하는 지표가 없습니다.",
+        "C": "복제 지연은 팔로워 fetcher 메트릭이며 컨슈머 lag과 다른 축입니다.",
+        "D": "CLI는 조회 시점에 계산해 출력만 하며 결과를 저장하지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring: Consumer Fetch Metrics",
+          "url": "https://kafka.apache.org/documentation/#consumer_fetch_monitoring"
+        }
+      ],
+      "tags": [
+        "records-lag-max",
+        "monitoring",
+        "consumer-lag"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-006",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 설정을 실제 소속(어느 컴포넌트의 설정인가)과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`acks`",
+          "right": "프로듀서"
+        },
+        {
+          "id": "p2",
+          "left": "`min.insync.replicas`",
+          "right": "브로커 · 토픽 양쪽"
+        },
+        {
+          "id": "p3",
+          "left": "`max.message.bytes`",
+          "right": "토픽 (브로커 값을 오버라이드)"
+        },
+        {
+          "id": "p4",
+          "left": "`replica.fetch.max.bytes`",
+          "right": "브로커 (팔로워 복제용)"
+        },
+        {
+          "id": "p5",
+          "left": "`offsets.retention.minutes`",
+          "right": "브로커 (그룹 코디네이터)"
+        }
+      ],
+      "extraRights": [
+        "컨슈머",
+        "Connect 커넥터 (sink 전용)",
+        "Kafka Streams 애플리케이션"
+      ],
+      "explanation": "설정 이름은 맞는데 소속만 바꿔 놓는 것이 가장 흔한 오답 유도 방식입니다. `acks` 는 프로듀서만 갖고 있고, 이를 브로커나 토픽 설정으로 제시하는 선택지가 자주 나옵니다. 반대로 `min.insync.replicas` 는 브로커 기본값과 토픽 오버라이드 양쪽에 존재하며 프로듀서에는 없습니다. 브로커 `message.max.bytes` 와 토픽 `max.message.bytes` 는 어순이 반대라 특히 자주 뒤바뀌므로, 이름을 볼 때 소속을 먼저 확인하는 습관이 필요합니다.",
+      "distractorNotes": {
+        "p2": "`acks=all` 과 함께 쓰이기 때문에 프로듀서 설정으로 착각하기 쉽습니다.",
+        "p3": "브로커 `message.max.bytes` 와 이름 순서가 반대입니다. 토픽 레벨 키가 `max.message.bytes` 입니다.",
+        "p4": "`fetch` 라는 단어 때문에 컨슈머 설정으로 오인하기 쉽지만 팔로워 복제용 브로커 설정입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Broker Configs",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        }
+      ],
+      "tags": [
+        "config-ownership",
+        "acks-isr",
+        "message-size",
+        "defaults"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-007",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "Kafka Streams `commit.interval.ms` 의 기본값에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "항상 30000이며 `processing.guarantee` 값과 무관하게 고정된다."
+        },
+        {
+          "id": "B",
+          "text": "기본값은 30000이지만 `processing.guarantee=exactly_once_v2` 이면 100이 기본값이 된다."
+        },
+        {
+          "id": "C",
+          "text": "기본값은 100이며 at-least-once에서는 커밋을 아예 하지 않는다."
+        },
+        {
+          "id": "D",
+          "text": "기본값은 5000으로 컨슈머 `auto.commit.interval.ms` 와 같다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "Streams는 커밋 주기 기본값을 보장 수준에 따라 다르게 잡습니다. at-least-once에서는 30000ms로 커밋 오버헤드를 줄이고, 정확히 한 번 처리에서는 100ms로 잡아 종단 지연을 줄입니다. 트랜잭션 커밋마다 결과가 가시화되므로 EOS에서 커밋 주기가 곧 지연이 되기 때문입니다. 이 값을 올리면 EOS에서 처리량은 좋아지지만 다운스트림이 결과를 보기까지의 시간이 늘어납니다.",
+      "distractorNotes": {
+        "A": "보장 수준에 따라 기본값이 달라집니다. 고정값이 아닙니다.",
+        "C": "at-least-once에서도 커밋은 일어나며 기본 주기는 30000ms입니다.",
+        "D": "5000은 컨슈머 `auto.commit.interval.ms` 의 기본값입니다. Streams는 자체 커밋 주기를 씁니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Streams Configs: commit.interval.ms",
+          "url": "https://kafka.apache.org/documentation/#streamsconfigs_commit.interval.ms"
+        }
+      ],
+      "tags": [
+        "commit.interval.ms",
+        "defaults",
+        "processing.guarantee",
+        "streams"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-008",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch06",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "Kafka 4.3의 consume-transform-produce 트랜잭션에서 프로듀서 API 호출을 올바른 순서로 배열하세요.",
+      "code": null,
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4",
+        "i5"
+      ],
+      "items": [
+        {
+          "id": "i3",
+          "text": "`send(outputRecord)` — 변환 결과 레코드 전송"
+        },
+        {
+          "id": "i5",
+          "text": "`commitTransaction()` — 레코드와 오프셋을 함께 가시화"
+        },
+        {
+          "id": "i1",
+          "text": "`initTransactions()` — 애플리케이션 기동 시 1회"
+        },
+        {
+          "id": "i4",
+          "text": "`sendOffsetsToTransaction(offsets, consumer.groupMetadata())` — 읽은 오프셋을 같은 트랜잭션에 포함"
+        },
+        {
+          "id": "i2",
+          "text": "`beginTransaction()` — 트랜잭션 경계 시작"
+        }
+      ],
+      "explanation": "`initTransactions()` 는 프로듀서 생애에 한 번만 호출해 `transactional.id` 를 등록하고 이전 세션을 펜싱합니다. 그 뒤 각 배치마다 `beginTransaction()` 으로 경계를 열고, 결과 레코드를 보낸 다음 읽은 오프셋을 같은 트랜잭션에 넣습니다. 오프셋을 트랜잭션 밖에서 커밋하면 원자성이 깨지므로 컨슈머는 `enable.auto.commit=false` 여야 합니다. 4.3에는 그룹 ID 문자열을 받는 오버로드가 없고 `ConsumerGroupMetadata` 를 받는 형태만 남아 있어 더 강한 펜싱을 제공합니다.",
+      "distractorNotes": {
+        "i1": "트랜잭션마다 호출하는 것으로 착각하기 쉽습니다. 초기화 시 1회입니다.",
+        "i4": "`commitTransaction()` 뒤에 오프셋을 커밋하는 순서로 착각하면 원자성이 깨집니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Producer API: transactions",
+          "url": "https://kafka.apache.org/documentation/#producerapi"
+        },
+        {
+          "title": "Apache Kafka — Message Delivery Semantics",
+          "url": "https://kafka.apache.org/documentation/#semantics"
+        }
+      ],
+      "tags": [
+        "transactions",
+        "eos",
+        "producer-api"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-009",
+      "exam": "CCDAK",
+      "domain": "Application Testing",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 테스트 도구를 \"브로커 필요 여부 · 출처\" 와 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`MockProducer`",
+          "right": "브로커 불필요 · Apache Kafka `kafka-clients`"
+        },
+        {
+          "id": "p2",
+          "left": "`TopologyTestDriver`",
+          "right": "브로커 불필요 · Apache Kafka `kafka-streams-test-utils`"
+        },
+        {
+          "id": "p3",
+          "left": "Testcontainers `KafkaContainer`",
+          "right": "실제 브로커 필요 · 외부 프로젝트"
+        },
+        {
+          "id": "p4",
+          "left": "`kafka-producer-perf-test.sh`",
+          "right": "실제 브로커 필요 · Apache Kafka `bin/`"
+        },
+        {
+          "id": "p5",
+          "left": "`kafka-connect-datagen`",
+          "right": "실제 브로커 필요 · Confluent 제공(배포판에 없음)"
+        }
+      ],
+      "extraRights": [
+        "브로커 불필요 · Confluent 제공",
+        "브로커 불필요 · 외부 프로젝트"
+      ],
+      "explanation": "이 도메인은 \"브로커가 필요한가\"와 \"누가 배포하는가\" 두 축으로 정리하면 대부분 풀립니다. 단위 테스트용 목 객체와 `TopologyTestDriver` 는 Apache Kafka가 배포하며 브로커 없이 동작합니다. 반면 Testcontainers와 Spring의 임베디드 브로커는 외부 프로젝트이고 실제 브로커(컨테이너 또는 JVM 내 프로세스)를 띄웁니다. 목 데이터 생성기는 Confluent가 배포하므로 Apache Kafka 배포판의 `bin/` 에서 찾을 수 없습니다.",
+      "distractorNotes": {
+        "p2": "`kafka-streams` 본체가 아니라 `kafka-streams-test-utils` 아티팩트에 들어 있습니다.",
+        "p5": "이름이 커넥터라서 Apache 배포판에 있을 것으로 오해하기 쉽습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Testing a Streams Application",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/testing.html"
+        },
+        {
+          "title": "Apache Kafka — Producer API",
+          "url": "https://kafka.apache.org/documentation/#producerapi"
+        }
+      ],
+      "tags": [
+        "kafka-testing",
+        "TopologyTestDriver",
+        "MockProducer",
+        "testcontainers"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-010",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch06",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "`isolation.level` 설정에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "프로듀서 설정이며 기본값은 `read_committed` 다."
+        },
+        {
+          "id": "B",
+          "text": "브로커 설정이며 토픽 단위로 오버라이드할 수 있다."
+        },
+        {
+          "id": "C",
+          "text": "컨슈머 설정이며 기본값은 `read_uncommitted` 다."
+        },
+        {
+          "id": "D",
+          "text": "컨슈머 설정이며 기본값은 `read_committed` 다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "`isolation.level` 은 컨슈머 설정이고 기본값은 `read_uncommitted` 입니다. 즉 프로듀서 쪽에서만 트랜잭션을 켜고 컨슈머를 기본값으로 두면 abort된 레코드까지 다운스트림으로 흘러갑니다. `read_committed` 로 바꾸면 컨슈머는 LSO(Last Stable Offset)까지만 읽고 커밋된 레코드만 반환합니다. \"트랜잭션이 기본이니 `read_committed` 겠지\"라는 오추론이 이 항목의 대표적인 함정입니다.",
+      "distractorNotes": {
+        "A": "프로듀서에는 이 설정이 없습니다. 프로듀서 쪽 트랜잭션 스위치는 `transactional.id` 입니다.",
+        "B": "브로커·토픽 설정이 아니므로 서버에서 강제할 수 없습니다.",
+        "D": "소속은 맞지만 기본값이 틀렸습니다. 기본값은 `read_uncommitted` 입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer Configs: isolation.level",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_isolation.level"
+        }
+      ],
+      "tags": [
+        "isolation-level",
+        "defaults",
+        "config-ownership",
+        "transactions"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-011",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch11",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "`kafka-consumer-groups.sh --describe` 출력의 `LOG-END-OFFSET` 열이 나타내는 값은?",
+      "code": {
+        "lang": "bash",
+        "caption": "출력 예시",
+        "body": "TOPIC   PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG\norders  0          241019          395308          154289"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "리더의 LEO — 아직 복제되지 않은 레코드까지 포함한 로그의 끝이다."
+        },
+        {
+          "id": "B",
+          "text": "컨슈머 그룹이 커밋한 오프셋 중 가장 큰 값이다."
+        },
+        {
+          "id": "C",
+          "text": "파티션의 log-start-offset에 세그먼트 수를 더한 값이다."
+        },
+        {
+          "id": "D",
+          "text": "high watermark — ISR 전원이 복제를 마쳐 컨슈머가 읽을 수 있는 상한이다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "CLI는 최신 오프셋 조회로 이 값을 얻는데, 이때 돌아오는 값은 리더의 LEO가 아니라 high watermark입니다. high watermark와 LEO 사이 구간은 아직 ISR 전원이 복제하지 않았으므로 컨슈머에게 보이지 않습니다. 따라서 lag은 high watermark에서 커밋 오프셋을 뺀 값이며, LEO로 계산하면 읽을 수도 없는 레코드를 포함해 과대 계산됩니다. 한 파티션 위에 log-start-offset · 커밋 오프셋 · high watermark · LEO 네 지점이 동시에 존재한다는 점을 구분해야 합니다.",
+      "distractorNotes": {
+        "A": "LEO는 리더가 append한 마지막 다음 위치이며 컨슈머에게 노출되지 않습니다.",
+        "B": "커밋 오프셋은 같은 출력의 `CURRENT-OFFSET` 열입니다.",
+        "C": "세그먼트 수로 오프셋을 계산하는 방식은 존재하지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Basic Kafka Operations: Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        },
+        {
+          "title": "Apache Kafka — Replication",
+          "url": "https://kafka.apache.org/documentation/#replication"
+        }
+      ],
+      "tags": [
+        "high-watermark",
+        "consumer-lag",
+        "cli",
+        "offsets"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-012",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 Connect 워커 설정을 Kafka 4.3 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`offset.storage.partitions`",
+          "right": "25"
+        },
+        {
+          "id": "p2",
+          "left": "`status.storage.partitions`",
+          "right": "5"
+        },
+        {
+          "id": "p3",
+          "left": "`offset.flush.interval.ms`",
+          "right": "60000"
+        },
+        {
+          "id": "p4",
+          "left": "`plugin.discovery`",
+          "right": "hybrid_warn"
+        },
+        {
+          "id": "p5",
+          "left": "`config.storage.replication.factor`",
+          "right": "3"
+        }
+      ],
+      "extraRights": [
+        "1",
+        "50",
+        "service_load",
+        "5000"
+      ],
+      "explanation": "오프셋 토픽은 파티션이 많아야 커넥터별 오프셋 쓰기가 분산되므로 기본값이 25이고, 상태 토픽은 5입니다. 반면 `config.storage.topic` 은 설정 변경의 순서가 중요해 파티션이 1개여야 합니다. `offset.flush.interval.ms` 는 source 커넥터의 오프셋 커밋 주기이며 기본 1분입니다. `plugin.discovery` 기본값 `hybrid_warn` 은 구식 플러그인 탐색을 허용하되 경고를 남기는 모드로, 4.x에서 서비스 로더 매니페스트 도입과 함께 들어온 값입니다.",
+      "distractorNotes": {
+        "p1": "`status.storage.partitions` 와 값을 뒤바꿔 외우기 쉽습니다.",
+        "p3": "`offset.flush.timeout.ms` 기본값 5000과 혼동하기 쉽습니다.",
+        "p4": "`service_load` 는 실제로 존재하는 다른 모드 값입니다. 기본값은 아닙니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Kafka Connect Configs",
+          "url": "https://kafka.apache.org/documentation/#connectconfigs"
+        }
+      ],
+      "tags": [
+        "connect",
+        "defaults",
+        "connect-offsets",
+        "plugin.discovery"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-013",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch05",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Kafka 4.3 컨슈머의 `max.poll.records` 와 `max.poll.interval.ms` 기본값 조합으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`max.poll.records`=500, `max.poll.interval.ms`=300000"
+        },
+        {
+          "id": "B",
+          "text": "`max.poll.records`=500, `max.poll.interval.ms`=45000"
+        },
+        {
+          "id": "C",
+          "text": "`max.poll.records`=1000, `max.poll.interval.ms`=300000"
+        },
+        {
+          "id": "D",
+          "text": "`max.poll.records`=100, `max.poll.interval.ms`=60000"
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "한 번의 `poll()` 이 반환하는 레코드 수 상한이 500이고, 두 `poll()` 호출 사이 허용 시간이 300000ms(5분)입니다. 이 둘은 같은 축(애플리케이션 스레드의 처리 속도)에 있으며, 하트비트 축인 `session.timeout.ms`(45000) · `heartbeat.interval.ms`(3000)와 구분해야 합니다. 처리가 길어져 그룹에서 빠지는 증상의 1차 처방은 타임아웃을 올리는 것이 아니라 `max.poll.records` 를 줄이는 것입니다. 45000을 `max.poll.interval.ms` 값으로 제시하는 선택지는 두 축을 섞어 놓은 함정입니다.",
+      "distractorNotes": {
+        "B": "45000은 `session.timeout.ms` 의 기본값입니다. 축이 다릅니다.",
+        "C": "1000은 Streams의 `buffered.records.per.partition` 기본값이며 `max.poll.records` 와 무관합니다.",
+        "D": "두 값 모두 기본값이 아닙니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer Configs: max.poll.records",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records"
+        },
+        {
+          "title": "Apache Kafka — Consumer Configs: max.poll.interval.ms",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms"
+        }
+      ],
+      "tags": [
+        "max-poll-interval",
+        "defaults",
+        "consumer",
+        "max.poll.records"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-014",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "chapter": "ch11",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "각 브로커 JMX 메트릭을 의미와 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`UnderReplicatedPartitions`",
+          "right": "ISR 크기가 전체 레플리카 수보다 작은 파티션 수"
+        },
+        {
+          "id": "p2",
+          "left": "`UnderMinIsrPartitionCount`",
+          "right": "ISR 크기가 `min.insync.replicas` 미만인 파티션 수"
+        },
+        {
+          "id": "p3",
+          "left": "`OfflinePartitionsCount`",
+          "right": "리더가 없어 읽기·쓰기가 모두 불가한 파티션 수"
+        },
+        {
+          "id": "p4",
+          "left": "`ActiveControllerCount`",
+          "right": "클러스터 전체 합이 1이어야 하는 컨트롤러 활성 표시"
+        },
+        {
+          "id": "p5",
+          "left": "`RequestHandlerAvgIdlePercent`",
+          "right": "요청 핸들러 스레드 풀의 평균 유휴 비율"
+        }
+      ],
+      "extraRights": [
+        "컨슈머가 발행하는 최대 lag 레코드 수",
+        "팔로워 레플리카별 복제 지연 레코드 수"
+      ],
+      "explanation": "두 지표가 다른 것을 본다는 점이 핵심입니다. RF=3 · `min.insync.replicas=2` 에서 브로커 한 대가 빠지면 `UnderReplicatedPartitions` 는 올라가지만 ISR이 2라서 `UnderMinIsrPartitionCount` 는 여전히 0이고 `acks=all` 쓰기도 성공합니다. `UnderMinIsrPartitionCount` 가 1 이상이 되는 순간은 이미 쓰기가 거부되고 있다는 뜻이므로 경보 등급이 다릅니다. `ActiveControllerCount` 는 각 브로커에서 1이 아니라 클러스터 전체 합이 1이어야 하며, 이를 브로커별 기준으로 잡으면 정상 상태에서 알림이 울립니다.",
+      "distractorNotes": {
+        "p1": "`UnderMinIsrPartitionCount` 와 같은 것으로 취급하기 쉽습니다. 기준선이 전체 레플리카 수인지 `min.insync.replicas` 인지가 다릅니다.",
+        "p4": "브로커별로 1이어야 한다고 외우면 오답입니다.",
+        "p5": "값이 낮으면 포화 상태입니다. 높은 값이 정상이라는 방향을 뒤집어 외우기 쉽습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
+      ],
+      "tags": [
+        "monitoring",
+        "under-replicated",
+        "isr",
+        "controller"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-015",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "Kafka Streams DSL에서 스트림을 \"리파티션 필요\" 상태로 표시하는 연산을 모두 고르세요. (3개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`map`"
+        },
+        {
+          "id": "B",
+          "text": "`mapValues`"
+        },
+        {
+          "id": "C",
+          "text": "`selectKey`"
+        },
+        {
+          "id": "D",
+          "text": "`filter`"
+        },
+        {
+          "id": "E",
+          "text": "`groupBy`"
+        }
+      ],
+      "answer": [
+        "A",
+        "C",
+        "E"
+      ],
+      "explanation": "리파티션 표시의 기준은 \"키가 바뀔 수 있는가\"입니다. `map` · `selectKey` · `groupBy` 는 키를 변경할 수 있으므로 스트림에 리파티션 필요 플래그가 붙고, 뒤에 집계나 조인 같은 키 기반 연산이 오면 실제 리파티션 토픽이 생성됩니다. 값만 바꾸는 연산과 레코드를 걸러내는 연산은 키를 건드리지 않으므로 플래그가 붙지 않습니다. 값만 변환하면 되는 자리에 키까지 바꿀 수 있는 연산을 쓰면 불필요한 네트워크·디스크·지연 비용이 생깁니다.",
+      "distractorNotes": {
+        "B": "값만 바꾸므로 키가 유지되고 리파티션이 필요하지 않습니다.",
+        "D": "레코드를 걸러낼 뿐 키를 바꾸지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Streams DSL",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html"
+        }
+      ],
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "streams",
+        "dsl"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-016",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch05",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "Kafka 4.3에서 컨슈머를 타임아웃과 함께 닫으려 한다. 권장 API와 그 근거로 옳은 것은?",
+      "code": {
+        "lang": "java",
+        "caption": "3.x 스타일 종료 코드",
+        "body": "consumer.close(Duration.ofSeconds(30));"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "`close(Duration)` 이 4.3의 유일한 타임아웃 오버로드이므로 그대로 두면 된다."
+        },
+        {
+          "id": "B",
+          "text": "`close(Duration)` 은 deprecated 되었고 `close(CloseOptions)` 로 옮겨야 한다."
+        },
+        {
+          "id": "C",
+          "text": "`close()` 만 남아 있고 타임아웃은 `default.api.timeout.ms` 로 정해진다."
+        },
+        {
+          "id": "D",
+          "text": "`unsubscribe()` 를 먼저 부른 뒤 `close(Duration)` 을 호출하는 것이 4.3 권장 절차다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "4.3의 `Consumer` 인터페이스에서 `close(Duration)` 은 `@Deprecated` 로 표시되어 있고, 대신 `close(CloseOptions)` 가 권장됩니다. `CloseOptions` 는 타임아웃뿐 아니라 종료 시 그룹을 떠날지 여부 같은 동작까지 함께 지정할 수 있어 정적 멤버십과 조합하기 좋습니다. deprecated 오버로드는 아직 동작하지만 이후 릴리스에서 제거될 예정이므로 새 코드에서는 쓰지 않습니다. 인수 없는 `close()` 도 여전히 존재하며 기본 타임아웃으로 동작합니다.",
+      "distractorNotes": {
+        "A": "유일한 오버로드가 아니며 deprecated 상태입니다.",
+        "C": "`close()` 외에 `close(CloseOptions)` 가 존재하고, `default.api.timeout.ms` 는 종료 타임아웃을 정하는 설정이 아닙니다.",
+        "D": "`unsubscribe()` 를 먼저 부르라는 권장 절차는 없습니다. 종료 동작은 `CloseOptions` 로 지정합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        },
+        {
+          "title": "Apache Kafka — Upgrading to 4.3.0",
+          "url": "https://kafka.apache.org/documentation/#upgrade_4_3_0"
+        }
+      ],
+      "tags": [
+        "consumer-api",
+        "version-4x",
+        "deprecated"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-017",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "브로커를 추가한 뒤 `kafka-reassign-partitions.sh` 로 파티션을 재배치하는 절차를 올바른 순서로 배열하세요.",
+      "code": null,
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
+      ],
+      "items": [
+        {
+          "id": "i3",
+          "text": "`--execute --throttle` 로 재할당을 시작하며 복제 대역폭을 제한한다"
+        },
+        {
+          "id": "i1",
+          "text": "`--generate` 로 대상 토픽과 브로커 목록을 넣어 재할당 계획을 만든다"
+        },
+        {
+          "id": "i4",
+          "text": "`--verify` 로 완료를 확인하고 스로틀을 해제한다"
+        },
+        {
+          "id": "i2",
+          "text": "출력된 제안 계획을 JSON 파일로 저장하고 배치를 검토한다"
+        }
+      ],
+      "explanation": "`--generate` 는 계획을 표준 출력으로 제안할 뿐 아무것도 바꾸지 않습니다. 제안된 배치를 파일로 저장해 검토한 뒤 `--execute` 로 적용해야 하며, 이때 `--throttle` 로 복제 트래픽을 제한하지 않으면 정상 트래픽이 영향을 받습니다. `--verify` 는 완료 확인과 함께 스로틀을 해제하는 단계이므로 반드시 실행해야 하며, 빼먹으면 제한이 남아 복제가 계속 느려집니다. 이 도구는 레플리카 배치만 옮기며 파티션 수는 바꾸지 못합니다.",
+      "distractorNotes": {
+        "i4": "완료 확인만 하는 단계로 오해해 생략하기 쉽습니다. 스로틀 해제가 여기서 일어납니다.",
+        "i3": "스로틀을 나중에 따로 거는 것으로 착각하기 쉽습니다. 실행과 함께 지정합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Basic Kafka Operations: Expanding your cluster",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_cluster_expansion"
+        }
+      ],
+      "tags": [
+        "partition-reassign",
+        "cli",
+        "operations",
+        "throttle"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-018",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "Connect 커넥터의 오프셋 저장 위치와 DLQ 지원 범위에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "source·sink 모두 `offset.storage.topic` 을 쓰며 둘 다 DLQ를 지원한다."
+        },
+        {
+          "id": "B",
+          "text": "source는 `__consumer_offsets`, sink는 `offset.storage.topic` 을 쓰며 DLQ는 source 전용이다."
+        },
+        {
+          "id": "C",
+          "text": "source는 `offset.storage.topic`, sink는 `__consumer_offsets` 를 쓰며 DLQ는 sink 전용이다."
+        },
+        {
+          "id": "D",
+          "text": "source·sink 모두 `__consumer_offsets` 를 쓰며 DLQ는 워커 전역 설정이다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "source 커넥터가 기록하는 것은 외부 시스템에서 어디까지 읽었는지이며, 이 값은 Kafka 컨슈머 오프셋이 아니라 Connect 내부 토픽에 저장됩니다. sink 커넥터는 그냥 컨슈머이므로 오프셋이 `__consumer_offsets` 에 들어가고, 그룹 이름은 `connect-{커넥터 이름}` 이라 `kafka-consumer-groups.sh` 로 lag을 조회할 수 있습니다. 이 비대칭이 Connect 도메인 최다 출제 지점이고, 복구할 때 엉뚱한 쪽을 초기화하면 전량 재수집이나 재적재가 일어납니다. DLQ 설정(`errors.deadletterqueue.*`)은 sink 커넥터에만 존재합니다.",
+      "distractorNotes": {
+        "A": "source에는 DLQ 설정이 없습니다.",
+        "B": "저장 위치가 반대이고 DLQ 소속도 반대입니다.",
+        "D": "DLQ는 워커 전역이 아니라 커넥터 단위 설정입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Kafka Connect",
+          "url": "https://kafka.apache.org/documentation/#connect"
+        },
+        {
+          "title": "Apache Kafka — Sink Connector Configs",
+          "url": "https://kafka.apache.org/documentation/#sinkconnectconfigs"
+        }
+      ],
+      "tags": [
+        "connect-offsets",
+        "dlq",
+        "config-ownership",
+        "connect"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-019",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch04",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 프로듀서 설정을 Apache Kafka 4.3 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`batch.size`",
+          "right": "16384"
+        },
+        {
+          "id": "p2",
+          "left": "`buffer.memory`",
+          "right": "33554432"
+        },
+        {
+          "id": "p3",
+          "left": "`max.block.ms`",
+          "right": "60000"
+        },
+        {
+          "id": "p4",
+          "left": "`max.request.size`",
+          "right": "1048576"
+        },
+        {
+          "id": "p5",
+          "left": "`delivery.timeout.ms`",
+          "right": "120000"
+        }
+      ],
+      "extraRights": [
+        "1048588",
+        "30000",
+        "2147483647",
+        "5"
+      ],
+      "explanation": "`max.request.size` 는 1048576(정확히 1MiB)이고 브로커 `message.max.bytes` 는 1048588이라 12바이트 차이가 있습니다. `buffer.memory` 가 고갈되면 `send()` 가 블로킹되고 `max.block.ms`(60000)를 넘기면 `TimeoutException` 이 발생하므로, 두 값을 함께 봐야 \"비동기니까 블로킹되지 않는다\"는 오해가 깨집니다. `delivery.timeout.ms` 는 `send()` 부터 성공·실패 확정까지의 전체 예산이며, `linger.ms` + `request.timeout.ms` 보다 커야 설정 검증을 통과합니다. 미끼로 들어간 30000은 `request.timeout.ms`, 2147483647은 `retries` 의 기본값입니다.",
+      "distractorNotes": {
+        "p4": "1048588을 고르기 쉽습니다. 그 값은 브로커 `message.max.bytes` 입니다.",
+        "p5": "`request.timeout.ms`(30000)와 혼동하기 쉽습니다. 이쪽은 요청 1회, 저쪽은 전체 예산입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Producer Configs",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs"
+        }
+      ],
+      "tags": [
+        "defaults",
+        "producer",
+        "message-size",
+        "max.block.ms"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-020",
+      "exam": "CCDAK",
+      "domain": "Application Testing",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "`TopologyTestDriver` 로 Streams 토폴로지 단위 테스트를 작성하는 절차를 올바른 순서로 배열하세요.",
+      "code": null,
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4",
+        "i5"
+      ],
+      "items": [
+        {
+          "id": "i4",
+          "text": "`inputTopic.pipeInput(key, value)` 로 테스트 레코드를 넣는다"
+        },
+        {
+          "id": "i2",
+          "text": "`new TopologyTestDriver(topology, props)` 로 드라이버를 만든다"
+        },
+        {
+          "id": "i5",
+          "text": "`outputTopic.readKeyValue()` 로 결과를 검증한 뒤 `driver.close()` 로 정리한다"
+        },
+        {
+          "id": "i1",
+          "text": "`Topology` 와 `application.id` · serde를 담은 `Properties` 를 준비한다"
+        },
+        {
+          "id": "i3",
+          "text": "`driver.createInputTopic(...)` · `driver.createOutputTopic(...)` 으로 테스트 토픽을 만든다"
+        }
+      ],
+      "explanation": "드라이버는 생성 시점에 토폴로지와 설정을 받아 내부적으로 태스크를 구성하므로 토폴로지와 `Properties` 가 먼저 준비돼야 합니다. 테스트 토픽은 드라이버가 만들어 주는 객체이므로 드라이버 생성 이후에만 얻을 수 있습니다. 입력 토픽에는 직렬화기를, 출력 토픽에는 역직렬화기를 넘긴다는 비대칭을 기억해야 합니다. 마지막에 `close()` 를 호출하지 않으면 상태 저장소 디렉터리가 남아 다음 테스트가 이전 상태를 물려받습니다.",
+      "distractorNotes": {
+        "i3": "드라이버보다 먼저 만들 수 있다고 착각하기 쉽습니다. 드라이버 인스턴스의 팩토리 메서드입니다.",
+        "i5": "`close()` 를 생략해도 테스트가 통과하는 경우가 있어 빼먹기 쉽지만, 상태가 누적되어 간헐적 실패의 원인이 됩니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Testing a Streams Application",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/testing.html"
+        }
+      ],
+      "tags": [
+        "kafka-testing",
+        "TopologyTestDriver",
+        "streams"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-021",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch07",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Kafka 4.3 기준 브로커 `message.max.bytes` 와 프로듀서 `max.request.size` 의 기본값 관계로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "둘 다 1048576으로 같으므로 경계값에서 차이가 없다."
+        },
+        {
+          "id": "B",
+          "text": "둘 다 1048588로 같으며 압축 전 크기를 기준으로 판정한다."
+        },
+        {
+          "id": "C",
+          "text": "브로커가 1048576, 프로듀서가 1048588로 프로듀서 쪽이 조금 크다."
+        },
+        {
+          "id": "D",
+          "text": "브로커가 1048588, 프로듀서가 1048576으로 브로커 쪽이 12바이트 크다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "브로커 값은 1048588이고 프로듀서 값은 정확히 1MiB인 1048576입니다. 둘 다 \"약 1MB\"로 외우면 경계값을 묻는 문항에서 갈립니다. 브로커 판정 단위는 개별 메시지가 아니라 레코드 배치이며 압축이 적용되면 압축 후 크기가 기준입니다. 프로듀서 쪽 초과는 `RecordTooLargeException` 으로 즉시 실패하지만, 브로커 쪽 초과는 배치를 쪼개 재전송하는 경로로 처리되어 증상이 다릅니다.",
+      "distractorNotes": {
+        "A": "1048576은 프로듀서 값이고 브로커 값은 12바이트 더 큽니다.",
+        "B": "값도 하나만 맞고, 브로커 판정 기준은 압축 후 크기입니다.",
+        "C": "두 값이 뒤바뀌었습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Broker Configs: message.max.bytes",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_message.max.bytes"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs: max.request.size",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_max.request.size"
+        }
+      ],
+      "tags": [
+        "message-size",
+        "defaults",
+        "message.max.bytes",
+        "max.request.size"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-022",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch04",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "아래 콜백이 실패 경로를 탔을 때의 동작으로 옳은 것은?",
+      "code": {
+        "lang": "java",
+        "caption": "프로듀서 콜백",
+        "body": "producer.send(record, (metadata, exception) -> {\n    if (exception != null) {\n        log.error(\"failed at partition={} offset={}\",\n                  metadata.partition(), metadata.offset(), exception);\n    }\n});"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "`metadata` 는 null이 아니지만 모든 필드가 -1이라 파티션·오프셋을 알 수 없다."
+        },
+        {
+          "id": "B",
+          "text": "`metadata` 가 null이므로 이 코드는 `NullPointerException` 을 던진다."
+        },
+        {
+          "id": "C",
+          "text": "`metadata` 에는 전송을 시도했던 파티션과 마지막 오프셋이 그대로 들어 있다."
+        },
+        {
+          "id": "D",
+          "text": "예외가 있으면 콜백이 호출되지 않으므로 이 블록은 실행되지 않는다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "공식 Javadoc은 예외가 null이 아닐 때 `metadata` 의 모든 필드가 특수값 -1로 채워진 빈 메타데이터가 전달된다고 명시합니다. 따라서 널 검사는 통과하지만 로그에는 `partition=-1 offset=-1` 만 남아 어느 파티션에서 실패했는지 알 수 없습니다. 실패 위치를 남기려면 원본 `ProducerRecord` 의 토픽·키를 함께 로깅해야 합니다. 콜백은 Sender(I/O) 스레드에서 실행되므로 이 안에서 블로킹 작업을 하면 전송 파이프라인 전체가 멈춥니다.",
+      "distractorNotes": {
+        "B": "`metadata` 는 null이 아니라 -1로 채워진 객체입니다.",
+        "C": "실패 시에는 위치 정보가 유지되지 않습니다.",
+        "D": "성공과 실패 모두 콜백이 호출되며, 둘 중 하나의 인자가 의미 있는 값을 갖습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Producer API",
+          "url": "https://kafka.apache.org/documentation/#producerapi"
+        }
+      ],
+      "tags": [
+        "producer-callback",
+        "exceptions",
+        "producer"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-023",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "처리는 정상인데 `kafka-consumer-groups.sh --describe` 의 LAG이 실제보다 훨씬 크게 보인다. 가장 그럴듯한 원인은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "CLI가 LEO를 기준으로 계산하므로 복제 중인 레코드가 lag에 포함된다."
+        },
+        {
+          "id": "B",
+          "text": "CLI는 커밋된 오프셋을 기준으로 계산하므로 커밋 주기가 길면 lag이 과대 표시된다."
+        },
+        {
+          "id": "C",
+          "text": "`records-lag-max` 와 달리 CLI는 할당되지 않은 파티션까지 합산한다."
+        },
+        {
+          "id": "D",
+          "text": "`auto.offset.reset=latest` 때문에 CLI가 처음부터의 거리를 계산한다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "CLI의 `CURRENT-OFFSET` 은 그룹이 커밋한 위치입니다. 실제로는 처리가 진행되고 있어도 커밋 주기가 길면 커밋 위치가 뒤에 남아 lag이 실제보다 크게 보입니다. 반대로 처리 전에 커밋하는 코드라면 lag이 실제보다 작게 보여 위험을 감춥니다. CLI는 스냅샷이라 추세를 볼 수 없으므로, 커밋 주기와 무관한 값을 원하면 컨슈머 JMX 지표를 함께 보고 컨슈머 사망까지 잡으려면 AdminClient로 외부 계산을 해야 합니다.",
+      "distractorNotes": {
+        "A": "CLI가 쓰는 최신 오프셋은 high watermark이며 LEO가 아닙니다.",
+        "C": "CLI는 그룹에 기록된 파티션을 대상으로 하며 임의의 파티션을 합산하지 않습니다.",
+        "D": "`auto.offset.reset` 은 커밋이 없거나 범위를 벗어났을 때만 관여하며 lag 계산식과 무관합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Basic Kafka Operations: Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        }
+      ],
+      "tags": [
+        "consumer-lag",
+        "monitoring",
+        "cli",
+        "offsets"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-024",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 SMT를 용도와 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`InsertField`",
+          "right": "정적 값이나 레코드 메타데이터를 필드로 추가"
+        },
+        {
+          "id": "p2",
+          "left": "`MaskField`",
+          "right": "지정한 필드의 값을 기본값이나 지정값으로 가림"
+        },
+        {
+          "id": "p3",
+          "left": "`ValueToKey`",
+          "right": "값의 특정 필드를 레코드 키로 승격"
+        },
+        {
+          "id": "p4",
+          "left": "`RegexRouter`",
+          "right": "정규식으로 대상 토픽 이름을 바꿈"
+        },
+        {
+          "id": "p5",
+          "left": "`TimestampConverter`",
+          "right": "타임스탬프 필드의 표현 형식을 변환"
+        }
+      ],
+      "extraRights": [
+        "여러 레코드를 키로 묶어 집계",
+        "중첩 구조를 평탄화해 단일 레벨로 변환"
+      ],
+      "explanation": "SMT는 레코드 한 건 단위의 stateless 변환이므로 집계나 조인처럼 여러 레코드를 함께 봐야 하는 작업은 불가능합니다. 이런 작업이 필요하면 Streams나 ksqlDB로 옮겨야 합니다. 여러 SMT를 `transforms=` 로 체인할 수 있고 순서가 결과를 바꾸며, source에서는 converter 앞, sink에서는 converter 뒤에 적용됩니다. 키를 만들어야 하는 sink 적재에서는 값의 필드를 키로 올리는 변환이 자주 쓰입니다.",
+      "distractorNotes": {
+        "p3": "키를 값으로 옮기는 방향으로 착각하기 쉽습니다. 값 → 키 방향입니다.",
+        "p4": "필드 이름을 바꾸는 변환과 혼동하기 쉽습니다. 이쪽은 대상 토픽 이름을 바꿉니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect Transformations",
+          "url": "https://kafka.apache.org/documentation/#connect_transforms"
+        }
+      ],
+      "tags": [
+        "smt",
+        "connect",
+        "transformations"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-025",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "각 윈도우 타입을 특성과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "Tumbling 윈도우",
+          "right": "고정 크기이며 겹치지 않아 레코드가 정확히 1개 윈도우에 속함"
+        },
+        {
+          "id": "p2",
+          "left": "Hopping 윈도우",
+          "right": "고정 크기이며 advance 간격만큼 겹쳐 레코드가 여러 윈도우에 속함"
+        },
+        {
+          "id": "p3",
+          "left": "Sliding 윈도우",
+          "right": "레코드 타임스탬프 기준 고정 간격 구간이며 데이터가 있는 구간만 만들어짐"
+        },
+        {
+          "id": "p4",
+          "left": "Session 윈도우",
+          "right": "비활성 gap으로 구분되어 크기가 가변이고 세션 병합이 일어남"
+        }
+      ],
+      "extraRights": [
+        "키와 무관하게 전역으로 하나만 유지되는 무한 윈도우",
+        "grace period 없이 지연 레코드를 항상 반영하는 윈도우"
+      ],
+      "explanation": "크기가 고정인지, 겹치는지, 데이터 없는 구간도 만들어지는지 세 축으로 구분하면 정리됩니다. 크기 10분에 advance 5분이면 한 레코드가 2개 윈도우에 속하므로 집계값이 두 번 반영되며, 이를 겹치지 않는 윈도우로 착각하면 중복 계산으로 보입니다. 세션 윈도우는 gap 안에 이벤트가 계속 오면 구간이 늘어나고 기존 세션들이 병합되기도 합니다. `...WithNoGrace` 를 쓰면 grace period가 0이 되어 지연 도착 레코드가 버려집니다.",
+      "distractorNotes": {
+        "p2": "Tumbling과 같은 것으로 취급하면 집계가 중복 계산된 것처럼 보입니다.",
+        "p3": "Hopping과 헷갈리기 쉽습니다. 이쪽은 advance 간격이 아니라 레코드 타임스탬프가 구간을 만듭니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Streams DSL: Windowing",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#windowing"
+        }
+      ],
+      "tags": [
+        "windowing",
+        "streams",
+        "stateless-stateful"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-026",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "`assign()` 으로 파티션을 직접 지정한 컨슈머의 특성으로 옳은 것을 모두 고르세요. (3개 선택)",
+      "code": {
+        "lang": "java",
+        "caption": "수동 할당",
+        "body": "consumer.assign(List.of(new TopicPartition(\"orders\", 0),\n                        new TopicPartition(\"orders\", 1)));"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "그룹 조정에 참여하지 않으므로 리밸런스가 발생하지 않는다."
+        },
+        {
+          "id": "B",
+          "text": "`group.id` 를 설정하지 않아도 동작한다."
+        },
+        {
+          "id": "C",
+          "text": "토픽의 파티션이 늘어나면 새 파티션을 자동으로 할당받는다."
+        },
+        {
+          "id": "D",
+          "text": "같은 인스턴스에서 `subscribe()` 와 함께 쓰면 `IllegalStateException` 이 발생한다."
+        },
+        {
+          "id": "E",
+          "text": "오프셋을 커밋할 수 없으므로 항상 처음부터 다시 읽어야 한다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B",
+        "D"
+      ],
+      "explanation": "수동 할당은 그룹 코디네이터와의 협상을 건너뛰므로 리밸런스가 없고 `group.id` 없이도 동작합니다. 대신 파티션 목록이 호출 시점에 고정되므로 파티션이 늘어나도 알아채지 못해 새 파티션이 조용히 방치됩니다. 구독과 수동 할당은 같은 인스턴스에서 섞을 수 없고 섞으면 `IllegalStateException` 이 발생합니다. `group.id` 를 지정하면 수동 할당에서도 오프셋 커밋은 가능하므로, 커밋 자체가 막히는 것은 아닙니다.",
+      "distractorNotes": {
+        "C": "파티션 증가는 감지되지 않습니다. 이것이 수동 할당의 대표적인 운영 함정입니다.",
+        "E": "`group.id` 가 있으면 커밋할 수 있습니다. 그룹 조정에 참여하지 않는 것과 커밋 가능 여부는 다른 문제입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer API: Manual Partition Assignment",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        }
+      ],
+      "tags": [
+        "assign-vs-subscribe",
+        "consumer",
+        "rebalance-triggers"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-027",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch07",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 토픽 설정을 Apache Kafka 4.3 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`retention.ms`",
+          "right": "604800000"
+        },
+        {
+          "id": "p2",
+          "left": "`segment.bytes`",
+          "right": "1073741824"
+        },
+        {
+          "id": "p3",
+          "left": "`delete.retention.ms`",
+          "right": "86400000"
+        },
+        {
+          "id": "p4",
+          "left": "`min.cleanable.dirty.ratio`",
+          "right": "0.5"
+        },
+        {
+          "id": "p5",
+          "left": "`retention.bytes`",
+          "right": "-1 (파티션당 무제한)"
+        }
+      ],
+      "extraRights": [
+        "1048588",
+        "0",
+        "10485760"
+      ],
+      "explanation": "`retention.ms` 기본값 604800000은 7일이고, `segment.ms` 도 같은 7일이므로 보관 기간만 줄이면 세그먼트가 마감되지 않아 삭제가 늦어집니다. `delete.retention.ms` 는 일반 레코드가 아니라 tombstone의 수명이며 기본 1일입니다. `retention.bytes` 는 -1로 크기 제한이 없고, 값을 줄 때는 토픽 전체가 아니라 파티션당 기준이라는 점이 자주 틀립니다. `min.cleanable.dirty.ratio` 0.5는 컴팩션 클리너가 동작을 시작하는 dirty 비율입니다.",
+      "distractorNotes": {
+        "p3": "`retention.ms` 와 이름이 비슷해 같은 값으로 착각하기 쉽습니다. 대상이 tombstone입니다.",
+        "p5": "0으로 착각하기 쉽지만 0은 \"즉시 삭제\"에 가까운 의미이고 기본값은 -1입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        }
+      ],
+      "tags": [
+        "retention",
+        "defaults",
+        "compaction",
+        "delete.retention.ms"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-028",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch04",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "3.x에서 쓰던 아래 설정을 그대로 4.3 프로듀서에 넘겼다. 결과로 옳은 것은?",
+      "code": {
+        "lang": "properties",
+        "caption": "producer.properties",
+        "body": "partitioner.class=org.apache.kafka.clients.producer.internals.DefaultPartitioner"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "경고 로그만 남고 내장 파티셔너로 조용히 폴백한다."
+        },
+        {
+          "id": "B",
+          "text": "`UniformStickyPartitioner` 로 자동 치환되어 sticky 배칭이 적용된다."
+        },
+        {
+          "id": "C",
+          "text": "해당 클래스가 4.0에서 제거되었으므로 프로듀서 생성이 실패한다."
+        },
+        {
+          "id": "D",
+          "text": "키가 있는 레코드에만 적용되고 키가 없으면 내장 로직이 쓰인다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "`DefaultPartitioner` 와 `UniformStickyPartitioner` 는 모두 Kafka 4.0에서 제거되었습니다. 설정에 존재하지 않는 클래스를 지정하면 클라이언트가 클래스를 로드하지 못해 생성 단계에서 예외로 실패합니다. 4.x에서 기본 파티셔닝을 쓰려면 `partitioner.class` 를 지정하지 않고 기본값인 null로 두어야 하며, 그러면 키가 있으면 `murmur2(key) % 파티션수`, 키가 없으면 배치 단위 sticky 로직이 동작합니다. 라운드로빈 동작이 필요하다는 오래된 요구는 `partitioner.ignore.keys` 나 sticky 배칭 이해로 대체됩니다.",
+      "distractorNotes": {
+        "A": "존재하지 않는 클래스로의 조용한 폴백은 없습니다.",
+        "B": "그 클래스 역시 4.0에서 제거되었습니다.",
+        "D": "파티셔너는 키 유무와 무관하게 로드 시점에 결정되므로 부분 적용되지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Upgrading to 4.0.0",
+          "url": "https://kafka.apache.org/documentation/#upgrade_4_0_0"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs: partitioner.class",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_partitioner.class"
+        }
+      ],
+      "tags": [
+        "partitioning",
+        "version-4x",
+        "producer",
+        "deprecated"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-029",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "Connect의 DLQ(dead letter queue)가 실제로 동작하기 위한 조건을 모두 고르세요. (3개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`errors.tolerance=all` 로 설정한다."
+        },
+        {
+          "id": "B",
+          "text": "`errors.deadletterqueue.topic.name` 에 토픽 이름을 지정한다."
+        },
+        {
+          "id": "C",
+          "text": "대상이 sink 커넥터여야 한다."
+        },
+        {
+          "id": "D",
+          "text": "`errors.log.enable=true` 로 설정한다."
+        },
+        {
+          "id": "E",
+          "text": "`errors.retry.timeout=-1` 로 무한 재시도를 켠다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B",
+        "C"
+      ],
+      "explanation": "DLQ는 관용(tolerance)이 켜져 있고 대상 토픽 이름이 지정된 sink 커넥터에서만 동작합니다. 기본값은 `errors.tolerance=none` 이라 첫 실패에서 태스크가 죽고, `all` 로 바꾸면서 DLQ 토픽을 지정하지 않으면 실패 레코드가 조용히 버려집니다. `errors.deadletterqueue.context.headers.enable` 기본값이 false이므로 원인 정보를 헤더에 남기려면 별도로 켜야 합니다. source 커넥터에는 DLQ 설정 자체가 존재하지 않습니다.",
+      "distractorNotes": {
+        "D": "에러 로깅은 DLQ와 독립적인 옵션입니다. 켜지 않아도 DLQ는 동작합니다.",
+        "E": "재시도 예산은 일시 장애 대응용이며 DLQ 활성 조건이 아닙니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Sink Connector Configs",
+          "url": "https://kafka.apache.org/documentation/#sinkconnectconfigs"
+        },
+        {
+          "title": "Apache Kafka — Connect Error Reporting",
+          "url": "https://kafka.apache.org/documentation/#connect_errorreporting"
+        }
+      ],
+      "tags": [
+        "dlq",
+        "errors.tolerance",
+        "connect",
+        "defaults"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-030",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "컨슈머 리밸런스가 잦은 원인을 조사할 때 보아야 하는 클라이언트 메트릭을 모두 고르세요. (3개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`time-between-poll-max`"
+        },
+        {
+          "id": "B",
+          "text": "`last-rebalance-seconds-ago`"
+        },
+        {
+          "id": "C",
+          "text": "`failed-rebalance-rate-per-hour`"
+        },
+        {
+          "id": "D",
+          "text": "`record-queue-time-avg`"
+        },
+        {
+          "id": "E",
+          "text": "`buffer-available-bytes`"
+        }
+      ],
+      "answer": [
+        "A",
+        "B",
+        "C"
+      ],
+      "explanation": "리밸런스 원인 조사는 poll 축과 코디네이터 축을 같이 보는 작업입니다. `time-between-poll-max` 는 `max.poll.interval.ms` 에 얼마나 근접했는지를 보여 주므로 리밸런스를 사후가 아니라 사전에 예측할 수 있게 합니다. 코디네이터 메트릭에서 마지막 리밸런스 경과 시간과 실패율을 함께 보면 반복 여부와 성공 여부를 구분할 수 있습니다. lag 지표는 리밸런스의 결과로 뒤늦게 움직이므로 원인 지표로는 늦습니다.",
+      "distractorNotes": {
+        "D": "프로듀서 메트릭이며 레코드가 배치 큐에서 대기한 시간을 나타냅니다.",
+        "E": "프로듀서 버퍼 잔량 메트릭이므로 컨슈머 리밸런스와 무관합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring: Consumer Group Metrics",
+          "url": "https://kafka.apache.org/documentation/#consumer_group_monitoring"
+        }
+      ],
+      "tags": [
+        "monitoring",
+        "rebalance-triggers",
+        "max-poll-interval"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-031",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 컨슈머 설정을 Apache Kafka 4.3 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`session.timeout.ms`",
+          "right": "45000"
+        },
+        {
+          "id": "p2",
+          "left": "`heartbeat.interval.ms`",
+          "right": "3000"
+        },
+        {
+          "id": "p3",
+          "left": "`auto.commit.interval.ms`",
+          "right": "5000"
+        },
+        {
+          "id": "p4",
+          "left": "`fetch.max.bytes`",
+          "right": "52428800"
+        },
+        {
+          "id": "p5",
+          "left": "`group.protocol`",
+          "right": "classic"
+        }
+      ],
+      "extraRights": [
+        "10000",
+        "1048576",
+        "consumer",
+        "500"
+      ],
+      "explanation": "`session.timeout.ms` 는 오래된 자료의 10000이 아니라 45000이며, 권장 관계상 하트비트 주기는 그 1/3 이하인 3000입니다. `fetch.max.bytes` 는 요청 전체 상한 52428800(50MB)이고 파티션당 상한인 `max.partition.fetch.bytes` 는 1048576이라 값이 다릅니다. `group.protocol` 기본값은 KIP-848이 4.0에서 GA가 되었음에도 여전히 `classic` 이며, 새 프로토콜을 쓰려면 `consumer` 로 명시해야 합니다. GA와 기본값을 같은 것으로 보는 오추론이 이 항목의 대표 함정입니다.",
+      "distractorNotes": {
+        "p1": "10000을 고르기 쉽습니다. 그것은 예전 기본값입니다.",
+        "p4": "1048576을 고르면 파티션당 상한과 혼동한 것입니다.",
+        "p5": "`consumer` 를 고르면 GA 사실과 기본값을 섞은 것입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer Configs",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs"
+        }
+      ],
+      "tags": [
+        "defaults",
+        "consumer",
+        "group.protocol",
+        "session.timeout.ms"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-032",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "`unclean.leader.election.enable` 의 4.3 기본값과 그 결과로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`true` — ISR 밖 레플리카도 리더가 될 수 있어 가용성이 우선된다."
+        },
+        {
+          "id": "B",
+          "text": "`true` — 다만 `min.insync.replicas` 가 2 이상이면 자동으로 무시된다."
+        },
+        {
+          "id": "C",
+          "text": "`false` — ISR 밖 레플리카가 리더가 되어 일부 데이터가 유실될 수 있다."
+        },
+        {
+          "id": "D",
+          "text": "`false` — ISR 밖 레플리카는 리더가 되지 못하므로 유실 대신 가용성을 희생한다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "기본값은 `false` 이며, ISR에 속하지 않은 레플리카는 리더로 승격되지 않습니다. 따라서 ISR이 전부 사라지면 해당 파티션은 리더가 없는 상태가 되어 읽기·쓰기가 모두 멈추고 `OfflinePartitionsCount` 가 올라갑니다. 데이터 유실을 막는 대신 가용성을 포기하는 선택이며, 이를 `true` 로 바꾸는 것은 증상은 사라지지만 데이터를 잃는 과잉 조치입니다. 아주 오래된 버전의 기본값이 `true` 였기 때문에 여전히 틀리게 외우는 경우가 많습니다.",
+      "distractorNotes": {
+        "A": "기본값이 반대이며, 4.x는 안전 쪽으로 기본값을 잡습니다.",
+        "B": "`min.insync.replicas` 로 이 설정이 무시되는 규칙은 없습니다.",
+        "C": "기본값은 맞지만 결과가 반대입니다. `false` 이므로 ISR 밖 레플리카는 리더가 되지 못합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Broker Configs: unclean.leader.election.enable",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_unclean.leader.election.enable"
+        }
+      ],
+      "tags": [
+        "unclean-leader-election",
+        "defaults",
+        "isr",
+        "durability"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-033",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "Streams 애플리케이션의 상태와 오프셋을 완전히 초기화해 처음부터 다시 처리하려 한다. 절차를 올바른 순서로 배열하세요.",
+      "code": null,
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
+      ],
+      "items": [
+        {
+          "id": "i3",
+          "text": "각 인스턴스에서 `KafkaStreams.cleanUp()` 을 호출하거나 `state.dir` 의 로컬 상태를 삭제한다"
+        },
+        {
+          "id": "i1",
+          "text": "같은 `application.id` 를 쓰는 모든 인스턴스를 정지한다"
+        },
+        {
+          "id": "i4",
+          "text": "애플리케이션을 다시 기동한다"
+        },
+        {
+          "id": "i2",
+          "text": "`kafka-streams-application-reset.sh --application-id {id}` 로 내부 토픽과 그룹 오프셋을 정리한다"
+        }
+      ],
+      "explanation": "리셋 도구는 그룹이 비어 있을 때만 안전하게 동작하므로 모든 인스턴스를 먼저 내려야 합니다. 도구는 입력 토픽 오프셋을 되돌리고 내부 리파티션 토픽을 정리하지만, 각 인스턴스 로컬 디스크의 RocksDB 상태는 건드리지 않습니다. 따라서 인스턴스별로 로컬 상태를 지우는 단계가 반드시 뒤따라야 하며, 이를 빼먹으면 옛 상태를 물려받아 결과가 어긋납니다. 정리가 끝난 뒤 기동해야 changelog 토픽으로부터 상태가 새로 복원됩니다.",
+      "distractorNotes": {
+        "i3": "리셋 도구가 로컬 상태까지 지워 준다고 오해하기 쉽습니다.",
+        "i1": "실행 중에 리셋 도구를 돌리면 그룹이 활성 상태라 실패하거나 결과가 일관되지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Streams: Application Reset Tool",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/app-reset-tool.html"
+        }
+      ],
+      "tags": [
+        "streams",
+        "application-reset",
+        "state-store"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-034",
+      "exam": "CCDAK",
+      "domain": "Application Testing",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "아래 `MockConsumer` 테스트에서 `poll()` 이 아무 레코드도 돌려주지 않는다. 원인으로 옳은 것은?",
+      "code": {
+        "lang": "java",
+        "caption": "MockConsumer 단위 테스트",
+        "body": "MockConsumer<String, String> consumer = new MockConsumer<>(\"earliest\");\nTopicPartition tp = new TopicPartition(\"orders\", 0);\nconsumer.assign(List.of(tp));\nconsumer.addRecord(new ConsumerRecord<>(\"orders\", 0, 0L, \"k\", \"v\"));\n\nConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));\nassertEquals(1, records.count());   // 실패: 0"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "`updateBeginningOffsets()` 로 시작 오프셋을 주지 않아 포지션이 정해지지 않았다."
+        },
+        {
+          "id": "B",
+          "text": "`MockConsumer` 는 `assign()` 을 지원하지 않으므로 `subscribe()` 를 써야 한다."
+        },
+        {
+          "id": "C",
+          "text": "`addRecord()` 로 넣은 레코드는 `commitSync()` 이후에만 반환된다."
+        },
+        {
+          "id": "D",
+          "text": "`MockConsumer` 는 실제 브로커가 없으면 항상 빈 결과를 돌려준다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "`MockConsumer` 는 파티션별 시작 오프셋 정보를 스스로 만들지 않습니다. `updateBeginningOffsets(Map.of(tp, 0L))` 로 시작 오프셋을 알려 주어야 포지션이 초기화되고 주입한 레코드가 반환됩니다. 끝 오프셋을 기준으로 하는 테스트라면 `updateEndOffsets()` 도 함께 지정합니다. 예외 경로를 검증할 때는 `setPollException()` 으로 예외를 주입할 수 있어 브로커 없이도 실패 처리 코드를 테스트할 수 있습니다.",
+      "distractorNotes": {
+        "B": "`MockConsumer` 는 `assign()` 과 `subscribe()` 를 모두 지원합니다.",
+        "C": "커밋과 레코드 반환은 무관합니다.",
+        "D": "브로커 없이 동작하도록 만들어진 목 객체입니다. 오프셋 정보를 주면 정상적으로 반환합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        }
+      ],
+      "tags": [
+        "kafka-testing",
+        "MockConsumer",
+        "consumer"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-035",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch04",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "값 직렬화기가 처리할 수 없는 객체를 담아 아래처럼 전송했다. 예외가 전달되는 방식으로 옳은 것은?",
+      "code": {
+        "lang": "java",
+        "caption": "value.serializer=StringSerializer 인데 객체를 넣은 경우",
+        "body": "producer.send(new ProducerRecord<>(\"orders\", key, orderObject),\n              (metadata, exception) -> handle(exception));"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "콜백의 `exception` 인자로 비동기 전달된다."
+        },
+        {
+          "id": "B",
+          "text": "`send()` 호출이 `SerializationException` 을 동기로 던진다."
+        },
+        {
+          "id": "C",
+          "text": "`flush()` 시점에 `ExecutionException` 으로 감싸져 나온다."
+        },
+        {
+          "id": "D",
+          "text": "브로커가 거부하며 `InvalidRecordException` 이 콜백으로 온다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "직렬화는 레코드를 배치에 넣기 전, `send()` 안에서 호출 스레드가 수행합니다. 따라서 직렬화 실패는 브로커까지 가지 않고 `send()` 가 동기로 예외를 던지며, 콜백은 호출되지 않습니다. 이 때문에 전송 실패 처리를 콜백에만 넣어 두면 직렬화 오류를 놓치고 애플리케이션이 그대로 죽습니다. 견고한 코드는 `send()` 를 try/catch로 감싸고 콜백에서 브로커 응답 실패를 따로 처리합니다.",
+      "distractorNotes": {
+        "A": "콜백은 브로커 응답 또는 최종 실패 시점에 호출되며 직렬화 단계보다 뒤에 있습니다.",
+        "C": "`ExecutionException` 은 `Future.get()` 에서 감싸지는 형태이며 직렬화 실패 경로가 아닙니다.",
+        "D": "레코드가 브로커에 도달하지 못하므로 브로커 예외가 나올 수 없습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Producer API",
+          "url": "https://kafka.apache.org/documentation/#producerapi"
+        }
+      ],
+      "tags": [
+        "retriable-errors",
+        "exceptions",
+        "producer",
+        "serialization"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-036",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch08",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "호환성 모드가 BACKWARD인 subject에 새 스키마를 적용해 배포하는 절차를 올바른 순서로 배열하세요.",
+      "code": null,
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
+      ],
+      "items": [
+        {
+          "id": "i2",
+          "text": "새 스키마로 빌드한 컨슈머를 먼저 배포한다"
+        },
+        {
+          "id": "i4",
+          "text": "옛 스키마로 기록된 데이터가 모두 만료된 뒤 옛 스키마 처리 코드를 정리한다"
+        },
+        {
+          "id": "i1",
+          "text": "새 스키마를 등록해 호환성 검사를 통과하는지 확인한다"
+        },
+        {
+          "id": "i3",
+          "text": "새 스키마로 빌드한 프로듀서를 배포한다"
+        }
+      ],
+      "explanation": "BACKWARD는 \"새 스키마로 옛 데이터를 읽을 수 있다\"는 보장이므로 새 컨슈머가 옛 데이터와 새 데이터를 모두 처리할 수 있습니다. 따라서 컨슈머를 먼저 올리고 그다음 프로듀서를 올려야 하며, 순서를 뒤바꾸면 옛 컨슈머가 모르는 스키마의 데이터를 받아 전량 실패합니다. 등록 단계에서 호환성 검사를 먼저 통과시켜야 배포 중간에 등록 거부로 막히는 일을 피할 수 있습니다. FORWARD는 반대로 프로듀서를 먼저 배포하며, 옛 데이터를 새 컨슈머로 재처리해야 한다면 BACKWARD_TRANSITIVE가 필요합니다.",
+      "distractorNotes": {
+        "i2": "프로듀서를 먼저 배포하는 FORWARD 순서와 자주 뒤바뀝니다.",
+        "i4": "정리 단계를 프로듀서 배포보다 앞에 두면 아직 옛 데이터가 남아 있는 상태에서 처리 코드가 사라집니다."
+      },
+      "refs": [
+        {
+          "title": "Confluent — Schema Evolution and Compatibility",
+          "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html"
+        }
+      ],
+      "tags": [
+        "schema-compatibility",
+        "deployment-order",
+        "schema-registry"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-037",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Connect 커넥터의 `errors.tolerance` 와 `errors.retry.timeout` 기본값과 그 결과로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`all` / `-1` — 기본적으로 무한히 재시도한 뒤 실패 레코드를 건너뛴다."
+        },
+        {
+          "id": "B",
+          "text": "`none` / `60000` — 1분간 재시도한 뒤 태스크를 실패시킨다."
+        },
+        {
+          "id": "C",
+          "text": "`none` / `0` — 재시도 없이 첫 실패에서 태스크가 실패한다."
+        },
+        {
+          "id": "D",
+          "text": "`all` / `0` — 재시도 없이 실패 레코드를 건너뛴다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "기본값은 관용 없음(`none`)과 재시도 예산 0의 조합입니다. 즉 변환·컨버터·쓰기 중 첫 실패가 나면 재시도 없이 태스크가 FAILED로 떨어지고, 태스크는 자동으로 되살아나지 않습니다. 일시 장애를 넘기려면 `errors.retry.timeout` 을 양수(또는 무한을 뜻하는 -1)로 주고, 영구 불량 레코드를 격리하려면 관용을 켜면서 DLQ를 함께 지정해야 합니다. 60000은 재시도 백오프 상한인 `errors.retry.delay.max.ms` 의 기본값이라 값만 보고 헷갈리기 쉽습니다.",
+      "distractorNotes": {
+        "A": "두 값 모두 기본값이 아닙니다. 기본 상태는 재시도도 관용도 없습니다.",
+        "B": "60000은 재시도 백오프 상한 설정의 기본값입니다.",
+        "D": "관용 기본값이 `all` 이 아닙니다. 이 조합은 조용한 유실을 만드는 위험한 수동 설정입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Sink Connector Configs",
+          "url": "https://kafka.apache.org/documentation/#sinkconnectconfigs"
+        }
+      ],
+      "tags": [
+        "errors.tolerance",
+        "defaults",
+        "connect",
+        "dlq"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-038",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "chapter": "ch11",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "브로커 JMX의 `kafka.server:type=FetcherLagMetrics,name=ConsumerLag` 값이 커졌다. 이 지표의 의미로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "컨슈머 그룹의 lag이며 클라이언트 `records-lag-max` 와 같은 값이다."
+        },
+        {
+          "id": "B",
+          "text": "커밋 오프셋과 high watermark의 차이를 브로커가 그룹별로 계산한 값이다."
+        },
+        {
+          "id": "C",
+          "text": "share group에서 아직 확인(ack)되지 않은 레코드 수다."
+        },
+        {
+          "id": "D",
+          "text": "팔로워 레플리카의 복제 지연 레코드 수이며 컨슈머 그룹과 무관하다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "이름에 `ConsumerLag` 이 들어 있지만 이 MBean은 브로커의 replica fetcher가 발행하는 지표이고, 공식 문서는 이를 \"팔로워 레플리카별 지연 메시지 수\"로 설명합니다. 즉 팔로워가 리더를 따라잡지 못한 정도이므로 ISR 축소와 함께 움직입니다. 애플리케이션 컨슈머의 lag은 컨슈머 프로세스가 발행하는 `records-lag-max` 이거나 CLI·AdminClient로 계산한 값입니다. 이름만 보고 컨슈머 그룹 lag 알림을 이 지표에 걸면 정작 컨슈머 지연을 못 잡습니다.",
+      "distractorNotes": {
+        "A": "발행 주체와 대상이 모두 다릅니다. 한쪽은 브로커 팔로워, 한쪽은 컨슈머 클라이언트입니다.",
+        "B": "브로커는 그룹별 lag을 계산해 노출하지 않습니다.",
+        "C": "share group의 미확인 레코드는 다른 지표 체계로 노출됩니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
+      ],
+      "tags": [
+        "monitoring",
+        "replication",
+        "consumer-lag",
+        "isr"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-039",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch04",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "`enable.idempotence=true` 일 때 프로듀서가 요구하는 설정 조건을 모두 고르세요. (3개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`acks=all`"
+        },
+        {
+          "id": "B",
+          "text": "`retries` 가 0보다 큼"
+        },
+        {
+          "id": "C",
+          "text": "`max.in.flight.requests.per.connection` 이 5 이하"
+        },
+        {
+          "id": "D",
+          "text": "`linger.ms` 가 0보다 큼"
+        },
+        {
+          "id": "E",
+          "text": "`transactional.id` 지정"
+        }
+      ],
+      "answer": [
+        "A",
+        "B",
+        "C"
+      ],
+      "explanation": "멱등 프로듀서는 브로커가 파티션별 최근 배치 5개의 시퀀스 번호만 추적하기 때문에 in-flight 요청이 5를 넘으면 중복 제거와 순서 보장을 할 수 없습니다. 또한 유실이 생기면 시퀀스가 끊기므로 `acks=all` 과 0보다 큰 재시도가 필요합니다. 이 값들과 충돌하는 설정을 명시하면 `ConfigException` 으로 기동이 실패하고, 명시하지 않은 경우에는 조용히 조정되거나 멱등성이 꺼질 수 있어 로그 확인이 필요합니다. `transactional.id` 는 트랜잭션을 쓸 때 지정하는 별개 설정이며 멱등성 자체의 전제는 아닙니다.",
+      "distractorNotes": {
+        "D": "배치 대기 시간은 멱등성과 무관합니다. 4.3 기본값도 이미 5입니다.",
+        "E": "트랜잭션에는 멱등성이 필요하지만 그 역은 성립하지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Producer Configs: enable.idempotence",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_enable.idempotence"
+        }
+      ],
+      "tags": [
+        "idempotence-inflight",
+        "producer",
+        "defaults",
+        "exceptions"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-040",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 Kafka Streams 설정을 4.3 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`num.stream.threads`",
+          "right": "1"
+        },
+        {
+          "id": "p2",
+          "left": "`num.standby.replicas`",
+          "right": "0"
+        },
+        {
+          "id": "p3",
+          "left": "`processing.guarantee`",
+          "right": "at_least_once"
+        },
+        {
+          "id": "p4",
+          "left": "`replication.factor`",
+          "right": "-1 (브로커 기본값을 따름)"
+        },
+        {
+          "id": "p5",
+          "left": "`statestore.cache.max.bytes`",
+          "right": "10485760"
+        }
+      ],
+      "extraRights": [
+        "CPU 코어 수",
+        "exactly_once_v2",
+        "3",
+        "30000"
+      ],
+      "explanation": "스트림 스레드 수는 CPU 코어 수가 아니라 1이므로, 병렬 처리를 원하면 명시적으로 올려야 합니다. 대기 레플리카도 0이라 인스턴스가 죽으면 상태를 changelog에서 복원하는 시간이 그대로 다운타임이 됩니다. 보장 수준 기본값은 at-least-once이며 정확히 한 번 처리는 `exactly_once_v2` 로 명시해야 하고 브로커 3대가 전제입니다. 내부 토픽 `replication.factor` 기본값 -1은 \"브로커의 기본 복제 계수를 쓴다\"는 뜻이라 개발 클러스터에서 1로 만들어지기 쉽습니다.",
+      "distractorNotes": {
+        "p1": "코어 수만큼 자동으로 잡힌다고 추측하기 쉽습니다.",
+        "p2": "고가용성을 위해 기본으로 1개는 있을 것이라고 오해하기 쉽습니다.",
+        "p3": "\"Streams니까 EOS가 기본\"이라는 오추론이 흔합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Streams Configs",
+          "url": "https://kafka.apache.org/documentation/#streamsconfigs"
+        }
+      ],
+      "tags": [
+        "streams",
+        "defaults",
+        "processing.guarantee",
+        "num.standby.replicas"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-041",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch05",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "브로커 `offsets.retention.minutes` 의 기본값과 그 영향으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "10080(7일)이며, 그룹이 비어 있는 상태로 이 기간이 지나면 커밋 오프셋이 삭제된다."
+        },
+        {
+          "id": "B",
+          "text": "1440(1일)이며, 커밋이 만료되면 컨슈머가 자동으로 earliest부터 다시 읽는다."
+        },
+        {
+          "id": "C",
+          "text": "10080(7일)이지만 `__consumer_offsets` 가 compact 토픽이라 실제로는 만료되지 않는다."
+        },
+        {
+          "id": "D",
+          "text": "이 설정은 없고 `__consumer_offsets` 의 `retention.ms` 를 그대로 따른다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "커밋 오프셋에는 별도의 보존 기간이 있고 기본값은 10080분, 즉 7일입니다. 주말이나 연휴처럼 그룹이 비어 있는 기간이 이 값을 넘기면 커밋이 사라지고, 다시 붙은 컨슈머는 `auto.offset.reset` 정책을 타게 됩니다. 이때 정책이 `latest` 면 그 사이 들어온 데이터를 조용히 건너뛰고, `earliest` 면 전량 재처리가 일어납니다. 어느 쪽이든 사고이므로 장기간 중단되는 그룹은 이 값을 늘리거나 오프셋을 명시적으로 관리해야 합니다.",
+      "distractorNotes": {
+        "B": "값이 틀렸고, 만료 후 동작은 자동 earliest가 아니라 `auto.offset.reset` 정책에 따릅니다.",
+        "C": "컴팩션은 최신 값을 남기는 정책이며 만료 삭제(tombstone 기록)를 막지 않습니다.",
+        "D": "그룹 코디네이터가 관리하는 별도의 브로커 설정이 존재합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Broker Configs: offsets.retention.minutes",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_offsets.retention.minutes"
+        }
+      ],
+      "tags": [
+        "offset-reset",
+        "defaults",
+        "consumer-group",
+        "offsets"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-042",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch06",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "3.x 코드를 4.3으로 올렸을 때 아래 호출의 결과로 옳은 것은?",
+      "code": {
+        "lang": "java",
+        "caption": "트랜잭션 안에서 오프셋 커밋",
+        "body": "producer.sendOffsetsToTransaction(offsets, \"order-processor\");"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "deprecated 경고가 남지만 그대로 동작한다."
+        },
+        {
+          "id": "B",
+          "text": "해당 오버로드가 제거되어 컴파일되지 않는다. `ConsumerGroupMetadata` 를 받는 형태만 남아 있다."
+        },
+        {
+          "id": "C",
+          "text": "런타임에 `UnsupportedVersionException` 이 발생한다."
+        },
+        {
+          "id": "D",
+          "text": "그룹 이름 문자열이 무시되고 오프셋만 정상 커밋된다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "그룹 ID 문자열을 받던 오버로드는 4.x에서 제거되었고 `sendOffsetsToTransaction(Map, ConsumerGroupMetadata)` 만 남았습니다. 메타데이터를 넘기면 그룹 세대(generation)와 인스턴스 ID까지 함께 전달되어, 좀비 컨슈머가 오래된 세대로 오프셋을 커밋하는 것을 브로커가 차단할 수 있습니다. 따라서 4.3 코드는 `consumer.groupMetadata()` 를 그대로 넘기는 형태로 작성합니다. 문자열만 넘기면 이 펜싱이 약해지므로 API에서 아예 없앤 것입니다.",
+      "distractorNotes": {
+        "A": "deprecated 단계를 지나 제거되었으므로 컴파일 단계에서 막힙니다.",
+        "C": "런타임 예외가 아니라 컴파일 오류입니다.",
+        "D": "무시되는 것이 아니라 그런 시그니처가 존재하지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Producer API",
+          "url": "https://kafka.apache.org/documentation/#producerapi"
+        },
+        {
+          "title": "Apache Kafka — Upgrading to 4.0.0",
+          "url": "https://kafka.apache.org/documentation/#upgrade_4_0_0"
+        }
+      ],
+      "tags": [
+        "transactions",
+        "version-4x",
+        "producer-api",
+        "eos"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-043",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "각 Connect REST 엔드포인트를 용도와 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`GET /connectors/{name}/status`",
+          "right": "태스크 상태와 실패 `trace`, `worker_id` 조회"
+        },
+        {
+          "id": "p2",
+          "left": "`PATCH /connectors/{name}/config`",
+          "right": "설정의 일부 키만 수정"
+        },
+        {
+          "id": "p3",
+          "left": "`DELETE /connectors/{name}/offsets`",
+          "right": "오프셋 초기화 (STOPPED 상태에서만 가능)"
+        },
+        {
+          "id": "p4",
+          "left": "`PUT /connector-plugins/{type}/config/validate`",
+          "right": "배포 전 설정 유효성 검증"
+        },
+        {
+          "id": "p5",
+          "left": "`PUT /admin/loggers/{logger}`",
+          "right": "런타임에 로거 레벨 변경"
+        }
+      ],
+      "extraRights": [
+        "커넥터를 일시 정지하되 태스크 자원은 유지",
+        "실패한 태스크만 골라 재시작"
+      ],
+      "explanation": "장애 조사는 상태 조회에서 시작합니다. 상태 응답의 `trace` 로 원인을, `worker_id` 로 어느 노드의 로그를 봐야 하는지 알 수 있습니다. 설정 전체를 교체하는 `PUT` 과 일부만 바꾸는 `PATCH` 를 구분해야 하며, 전체 교체는 빠뜨린 키를 기본값으로 되돌립니다. 오프셋 조회·변경·초기화 엔드포인트는 커넥터가 STOPPED 상태여야 하고, PAUSED는 자원을 유지하는 상태라 오프셋을 만질 수 없습니다.",
+      "distractorNotes": {
+        "p3": "PAUSED에서도 될 것으로 오해하기 쉽습니다. 자원이 해제된 STOPPED만 허용됩니다.",
+        "p5": "워커 재시작이 필요하다고 오해하기 쉽지만 REST로 런타임 변경이 가능합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect REST Interface",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
+      ],
+      "tags": [
+        "connect",
+        "connect-logging",
+        "rest-api",
+        "connect-offsets"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-044",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "`errors.tolerance=all` 로 운영하는 sink 커넥터에서 \"조용한 유실\"을 잡기 위해 알림을 걸어야 할 Connect 메트릭을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`total-records-skipped`"
+        },
+        {
+          "id": "B",
+          "text": "`deadletterqueue-produce-requests`"
+        },
+        {
+          "id": "C",
+          "text": "`connector-total-task-count`"
+        },
+        {
+          "id": "D",
+          "text": "`sink-record-read-rate`"
+        },
+        {
+          "id": "E",
+          "text": "`records-lag-max`"
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
+      ],
+      "explanation": "관용을 켜면 실패 레코드가 태스크를 죽이지 않고 넘어가므로 태스크 상태만 보면 정상으로 보입니다. 건너뛴 레코드 수와 DLQ 쓰기 시도 수는 태스크 에러 메트릭 그룹에 있어, 값이 0에서 벗어나는 순간을 알림으로 잡을 수 있습니다. 두 지표를 함께 보면 \"버려졌지만 DLQ에도 못 들어간\" 최악의 경우를 구분할 수 있습니다. 처리량이나 태스크 수 지표는 유실이 있어도 정상 범위를 유지하므로 이 목적에 쓸 수 없습니다.",
+      "distractorNotes": {
+        "C": "태스크 수는 배치 구성 정보이며 레코드 유실과 무관합니다.",
+        "D": "읽기 처리량은 레코드를 버려도 정상으로 유지됩니다.",
+        "E": "컨슈머 클라이언트 lag 지표이며 건너뛴 레코드를 표현하지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect Monitoring",
+          "url": "https://kafka.apache.org/documentation/#connect_monitoring"
+        }
+      ],
+      "tags": [
+        "monitoring",
+        "errors.tolerance",
+        "dlq",
+        "connect"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-045",
+      "exam": "CCDAK",
+      "domain": "Application Testing",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "Kafka 테스트 도구의 출처 분류에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`EmbeddedKafkaCluster` 는 Apache Kafka가 공개 배포하는 통합 테스트 아티팩트다."
+        },
+        {
+          "id": "B",
+          "text": "Testcontainers의 `KafkaContainer` 는 Apache Kafka 배포판에 포함된 클래스다."
+        },
+        {
+          "id": "C",
+          "text": "`EmbeddedKafkaCluster` 는 Apache Kafka의 공개 배포 아티팩트가 아니므로 이를 Apache 제공 도구로 분류하면 틀린다."
+        },
+        {
+          "id": "D",
+          "text": "`kafka-connect-datagen` 은 Apache Kafka `bin/` 에 포함된 목 데이터 생성기다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "Apache Kafka가 공개 아티팩트로 배포하는 테스트 도구는 `kafka-clients` 의 목 객체와 `kafka-streams-test-utils` 의 `TopologyTestDriver` 계열입니다. 흔히 인용되는 임베디드 클러스터 유틸리티는 Kafka 저장소 내부의 테스트 코드에 있으며 공개 배포 대상이 아닙니다. 이것을 Apache 제공 도구로 분류하는 선택지가 대표적인 오답 유도 지점입니다. 컨테이너 기반 통합 테스트와 Spring의 임베디드 브로커, 목 데이터 생성기는 모두 외부 프로젝트이므로 버전과 API를 각 프로젝트 문서로 확인해야 합니다.",
+      "distractorNotes": {
+        "A": "저장소 내부 테스트 유틸리티이며 공개 배포 아티팩트가 아닙니다.",
+        "B": "Testcontainers는 별도의 외부 프로젝트입니다.",
+        "D": "Confluent가 배포하는 커넥터이며 Apache 배포판에 없습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Testing a Streams Application",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/testing.html"
+        }
+      ],
+      "tags": [
+        "kafka-testing",
+        "TopologyTestDriver",
+        "integration-test"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-046",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch05",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "몇 달째 운영 중인 컨슈머 그룹의 `auto.offset.reset` 을 `latest` 에서 `earliest` 로 바꿔 재시작했다. 결과로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "이후 재시작할 때마다 항상 로그의 처음부터 다시 읽는다."
+        },
+        {
+          "id": "B",
+          "text": "커밋 오프셋이 초기화되면서 즉시 전량 재처리가 시작된다."
+        },
+        {
+          "id": "C",
+          "text": "설정이 검증에서 거부되어 컨슈머가 기동하지 않는다."
+        },
+        {
+          "id": "D",
+          "text": "유효한 커밋 오프셋이 있으므로 그 지점부터 이어 읽고 설정은 발동하지 않는다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "이 설정은 커밋된 오프셋이 없을 때, 또는 커밋된 오프셋이 로그 범위를 벗어났을 때만 발동합니다. 정상 커밋이 남아 있는 그룹에서는 값을 바꿔도 아무 일이 일어나지 않습니다. 처음부터 다시 읽으려면 새 `group.id` 를 쓰거나 `kafka-consumer-groups.sh --reset-offsets` 로 오프셋을 명시적으로 되돌려야 합니다. 반대로 커밋이 만료되어 사라졌을 때는 이 값이 그대로 발동하므로, `latest` 인 그룹은 중단 구간의 데이터를 조용히 건너뛰게 됩니다.",
+      "distractorNotes": {
+        "A": "재시작마다 적용되는 설정이 아닙니다.",
+        "B": "설정 변경이 커밋 오프셋을 지우지는 않습니다.",
+        "C": "`earliest` 는 유효한 값이므로 기동은 정상입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer Configs: auto.offset.reset",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_auto.offset.reset"
+        }
+      ],
+      "tags": [
+        "offset-reset",
+        "consumer",
+        "consumer-group"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-047",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch07",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "어떤 파티션에 컨슈머의 파티션당 fetch 상한 기본값(1048576)보다 큰 레코드가 들어 있다. 4.3 컨슈머의 동작으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "첫 배치는 이 상한을 넘어도 그대로 반환되므로 소비가 멈추지 않는다."
+        },
+        {
+          "id": "B",
+          "text": "해당 파티션의 fetch가 영구히 실패해 컨슈머가 그 파티션에서 진행하지 못한다."
+        },
+        {
+          "id": "C",
+          "text": "`RecordTooLargeException` 이 발생하고 컨슈머가 종료된다."
+        },
+        {
+          "id": "D",
+          "text": "큰 레코드를 건너뛰고 다음 오프셋부터 처리한다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "fetch 관련 상한 세 가지(`fetch.max.bytes`, `max.partition.fetch.bytes`, 팔로워의 `replica.fetch.max.bytes`)는 절대 상한이 아닙니다. 공식 문서는 첫 레코드 배치가 이 값보다 커도 그대로 반환해 소비와 복제가 진행되도록 보장한다고 명시합니다. 따라서 \"큰 레코드 하나가 컨슈머를 영구히 멈춘다\"는 서술은 4.x에서 오답이며, 좋은 오답 선택지 소재입니다. 실제 하드 게이트는 프로듀서 `max.request.size` 와 브로커·토픽의 최대 메시지 크기 두 곳뿐입니다.",
+      "distractorNotes": {
+        "B": "이 동작은 아주 오래된 버전의 문제였고 현행 문서는 진행 보장을 명시합니다.",
+        "C": "이 예외는 프로듀서 쪽 크기 초과에서 발생합니다.",
+        "D": "레코드를 건너뛰는 동작은 없습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer Configs: max.partition.fetch.bytes",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.partition.fetch.bytes"
+        },
+        {
+          "title": "Apache Kafka — Consumer Configs: fetch.max.bytes",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_fetch.max.bytes"
+        }
+      ],
+      "tags": [
+        "message-size",
+        "consumer",
+        "fetch",
+        "defaults"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-048",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "파티션 3개인 토픽과 6개인 토픽을 KStream-KTable 조인하도록 토폴로지를 구성했다. Streams의 동작으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "적은 쪽을 자동으로 리파티션해 6개로 맞춘 뒤 조인한다."
+        },
+        {
+          "id": "B",
+          "text": "파티션 수 불일치를 감지해 `TopologyBuilderException` 으로 실패한다."
+        },
+        {
+          "id": "C",
+          "text": "조인은 성립하지만 결과 일부가 조용히 누락된다."
+        },
+        {
+          "id": "D",
+          "text": "파티션 수는 검증하지 않고 파티셔너 불일치만 검증해 경고를 남긴다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "co-partitioning 요건 중 Streams가 런타임에 실제로 검증하는 것은 파티션 수뿐이며, 불일치하면 `TopologyBuilderException` 으로 실패합니다. 반대로 파티셔너가 다른 경우는 감지되지 않아 조인이 조용히 누락되는데, 이것이 훨씬 찾기 어려운 실패 양상입니다. 맞출 때는 적은 쪽을 많은 쪽에 맞춰 `repartition()` 하며, KStream-KTable이면 KStream을 리파티션하는 편이 상태 저장소를 추가로 만들지 않아 유리합니다. KStream-GlobalKTable 조인과 KTable 외래키 조인은 co-partitioning이 필요하지 않습니다.",
+      "distractorNotes": {
+        "A": "자동 리파티션은 일어나지 않습니다. 명시적으로 처리해야 합니다.",
+        "C": "조용한 누락은 파티셔너 불일치일 때의 증상입니다.",
+        "D": "검증 대상이 반대로 서술되었습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Streams DSL: Joining",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#joining"
+        }
+      ],
+      "tags": [
+        "stream-join",
+        "co-partitioning",
+        "streams",
+        "exceptions"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-049",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch06",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "Kafka 4.3에 추가된 `ConsumerRecords#nextOffsets()` 에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "각 파티션의 high watermark를 반환한다."
+        },
+        {
+          "id": "B",
+          "text": "마지막으로 커밋된 오프셋을 파티션별로 반환한다."
+        },
+        {
+          "id": "C",
+          "text": "이번 poll로 진행된 파티션의 다음 오프셋을 리더 에포크 정보와 함께 반환한다."
+        },
+        {
+          "id": "D",
+          "text": "`poll()` 이 반환한 레코드들의 오프셋 목록을 그대로 반환한다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "이 메서드는 이번 poll 호출로 포지션이 전진한 파티션들에 대해 \"다음에 소비할 오프셋\"을 `OffsetAndMetadata` 로 돌려줍니다. `OffsetAndMetadata` 에는 리더 에포크가 담겨 있어, 커밋할 때 에포크까지 함께 넘길 수 있고 오래된 리더로의 잘못된 커밋을 방지합니다. 직접 오프셋을 계산해 `lastOffset + 1` 을 커밋하던 코드를 이 메서드로 대체하면 실수를 줄일 수 있습니다. 인터셉터나 래퍼가 구식 생성자로 `ConsumerRecords` 를 만들면 이 값이 비어 EOS 커밋이 진행되지 못하므로, 4.x용 생성자를 써야 합니다.",
+      "distractorNotes": {
+        "A": "high watermark는 별도의 조회 API로 얻습니다.",
+        "B": "커밋된 오프셋 조회는 `committed()` 계열 메서드입니다.",
+        "D": "반환하는 것은 레코드 오프셋 목록이 아니라 파티션별 다음 오프셋입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        },
+        {
+          "title": "Apache Kafka — Upgrading to 4.3.0",
+          "url": "https://kafka.apache.org/documentation/#upgrade_4_3_0"
+        }
+      ],
+      "tags": [
+        "consumer-api",
+        "version-4x",
+        "offsets",
+        "eos"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-050",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "chapter": "ch11",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "`ActiveControllerCount` 메트릭에 알림을 걸 때 옳은 기준은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "각 브로커에서 값이 1이어야 한다."
+        },
+        {
+          "id": "B",
+          "text": "컨트롤러 노드에서만 1이고 나머지 노드에서는 수집되지 않아야 한다."
+        },
+        {
+          "id": "C",
+          "text": "클러스터 전체 합이 컨트롤러 쿼럼 크기(보통 3)와 같아야 한다."
+        },
+        {
+          "id": "D",
+          "text": "클러스터 전체 합이 정확히 1이어야 한다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "이 지표는 노드가 현재 활성 컨트롤러인지를 0 또는 1로 나타냅니다. 정상 상태에서는 활성 컨트롤러가 하나뿐이므로 클러스터 전체 합이 1이어야 하고, 0이면 컨트롤러가 없는 상태, 2 이상이면 분열 상태를 뜻합니다. 브로커별로 1을 기대하도록 알림을 만들면 정상 상태에서 계속 경보가 울립니다. 쿼럼에 참여하는 컨트롤러가 3대라도 그중 활성은 한 대뿐이라는 점을 구분해야 합니다.",
+      "distractorNotes": {
+        "A": "활성 컨트롤러가 아닌 노드는 0을 보고합니다.",
+        "B": "다른 노드에서도 값이 수집되며 0으로 보고됩니다.",
+        "C": "쿼럼 크기는 참여 노드 수이고 활성 컨트롤러 수와 다릅니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
+      ],
+      "tags": [
+        "monitoring",
+        "controller",
+        "kraft"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-051",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch07",
+      "difficulty": "hard",
+      "type": "multiple",
+      "question": "1.5MB 레코드를 정상적으로 쓰고 읽고 복제하려 한다. 기본값에서 반드시 올려야 하는 설정을 모두 고르세요. (4개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "토픽 `max.message.bytes`"
+        },
+        {
+          "id": "B",
+          "text": "프로듀서 `max.request.size`"
+        },
+        {
+          "id": "C",
+          "text": "컨슈머 `max.partition.fetch.bytes`"
+        },
+        {
+          "id": "D",
+          "text": "브로커 `replica.fetch.max.bytes`"
+        },
+        {
+          "id": "E",
+          "text": "컨슈머 `fetch.min.bytes`"
+        }
+      ],
+      "answer": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "explanation": "쓰기 경로에서는 클라이언트 요청 크기 상한과 브로커·토픽의 최대 메시지 크기가 모두 1.5MB를 넘어야 합니다. 읽기 경로에서는 파티션당 fetch 상한을 올려야 하며, 팔로워 복제도 별도의 fetch 상한을 쓰므로 이를 빼먹으면 쓰기는 성공하는데 복제가 실패해 ISR이 줄어듭니다. 이 마지막 항목이 가장 자주 누락되는 지점입니다. `fetch.min.bytes` 는 응답을 모으기 위한 최소 크기(기본 1)이므로 큰 메시지 허용과 무관합니다.",
+      "distractorNotes": {
+        "E": "최소 크기 조건이며 상한이 아닙니다. 올려도 큰 레코드 허용에 도움이 되지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Topic Configs: max.message.bytes",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_max.message.bytes"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs: replica.fetch.max.bytes",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_replica.fetch.max.bytes"
+        }
+      ],
+      "tags": [
+        "message-size",
+        "isr",
+        "config-ownership",
+        "defaults"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-052",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "distributed 모드 Connect에서 태스크 하나가 FAILED가 되었다. 조사와 복구 절차를 올바른 순서로 배열하세요.",
+      "code": null,
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4",
+        "i5",
+        "i6"
+      ],
+      "items": [
+        {
+          "id": "i5",
+          "text": "`POST /connectors/{name}/restart?includeTasks=true&onlyFailed=true` 로 실패 태스크만 재시작한다"
+        },
+        {
+          "id": "i1",
+          "text": "`GET /connectors/{name}/status` 로 실패 태스크의 `trace` 와 `worker_id` 를 확인한다"
+        },
+        {
+          "id": "i3",
+          "text": "`PUT /admin/loggers/{logger}` 로 필요한 로거 레벨을 임시로 올린다"
+        },
+        {
+          "id": "i6",
+          "text": "로거 레벨을 원래대로 되돌린다"
+        },
+        {
+          "id": "i2",
+          "text": "확인한 `worker_id` 노드의 로컬 로그 파일을 조회한다"
+        },
+        {
+          "id": "i4",
+          "text": "컨버터·권한·스키마 등 확인된 원인을 수정한다"
+        }
+      ],
+      "explanation": "Connect 로그는 중앙 집계되지 않고 태스크를 실행한 워커 노드의 로컬 파일에 남습니다. 따라서 상태 조회로 어느 워커가 그 태스크를 맡았는지 알아낸 뒤 그 노드의 로그를 봐야 하며, 리더 워커의 로그를 보면 원인이 나오지 않습니다. 정보가 부족하면 REST로 로거 레벨을 올려 재현하고, 원인을 고친 다음 실패 태스크만 재시작합니다. FAILED 태스크는 자동으로 되살아나지 않으므로 명시적 재시작이 필요하고, 조사가 끝나면 로그 레벨을 되돌려야 디스크와 성능에 부담이 남지 않습니다.",
+      "distractorNotes": {
+        "i2": "리더 워커나 REST 요청을 받은 노드의 로그를 보면 된다고 착각하기 쉽습니다.",
+        "i5": "커넥터를 삭제하고 재생성하는 것으로 대체하려 하면 오프셋이 초기화되어 재적재 위험이 생깁니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect REST Interface",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        },
+        {
+          "title": "Apache Kafka — Connect Administration",
+          "url": "https://kafka.apache.org/documentation/#connect_administration"
+        }
+      ],
+      "tags": [
+        "connect-logging",
+        "connect",
+        "troubleshooting",
+        "rest-api"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-053",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch04",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "아래 코드를 Kafka 4.3에서 실행했을 때의 결과로 옳은 것은?",
+      "code": {
+        "lang": "java",
+        "caption": "콜백 안에서 flush 호출",
+        "body": "producer.send(record, (metadata, exception) -> {\n    if (exception == null) {\n        producer.flush();   // 전송을 확실히 밀어내려는 의도\n    }\n});"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "`KafkaException` 이 발생한다. 콜백은 I/O 스레드에서 실행되므로 교착이 생기기 때문이다."
+        },
+        {
+          "id": "B",
+          "text": "정상 동작하지만 콜백마다 flush가 일어나 처리량만 떨어진다."
+        },
+        {
+          "id": "C",
+          "text": "`flush()` 가 무시되고 `linger.ms` 경과 시점에 전송된다."
+        },
+        {
+          "id": "D",
+          "text": "`IllegalStateException` 이 발생하며 프로듀서가 닫힌 상태가 된다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "콜백은 프로듀서의 Sender(I/O) 스레드에서 실행되고, `flush()` 는 그 스레드가 처리해야 할 작업의 완료를 기다립니다. 자기 자신을 기다리는 구조이므로 교착이 되며, 4.3에서는 이를 감지해 `KafkaException` 을 던집니다. 콜백 안에서는 블로킹 호출을 하지 말고 결과를 큐에 넘기거나 로깅만 하는 것이 원칙입니다. 트랜잭션 프로듀서라면 `commitTransaction()` 이 미전송 레코드를 먼저 밀어내므로 별도 flush가 필요하지 않습니다.",
+      "distractorNotes": {
+        "B": "성능 문제가 아니라 명시적으로 금지된 호출입니다.",
+        "C": "조용히 무시되지 않고 예외가 발생합니다.",
+        "D": "예외 종류가 다르고, 프로듀서가 닫히는 동작도 아닙니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Producer API",
+          "url": "https://kafka.apache.org/documentation/#producerapi"
+        },
+        {
+          "title": "Apache Kafka — Upgrading to 4.3.0",
+          "url": "https://kafka.apache.org/documentation/#upgrade_4_3_0"
+        }
+      ],
+      "tags": [
+        "producer-callback",
+        "version-4x",
+        "exceptions",
+        "producer"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-054",
+      "exam": "CCDAK",
+      "domain": "Application Testing",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "아래 성능 측정 명령을 Kafka 4.3 권장 옵션으로 바꿀 때 필요한 변경은?",
+      "code": {
+        "lang": "bash",
+        "caption": "3.x 스타일 명령",
+        "body": "bin/kafka-producer-perf-test.sh --topic orders \\\n  --num-records 100000 --record-size 512 --throughput -1 \\\n  --producer-props bootstrap.servers=localhost:9092 acks=all"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "`--producer-props` 를 `--producer-property` 로 바꾼다."
+        },
+        {
+          "id": "B",
+          "text": "`--producer-props` 를 `--command-property` 로 바꾼다."
+        },
+        {
+          "id": "C",
+          "text": "`--num-records` 를 `--messages` 로 바꾼다."
+        },
+        {
+          "id": "D",
+          "text": "`--throughput -1` 을 `--reporting-interval -1` 로 바꾼다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "4.3에서 성능 측정 도구의 옵션 이름이 정리되어, 프로듀서 속성 전달은 `--command-property` 로, 설정 파일 전달은 `--command-config` 로 통일되었습니다. 컨슈머 쪽에서는 레코드 수 옵션이 `--messages` 에서 `--num-records` 로 바뀌었으므로 방향을 반대로 기억하면 틀립니다. 기존 옵션은 아직 동작하지만 deprecated이며 5.0에서 제거될 예정입니다. 시중 자료는 대부분 구 옵션으로 적혀 있어 이 항목은 출제 가치가 높습니다.",
+      "distractorNotes": {
+        "A": "`--producer-property` 는 콘솔 프로듀서 계열의 옵션이며 여기서의 신규 이름이 아닙니다.",
+        "C": "변경 방향이 반대입니다. `--messages` 가 구 옵션입니다.",
+        "D": "`--throughput` 과 `--reporting-interval` 은 서로 다른 목적의 옵션입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Upgrading to 4.3.0",
+          "url": "https://kafka.apache.org/documentation/#upgrade_4_3_0"
+        }
+      ],
+      "tags": [
+        "kafka-testing",
+        "cli",
+        "perf-test",
+        "version-4x"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-055",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch03",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "Apache Kafka 4.0에서 제거된 항목을 모두 고르세요. (3개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "ZooKeeper 모드"
+        },
+        {
+          "id": "B",
+          "text": "CLI 도구의 `--zookeeper` 옵션"
+        },
+        {
+          "id": "C",
+          "text": "Java 8 지원"
+        },
+        {
+          "id": "D",
+          "text": "CLI 도구의 `--bootstrap-server` 옵션"
+        },
+        {
+          "id": "E",
+          "text": "KRaft 모드"
+        }
+      ],
+      "answer": [
+        "A",
+        "B",
+        "C"
+      ],
+      "explanation": "4.0은 메타데이터 저장소를 KRaft로 일원화한 릴리스이므로 ZooKeeper 모드와 이를 가리키던 CLI 옵션이 함께 사라졌습니다. 같은 릴리스에서 Java 8 지원도 끝났고, 4.3 문서는 Java 17·21·25를 완전 지원 대상으로 명시합니다. 3.9가 마지막 ZooKeeper 지원 버전이므로 옛 클러스터는 3.9를 경유해 KRaft로 마이그레이션한 뒤 4.x로 올려야 합니다. 4.3 업그레이드에는 소프트웨어·메타데이터 버전이 최소 3.3.x여야 한다는 조건도 붙습니다.",
+      "distractorNotes": {
+        "D": "4.x에서 클러스터에 접속하는 표준 옵션이며 제거되지 않았습니다.",
+        "E": "제거된 것이 아니라 유일하게 남은 모드입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Upgrading to 4.0.0",
+          "url": "https://kafka.apache.org/documentation/#upgrade_4_0_0"
+        },
+        {
+          "title": "Apache Kafka — Java Version",
+          "url": "https://kafka.apache.org/documentation/#java"
+        }
+      ],
+      "tags": [
+        "zookeeper-removal",
+        "kraft",
+        "upgrade",
+        "version-4x"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-056",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "Kafka Streams `topology.optimization` 의 기본값과 그 의미로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`all` — 리파티션 토픽 병합과 소스 KTable 재사용이 기본으로 적용된다."
+        },
+        {
+          "id": "B",
+          "text": "`reuse.ktable.source.topics` — 소스 토픽을 changelog로 재사용하는 최적화만 기본 적용된다."
+        },
+        {
+          "id": "C",
+          "text": "`none` — 최적화가 적용되지 않으므로 필요하면 명시적으로 켜야 한다."
+        },
+        {
+          "id": "D",
+          "text": "`merge.repartition.topics` — 리파티션 토픽 병합만 기본 적용된다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "기본값은 최적화를 적용하지 않는 `none` 입니다. `all` 로 켜면 리파티션 토픽 병합과 소스 KTable의 changelog 재사용 같은 최적화가 적용되어 내부 토픽과 트래픽이 줄어들 수 있습니다. 다만 이 설정은 `StreamsBuilder#build(Properties)` 에 같은 `Properties` 를 넘겨야 실제로 효과가 나며, 이를 빼먹으면 설정만 하고 최적화가 적용되지 않습니다. 최적화를 켜면 토폴로지 구조가 바뀌므로 기존 애플리케이션에 적용할 때는 상태 초기화가 필요할 수 있습니다.",
+      "distractorNotes": {
+        "A": "명시적으로 지정할 수 있는 값이지만 기본값은 아닙니다.",
+        "B": "개별 최적화를 이름으로 지정하는 값이며 기본값이 아닙니다.",
+        "D": "역시 개별 최적화 이름이며 기본으로 켜져 있지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Streams Configs: topology.optimization",
+          "url": "https://kafka.apache.org/documentation/#streamsconfigs_topology.optimization"
+        }
+      ],
+      "tags": [
+        "streams",
+        "defaults",
+        "topology.optimization",
+        "repartition"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-057",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "다음 Connect 메트릭 중 sink 커넥터 태스크에만 존재하는 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`source-record-poll-rate`"
+        },
+        {
+          "id": "B",
+          "text": "`connector-startup-attempts-total`"
+        },
+        {
+          "id": "C",
+          "text": "`connector-total-task-count`"
+        },
+        {
+          "id": "D",
+          "text": "`sink-record-lag-max`"
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "Connect 메트릭은 워커 레벨, 커넥터 레벨, 태스크 레벨로 나뉘고 태스크 레벨은 다시 source와 sink로 갈립니다. sink 태스크 지표에는 컨슈머 포지션을 기준으로 얼마나 뒤처졌는지를 나타내는 lag 지표가 있고, source 태스크에는 폴링 속도 계열 지표가 있습니다. 커넥터 레벨 지표는 종류와 무관하게 공통으로 존재하므로 \"sink에만 있다\"는 조건에 맞지 않습니다. 어느 그룹에 속한 지표인지를 구분하는 것이 이 도메인의 기본입니다.",
+      "distractorNotes": {
+        "A": "source 태스크 지표입니다.",
+        "B": "커넥터 레벨 지표이며 source·sink 공통입니다.",
+        "C": "커넥터 레벨 지표이며 태스크 수를 나타냅니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect Monitoring",
+          "url": "https://kafka.apache.org/documentation/#connect_monitoring"
+        }
+      ],
+      "tags": [
+        "monitoring",
+        "connect",
+        "consumer-lag"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-058",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch06",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "브로커 1대만 띄운 개발 환경에서 트랜잭션 프로듀서를 쓰려니 실패한다. 관련 브로커 기본값으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`transaction.state.log.replication.factor=3`, `transaction.state.log.min.isr=2` 이므로 브로커 3대가 필요하다."
+        },
+        {
+          "id": "B",
+          "text": "`transaction.state.log.replication.factor=1` 이지만 `min.isr=2` 라서 실패한다."
+        },
+        {
+          "id": "C",
+          "text": "`transaction.state.log.replication.factor=2`, `min.isr=1` 이므로 브로커 2대가 필요하다."
+        },
+        {
+          "id": "D",
+          "text": "기본값이 -1이라 브로커 수에 맞춰지지만 `acks=all` 때문에 실패한다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "트랜잭션 상태 로그는 내구성이 중요하므로 기본 복제 계수가 3, 최소 ISR이 2로 잡혀 있습니다. 브로커가 1대뿐이면 이 토픽을 만들 수 없어 트랜잭션 초기화 단계에서 실패합니다. 개발이나 테스트 환경에서는 두 값을 1로 내려야 하며, 그래서 EOS를 쓰는 애플리케이션의 통합 테스트 설정에 이 오버라이드가 자주 등장합니다. `transaction.max.timeout.ms` 기본값 900000처럼 트랜잭션 관련 브로커 설정도 함께 확인해 두면 좋습니다.",
+      "distractorNotes": {
+        "B": "복제 계수 기본값이 1이 아닙니다.",
+        "C": "두 값 모두 기본값이 아닙니다.",
+        "D": "이 토픽의 복제 계수는 자동으로 브로커 수에 맞춰지지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Broker Configs: transaction.state.log.replication.factor",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_transaction.state.log.replication.factor"
+        }
+      ],
+      "tags": [
+        "transactions",
+        "defaults",
+        "eos",
+        "isr"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-059",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "MirrorMaker 2의 `replication.factor` 와 `sync.group.offsets.enabled` 기본값 조합으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "3 / `true`"
+        },
+        {
+          "id": "B",
+          "text": "2 / `false`"
+        },
+        {
+          "id": "C",
+          "text": "3 / `false`"
+        },
+        {
+          "id": "D",
+          "text": "-1 / `true`"
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "MM2가 대상 클러스터에 토픽을 만들 때 쓰는 복제 계수 기본값은 3이 아니라 2입니다. Kafka의 다른 내부 토픽 기본값이 3인 경우가 많아 반사적으로 3을 고르기 쉬운 지점입니다. 그룹 오프셋을 대상 클러스터의 `__consumer_offsets` 로 동기화하는 기능은 기본적으로 꺼져 있어, 명시적으로 켜야 페일오버 시 컨슈머가 이어서 읽을 수 있습니다. 체크포인트 토픽 복제 계수는 별도 설정으로 3이므로 값을 하나로 뭉쳐 외우면 틀립니다.",
+      "distractorNotes": {
+        "A": "복제 계수와 오프셋 동기화 기본값이 모두 틀렸습니다.",
+        "C": "복제 계수가 틀렸습니다. 2가 기본값입니다.",
+        "D": "-1로 브로커 기본값을 따르는 방식이 아닙니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Geo-Replication (MirrorMaker 2)",
+          "url": "https://kafka.apache.org/documentation/#georeplication"
+        }
+      ],
+      "tags": [
+        "mirrormaker",
+        "defaults",
+        "connect",
+        "geo-replication"
+      ]
+    },
+    {
+      "id": "ccdak-mock-3-060",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch07",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "`retention.ms` 를 3600000(1시간)으로 줄였는데 디스크 사용량이 거의 줄지 않는다. 가장 가능성이 높은 원인은?",
+      "code": {
+        "lang": "bash",
+        "caption": "변경한 토픽 설정",
+        "body": "bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter \\\n  --entity-type topics --entity-name events \\\n  --add-config retention.ms=3600000"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "`cleanup.policy` 가 `compact` 여서 기간 기반 삭제가 일어나지 않는다."
+        },
+        {
+          "id": "B",
+          "text": "`retention.bytes` 가 -1이라 기간 정책이 무시된다."
+        },
+        {
+          "id": "C",
+          "text": "`segment.ms` 기본값이 604800000이라 세그먼트가 마감되지 않아 삭제 대상이 되지 않는다."
+        },
+        {
+          "id": "D",
+          "text": "`log.retention.check.interval.ms` 기본값이 7일이라 점검이 늦게 일어난다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "보관 기간 판정과 삭제는 세그먼트 단위로 일어나며, 활성 세그먼트는 대상이 아닙니다. `segment.ms` 기본값이 7일이므로 트래픽이 적으면 세그먼트가 마감되지 않아 최대 7일치 데이터가 남습니다. 짧은 보관을 실제로 적용하려면 `segment.ms` 또는 `segment.bytes` 도 함께 줄여야 합니다. 보관 정책 점검 주기는 5분이라 점검이 늦어서 생기는 문제는 아닙니다.",
+      "distractorNotes": {
+        "A": "정책이 `compact` 라면 그 자체가 원인일 수 있지만, 기본 정책은 `delete` 이므로 이 상황의 일반적 원인이 아닙니다.",
+        "B": "-1은 크기 제한이 없다는 뜻일 뿐 기간 정책을 무력화하지 않습니다.",
+        "D": "점검 주기 기본값은 300000ms(5분)입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Topic Configs: segment.ms",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_segment.ms"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs: retention.ms",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_retention.ms"
+        }
+      ],
+      "tags": [
+        "retention",
+        "segment.ms",
+        "storage",
+        "defaults"
+      ]
+    }
+  ]
+}

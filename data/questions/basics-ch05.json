@@ -1,0 +1,296 @@
+{
+  "setId": "basics-ch05",
+  "title": "5장 확인 문제 — Consumer 심화",
+  "exam": "BASICS",
+  "domain": "Consumer 심화",
+  "kafkaVersion": "4.3",
+  "questions": [
+    {
+      "id": "basics-ch05-001",
+      "exam": "BASICS",
+      "domain": "Consumer 심화",
+      "chapter": "ch05",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "레코드 처리가 오래 걸려 컨슈머가 그룹에서 제거되고 `CommitFailedException` 이 발생했다. 1차 처방으로 가장 적절한 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`session.timeout.ms` 를 늘려 브로커가 더 오래 기다리게 한다." },
+        { "id": "B", "text": "`heartbeat.interval.ms` 를 줄여 하트비트를 더 자주 보낸다." },
+        { "id": "C", "text": "`max.poll.records` 를 줄여 한 번의 `poll()` 뒤에 처리할 건수를 낮춘다." },
+        { "id": "D", "text": "`fetch.max.bytes` 를 줄여 네트워크로 받아 오는 양을 낮춘다." }
+      ],
+      "answer": ["C"],
+      "explanation": "하트비트 축과 poll 축은 별개입니다. 하트비트는 백그라운드 스레드가 보내므로 사용자 처리가 길어져도 계속 나가고, 처리 지연으로 실제로 터지는 것은 두 `poll()` 사이의 간격을 재는 `max.poll.interval.ms`(기본 300000ms)입니다. `CommitFailedException` 의 기본 메시지도 `max.poll.interval.ms` 를 늘리거나 `max.poll.records` 를 줄이라고 안내합니다. 두 처방 중 먼저 손대야 하는 쪽은 `max.poll.records` 입니다 — 타임아웃을 늘리면 진짜로 멈춘 컨슈머를 감지하는 시간까지 함께 늘어나기 때문입니다.",
+      "distractorNotes": {
+        "A": "이 값은 프로세스 크래시·GC 정지·네트워크 단절을 잡습니다. 처리 지연은 이 축에서 감지되지 않으므로 증상이 그대로 남습니다.",
+        "B": "하트비트는 이미 정상적으로 나가고 있습니다. 더 자주 보내도 poll 간격 초과는 막지 못합니다.",
+        "D": "`max.poll.records` 는 내부 fetch 동작에 영향을 주지 않습니다. 반대로 fetch 크기를 줄여도 `poll()` 이 반환하는 건수는 그대로입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" },
+        { "title": "Apache Kafka — Javadoc: CommitFailedException", "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/consumer/CommitFailedException.html" }
+      ],
+      "tags": ["max-poll-interval", "max.poll.records", "rebalance", "session.timeout.ms"]
+    },
+    {
+      "id": "basics-ch05-002",
+      "exam": "BASICS",
+      "domain": "Consumer 심화",
+      "chapter": "ch05",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "`assign()` 으로 파티션을 직접 지정한 컨슈머에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "그룹 조정에 참여하지 않아 리밸런스가 없고, 구독 토픽의 파티션이 늘어도 감지하지 않는다." },
+        { "id": "B", "text": "리밸런스가 더 빠르게 완료되므로 지연에 민감한 애플리케이션에 유리하다." },
+        { "id": "C", "text": "`group.id` 를 반드시 설정해야 하며 없으면 `assign()` 호출 자체가 실패한다." },
+        { "id": "D", "text": "`ConsumerRebalanceListener` 를 등록하면 파티션 추가를 콜백으로 통지받는다." }
+      ],
+      "answer": ["A"],
+      "explanation": "`assign()` 은 애플리케이션이 파티션을 직접 고르는 수동 할당이므로 그룹 멤버십 조정이 개입하지 않습니다. 리밸런스가 아예 발생하지 않는다는 것이 장점이자 제약입니다 — 파티션이 추가되어도 자동으로 반영되지 않아 애플리케이션이 다시 `assign()` 해야 합니다. 오프셋 커밋을 Kafka에 저장하려면 `group.id` 가 필요하지만, 순수하게 읽기만 한다면 없어도 동작합니다. 특정 파티션만 읽는 도구, 오프셋을 외부 저장소에 두는 완전 수동 제어, 디버깅·재처리 도구가 대표적인 용도입니다.",
+      "distractorNotes": {
+        "B": "리밸런스가 빠른 것이 아니라 애초에 일어나지 않습니다. 속도 비교 자체가 성립하지 않습니다.",
+        "C": "오프셋 커밋을 Kafka에 하려면 필요하지만, 읽기 전용이라면 `group.id` 없이도 동작합니다.",
+        "D": "리밸런스가 없으므로 리스너 콜백이 호출될 일이 없습니다. 등록해도 의미가 없습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Javadoc: KafkaConsumer", "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html" },
+        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" }
+      ],
+      "tags": ["assign-vs-subscribe", "consumer-group", "rebalance"]
+    },
+    {
+      "id": "basics-ch05-003",
+      "exam": "BASICS",
+      "domain": "Consumer 심화",
+      "chapter": "ch05",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "몇 달째 운영 중인 컨슈머 그룹의 `auto.offset.reset` 을 `earliest` 로 바꾸고 재시작했다. 무슨 일이 일어나는가?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "다음 `poll()` 부터 파티션에 남아 있는 가장 오래된 레코드부터 다시 읽는다." },
+        { "id": "B", "text": "커밋된 오프셋이 초기화되어 그룹이 처음 생성된 상태로 돌아간다." },
+        { "id": "C", "text": "재시작 시 리밸런스가 일어나면서 각 멤버가 자기 파티션을 처음부터 읽는다." },
+        { "id": "D", "text": "아무 일도 일어나지 않는다. 커밋된 오프셋이 있으므로 이 설정은 발동하지 않는다." }
+      ],
+      "answer": ["D"],
+      "explanation": "`auto.offset.reset` 은 평소에 아무 일도 하지 않는 설정입니다. 공식 문서 기준으로 발동 조건은 두 가지뿐입니다 — 초기 오프셋이 없을 때(새 `group.id` 이거나 오프셋이 만료된 경우), 그리고 현재 오프셋이 서버에 더 이상 존재하지 않을 때(리텐션으로 삭제된 경우)입니다. 이미 커밋된 오프셋이 있는 그룹은 그 위치에서 이어 읽습니다. 처음부터 다시 읽으려면 `kafka-consumer-groups.sh --reset-offsets --to-earliest --execute` 로 커밋된 오프셋 자체를 바꿔야 하며, 이 명령은 그룹에 활성 멤버가 없을 때만 동작합니다.",
+      "distractorNotes": {
+        "A": "커밋된 오프셋이 있으면 재설정 로직을 타지 않습니다. 위치는 그대로 유지됩니다.",
+        "B": "설정 변경은 저장된 오프셋을 건드리지 않습니다. 오프셋은 `__consumer_offsets` 에 그대로 남아 있습니다.",
+        "C": "리밸런스는 파티션 소유권만 재배치합니다. 각 파티션의 읽기 시작 위치는 커밋된 오프셋입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" },
+        { "title": "Apache Kafka — Managing Consumer Groups", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" }
+      ],
+      "tags": ["offset-reset", "auto.offset.reset", "consumer-group"]
+    },
+    {
+      "id": "basics-ch05-004",
+      "exam": "BASICS",
+      "domain": "Consumer 심화",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "`StickyAssignor` 와 `CooperativeStickyAssignor` 의 차이로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "Sticky는 균등 배분을 우선하고 CooperativeSticky는 기존 할당 유지를 우선한다." },
+        { "id": "B", "text": "할당 계산 로직은 같고, 리밸런스 방식이 eager(전체 회수)와 cooperative(증분)로 다르다." },
+        { "id": "C", "text": "CooperativeSticky는 클라이언트가 아니라 브로커가 할당을 계산한다." },
+        { "id": "D", "text": "Sticky는 여러 토픽을 구독할 때 같은 파티션 번호를 한 컨슈머에 모아 준다." }
+      ],
+      "answer": ["B"],
+      "explanation": "두 할당자는 \"최대한 균등하게 배분하면서 기존 할당을 최대한 보존한다\"는 같은 로직을 씁니다. 다른 것은 리밸런스 수행 방식입니다 — eager인 `StickyAssignor` 는 리밸런스가 시작되면 모든 멤버가 보유 파티션 전부를 반납하므로 그룹 전체가 잠시 멈추고, cooperative인 `CooperativeStickyAssignor` 는 실제로 옮겨야 하는 파티션만 반납해 stop-the-world가 없습니다. 대신 cooperative는 리밸런스가 두 라운드로 나뉘고, eager 전략만 쓰던 그룹에서 전환할 때는 두 전략을 함께 나열한 상태를 한 번 거치는 2단계 롤링이 필요합니다.",
+      "distractorNotes": {
+        "A": "두 할당자의 배분 우선순위는 동일합니다. 균등성과 보존성의 차이가 아닙니다.",
+        "C": "서버가 할당을 계산하는 것은 KIP-848의 Consumer 프로토콜입니다. 두 할당자는 모두 classic 프로토콜의 클라이언트 측 전략입니다.",
+        "D": "같은 파티션 번호를 한 컨슈머에 모으는 것은 `RangeAssignor` 의 성질입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" },
+        { "title": "Apache Kafka — Javadoc: ConsumerRebalanceListener", "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/consumer/ConsumerRebalanceListener.html" }
+      ],
+      "tags": ["sticky-assignor", "rebalance", "partition.assignment.strategy"]
+    },
+    {
+      "id": "basics-ch05-005",
+      "exam": "BASICS",
+      "domain": "Consumer 심화",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "다운스트림 DB가 느려져 소비 속도를 일시적으로 낮춰야 한다. 리밸런스를 유발하지 않는 방법은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`pause()` 로 해당 파티션의 fetch만 멈추고 `poll()` 은 계속 호출한다." },
+        { "id": "B", "text": "`poll()` 호출 사이에 `Thread.sleep()` 을 넣어 루프 주기를 늘린다." },
+        { "id": "C", "text": "`session.timeout.ms` 를 크게 늘려 하트비트 여유를 확보한다." },
+        { "id": "D", "text": "`unsubscribe()` 로 그룹에서 나갔다가 회복된 뒤 다시 구독한다." }
+      ],
+      "answer": ["A"],
+      "explanation": "`pause()` 는 지정한 파티션의 fetch만 중단하며 `poll()` 호출은 그대로 유지됩니다. poll 축이 살아 있으므로 `max.poll.interval.ms` 가 만료되지 않고, 따라서 그룹에서 쫓겨나지 않습니다. 회복되면 `resume()` 으로 fetch를 다시 켜면 됩니다. 반대로 `poll()` 을 멈추거나 루프에 `sleep()` 을 넣는 방식은 poll 간격을 직접 늘리므로 리밸런스를 부르는 전형적인 안티패턴입니다.",
+      "distractorNotes": {
+        "B": "poll 간격이 그만큼 늘어나 `max.poll.interval.ms` 초과로 자발적 이탈이 발생할 수 있습니다.",
+        "C": "처리 지연은 하트비트 축에서 감지되지 않습니다. 이 값을 늘려도 poll 축의 만료는 막지 못합니다.",
+        "D": "`unsubscribe()` 와 재구독은 리밸런스를 두 번 유발합니다. 백프레셔 수단으로 적절하지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Javadoc: KafkaConsumer", "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html" },
+        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" }
+      ],
+      "tags": ["max-poll-interval", "pause-resume", "backpressure"]
+    },
+    {
+      "id": "basics-ch05-006",
+      "exam": "BASICS",
+      "domain": "Consumer 심화",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "아래 코드를 실행하면 어떻게 되는가?",
+      "code": {
+        "lang": "java",
+        "caption": "구독과 수동 할당을 함께 호출",
+        "body": "consumer.subscribe(List.of(\"orders\"));\nconsumer.assign(List.of(new TopicPartition(\"orders\", 0)));"
+      },
+      "choices": [
+        { "id": "A", "text": "뒤의 호출이 앞의 것을 덮어써 파티션 0만 수동으로 읽는다." },
+        { "id": "B", "text": "구독 유형은 상호 배타적이므로 두 번째 호출에서 `IllegalStateException` 이 발생한다." },
+        { "id": "C", "text": "구독과 수동 할당이 합쳐져 파티션 0의 레코드를 두 번 읽는다." },
+        { "id": "D", "text": "첫 번째 호출이 무시되고 경고 로그만 남은 뒤 정상 동작한다." }
+      ],
+      "answer": ["B"],
+      "explanation": "하나의 컨슈머 인스턴스는 구독 유형을 하나만 가질 수 있습니다. 토픽 구독, 패턴 구독, 수동 할당은 상호 배타적이며, 이미 한 가지가 설정된 상태에서 다른 방식을 호출하면 \"Subscription to topics, partitions and pattern are mutually exclusive\" 메시지와 함께 `IllegalStateException` 이 발생합니다. 방식을 바꾸려면 `unsubscribe()` 로 구독 상태를 먼저 초기화해야 합니다. 재처리 도구처럼 특정 파티션과 오프셋을 직접 다뤄야 한다면 처음부터 `assign()` 만 쓰고 그 뒤에 `seek()` 을 호출하는 형태가 맞습니다.",
+      "distractorNotes": {
+        "A": "덮어쓰기 동작은 없습니다. 상태가 이미 정해져 있으면 예외로 거부합니다.",
+        "C": "두 방식이 합쳐지는 경로는 존재하지 않습니다. 중복 읽기도 발생하지 않습니다.",
+        "D": "경고가 아니라 예외입니다. 조용히 넘어가지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Javadoc: KafkaConsumer", "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html" },
+        { "title": "Apache Kafka — Design: Consumer Position", "url": "https://kafka.apache.org/documentation/#design_consumerposition" }
+      ],
+      "tags": ["assign-vs-subscribe", "exceptions", "seek"]
+    },
+    {
+      "id": "basics-ch05-007",
+      "exam": "BASICS",
+      "domain": "Consumer 심화",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "컨슈머 그룹의 리밸런스를 유발하는 상황을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "구독 중인 토픽의 파티션 수가 관리자에 의해 늘어났다." },
+        { "id": "B", "text": "그룹 코디네이터를 맡고 있던 브로커가 교체되었다." },
+        { "id": "C", "text": "프로듀서가 같은 토픽에 보내는 처리량이 두 배로 늘었다." },
+        { "id": "D", "text": "리텐션이 지나 파티션 앞쪽 세그먼트가 삭제되었다." },
+        { "id": "E", "text": "`assign()` 으로 파티션을 직접 지정한 컨슈머 프로세스가 하나 추가되었다." }
+      ],
+      "answer": ["A", "B"],
+      "explanation": "리밸런스는 그룹 멤버십이나 구독 대상이 바뀔 때 일어납니다. 공식 문서는 구독 토픽에 영향을 주는 변경, 예를 들어 파티션 수가 관리자에 의해 조정되는 경우를 명시적으로 포함하고, 그룹 코디네이터 브로커가 교체되면 그룹이 재구성됩니다. 그 밖의 조건은 컨슈머 합류·정상 이탈·크래시(세션 타임아웃)·`max.poll.interval.ms` 초과·패턴 구독에 새 토픽 매칭·멤버의 구독 변경입니다. 데이터 양이나 리텐션 삭제는 멤버십과 무관하며, 수동 할당 컨슈머는 그룹 조정에 참여하지 않으므로 몇 개를 띄워도 리밸런스가 없습니다.",
+      "distractorNotes": {
+        "C": "처리량 변화는 멤버십이나 구독 대상을 바꾸지 않습니다. lag만 늘어납니다.",
+        "D": "세그먼트 삭제는 저장소 관리 동작입니다. 다만 커밋 오프셋이 사라진 범위라면 `auto.offset.reset` 이 발동합니다.",
+        "E": "`assign()` 은 그룹 조정에 참여하지 않습니다. 그래서 리밸런스 트리거가 되지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Javadoc: ConsumerRebalanceListener", "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/consumer/ConsumerRebalanceListener.html" },
+        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" }
+      ],
+      "tags": ["rebalance-triggers", "consumer-group", "assign-vs-subscribe"]
+    },
+    {
+      "id": "basics-ch05-008",
+      "exam": "BASICS",
+      "domain": "Consumer 심화",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "`group.protocol=consumer`(KIP-848 새 프로토콜)로 전환할 때 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`heartbeat.interval.ms` 와 `session.timeout.ms` 는 클라이언트 설정으로 지원되지 않으므로 제거해야 한다." },
+        { "id": "B", "text": "`max.poll.interval.ms` 와 `max.poll.records` 는 그대로 클라이언트 설정으로 남는다." },
+        { "id": "C", "text": "`partition.assignment.strategy` 에 서버 측 할당자 이름을 적어 선택한다." },
+        { "id": "D", "text": "4.0에서 GA가 되었으므로 클라이언트 설정 없이 자동으로 새 프로토콜이 적용된다." },
+        { "id": "E", "text": "전환하면 커밋된 오프셋이 초기화되므로 그룹을 새로 만들어야 한다." }
+      ],
+      "answer": ["A", "B"],
+      "explanation": "새 프로토콜에서는 하트비트 주기와 세션 타임아웃을 브로커가 관리하므로, 클라이언트 쪽 `heartbeat.interval.ms`·`session.timeout.ms`·`partition.assignment.strategy` 는 더 이상 지원되지 않습니다. 대신 브로커의 `group.consumer.heartbeat.interval.ms`(기본 5000)와 `group.consumer.session.timeout.ms`(기본 45000)가 그 역할을 합니다. poll 축 설정은 애플리케이션 처리 속도의 문제여서 브로커가 대신 정할 수 없으므로 클라이언트에 남습니다. `group.protocol` 기본값은 여전히 `classic` 이므로 GA와 기본값을 같은 것으로 착각하면 안 되고, 서버 측 할당자를 직접 고르려면 `group.remote.assignor` 를 씁니다.",
+      "distractorNotes": {
+        "C": "이 설정은 새 프로토콜에서 지원되지 않습니다. 서버 측 할당자 선택은 `group.remote.assignor` 로 합니다.",
+        "D": "서버 쪽은 4.0부터 자동 활성이지만 컨슈머 기본값은 `classic` 입니다. 명시해야 켜집니다.",
+        "E": "그룹은 비어 있을 때 자동으로 변환되며 커밋 오프셋은 유지됩니다. 롤링 배포로 온라인 전환도 가능합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Consumer Rebalance Protocol", "url": "https://kafka.apache.org/documentation/#consumer_rebalance_protocol" },
+        { "title": "Apache Kafka — Group Configs", "url": "https://kafka.apache.org/documentation/#groupconfigs" }
+      ],
+      "tags": ["kip-848", "group.protocol", "max-poll-interval", "rebalance"]
+    },
+    {
+      "id": "basics-ch05-009",
+      "exam": "BASICS",
+      "domain": "Consumer 심화",
+      "chapter": "ch05",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "각 컨슈머 설정을 그 설정이 실제로 재는 대상과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        { "id": "p1", "left": "`heartbeat.interval.ms`", "right": "컨슈머의 백그라운드 스레드가 하트비트를 보내는 주기" },
+        { "id": "p2", "left": "`session.timeout.ms`", "right": "코디네이터가 하트비트 미수신으로 멤버 제거를 판정하는 시간" },
+        { "id": "p3", "left": "`max.poll.interval.ms`", "right": "컨슈머가 스스로 감시하는 두 `poll()` 호출 사이의 상한" },
+        { "id": "p4", "left": "`max.poll.records`", "right": "한 번의 `poll()` 이 반환하는 최대 레코드 수" },
+        { "id": "p5", "left": "`fetch.max.wait.ms`", "right": "최소 바이트가 모일 때까지 브로커가 응답을 붙잡는 시간" }
+      ],
+      "extraRights": ["커밋된 오프셋을 브로커가 보관하는 기간", "static membership에서 인스턴스를 식별하는 값", "자동 커밋이 실행되는 주기"],
+      "explanation": "네 개의 설정이 서로 다른 두 축에 놓여 있다는 점이 이 장의 핵심입니다. 하트비트 축은 `heartbeat.interval.ms`(전송 주기)와 `session.timeout.ms`(브로커의 감시 시간)로 이루어져 프로세스 생존을 판정하고, poll 축은 `max.poll.interval.ms`(컨슈머 자신의 감시)와 그 예산을 조절하는 손잡이인 `max.poll.records` 로 이루어져 처리 진행을 판정합니다. `fetch.max.wait.ms` 는 두 축과 무관하게 브로커가 응답을 얼마나 붙잡을지를 정하는 fetch 쪽 설정입니다. 축을 섞으면 \"처리가 느린데 세션 타임아웃을 늘린다\"는 잘못된 처방으로 이어집니다.",
+      "distractorNotes": {
+        "p2": "컨슈머가 감시하는 값으로 착각하기 쉽지만 판정 주체는 브로커 코디네이터입니다.",
+        "p3": "브로커가 감시한다고 오해하기 쉽습니다. 이 축은 컨슈머가 스스로 판단해 그룹을 떠납니다.",
+        "p4": "타임아웃으로 오해하기 쉽지만 시간이 아니라 건수 제한이며, 내부 fetch 양에는 영향이 없습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" },
+        { "title": "Apache Kafka — Group Configs", "url": "https://kafka.apache.org/documentation/#groupconfigs" }
+      ],
+      "tags": ["max-poll-interval", "session.timeout.ms", "timeouts", "fetch"]
+    },
+    {
+      "id": "basics-ch05-010",
+      "exam": "BASICS",
+      "domain": "Consumer 심화",
+      "chapter": "ch05",
+      "difficulty": "hard",
+      "type": "ordering",
+      "question": "classic 프로토콜의 eager 리밸런스에서 일어나는 일을 순서대로 배열하세요.",
+      "code": null,
+      "items": [
+        { "id": "i4", "text": "새 소유자에서 `onPartitionsAssigned` 가 호출된다" },
+        { "id": "i2", "text": "이전 소유자에서 `onPartitionsRevoked` 가 호출되고 여기서 오프셋을 커밋한다" },
+        { "id": "i5", "text": "할당된 파티션에 대한 fetch가 시작된다" },
+        { "id": "i1", "text": "새 컨슈머가 그룹에 합류해 리밸런스가 트리거된다" },
+        { "id": "i3", "text": "코디네이터를 통해 새 파티션 할당이 결정된다" }
+      ],
+      "answer": ["i1", "i2", "i3", "i4", "i5"],
+      "explanation": "eager 방식에서는 리밸런스가 트리거되면 모든 멤버가 보유 파티션 전부를 먼저 반납합니다. 반납 직전에 호출되는 `onPartitionsRevoked` 가 오프셋을 커밋할 마지막 기회이며, 이 시점에는 아직 자신이 소유자이므로 커밋이 유효합니다. 그다음 코디네이터를 통해 새 할당이 정해지고, `onPartitionsAssigned` 가 재할당 완료 후 fetch 시작 전에 호출됩니다. 공식 문서는 정상 상황에서 이전 소유자의 revoke가 새 소유자의 assigned보다 먼저 실행되는 것이 보장된다고 명시하며, 그래서 revoke에서 커밋한 오프셋을 새 소유자가 반드시 볼 수 있습니다.",
+      "distractorNotes": {
+        "i2": "새 할당을 받은 뒤에 커밋한다고 오해하기 쉽습니다. 그때는 이미 소유권이 넘어가 커밋이 거부됩니다.",
+        "i4": "`onPartitionsAssigned` 를 fetch가 시작된 뒤의 알림으로 착각하기 쉽지만, fetch 시작 전에 호출됩니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Javadoc: ConsumerRebalanceListener", "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/consumer/ConsumerRebalanceListener.html" },
+        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" }
+      ],
+      "tags": ["rebalance-triggers", "rebalance-listener", "offset-commit"]
+    }
+  ]
+}

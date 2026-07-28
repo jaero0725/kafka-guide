@@ -1,0 +1,584 @@
+{
+  "generatedAt": "2026-07-28",
+  "kafkaVersion": "4.3",
+  "total": 66,
+  "built": 66,
+  "sections": [
+    {
+      "id": "home",
+      "title": "홈",
+      "pages": [
+        {
+          "id": "index",
+          "path": "index.html",
+          "title": "Kafka Guide 홈",
+          "pageTitle": "Kafka Guide — Apache Kafka 4.3 학습 가이드",
+          "num": null,
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "basics",
+      "title": "기본개념",
+      "pages": [
+        {
+          "id": "ch01",
+          "path": "basics/ch01.html",
+          "title": "Kafka 개요와 이벤트 스트리밍",
+          "pageTitle": "Kafka 개요와 이벤트 스트리밍",
+          "num": "1",
+          "exists": true
+        },
+        {
+          "id": "ch02",
+          "path": "basics/ch02.html",
+          "title": "아키텍처와 핵심 개념",
+          "pageTitle": "아키텍처와 핵심 개념",
+          "num": "2",
+          "exists": true
+        },
+        {
+          "id": "ch03",
+          "path": "basics/ch03.html",
+          "title": "KRaft와 클러스터 메타데이터",
+          "pageTitle": "KRaft와 클러스터 메타데이터",
+          "num": "3",
+          "exists": true
+        },
+        {
+          "id": "ch04",
+          "path": "basics/ch04.html",
+          "title": "Producer 심화",
+          "pageTitle": "Producer 심화",
+          "num": "4",
+          "exists": true
+        },
+        {
+          "id": "ch05",
+          "path": "basics/ch05.html",
+          "title": "Consumer 심화",
+          "pageTitle": "Consumer 심화",
+          "num": "5",
+          "exists": true
+        },
+        {
+          "id": "ch06",
+          "path": "basics/ch06.html",
+          "title": "전달 보장과 트랜잭션",
+          "pageTitle": "전달 보장과 트랜잭션",
+          "num": "6",
+          "exists": true
+        },
+        {
+          "id": "ch07",
+          "path": "basics/ch07.html",
+          "title": "스토리지·리텐션·컴팩션",
+          "pageTitle": "스토리지·리텐션·컴팩션",
+          "num": "7",
+          "exists": true
+        },
+        {
+          "id": "ch08",
+          "path": "basics/ch08.html",
+          "title": "스키마와 직렬화",
+          "pageTitle": "스키마와 직렬화",
+          "num": "8",
+          "exists": true
+        },
+        {
+          "id": "ch09",
+          "path": "basics/ch09.html",
+          "title": "Kafka Connect",
+          "pageTitle": "Kafka Connect",
+          "num": "9",
+          "exists": true
+        },
+        {
+          "id": "ch10",
+          "path": "basics/ch10.html",
+          "title": "Kafka Streams와 ksqlDB",
+          "pageTitle": "Kafka Streams와 ksqlDB",
+          "num": "10",
+          "exists": true
+        },
+        {
+          "id": "ch11",
+          "path": "basics/ch11.html",
+          "title": "운영 기초",
+          "pageTitle": "운영 기초",
+          "num": "11",
+          "exists": true
+        },
+        {
+          "id": "appendix-legacy",
+          "path": "basics/appendix-legacy.html",
+          "title": "버전 표기와 레거시",
+          "pageTitle": "부록 · 버전 표기와 레거시",
+          "num": "부록",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "quiz",
+      "title": "문제 풀이",
+      "pages": [
+        {
+          "id": "index",
+          "path": "quiz/index.html",
+          "title": "문제 풀이 허브",
+          "pageTitle": "문제 풀이 허브",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "diagnostic",
+          "path": "quiz/diagnostic.html",
+          "title": "진단 테스트 (30문항)",
+          "pageTitle": "CCDAK 진단 테스트",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "review",
+          "path": "quiz/review.html",
+          "title": "오답 노트",
+          "pageTitle": "오답 노트",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "result",
+          "path": "quiz/result.html",
+          "title": "결과 리포트",
+          "pageTitle": "결과 리포트",
+          "num": null,
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "ccdak",
+      "title": "CCDAK",
+      "pages": [
+        {
+          "id": "index",
+          "path": "ccdak/index.html",
+          "title": "개요 · 4주 학습 플랜",
+          "pageTitle": "CCDAK 개요 · 4주 학습 플랜",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-app-development",
+          "path": "ccdak/domain-app-development.html",
+          "title": "Application Development",
+          "pageTitle": "Application Development (28%)",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-fundamentals",
+          "path": "ccdak/domain-fundamentals.html",
+          "title": "Fundamentals",
+          "pageTitle": "Fundamentals (23%)",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-connect",
+          "path": "ccdak/domain-connect.html",
+          "title": "Kafka Connect",
+          "pageTitle": "Kafka Connect (15%)",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-observability",
+          "path": "ccdak/domain-observability.html",
+          "title": "Application Observability",
+          "pageTitle": "Application Observability (13%)",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-streams",
+          "path": "ccdak/domain-streams.html",
+          "title": "Kafka Streams",
+          "pageTitle": "Kafka Streams (12%)",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-testing",
+          "path": "ccdak/domain-testing.html",
+          "title": "Application Testing",
+          "pageTitle": "Application Testing (8%)",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "flashcards",
+          "path": "ccdak/flashcards.html",
+          "title": "플래시카드",
+          "pageTitle": "CCDAK 플래시카드",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "traps",
+          "path": "ccdak/traps.html",
+          "title": "함정 사전",
+          "pageTitle": "함정 사전 · 헷갈리는 40쌍",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "cram",
+          "path": "ccdak/cram.html",
+          "title": "벼락치기 요약",
+          "pageTitle": "벼락치기 요약 · CCDAK D-1",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "exam-tips",
+          "path": "ccdak/exam-tips.html",
+          "title": "시험 당일 전략",
+          "pageTitle": "CCDAK 시험 당일 전략",
+          "num": null,
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "ccaak",
+      "title": "CCAAK",
+      "pages": [
+        {
+          "id": "index",
+          "path": "ccaak/index.html",
+          "title": "개요 · 학습 플랜",
+          "pageTitle": "CCAAK 개요 · 학습 플랜",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-fundamentals",
+          "path": "ccaak/domain-fundamentals.html",
+          "title": "Kafka Fundamentals",
+          "pageTitle": "CCAAK · Kafka Fundamentals",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-security",
+          "path": "ccaak/domain-security.html",
+          "title": "Kafka Security",
+          "pageTitle": "CCAAK · Kafka Security",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-connect",
+          "path": "ccaak/domain-connect.html",
+          "title": "Kafka Connect",
+          "pageTitle": "CCAAK · Kafka Connect",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-deployment",
+          "path": "ccaak/domain-deployment.html",
+          "title": "Deployment Architecture",
+          "pageTitle": "CCAAK · Deployment Architecture",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-cluster-config",
+          "path": "ccaak/domain-cluster-config.html",
+          "title": "Cluster Configuration",
+          "pageTitle": "CCAAK · Cluster Configuration",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-observability",
+          "path": "ccaak/domain-observability.html",
+          "title": "Observability",
+          "pageTitle": "CCAAK · Observability",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-troubleshooting",
+          "path": "ccaak/domain-troubleshooting.html",
+          "title": "Troubleshooting",
+          "pageTitle": "CCAAK · Troubleshooting",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "exam-tips",
+          "path": "ccaak/exam-tips.html",
+          "title": "시험 당일 전략",
+          "pageTitle": "CCAAK · 시험 당일 전략",
+          "num": null,
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "practice",
+      "title": "실무 예제",
+      "pages": [
+        {
+          "id": "ex01",
+          "path": "practice/ex01.html",
+          "title": "로컬 KRaft 클러스터 구축",
+          "pageTitle": "예제 1 · 로컬 KRaft 클러스터 구축",
+          "num": "1",
+          "exists": true
+        },
+        {
+          "id": "ex02",
+          "path": "practice/ex02.html",
+          "title": "Spring Boot Producer/Consumer",
+          "pageTitle": "예제 2 · Spring Boot Producer/Consumer 기본",
+          "num": "2",
+          "exists": true
+        },
+        {
+          "id": "ex03",
+          "path": "practice/ex03.html",
+          "title": "안전한 Producer 설정",
+          "pageTitle": "예제 3 · 안전한 Producer 설정 (무손실)",
+          "num": "3",
+          "exists": true
+        },
+        {
+          "id": "ex04",
+          "path": "practice/ex04.html",
+          "title": "컨슈머 오프셋 전략",
+          "pageTitle": "예제 4 · 컨슈머 오프셋 전략 (수동 커밋 · 배치 처리)",
+          "num": "4",
+          "exists": true
+        },
+        {
+          "id": "ex05",
+          "path": "practice/ex05.html",
+          "title": "Exactly-Once 파이프라인",
+          "pageTitle": "예제 5 · Exactly-Once 파이프라인",
+          "num": "5",
+          "exists": true
+        },
+        {
+          "id": "ex06",
+          "path": "practice/ex06.html",
+          "title": "DLQ + 재시도 패턴",
+          "pageTitle": "예제 6 · DLQ + 재시도 패턴",
+          "num": "6",
+          "exists": true
+        },
+        {
+          "id": "ex07",
+          "path": "practice/ex07.html",
+          "title": "Avro 스키마 진화",
+          "pageTitle": "예제 7 · Avro + Schema Registry 스키마 진화",
+          "num": "7",
+          "exists": true
+        },
+        {
+          "id": "ex08",
+          "path": "practice/ex08.html",
+          "title": "Connect CDC 파이프라인",
+          "pageTitle": "예제 8 · Kafka Connect CDC 파이프라인",
+          "num": "8",
+          "exists": true
+        },
+        {
+          "id": "ex09",
+          "path": "practice/ex09.html",
+          "title": "Streams 실시간 집계",
+          "pageTitle": "예제 9 · Kafka Streams 실시간 집계",
+          "num": "9",
+          "exists": true
+        },
+        {
+          "id": "ex10",
+          "path": "practice/ex10.html",
+          "title": "컨슈머 Lag 모니터링",
+          "pageTitle": "예제 10 · 컨슈머 Lag 모니터링과 알림",
+          "num": "10",
+          "exists": true
+        },
+        {
+          "id": "ex11",
+          "path": "practice/ex11.html",
+          "title": "MirrorMaker 2 복제",
+          "pageTitle": "예제 11 · MirrorMaker 2 클러스터 간 복제",
+          "num": "11",
+          "exists": true
+        },
+        {
+          "id": "ex12",
+          "path": "practice/ex12.html",
+          "title": "Python / Node 클라이언트",
+          "pageTitle": "예제 12 · Python / Node.js 클라이언트",
+          "num": "12",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "cases",
+      "title": "실수 케이스",
+      "pages": [
+        {
+          "id": "case01",
+          "path": "cases/case01.html",
+          "title": "배포 후 며칠치 데이터가 사라졌다",
+          "pageTitle": "케이스 1 · 배포 후 며칠치 데이터가 사라졌다",
+          "num": "1",
+          "exists": true
+        },
+        {
+          "id": "case02",
+          "path": "cases/case02.html",
+          "title": "컨슈머가 무한 리밸런스 루프에 빠졌다",
+          "pageTitle": "케이스 2 · 컨슈머가 무한 리밸런스 루프에 빠졌다",
+          "num": "2",
+          "exists": true
+        },
+        {
+          "id": "case03",
+          "path": "cases/case03.html",
+          "title": "브로커 장애 후 메시지가 유실됐다",
+          "pageTitle": "케이스 3 · 브로커 장애 후 메시지가 유실됐다",
+          "num": "3",
+          "exists": true
+        },
+        {
+          "id": "case04",
+          "path": "cases/case04.html",
+          "title": "같은 주문의 상태가 뒤바뀌어 저장됐다",
+          "pageTitle": "케이스 4 · 같은 주문의 상태가 뒤바뀌어 저장됐다",
+          "num": "4",
+          "exists": true
+        },
+        {
+          "id": "case05",
+          "path": "cases/case05.html",
+          "title": "파티션을 1000개로 늘렸더니 더 느려졌다",
+          "pageTitle": "케이스 5 · 파티션을 1000개로 늘렸더니 더 느려졌다",
+          "num": "5",
+          "exists": true
+        },
+        {
+          "id": "case06",
+          "path": "cases/case06.html",
+          "title": "RF=3인데 브로커 1대 죽자 유실됐다",
+          "pageTitle": "케이스 6 · RF=3인데 브로커 1대 죽자 유실됐다",
+          "num": "6",
+          "exists": true
+        },
+        {
+          "id": "case07",
+          "path": "cases/case07.html",
+          "title": "재처리했더니 결제가 두 번 됐다",
+          "pageTitle": "케이스 7 · 재처리했더니 결제가 두 번 됐다",
+          "num": "7",
+          "exists": true
+        },
+        {
+          "id": "case08",
+          "path": "cases/case08.html",
+          "title": "상태 토픽 데이터가 조용히 사라졌다",
+          "pageTitle": "케이스 8 · 상태 토픽 데이터가 조용히 사라졌다",
+          "num": "8",
+          "exists": true
+        },
+        {
+          "id": "case09",
+          "path": "cases/case09.html",
+          "title": "스키마 배포 후 전체 컨슈머가 죽었다",
+          "pageTitle": "케이스 9 · 스키마 배포 후 전체 컨슈머가 죽었다",
+          "num": "9",
+          "exists": true
+        },
+        {
+          "id": "case10",
+          "path": "cases/case10.html",
+          "title": "큰 메시지가 무한 재시도로 쌓였다",
+          "pageTitle": "케이스 10 · 큰 메시지가 무한 재시도로 쌓였다",
+          "num": "10",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "id": "cheatsheet",
+      "title": "빠른참조",
+      "pages": [
+        {
+          "id": "cli",
+          "path": "cheatsheet/cli.html",
+          "title": "CLI 명령",
+          "pageTitle": "CLI 치트시트",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "config",
+          "path": "cheatsheet/config.html",
+          "title": "설정값",
+          "pageTitle": "설정 치트시트",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "metrics",
+          "path": "cheatsheet/metrics.html",
+          "title": "JMX 메트릭",
+          "pageTitle": "메트릭 치트시트",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "troubleshooting",
+          "path": "cheatsheet/troubleshooting.html",
+          "title": "트러블슈팅 결정 트리",
+          "pageTitle": "트러블슈팅 치트시트",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "security",
+          "path": "cheatsheet/security.html",
+          "title": "보안 설정",
+          "pageTitle": "보안 치트시트",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "streams",
+          "path": "cheatsheet/streams.html",
+          "title": "Streams DSL",
+          "pageTitle": "Streams 치트시트",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "connect",
+          "path": "cheatsheet/connect.html",
+          "title": "Connect REST · SMT",
+          "pageTitle": "Connect 치트시트",
+          "num": null,
+          "exists": true
+        }
+      ]
+    }
+  ]
+}

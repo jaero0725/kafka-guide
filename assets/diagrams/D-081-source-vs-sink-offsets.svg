@@ -1,0 +1,78 @@
+<svg viewBox="0 0 720 354" role="img" class="kg-diagram"
+     aria-labelledby="d081-title d081-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d081-title">source 와 sink 의 오프셋 저장 위치 — 비대칭입니다</title>
+  <desc id="d081-desc">소스 커넥터와 싱크 커넥터가 진행 위치를 어디에 저장하는지 좌우로 비교한 그림입니다.
+    왼쪽 소스 커넥터는 데이터베이스나 파일 같은 외부 시스템에서 읽어 Kafka 토픽에 씁니다.
+    이때 어디까지 읽었는지는 커넥터가 스스로 정의한 구조로 표현하며,
+    Connect 의 내부 토픽인 offset.storage.topic 에 저장됩니다.
+    소스 쪽에는 컨슈머가 없으므로 __consumer_offsets 와는 아무 관계가 없습니다.
+    커밋 주기는 워커 설정 offset.flush.interval.ms 기본값 60000 밀리초입니다.
+    오른쪽 싱크 커넥터는 Kafka 토픽을 일반 KafkaConsumer 로 읽어 외부 시스템에 씁니다.
+    컨슈머 그룹 id 는 connect 하이픈 커넥터 이름 형식이며,
+    오프셋은 일반 컨슈머와 똑같이 __consumer_offsets 에 저장됩니다.
+    그래서 kafka-consumer-groups 명령으로 lag 을 확인할 수 있습니다.
+    싱크 커넥터는 offset.storage.topic 을 쓰지 않습니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">source vs sink 오프셋 저장 위치 — 같은 Connect 인데 저장소가 다릅니다</text>
+
+  <!-- 중앙 구분선 -->
+  <line class="dg-grid" x1="360" y1="28" x2="360" y2="304"/>
+
+  <!-- ================= SOURCE ================= -->
+  <rect class="dg-node dg-node--alt" x="12" y="28" width="336" height="26" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="46">SOURCE 커넥터 — 외부 → Kafka</text>
+
+  <rect class="dg-node" x="12" y="62" width="336" height="32" rx="4"/>
+  <text class="dg-fs-sm" x="22" y="82">외부 시스템 (DB · 파일 · API)</text>
+  <line class="dg-edge" x1="180" y1="94" x2="180" y2="100"/>
+  <path class="dg-marker" d="M175,100 L185,100 L180,108 Z"/>
+
+  <rect class="dg-node" x="12" y="110" width="336" height="46" rx="4"/>
+  <text class="dg-fs-sm dg-mono dg-bold" x="22" y="128">SourceTask.poll()</text>
+  <text class="dg-fs-sm dg-muted" x="22" y="146">위치 표현은 커넥터가 정의: <tspan class="dg-mono">{file, position}</tspan></text>
+  <line class="dg-edge" x1="180" y1="156" x2="180" y2="162"/>
+  <path class="dg-marker" d="M175,162 L185,162 L180,170 Z"/>
+
+  <rect class="dg-node" x="12" y="172" width="336" height="32" rx="4"/>
+  <text class="dg-fs-sm" x="22" y="192">Kafka 대상 토픽 (데이터)</text>
+
+  <rect class="dg-node dg-node--accent" x="12" y="216" width="336" height="60" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="234">오프셋 저장 위치</text>
+  <text class="dg-fs-sm dg-mono dg-bold" x="22" y="252">offset.storage.topic</text>
+  <text class="dg-fs-sm" x="22" y="269">Connect 내부 토픽 · <tspan class="dg-mono">offset.flush.interval.ms</tspan></text>
+
+  <rect class="dg-node dg-node--warn" x="12" y="282" width="336" height="22" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="297">컨슈머가 없습니다 → __consumer_offsets 무관</text>
+
+  <!-- ================= SINK ================= -->
+  <rect class="dg-node dg-node--alt" x="372" y="28" width="336" height="26" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="382" y="46">SINK 커넥터 — Kafka → 외부</text>
+
+  <rect class="dg-node" x="372" y="62" width="336" height="32" rx="4"/>
+  <text class="dg-fs-sm" x="382" y="82">Kafka 소스 토픽</text>
+  <line class="dg-edge" x1="540" y1="94" x2="540" y2="100"/>
+  <path class="dg-marker" d="M535,100 L545,100 L540,108 Z"/>
+
+  <rect class="dg-node" x="372" y="110" width="336" height="46" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="382" y="128">일반 <tspan class="dg-mono">KafkaConsumer</tspan> 그대로 사용</text>
+  <text class="dg-fs-sm dg-mono dg-muted" x="382" y="146">group.id = connect-{커넥터 이름}</text>
+  <line class="dg-edge" x1="540" y1="156" x2="540" y2="162"/>
+  <path class="dg-marker" d="M535,162 L545,162 L540,170 Z"/>
+
+  <rect class="dg-node" x="372" y="172" width="336" height="32" rx="4"/>
+  <text class="dg-fs-sm dg-mono" x="382" y="192">SinkTask.put()</text>
+  <text class="dg-fs-sm" x="500" y="192">→ 외부 시스템</text>
+
+  <rect class="dg-node dg-node--accent" x="372" y="216" width="336" height="60" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="382" y="234">오프셋 저장 위치</text>
+  <text class="dg-fs-sm dg-mono dg-bold" x="382" y="252">__consumer_offsets</text>
+  <text class="dg-fs-sm" x="382" y="269">일반 컨슈머와 완전히 동일합니다</text>
+
+  <rect class="dg-node dg-node--ok" x="372" y="282" width="336" height="22" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="382" y="297">kafka-consumer-groups 로 lag 확인 가능</text>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="314" x2="708" y2="314"/>
+  <text class="dg-fs-sm dg-bold" x="12" y="332">한 줄 요약: <tspan class="dg-mono">source → offset.storage.topic</tspan> · <tspan class="dg-mono">sink → __consumer_offsets</tspan>. 뒤집어 외우면 그대로 틀립니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="346">싱크 오프셋을 사람이 손으로 <tspan class="dg-mono">offset.storage.topic</tspan> 에서 찾으려 해도 없습니다. 반대도 마찬가지입니다.</text>
+</svg>

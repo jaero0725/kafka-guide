@@ -1,0 +1,728 @@
+{
+  "deckId": "ccdak-configs",
+  "title": "CCDAK — 반드시 외울 설정 기본값",
+  "exam": "CCDAK",
+  "kafkaVersion": "4.3",
+  "cards": [
+    {
+      "id": "fc-cfg-001",
+      "deck": "ccdak-configs",
+      "front": "`acks` 의 기본값은?",
+      "back": "**all** · 프로듀서\nKafka 3.0에서 `1` → `all` 로 바뀌었습니다. 기다리는 대상은 전체 레플리카가 아니라 그 시점의 ISR 전원입니다.",
+      "tags": [
+        "acks",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-002",
+      "deck": "ccdak-configs",
+      "front": "`enable.idempotence` 의 기본값은?",
+      "back": "**true** · 프로듀서\n3.0부터 기본 활성입니다. 활성 시 in-flight ≤ 5, `acks=all`, `retries>0` 이 강제됩니다.",
+      "tags": [
+        "enable.idempotence",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-003",
+      "deck": "ccdak-configs",
+      "front": "`linger.ms` 의 기본값은?",
+      "back": "**5** · 프로듀서\nKafka 4.0에서 `0` → `5` 로 바뀌었습니다. 시중 자료가 가장 많이 틀리는 값입니다.",
+      "tags": [
+        "linger.ms",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-004",
+      "deck": "ccdak-configs",
+      "front": "`batch.size` 의 기본값은?",
+      "back": "**16384** (16KiB) · 프로듀서\n파티션별 배치 크기 상한이며, `linger.ms` 와 **OR 조건**으로 전송을 유발합니다.",
+      "tags": [
+        "batch.size",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-005",
+      "deck": "ccdak-configs",
+      "front": "`buffer.memory` 의 기본값은?",
+      "back": "**33554432** (32MiB) · 프로듀서\n전송 대기 레코드가 쓰는 전체 메모리입니다. 고갈되면 `send()` 가 블로킹됩니다.",
+      "tags": [
+        "buffer.memory",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-006",
+      "deck": "ccdak-configs",
+      "front": "`max.block.ms` 의 기본값은?",
+      "back": "**60000** · 프로듀서\n버퍼 고갈·메타데이터 미확보로 `send()` 가 블로킹될 때의 상한이며, 초과 시 `TimeoutException` 입니다.",
+      "tags": [
+        "max.block.ms",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-007",
+      "deck": "ccdak-configs",
+      "front": "`max.in.flight.requests.per.connection` 의 기본값은?",
+      "back": "**5** · 프로듀서\n멱등성 활성 시 허용 상한도 5입니다. 6 이상을 명시하면 기동 시 `ConfigException` 입니다.",
+      "tags": [
+        "max.in.flight.requests.per.connection",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-008",
+      "deck": "ccdak-configs",
+      "front": "프로듀서 `request.timeout.ms` 의 기본값은?",
+      "back": "**30000** · 프로듀서\n요청 **한 번**에 대한 응답 대기 상한입니다. 초과하면 재시도 대상이 됩니다.",
+      "tags": [
+        "request.timeout.ms",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-009",
+      "deck": "ccdak-configs",
+      "front": "`delivery.timeout.ms` 의 기본값은?",
+      "back": "**120000** · 프로듀서\n`send()` 부터 성공·실패 확정까지의 **전체 예산**이며, `linger.ms + request.timeout.ms` 이상이어야 합니다.",
+      "tags": [
+        "delivery.timeout.ms",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-010",
+      "deck": "ccdak-configs",
+      "front": "`retries` 의 기본값은?",
+      "back": "**2147483647** · 프로듀서\n사실상 무한이므로 실질적인 재시도 상한은 횟수가 아니라 `delivery.timeout.ms` 입니다.",
+      "tags": [
+        "retries",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-011",
+      "deck": "ccdak-configs",
+      "front": "`retry.backoff.ms` 의 기본값은?",
+      "back": "**100** · 프로듀서\n재시도 사이의 대기 시간이며, 상한은 `retry.backoff.max.ms`(1000)로 지수 증가합니다.",
+      "tags": [
+        "retry.backoff.ms",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-012",
+      "deck": "ccdak-configs",
+      "front": "`max.request.size` 의 기본값은?",
+      "back": "**1048576** (1MiB) · 프로듀서\n클라이언트 쪽 하드 게이트입니다. 브로커 `message.max.bytes`(1048588)와 값이 다릅니다.",
+      "tags": [
+        "max.request.size",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-013",
+      "deck": "ccdak-configs",
+      "front": "프로듀서 `compression.type` 의 기본값은?",
+      "back": "**none** · 프로듀서\n토픽 레벨 `compression.type` 의 기본값은 `producer` 라서 프로듀서가 보낸 코덱을 그대로 유지합니다.",
+      "tags": [
+        "compression.type",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-014",
+      "deck": "ccdak-configs",
+      "front": "`partitioner.class` 의 기본값은?",
+      "back": "**null** · 프로듀서\nnull이면 내장 로직을 씁니다 — 키가 있으면 murmur2 해시, 없으면 배치 단위 sticky 입니다.",
+      "tags": [
+        "partitioner.class",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-cfg-015",
+      "deck": "ccdak-configs",
+      "front": "`transactional.id` 의 기본값은?",
+      "back": "**null** · 프로듀서\n지정해야 트랜잭션 API를 쓸 수 있고, 지정하면 멱등성도 자동으로 활성화됩니다.",
+      "tags": [
+        "transactional.id",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-cfg-016",
+      "deck": "ccdak-configs",
+      "front": "`transaction.timeout.ms` 의 기본값은?",
+      "back": "**60000** · 프로듀서\n이 시간을 넘긴 트랜잭션은 코디네이터가 중단시킵니다. 브로커 상한은 `transaction.max.timeout.ms`(900000)입니다.",
+      "tags": [
+        "transaction.timeout.ms",
+        "defaults",
+        "producer"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-cfg-017",
+      "deck": "ccdak-configs",
+      "front": "`group.protocol` 의 기본값은?",
+      "back": "**classic** · 컨슈머\nKIP-848 새 프로토콜은 4.0에서 GA지만 기본값이 아닙니다. `consumer` 로 명시해야 활성됩니다.",
+      "tags": [
+        "group.protocol",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-018",
+      "deck": "ccdak-configs",
+      "front": "`session.timeout.ms` 의 기본값은?",
+      "back": "**45000** · 컨슈머\n하트비트가 끊긴 뒤 코디네이터가 기다리는 한계입니다. 예전 기본값 10000과 혼동하기 쉽습니다.",
+      "tags": [
+        "session.timeout.ms",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-019",
+      "deck": "ccdak-configs",
+      "front": "`heartbeat.interval.ms` 의 기본값은?",
+      "back": "**3000** · 컨슈머\n하트비트를 보내는 주기이며 `session.timeout.ms` 의 1/3 이하로 두는 것이 권장 관계입니다.",
+      "tags": [
+        "heartbeat.interval.ms",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-020",
+      "deck": "ccdak-configs",
+      "front": "`max.poll.interval.ms` 의 기본값은?",
+      "back": "**300000** (5분) · 컨슈머\n두 `poll()` 호출 사이 허용 시간입니다. 초과하면 그룹에서 제외되고 리밸런스가 일어납니다.",
+      "tags": [
+        "max.poll.interval.ms",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-021",
+      "deck": "ccdak-configs",
+      "front": "`max.poll.records` 의 기본값은?",
+      "back": "**500** · 컨슈머\n한 번의 `poll()` 이 반환하는 최대 레코드 수이며, poll 간격 초과의 1차 처방이 이 값을 줄이는 것입니다.",
+      "tags": [
+        "max.poll.records",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-022",
+      "deck": "ccdak-configs",
+      "front": "`enable.auto.commit` 의 기본값은?",
+      "back": "**true** · 컨슈머\n처리 완료를 기다리지 않고 커밋하므로, at-least-once나 트랜잭션이 필요하면 `false` 로 둡니다.",
+      "tags": [
+        "enable.auto.commit",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-023",
+      "deck": "ccdak-configs",
+      "front": "`auto.commit.interval.ms` 의 기본값은?",
+      "back": "**5000** · 컨슈머\n자동 커밋은 이 주기가 지난 뒤 다음 `poll()` 호출 시 직전 반환분을 커밋합니다.",
+      "tags": [
+        "auto.commit.interval.ms",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-024",
+      "deck": "ccdak-configs",
+      "front": "`auto.offset.reset` 의 기본값은?",
+      "back": "**latest** · 컨슈머\n커밋된 오프셋이 없거나 범위를 벗어났을 때만 발동합니다. 정상 커밋이 있으면 아무 일도 하지 않습니다.",
+      "tags": [
+        "auto.offset.reset",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-025",
+      "deck": "ccdak-configs",
+      "front": "`isolation.level` 의 기본값은?",
+      "back": "**read_uncommitted** · 컨슈머\n프로듀서가 아니라 **컨슈머** 설정입니다. 트랜잭션 데이터만 읽으려면 `read_committed` 로 바꿉니다.",
+      "tags": [
+        "isolation.level",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-cfg-026",
+      "deck": "ccdak-configs",
+      "front": "`partition.assignment.strategy` 의 기본값은?",
+      "back": "**[RangeAssignor, CooperativeStickyAssignor]** · 컨슈머\n목록의 첫 항목이 Range이므로 협력 리밸런싱만 쓰려면 Cooperative를 단독 지정해야 합니다.",
+      "tags": [
+        "partition.assignment.strategy",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-027",
+      "deck": "ccdak-configs",
+      "front": "`fetch.min.bytes` 의 기본값은?",
+      "back": "**1** · 컨슈머\n브로커가 응답을 모으는 최소 크기이며, 채워지지 않으면 `fetch.max.wait.ms` 까지만 기다립니다.",
+      "tags": [
+        "fetch.min.bytes",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-028",
+      "deck": "ccdak-configs",
+      "front": "`fetch.max.wait.ms` 의 기본값은?",
+      "back": "**500** · 컨슈머\n`fetch.min.bytes` 가 채워지지 않을 때 브로커가 응답을 지연시키는 상한입니다.",
+      "tags": [
+        "fetch.max.wait.ms",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-029",
+      "deck": "ccdak-configs",
+      "front": "`fetch.max.bytes` 의 기본값은?",
+      "back": "**52428800** (50MiB) · 컨슈머\nfetch 요청 **전체**의 크기 목표입니다. 첫 배치가 더 커도 그대로 반환되므로 하드 상한이 아닙니다.",
+      "tags": [
+        "fetch.max.bytes",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-030",
+      "deck": "ccdak-configs",
+      "front": "`max.partition.fetch.bytes` 의 기본값은?",
+      "back": "**1048576** (1MiB) · 컨슈머\n**파티션당** fetch 크기 목표이며, 이 값도 절대 상한이 아닙니다.",
+      "tags": [
+        "max.partition.fetch.bytes",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-031",
+      "deck": "ccdak-configs",
+      "front": "`allow.auto.create.topics` 의 기본값은?",
+      "back": "**true** · 컨슈머\n토픽 이름에 오타가 있어도 브로커가 허용하면 빈 토픽이 생겨 버립니다.",
+      "tags": [
+        "allow.auto.create.topics",
+        "defaults",
+        "consumer"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-032",
+      "deck": "ccdak-configs",
+      "front": "`num.partitions` 의 기본값은?",
+      "back": "**1** · 브로커\n자동 생성 토픽의 파티션 수입니다. 운영 토픽은 명시적으로 만드는 것이 안전합니다.",
+      "tags": [
+        "num.partitions",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-cfg-033",
+      "deck": "ccdak-configs",
+      "front": "`default.replication.factor` 의 기본값은?",
+      "back": "**1** · 브로커\n자동 생성 토픽의 복제 계수이며, 1이면 브로커 한 대만 죽어도 데이터를 잃습니다.",
+      "tags": [
+        "default.replication.factor",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-cfg-034",
+      "deck": "ccdak-configs",
+      "front": "`auto.create.topics.enable` 의 기본값은?",
+      "back": "**true** · 브로커\n존재하지 않는 토픽에 접근하면 자동 생성됩니다. 프로덕션에서는 보통 끕니다.",
+      "tags": [
+        "auto.create.topics.enable",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-cfg-035",
+      "deck": "ccdak-configs",
+      "front": "`message.max.bytes` 의 기본값은?",
+      "back": "**1048588** · 브로커\n1MiB(1048576)가 아니라 12바이트 더 큽니다. 판정 기준은 **압축 후** 레코드 배치 크기입니다.",
+      "tags": [
+        "message.max.bytes",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-cfg-036",
+      "deck": "ccdak-configs",
+      "front": "`replica.fetch.max.bytes` 의 기본값은?",
+      "back": "**1048576** · 브로커\n팔로워가 리더에서 가져오는 크기입니다. 큰 메시지를 허용할 때 이것을 빼먹으면 복제만 실패해 ISR이 줄어듭니다.",
+      "tags": [
+        "replica.fetch.max.bytes",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-cfg-037",
+      "deck": "ccdak-configs",
+      "front": "`replica.lag.time.max.ms` 의 기본값은?",
+      "back": "**30000** · 브로커\n이 시간 동안 리더를 따라오지 못한 레플리카를 ISR에서 제외하는 판정 기준입니다.",
+      "tags": [
+        "replica.lag.time.max.ms",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-cfg-038",
+      "deck": "ccdak-configs",
+      "front": "`min.insync.replicas` 의 기본값은?",
+      "back": "**1** · 브로커·토픽\n복제 계수가 3이어도 기본값은 1입니다. `acks=all` 만 켜고 이 값을 올리지 않으면 유실을 막지 못합니다.",
+      "tags": [
+        "min.insync.replicas",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-cfg-039",
+      "deck": "ccdak-configs",
+      "front": "`unclean.leader.election.enable` 의 기본값은?",
+      "back": "**false** · 브로커·토픽\nISR 밖 레플리카를 리더로 올리지 않아 유실을 막습니다. `true` 는 가용성을 얻고 데이터를 잃는 선택입니다.",
+      "tags": [
+        "unclean.leader.election.enable",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-cfg-040",
+      "deck": "ccdak-configs",
+      "front": "`offsets.retention.minutes` 의 기본값은?",
+      "back": "**10080** (7일) · 브로커\n커밋된 컨슈머 오프셋의 보관 기간입니다. 만료 후 재기동하면 `auto.offset.reset` 이 발동합니다.",
+      "tags": [
+        "offsets.retention.minutes",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-cfg-041",
+      "deck": "ccdak-configs",
+      "front": "`offsets.topic.replication.factor` 의 기본값은?",
+      "back": "**3** · 브로커\n브로커가 3대 미만인 개발 클러스터에서 `__consumer_offsets` 생성이 실패하는 전형적 원인입니다.",
+      "tags": [
+        "offsets.topic.replication.factor",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-cfg-042",
+      "deck": "ccdak-configs",
+      "front": "`transaction.state.log.replication.factor` 의 기본값은?",
+      "back": "**3** · 브로커\n트랜잭션 상태 로그의 복제 계수입니다. 단일 브로커 테스트에서는 1로 낮춰야 합니다.",
+      "tags": [
+        "transaction.state.log.replication.factor",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-cfg-043",
+      "deck": "ccdak-configs",
+      "front": "`transaction.state.log.min.isr` 의 기본값은?",
+      "back": "**2** · 브로커\n트랜잭션 상태 로그의 최소 ISR입니다. EOS가 브로커 3대를 전제로 하는 이유가 이 값입니다.",
+      "tags": [
+        "transaction.state.log.min.isr",
+        "defaults",
+        "broker"
+      ],
+      "chapter": "ch06"
+    },
+    {
+      "id": "fc-cfg-044",
+      "deck": "ccdak-configs",
+      "front": "`cleanup.policy` 의 기본값은?",
+      "back": "**delete** · 토픽\n기간·크기를 넘긴 세그먼트를 삭제합니다. 키별 최신 값만 남기려면 `compact` 로 바꿉니다.",
+      "tags": [
+        "cleanup.policy",
+        "defaults",
+        "topic"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-cfg-045",
+      "deck": "ccdak-configs",
+      "front": "`retention.ms` 의 기본값은?",
+      "back": "**604800000** (7일) · 토픽\n마감된 세그먼트에만 적용되므로 `segment.ms`·`segment.bytes` 도 함께 줄여야 실제로 짧아집니다.",
+      "tags": [
+        "retention.ms",
+        "defaults",
+        "topic"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-cfg-046",
+      "deck": "ccdak-configs",
+      "front": "`retention.bytes` 의 기본값은?",
+      "back": "**-1** (무제한) · 토픽\n지정하면 **파티션당** 상한으로 동작하므로 토픽 전체 용량은 파티션 수를 곱해야 합니다.",
+      "tags": [
+        "retention.bytes",
+        "defaults",
+        "topic"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-cfg-047",
+      "deck": "ccdak-configs",
+      "front": "`segment.bytes` 의 기본값은?",
+      "back": "**1073741824** (1GiB) · 토픽\n세그먼트가 이 크기에 도달하면 마감됩니다. 삭제·컴팩션은 마감된 세그먼트 단위로 일어납니다.",
+      "tags": [
+        "segment.bytes",
+        "defaults",
+        "topic"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-cfg-048",
+      "deck": "ccdak-configs",
+      "front": "`segment.ms` 의 기본값은?",
+      "back": "**604800000** (7일) · 토픽\n크기에 도달하지 않아도 이 시간이 지나면 세그먼트를 마감합니다. 짧은 리텐션에는 이 값도 줄여야 합니다.",
+      "tags": [
+        "segment.ms",
+        "defaults",
+        "topic"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-cfg-049",
+      "deck": "ccdak-configs",
+      "front": "`max.message.bytes` 의 기본값은?",
+      "back": "**1048588** · 토픽\n브로커 `message.max.bytes` 를 토픽 단위로 오버라이드합니다. 두 설정의 어순이 반전되어 있어 자주 틀립니다.",
+      "tags": [
+        "max.message.bytes",
+        "defaults",
+        "topic"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-cfg-050",
+      "deck": "ccdak-configs",
+      "front": "`min.cleanable.dirty.ratio` 의 기본값은?",
+      "back": "**0.5** · 토픽\n로그 클리너가 컴팩션을 시작하는 더티 비율 기준입니다. 그래서 컴팩션은 즉시가 아니라 백그라운드로 일어납니다.",
+      "tags": [
+        "min.cleanable.dirty.ratio",
+        "defaults",
+        "topic"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-cfg-051",
+      "deck": "ccdak-configs",
+      "front": "`delete.retention.ms` 의 기본값은?",
+      "back": "**86400000** (1일) · 토픽\ntombstone(value=null)의 보관 기간입니다. 너무 짧으면 멈췄던 컨슈머가 삭제 사실을 놓칩니다.",
+      "tags": [
+        "delete.retention.ms",
+        "defaults",
+        "topic"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-cfg-052",
+      "deck": "ccdak-configs",
+      "front": "토픽 `compression.type` 의 기본값은?",
+      "back": "**producer** · 토픽\n프로듀서가 보낸 코덱을 그대로 유지해 브로커가 재압축하지 않습니다. 프로듀서 기본값은 `none` 입니다.",
+      "tags": [
+        "compression.type",
+        "defaults",
+        "topic"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-cfg-053",
+      "deck": "ccdak-configs",
+      "front": "`processing.guarantee` 의 기본값은?",
+      "back": "**at_least_once** · Kafka Streams\nEOS를 원하면 `exactly_once_v2` 로 명시해야 하며, 이때 `commit.interval.ms` 기본값이 100으로 낮아집니다.",
+      "tags": [
+        "processing.guarantee",
+        "defaults",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-cfg-054",
+      "deck": "ccdak-configs",
+      "front": "`num.stream.threads` 의 기본값은?",
+      "back": "**1** · Kafka Streams\nCPU 코어 수가 아닙니다. 태스크 수의 상한은 입력 파티션 수이므로 그 이상 올려도 효과가 없습니다.",
+      "tags": [
+        "num.stream.threads",
+        "defaults",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-cfg-055",
+      "deck": "ccdak-configs",
+      "front": "`num.standby.replicas` 의 기본값은?",
+      "back": "**0** · Kafka Streams\n대기 사본이 없으므로 인스턴스 장애 시 changelog를 처음부터 재생해 복구합니다.",
+      "tags": [
+        "num.standby.replicas",
+        "defaults",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-cfg-056",
+      "deck": "ccdak-configs",
+      "front": "Streams `commit.interval.ms` 의 기본값은?",
+      "back": "**30000** · Kafka Streams\n`processing.guarantee=exactly_once_v2` 로 두면 기본값이 **100** 으로 바뀝니다.",
+      "tags": [
+        "commit.interval.ms",
+        "defaults",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-cfg-057",
+      "deck": "ccdak-configs",
+      "front": "Connect 워커의 `listeners` 기본값은?",
+      "back": "**http://:8083** · Connect 워커\nREST 포트를 바꿀 때 씁니다. `rest.port` 는 4.x에 존재하지 않는 설정입니다.",
+      "tags": [
+        "listeners",
+        "defaults",
+        "connect"
+      ],
+      "chapter": "ch09"
+    },
+    {
+      "id": "fc-cfg-058",
+      "deck": "ccdak-configs",
+      "front": "`errors.tolerance` 의 기본값은?",
+      "back": "**none** · Connect 커넥터\n첫 실패에서 태스크가 멈춥니다. DLQ를 쓰려면 `all` 로 바꿔야 합니다.",
+      "tags": [
+        "errors.tolerance",
+        "defaults",
+        "connect"
+      ],
+      "chapter": "ch09"
+    },
+    {
+      "id": "fc-cfg-059",
+      "deck": "ccdak-configs",
+      "front": "`errors.retry.timeout` 의 기본값은?",
+      "back": "**0** (재시도 없음) · Connect 커넥터\n`-1` 은 무한 재시도이며, 백오프 상한은 `errors.retry.delay.max.ms`(60000)입니다.",
+      "tags": [
+        "errors.retry.timeout",
+        "defaults",
+        "connect"
+      ],
+      "chapter": "ch09"
+    },
+    {
+      "id": "fc-cfg-060",
+      "deck": "ccdak-configs",
+      "front": "`errors.deadletterqueue.topic.name` 의 기본값은?",
+      "back": "**\"\"** (비활성) · Connect **sink** 커넥터\nDLQ 설정은 sink 전용입니다. `errors.tolerance=all` 과 함께 지정해야 동작합니다.",
+      "tags": [
+        "errors.deadletterqueue.topic.name",
+        "defaults",
+        "connect"
+      ],
+      "chapter": "ch09"
+    }
+  ]
+}

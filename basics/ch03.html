@@ -1,0 +1,1148 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3장 · KRaft와 클러스터 메타데이터 — Kafka Guide</title>
+  <meta name="description" content="Apache Kafka 4.3 기준 KRaft 아키텍처를 정리합니다. KIP-500이 해결한 문제, 컨트롤러 쿼럼과 __cluster_metadata 토픽, process.roles와 combined 모드, kafka-storage.sh 부트스트랩 절차, controller.quorum.voters와 controller.quorum.bootstrap.servers의 차이, 메타데이터 스냅샷, 컨트롤러 수 권장값.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="basics" data-page="ch03"></div>
+
+  <main id="main" class="page" data-page-id="basics/ch03">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="ch01.html">기본개념</a></li>
+        <li><span aria-current="page">3장 · KRaft와 클러스터 메타데이터</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">기본개념 · 3장</p>
+      <h1>KRaft와 클러스터 메타데이터</h1>
+      <p class="page__lead">
+        Kafka 4.x에서 클러스터 메타데이터는 <strong>Kafka 자신의 내부 토픽</strong>에
+        Raft 합의로 기록됩니다. 외부 코디네이션 시스템은 필요하지 않습니다.
+        이 장은 그 구조가 왜 필요했는지, 노드 롤을 어떻게 나누는지,
+        새 클러스터를 어떤 명령으로 부트스트랩하는지, 그리고 3.x에서 오는 조직이
+        무엇을 준비해야 하는지를 다룹니다. CCAAK의 Deployment Architecture와
+        Cluster Configuration 도메인의 기반이 되는 내용입니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>KIP-500이 해결한 세 가지 문제(이중 운영, 메타데이터 확장 한계, 컨트롤러 페일오버 지연)를 설명할 수 있습니다.</li>
+        <li>컨트롤러 쿼럼과 <code>__cluster_metadata</code> 토픽의 관계를 설명할 수 있습니다.</li>
+        <li><code>process.roles</code>의 세 가지 값을 구분하고 combined 모드를 언제 쓰는지 판단할 수 있습니다.</li>
+        <li><code>kafka-storage.sh random-uuid</code> / <code>format</code>으로 새 클러스터를 부트스트랩할 수 있습니다.</li>
+        <li><code>controller.quorum.voters</code>(정적)와 <code>controller.quorum.bootstrap.servers</code>(동적)의 차이를 설명할 수 있습니다.</li>
+        <li>컨트롤러 수를 3 또는 5로 두는 근거를 <code>2N+1</code> 공식으로 설명할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="why-kraft">
+      <h2 id="why-kraft">왜 외부 메타데이터 저장소를 없앴는가 — KIP-500</h2>
+
+      <p>
+        Kafka는 2.x까지 <strong>두 개의 분산 시스템을 함께 운영</strong>해야 했습니다.
+        데이터는 Kafka 브로커에, 메타데이터는 외부 앙상블에 있었고,
+        각각 별도의 설정·모니터링·보안·백업·업그레이드 절차를 요구했습니다.
+        KIP-500은 이 구조를 걷어내고 메타데이터를 Kafka 안으로 옮기는 제안이었습니다.
+        4.0에서 그 이행이 완료되어 <strong>KRaft가 유일한 모드</strong>가 되었습니다.
+      </p>
+
+      <h3 id="three-problems">해결하려 한 세 가지 문제</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>외부 메타데이터 저장소 구조의 한계와 KRaft의 대응</caption>
+          <thead>
+            <tr>
+              <th scope="col">문제</th>
+              <th scope="col">이전 구조에서 무슨 일이 일어났는가</th>
+              <th scope="col">KRaft에서 어떻게 달라졌는가</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">이중 운영 부담</th>
+              <td>서로 다른 두 시스템의 설정 언어·보안 모델·모니터링 지표·업그레이드 절차를 각각 익혀야 했습니다. 장애 시 어느 쪽 문제인지 판단하는 것부터 일이었습니다</td>
+              <td>배포·설정·인증·모니터링이 <strong>Kafka 하나</strong>로 통합됩니다. 컨트롤러도 <code>kafka-server-start.sh</code>로 기동하는 같은 프로세스입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">메타데이터 확장 한계</th>
+              <td>브로커와 토픽 수가 늘어나면 외부 저장소 의존이 병목이 되어 성능과 확장성에 영향을 줬습니다. 메타데이터 상태가 두 시스템 사이에서 어긋날 여지도 있었습니다</td>
+              <td>메타데이터가 <strong>단일 파티션 로그</strong>가 되고, 브로커는 컨트롤러가 밀어 주는 것을 받는 대신 <strong>리더로부터 직접 pull</strong>합니다. 이 설계가 더 높은 파티션 수를 지원하는 근거입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">컨트롤러 페일오버 지연</th>
+              <td>컨트롤러가 바뀌면 새 컨트롤러가 <strong>메타데이터를 처음부터 다시 읽어</strong> 상태를 만들어야 했습니다. 파티션이 많은 클러스터에서는 이 로딩 시간이 그대로 장애 시간이었습니다</td>
+              <td>스탠바이 컨트롤러가 <strong>이미 같은 로그를 따라오고 있습니다.</strong> 공식 문서 표현대로 각 컨트롤러는 "활성 컨트롤러이거나 그것의 핫 스탠바이"이므로, 전환 시 새로 로딩할 것이 없습니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="diagram" data-diagram="D-020">
+        <figcaption>
+          이전 아키텍처와 KRaft 아키텍처 비교 — 외부 앙상블에 메타데이터를 두던 2.x 구조(좌)와
+          컨트롤러 쿼럼이 <code>__cluster_metadata</code>를 소유하는 4.x 구조(우)
+        </figcaption>
+      </figure>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p><strong>메타데이터 저장소 — 버전별 상태</strong></p>
+        <div class="table-scroll">
+          <table class="config-table config-table--plain">
+            <tbody>
+              <tr><th scope="row">Kafka 2.8</th><td>KRaft가 early access로 처음 등장했습니다. 프로덕션 사용 대상이 아니었습니다</td></tr>
+              <tr><th scope="row">Kafka 3.3</th><td>KRaft가 production-ready가 되었습니다. 두 방식이 공존한 시기입니다</td></tr>
+              <tr><th scope="row">Kafka 3.9</th><td><strong>마지막 브리지 릴리스</strong>입니다. 공식 문서는 4.x로 가려면 반드시 이 버전을 경유하라고 명시합니다</td></tr>
+              <tr><th scope="row">Kafka 4.0 이상</th><td><strong>KRaft 전용.</strong> 이전 방식은 제거되었습니다. 관련 설정(<code>zookeeper.connect</code> 등)과 CLI 옵션도 함께 사라졌습니다</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="kraft-architecture">
+      <h2 id="kraft-architecture">KRaft 아키텍처 — 컨트롤러 쿼럼과 <code>__cluster_metadata</code></h2>
+
+      <figure class="diagram" data-diagram="D-021">
+        <figcaption>
+          컨트롤러 쿼럼과 메타데이터 로그 — 활성 컨트롤러가 <code>__cluster_metadata</code>에 쓰고,
+          스탠바이 컨트롤러와 브로커가 그것을 복제·재생하며, 스냅샷으로 로그를 잘라내는 구조
+        </figcaption>
+      </figure>
+
+      <h3 id="metadata-topic">메타데이터도 하나의 토픽입니다</h3>
+      <p>
+        클러스터 메타데이터는 <code>__cluster_metadata</code>라는 내부 토픽의
+        <strong>단일 파티션</strong>(<code>__cluster_metadata-0</code>)에 기록됩니다.
+        토픽 생성, 파티션 리더 변경, ISR 변경, 브로커 등록, ACL, 동적 설정 변경이
+        모두 이 로그의 레코드입니다.
+      </p>
+      <p>
+        차이가 하나 있습니다. 일반 토픽은 리더가 팔로워의 fetch를 기다려 high watermark를 올리는
+        <strong>ISR 방식</strong>이지만, 이 파티션은 <strong>Raft 합의</strong>로 동작합니다.
+        즉 <strong>과반(majority)</strong>이 기록하면 커밋됩니다. 컨트롤러 3대면 2대,
+        5대면 3대가 받으면 확정입니다.
+      </p>
+      <p>
+        브로커는 이 로그의 <strong>observer</strong>입니다. 투표에 참여하지 않고 복제만 받아
+        자기 메모리에 메타데이터 캐시를 만듭니다. 그래서 브로커는
+        "메타데이터를 조회한다"기보다 <strong>"메타데이터 스트림을 구독한다"</strong>에 가깝습니다.
+      </p>
+
+      <h3 id="active-controller">활성 컨트롤러가 하는 일</h3>
+      <p>
+        쓰기는 <strong>활성 컨트롤러(Raft 리더)</strong>만 합니다. 토픽 생성 요청이 오면
+        활성 컨트롤러가 메타데이터 레코드를 만들어 로그에 append하고, 과반이 복제하면
+        커밋된 것으로 처리합니다. 브로커들은 그 레코드를 받아 각자 행동합니다.
+      </p>
+      <p>
+        활성 컨트롤러가 죽으면 남은 컨트롤러들이 새 리더를 뽑습니다. 이때
+        <code>controller.quorum.fetch.timeout.ms</code>(기본 2000ms) 안에 리더로부터 fetch 응답을
+        받지 못한 팔로워가 선거를 시작하고, <code>controller.quorum.election.timeout.ms</code>
+        (기본 1000ms) 안에 결론이 나지 않으면 재시도합니다.
+        새 리더는 이미 같은 로그를 갖고 있으므로 <strong>즉시 일을 이어받습니다.</strong>
+      </p>
+
+      <h3 id="metadata-snapshot">메타데이터 스냅샷</h3>
+      <p>
+        메타데이터 로그는 계속 자랍니다. 그대로 두면 새 노드가 합류할 때마다
+        처음부터 전부 재생해야 하므로, Kafka는 주기적으로
+        <strong>스냅샷(snapshot)</strong>을 만들어 그 시점의 상태를 하나의 파일로 저장하고
+        그 앞의 로그를 잘라냅니다. 파일 이름은
+        <code>{끝오프셋}-{에폭}.checkpoint</code> 형태입니다.
+      </p>
+      <p>스냅샷 생성 기준은 두 가지입니다.</p>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>메타데이터 스냅샷 관련 설정</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">의미</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>metadata.log.max.record.bytes.between.snapshots</code></th>
+              <td>20971520 (20MiB)</td>
+              <td>이만큼의 레코드가 쌓이면 새 스냅샷을 만듭니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.log.max.snapshot.interval.ms</code></th>
+              <td>3600000 (1시간)</td>
+              <td>레코드가 적어도 이 시간이 지나면 스냅샷을 만듭니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.log.segment.bytes</code></th>
+              <td>1073741824 (1GiB)</td>
+              <td>메타데이터 로그의 세그먼트 롤링 크기</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.max.idle.interval.ms</code></th>
+              <td>500</td>
+              <td>변경이 없어도 이 주기로 하트비트 레코드를 append해 로그가 정지하지 않게 합니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="주의">
+        <p>
+          포맷 시점에 만들어지는 <code>00000000000000000000-0000000000.checkpoint</code>는
+          <strong>클러스터 메타데이터를 담고 있지 않습니다.</strong> 부트스트랩용 제어 레코드
+          (<code>KRaftVersionRecord</code>, <code>VotersRecord</code>)만 들어 있습니다.
+          <code>kafka-metadata-shell.sh</code>로 메타데이터를 들여다볼 때는
+          <strong>실제 스냅샷 파일</strong>을 지정해야 합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="node-roles">
+      <h2 id="node-roles">노드 롤 — <code>process.roles</code></h2>
+
+      <p>
+        서버 프로세스의 역할은 <code>process.roles</code>로 정합니다.
+        허용되는 값은 <code>broker</code>, <code>controller</code>, <code>broker,controller</code>이며,
+        마지막 조합을 공식 문서는 <strong>"combined" 서버</strong>라고 부릅니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-022">
+        <figcaption>
+          노드 롤 조합 3가지 — 전용 브로커, 전용 컨트롤러, combined(브로커+컨트롤러) 배치와
+          각 구성에서 클라이언트·컨트롤러 리스너가 어디에 열리는지
+        </figcaption>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>process.roles</code> 값별 특징</caption>
+          <thead>
+            <tr>
+              <th scope="col">값</th>
+              <th scope="col">역할</th>
+              <th scope="col">쿼럼 투표</th>
+              <th scope="col">권장 용도</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>broker</code></th>
+              <td>파티션 로그 저장, 클라이언트 요청 처리</td>
+              <td>없음 (observer)</td>
+              <td>프로덕션 데이터 노드</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller</code></th>
+              <td>메타데이터 관리, Raft 쿼럼 참여</td>
+              <td>참여 (voter)</td>
+              <td>프로덕션 컨트롤러 노드 3 또는 5대</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>broker,controller</code></th>
+              <td>둘 다</td>
+              <td>참여 (voter)</td>
+              <td><strong>개발·테스트 환경</strong>. 프로덕션 비권장</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="combined-mode">combined 모드는 언제 쓰는가</h3>
+      <p>
+        공식 문서는 combined 서버가 <strong>개발 환경처럼 작은 용도에서 운영이 더 단순</strong>하다고
+        인정하면서, 동시에 두 가지 단점을 분명히 지적합니다.
+      </p>
+      <ol>
+        <li><strong>컨트롤러가 나머지 시스템으로부터 격리되지 않습니다.</strong>
+          같은 JVM에서 데이터 트래픽을 처리하므로, 브로커 쪽 GC 정지나 디스크 포화가
+          컨트롤러의 Raft 하트비트에 그대로 영향을 줍니다.</li>
+        <li><strong>컨트롤러와 브로커를 따로 롤링·스케일할 수 없습니다.</strong>
+          브로커를 재시작하면 컨트롤러도 함께 내려갑니다.</li>
+      </ol>
+
+      <aside class="note note--danger" data-label="프로덕션 권장 사항">
+        <p>
+          공식 문서의 배포 고려사항 절은 명시적으로 적고 있습니다 —
+          <strong><code>process.roles</code>는 <code>broker</code> 또는 <code>controller</code>
+          중 하나로 설정하되 둘 다로 하지 말 것.</strong>
+          combined 모드는 개발 환경에서 쓸 수 있지만
+          <strong>중요한 배포 환경에서는 피해야</strong> 합니다.
+        </p>
+      </aside>
+
+      <h3 id="controller-count">컨트롤러 수는 3 또는 5</h3>
+      <p>
+        공식 문서는 컨트롤러 노드를 보통 <strong>3대 또는 5대</strong> 선택한다고 하고,
+        내성 공식을 이렇게 정리합니다.
+      </p>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>컨트롤러 수와 동시 장애 내성 — 공식 문서의 <code>2N+1</code> 공식</caption>
+          <thead>
+            <tr>
+              <th scope="col">컨트롤러 수</th>
+              <th scope="col">과반</th>
+              <th scope="col">견딜 수 있는 동시 장애</th>
+              <th scope="col">비고</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">1</th><td>1</td><td>0</td><td>단일 장애점. 개발용만</td></tr>
+            <tr><th scope="row">3</th><td>2</td><td><strong>1</strong></td><td>가장 흔한 프로덕션 구성</td></tr>
+            <tr><th scope="row">5</th><td>3</td><td><strong>2</strong></td><td>랙/AZ 2개 손실을 견뎌야 할 때</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        즉 <em>N</em>대의 동시 장애를 견디려면 컨트롤러가 <strong><code>2N+1</code>대</strong> 필요합니다.
+        짝수를 쓰는 이점은 없습니다 — 4대는 3대와 같은 1대 내성을 가지면서 비용만 늘어납니다.
+      </p>
+      <p>
+        용량 산정도 공식 문서에 있습니다. 컨트롤러는 모든 메타데이터를 메모리와 디스크에 보관하며,
+        전형적인 Kafka 클러스터라면 <strong>메인 메모리 5GB와 메타데이터 로그 디렉터리 디스크 5GB</strong>로
+        충분하다고 명시합니다.
+      </p>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Deployment Architecture">
+        <p>
+          컨트롤러 쿼럼은 <strong>과반 합의</strong>이므로 3대에서 2대가 죽으면
+          <strong>메타데이터 쓰기가 멈춥니다.</strong> 이때 기존 파티션의 읽기·쓰기는
+          브로커의 메타데이터 캐시로 잠시 유지될 수 있지만,
+          <strong>토픽 생성·리더 변경·ISR 변경 같은 메타데이터 변경은 전부 불가</strong>합니다.
+          "컨트롤러가 다 죽어도 브로커는 아무 문제 없다"는 선택지는 오답입니다.
+        </p>
+        <p>
+          그리고 컨트롤러 수는 <strong>브로커 수와 무관</strong>합니다.
+          브로커 30대 클러스터도 컨트롤러는 3대면 됩니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="bootstrap-cluster">
+      <h2 id="bootstrap-cluster">클러스터 부트스트랩 — <code>kafka-storage.sh</code></h2>
+
+      <p>
+        KRaft에서는 <strong>저장 디렉터리를 사람이 명시적으로 포맷</strong>해야 합니다.
+        공식 문서는 이 변경의 이유를 밝히고 있습니다 — 자동 포맷은 오류 상황을 가려버리기 때문입니다.
+        특히 메타데이터 로그가 중요합니다. <strong>컨트롤러 과반이 빈 로그 디렉터리로 기동할 수 있다면,
+        커밋된 데이터가 빠진 상태로 리더가 선출될 수 있습니다.</strong>
+      </p>
+
+      <h3 id="single-node-bootstrap">1단계 — 클러스터 ID 생성</h3>
+      <figure class="code">
+        <figcaption>클러스터 UUID 생성 (클러스터 전체에서 한 번만)</figcaption>
+        <pre><code class="lang-bash">$ KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"
+$ echo $KAFKA_CLUSTER_ID</code></pre>
+      </figure>
+      <p>
+        이 ID는 <strong>클러스터에 속한 모든 노드를 포맷할 때 같은 값</strong>을 써야 합니다.
+        노드마다 다른 ID로 포맷하면 그 노드는 클러스터에 합류하지 못합니다.
+      </p>
+
+      <h3 id="standalone-format">2단계 — 첫 컨트롤러를 standalone으로 포맷</h3>
+      <p>
+        공식 문서가 권장하는 방법은 <strong>voter 한 대로 부트스트랩한 뒤
+        나머지 컨트롤러를 동적으로 추가</strong>하는 것입니다.
+      </p>
+      <figure class="code">
+        <figcaption>첫 컨트롤러 부트스트랩</figcaption>
+        <pre><code class="lang-bash">$ bin/kafka-storage.sh format \
+    --cluster-id $KAFKA_CLUSTER_ID \
+    --standalone \
+    --config config/controller.properties</code></pre>
+      </figure>
+      <p>공식 문서가 설명하는 이 명령의 결과는 두 가지입니다.</p>
+      <ol>
+        <li><code>metadata.log.dir</code>에 <code>meta.properties</code>를 만들고
+          무작위 <code>directory.id</code>를 부여합니다.</li>
+        <li><code>00000000000000000000-0000000000.checkpoint</code> 스냅샷을 만들어
+          이 노드를 쿼럼의 유일한 voter로 지정하는 제어 레코드
+          (<code>KRaftVersionRecord</code>, <code>VotersRecord</code>)를 기록합니다.</li>
+      </ol>
+
+      <h3 id="multi-controller-format">대안 — 여러 컨트롤러를 한 번에 부트스트랩</h3>
+      <p>
+        <code>--initial-controllers</code>를 쓰면 처음부터 여러 voter로 시작할 수 있습니다.
+        이때 <strong>모든 컨트롤러에서 같은 값</strong>을 써야 합니다.
+      </p>
+      <figure class="code">
+        <figcaption>컨트롤러 3대를 동시에 부트스트랩</figcaption>
+        <pre><code class="lang-bash">CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"
+CONTROLLER_0_UUID="$(bin/kafka-storage.sh random-uuid)"
+CONTROLLER_1_UUID="$(bin/kafka-storage.sh random-uuid)"
+CONTROLLER_2_UUID="$(bin/kafka-storage.sh random-uuid)"
+
+# 각 컨트롤러에서 실행 — --initial-controllers 값은 세 노드 모두 동일해야 합니다
+bin/kafka-storage.sh format --cluster-id ${CLUSTER_ID} \
+    --initial-controllers "0@controller-0:1234:${CONTROLLER_0_UUID},1@controller-1:1234:${CONTROLLER_1_UUID},2@controller-2:1234:${CONTROLLER_2_UUID}" \
+    --config config/controller.properties</code></pre>
+      </figure>
+      <p>
+        <code>0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA</code> 형식에서
+        <code>0</code>은 replica id, <code>controller-0</code>은 호스트,
+        <code>1234</code>는 포트, 마지막 값은 replica directory id입니다.
+      </p>
+
+      <h3 id="format-brokers">3단계 — 브로커와 추가 컨트롤러 포맷</h3>
+      <p>
+        이미 존재하는 클러스터에 붙일 노드는 <code>--no-initial-controllers</code>로 포맷합니다.
+      </p>
+      <figure class="code">
+        <figcaption>기존 클러스터에 합류할 브로커 포맷</figcaption>
+        <pre><code class="lang-bash">$ bin/kafka-storage.sh format \
+    --cluster-id $KAFKA_CLUSTER_ID \
+    --config config/server.properties \
+    --no-initial-controllers</code></pre>
+      </figure>
+
+      <h3 id="start-nodes">4단계 — 기동</h3>
+      <figure class="code">
+        <figcaption>컨트롤러와 브로커 기동 — 같은 스크립트를 씁니다</figcaption>
+        <pre><code class="lang-bash">$ bin/kafka-server-start.sh config/controller.properties   # 컨트롤러 노드
+$ bin/kafka-server-start.sh config/server.properties       # 브로커 노드</code></pre>
+      </figure>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          4.0부터 <strong>KRaft용 기본 설정 파일이 별도 디렉터리에 있지 않습니다.</strong>
+          3.x에서 <code>config/kraft/</code> 아래에 있던 파일들이
+          <strong>모두 <code>config/</code>로 통합</strong>되었습니다.
+          3.x 문서를 따라 <code>config/kraft/server.properties</code>를 찾으면 없습니다.
+        </p>
+      </aside>
+
+      <h3 id="minimal-configs">최소 설정 예시</h3>
+      <figure class="code">
+        <figcaption>config/controller.properties — 전용 컨트롤러 3대 중 1번</figcaption>
+        <pre><code class="lang-properties">process.roles=controller
+node.id=1
+
+# 컨트롤러는 컨트롤러 리스너만 엽니다 (클라이언트 리스너 없음)
+listeners=CONTROLLER://controller1.example.com:9093
+controller.listener.names=CONTROLLER
+
+# 쿼럼 위치. 모든 브로커와 컨트롤러가 이 값을 가져야 합니다
+controller.quorum.bootstrap.servers=controller1.example.com:9093,controller2.example.com:9093,controller3.example.com:9093
+
+log.dirs=/var/lib/kafka/metadata</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>config/server.properties — 전용 브로커</figcaption>
+        <pre><code class="lang-properties">process.roles=broker
+node.id=101
+
+listeners=INTERNAL://:9092,EXTERNAL://:9094
+advertised.listeners=INTERNAL://broker1.internal:9092,EXTERNAL://kafka.example.com:9094
+listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:SASL_SSL,CONTROLLER:PLAINTEXT
+inter.broker.listener.name=INTERNAL
+
+# 브로커도 컨트롤러 리스너 이름과 쿼럼 위치를 알아야 합니다
+controller.listener.names=CONTROLLER
+controller.quorum.bootstrap.servers=controller1.example.com:9093,controller2.example.com:9093,controller3.example.com:9093
+
+log.dirs=/var/lib/kafka/data
+num.partitions=6
+default.replication.factor=3
+min.insync.replicas=2</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="흔한 기동 실패">
+        <p>
+          <code>node.id</code>는 <strong>클러스터 전체에서 유일</strong>해야 하고
+          기본값이 없습니다. 지정하지 않으면 기동이 실패합니다.
+          <code>controller.listener.names</code>도 기본값이 없으며,
+          <strong>브로커에도 반드시 설정</strong>해야 합니다 — 브로커가 컨트롤러에 연결할 때
+          어떤 리스너 이름을 쓸지 알아야 하기 때문입니다.
+          그리고 <strong>브로커의 <code>listeners</code>에 컨트롤러 리스너를 넣지 마세요.</strong>
+          전용 브로커는 컨트롤러 리스너를 열지 않고 <em>연결만</em> 합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="quorum-config">
+      <h2 id="quorum-config">정적 쿼럼과 동적 쿼럼 — <code>voters</code> vs <code>bootstrap.servers</code></h2>
+
+      <p>
+        공식 문서는 KRaft를 운영하는 두 가지 방식을 구분합니다 —
+        <strong>KIP-853 동적 컨트롤러 쿼럼</strong>과 <strong>기존의 정적 쿼럼</strong>입니다.
+        이 구분이 설정 두 개로 드러납니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>정적 쿼럼과 동적 쿼럼 비교</caption>
+          <thead>
+            <tr>
+              <th scope="col">구분</th>
+              <th scope="col">정적 쿼럼</th>
+              <th scope="col">동적 쿼럼 (KIP-853)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">사용하는 설정</th>
+              <td><code>controller.quorum.voters</code></td>
+              <td><code>controller.quorum.bootstrap.servers</code></td>
+            </tr>
+            <tr>
+              <th scope="row">값의 형식</th>
+              <td><code>{id}@{host}:{port}</code> 목록 — <strong>모든 컨트롤러의 id·호스트·포트를 전부</strong></td>
+              <td><code>{host}:{port}</code> 목록 — 클라이언트의 <code>bootstrap.servers</code>와 같은 성격</td>
+            </tr>
+            <tr>
+              <th scope="row">전부 나열해야 하는가</th>
+              <td class="mark-no">예. 브로커·컨트롤러 모든 설정 파일에 동일하게</td>
+              <td class="mark-ok">아니오. 다만 가능한 많이 적는 편이 좋습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">컨트롤러 추가·제거</th>
+              <td class="mark-no">불가 — 전체 재구성·재시작 필요</td>
+              <td class="mark-ok">가능 — <code>kafka-metadata-quorum.sh add-controller</code> / <code>remove-controller</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kraft.version</code></th>
+              <td>0 또는 없음</td>
+              <td>1 이상</td>
+            </tr>
+            <tr>
+              <th scope="row">결정 시점</th>
+              <td colspan="2"><strong>포맷 시점에 결정됩니다.</strong> <code>controller.quorum.voters</code>가 없고 <code>--standalone</code> · <code>--initial-controllers</code> · <code>--no-initial-controllers</code> 중 하나를 쓰면 동적 쿼럼이 됩니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          공식 문서는 동적 컨트롤러 클러스터가
+          <strong><code>kraft.version=1</code>(release-version 4.1)에서 추가</strong>되었고,
+          <strong>Kafka 4.1이 정적 구성에서 동적 구성으로의 업그레이드를 지원</strong>한다고 기술합니다.
+          그와 함께 <strong><code>controller.quorum.voters</code>는 deprecated</strong>되었습니다.
+          새 클러스터는 <code>controller.quorum.bootstrap.servers</code>를 쓰세요.
+          정적 → 동적 전환은 <code>kafka-features.sh</code>로 feature 버전을 올린 뒤
+          설정을 교체하는 순서로 진행합니다.
+        </p>
+      </aside>
+
+      <h3 id="check-quorum-version">지금 어느 쪽인지 확인하는 방법</h3>
+      <figure class="code">
+        <figcaption>feature 버전으로 정적/동적 판별</figcaption>
+        <pre><code class="lang-bash">$ bin/kafka-features.sh --bootstrap-controller localhost:9093 describe
+Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0        Epoch: 7
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 4.0-IV3    FinalizedVersionLevel: 4.0-IV3  Epoch: 7</code></pre>
+      </figure>
+      <p>
+        <code>kraft.version</code>의 <code>FinalizedVersionLevel</code>이
+        <strong>0이거나 항목이 없으면 정적 쿼럼</strong>,
+        <strong>1 이상이면 동적 쿼럼</strong>입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>feature 버전 올리기</figcaption>
+        <pre><code class="lang-bash"># 전체 feature를 특정 릴리스 수준으로
+$ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.1
+
+# kraft.version 만 올리기
+$ bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature kraft.version=1</code></pre>
+      </figure>
+
+      <h3 id="add-remove-controller">컨트롤러 추가와 제거 (동적 쿼럼)</h3>
+      <p>
+        추가는 <strong>새 컨트롤러를 포맷·기동한 뒤 복제가 따라잡은 것을 확인하고</strong>
+        쿼럼에 넣는 순서입니다. 제거는 <strong>반드시 프로세스를 내리기 전에</strong>
+        쿼럼에서 빼야 합니다.
+      </p>
+      <figure class="code">
+        <figcaption>컨트롤러 추가·제거</figcaption>
+        <pre><code class="lang-bash"># 복제 진행 확인
+$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --replication
+
+# 추가 (브로커 엔드포인트를 쓰는 경우)
+$ bin/kafka-metadata-quorum.sh --command-config config/controller.properties \
+    --bootstrap-server localhost:9092 add-controller
+
+# 제거 — 프로세스를 내리기 전에 먼저 실행하세요
+$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 \
+    remove-controller --controller-id 3 --controller-directory-id ILZ5MPTeRWakmJu99uBJCA</code></pre>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Cluster Configuration">
+        <p>
+          <code>controller.quorum.voters</code>와
+          <code>controller.quorum.bootstrap.servers</code>의 차이는
+          <strong>값 형식에 replica id가 있는지</strong>로 구분하는 것이 가장 빠릅니다.
+        </p>
+        <ul>
+          <li><code>controller.quorum.voters=1@host1:9093,2@host2:9093,3@host3:9093</code> — 정적</li>
+          <li><code>controller.quorum.bootstrap.servers=host1:9093,host2:9093,host3:9093</code> — 동적</li>
+        </ul>
+        <p>
+          그리고 <strong>두 설정을 동시에 쓰지 않습니다.</strong>
+          동적 쿼럼을 쓸 때 <code>controller.quorum.voters</code>는
+          <strong>설정되어 있으면 안 됩니다.</strong>
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="operating-kraft">
+      <h2 id="operating-kraft">KRaft 클러스터를 들여다보는 도구</h2>
+
+      <h3 id="metadata-quorum-tool"><code>kafka-metadata-quorum.sh</code> — 쿼럼 상태</h3>
+      <figure class="code">
+        <figcaption>쿼럼 요약 조회</figcaption>
+        <pre><code class="lang-bash">$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --status
+ClusterId:              fMCL8kv1SWm87L_Md-I2hg
+LeaderId:               3002
+LeaderEpoch:            2
+HighWatermark:          10
+MaxFollowerLag:         0
+MaxFollowerLagTimeMs:   -1
+CurrentVoters:          [{"id": 3000, "directoryId": "ILZ5MPTeRWakmJu99uBJCA", "endpoints": ["CONTROLLER://localhost:9093"]},
+                         {"id": 3001, "directoryId": "b-DwmhtOheTqZzPoh52kfA", "endpoints": ["CONTROLLER://localhost:9094"]},
+                         {"id": 3002, "directoryId": "g42deArWBTRM5A1yuVpMCg", "endpoints": ["CONTROLLER://localhost:9095"]}]
+CurrentObservers:       [{"id": 0, "directoryId": "3Db5QLSqSZieL3rJBUUegA"},
+                         {"id": 1, "directoryId": "UegA3Db5QLSqSZieL3rJBU"},
+                         {"id": 2, "directoryId": "L3rJBUUegA3Db5QLSqSZie"}]</code></pre>
+      </figure>
+      <p>
+        <code>CurrentVoters</code>가 컨트롤러, <code>CurrentObservers</code>가 브로커입니다.
+        <code>MaxFollowerLag</code>가 계속 커지면 컨트롤러 한 대가 뒤처지고 있다는 뜻이므로
+        디스크·네트워크를 확인해야 합니다.
+      </p>
+
+      <h3 id="dump-log-tool"><code>kafka-dump-log.sh</code> — 메타데이터 레코드 해독</h3>
+      <figure class="code">
+        <figcaption>메타데이터 로그와 스냅샷 디코딩</figcaption>
+        <pre><code class="lang-bash"># 로그 세그먼트
+$ bin/kafka-dump-log.sh --cluster-metadata-decoder \
+    --files metadata_log_dir/__cluster_metadata-0/00000000000000000000.log
+
+# 스냅샷
+$ bin/kafka-dump-log.sh --cluster-metadata-decoder \
+    --files metadata_log_dir/__cluster_metadata-0/00000000000000000100-0000000001.checkpoint</code></pre>
+      </figure>
+
+      <h3 id="metadata-shell-tool"><code>kafka-metadata-shell.sh</code> — 대화형 탐색</h3>
+      <figure class="code">
+        <figcaption>스냅샷을 파일시스템처럼 탐색</figcaption>
+        <pre><code class="lang-bash">$ bin/kafka-metadata-shell.sh --snapshot metadata_log_dir/__cluster_metadata-0/00000000000000007228-0000000001.checkpoint
+&gt;&gt; ls /
+brokers  local  metadataQuorum  topicIds  topics
+&gt;&gt; ls /topics
+foo
+&gt;&gt; cat /topics/foo/0/data
+{
+  "partitionId" : 0,
+  "topicId" : "5zoAlv-xEh9xRANKXt1Lbg",
+  "replicas" : [ 1 ],
+  "isr" : [ 1 ],
+  "removingReplicas" : null,
+  "addingReplicas" : null,
+  "leader" : 1,
+  "leaderEpoch" : 0,
+  "partitionEpoch" : 0
+}
+&gt;&gt; exit</code></pre>
+      </figure>
+
+      <h3 id="controller-logging">컨트롤러 로그 레벨 변경</h3>
+      <p>
+        동적 로그 레벨 변경은 KRaft에서도 그대로 동작합니다. 다만
+        <strong>컨트롤러를 대상으로 할 때는 <code>--bootstrap-controller</code></strong>를 써야 합니다.
+      </p>
+      <figure class="code">
+        <figcaption>브로커와 컨트롤러의 로그 레벨 변경 — 플래그가 다릅니다</figcaption>
+        <pre><code class="lang-bash"># 브로커
+$ bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+    --entity-type broker-loggers --entity-name 1 \
+    --alter --add-config org.apache.kafka.raft.KafkaNetworkChannel=TRACE
+
+# 컨트롤러 — --bootstrap-controller 를 씁니다
+$ bin/kafka-configs.sh --bootstrap-controller localhost:9093 \
+    --entity-type broker-loggers --entity-name 3000 \
+    --alter --add-config org.apache.kafka.raft.KafkaNetworkChannel=TRACE</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="migration">
+      <h2 id="migration">3.x에서 오는 경우 — 마이그레이션 개요</h2>
+
+      <p>
+        4.x는 <strong>KRaft 클러스터만 업그레이드 대상으로 받습니다.</strong>
+        4.3 업그레이드 문서는 소프트웨어와 메타데이터 버전이
+        <strong>최소 3.3.x</strong>여야 한다고 명시합니다.
+        이전 메타데이터 저장소를 쓰던 클러스터는 <strong>4.x로 올리기 전에</strong>
+        마이그레이션을 끝내야 합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>업그레이드 경로 요약</caption>
+          <thead>
+            <tr><th scope="col">현재 버전</th><th scope="col">경로</th><th scope="col">핵심 제약</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">2.x</th>
+              <td>2.x → 3.9 → (마이그레이션) → 4.x</td>
+              <td>3.9가 <strong>마지막 브리지 릴리스</strong>입니다. 반드시 경유해야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">3.0 ~ 3.8 (구 메타데이터 저장소)</th>
+              <td>3.9로 업그레이드 → 마이그레이션 → 4.x</td>
+              <td>마이그레이션 절차는 <strong>3.9 문서</strong>에만 존재합니다. 4.x 문서에는 없습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">3.3 ~ 3.9 (이미 KRaft)</th>
+              <td>바로 4.x로 롤링 업그레이드</td>
+              <td>소프트웨어·<code>metadata.version</code> 모두 3.3 이상이어야 합니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="반드시 알아야 할 순서">
+        <p>
+          공식 문서는 마이그레이션에 <strong>브리지 릴리스</strong>가 필요하고
+          <strong>마지막 브리지 릴리스는 Kafka 3.9</strong>라고 명시하며,
+          구체적 절차는 3.9 문서의 해당 절을 참조하라고 안내합니다.
+          <strong>4.x로 먼저 올린 뒤 마이그레이션하는 경로는 없습니다.</strong>
+          순서를 뒤집으면 클러스터가 기동하지 않습니다.
+        </p>
+      </aside>
+
+      <h3 id="removed-configs">4.x에서 사라진 설정</h3>
+      <p>
+        3.x 설정 파일을 그대로 가져오면 브로커가 알 수 없는 설정으로 기동을 거부합니다.
+        공식 문서가 열거하는 제거 항목 중 실무에서 자주 걸리는 것들입니다.
+      </p>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>4.x에서 제거된 주요 설정과 대체 수단</caption>
+          <thead>
+            <tr><th scope="col">제거된 설정</th><th scope="col">무엇을 하던 설정인가</th><th scope="col">지금은</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>zookeeper.connect</code> 및 <code>zookeeper.*</code> 전체</th>
+              <td>외부 메타데이터 저장소 접속 정보와 TLS 설정</td>
+              <td><code>controller.quorum.bootstrap.servers</code> + <code>controller.listener.names</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>inter.broker.protocol.version</code></th>
+              <td>브로커 간 프로토콜 버전 고정</td>
+              <td><code>metadata.version</code> feature로 관리 — <code>kafka-features.sh</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>control.plane.listener.name</code></th>
+              <td>컨트롤러·브로커 통신용 내부 컨트롤 플레인</td>
+              <td><code>controller.listener.names</code> + <code>listeners</code> + <code>listener.security.protocol.map</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>broker.id.generation.enable</code>, <code>reserved.broker.max.id</code></th>
+              <td>브로커 ID 자동 생성</td>
+              <td><code>node.id</code>를 명시합니다 (자동 생성 없음)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>leader.imbalance.per.broker.percentage</code></th>
+              <td>preferred 리더 선출 빈도 제한</td>
+              <td>제거됨. <code>auto.leader.rebalance.enable</code>과 <code>leader.imbalance.check.interval.seconds</code>만 사용</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controlled.shutdown.max.retries</code>, <code>controlled.shutdown.retry.backoff.ms</code></th>
+              <td>정상 종료 재시도 제어</td>
+              <td>제거됨. 종료 절차를 쿼럼 컨트롤러가 관리합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>password.encoder.*</code></th>
+              <td>동적 설정의 민감 값 암호화 키</td>
+              <td>제거됨. 민감 값은 레코드에 저장되며 Kafka가 암호화하지 않습니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="보안 주의">
+        <p>
+          공식 문서는 KRaft에서 <strong>민감 데이터가 레코드에 저장되며 Kafka가 그것을
+          암호화하지 않는다</strong>고 명시합니다. 동적 설정으로 넣은 비밀번호는
+          메타데이터 로그와 스냅샷 파일에 남습니다. 메타데이터 로그 디렉터리의
+          파일시스템 권한과 디스크 암호화를 별도로 확보하세요.
+          <code>advertised.listeners</code>는 <strong>더 이상 동적으로 변경할 수 없고</strong>
+          재시작이 필요합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="configs">
+      <h2 id="configs">이 장에서 나온 설정</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>KRaft 관련 설정 — Apache Kafka 4.3 공식 문서 기준 기본값</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">기본값</th>
+              <th scope="col">설명</th>
+              <th scope="col">튜닝 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>process.roles</code></th>
+              <td>(빈 값)</td>
+              <td>허용 값 <code>broker</code> · <code>controller</code></td>
+              <td>프로덕션에서는 하나만. combined는 개발용</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>node.id</code></th>
+              <td>(없음, 필수)</td>
+              <td>클러스터 안에서 이 노드를 식별하는 정수 (0 이상)</td>
+              <td>중복되면 클러스터가 깨집니다. 브로커·컨트롤러가 같은 번호 공간을 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.listener.names</code></th>
+              <td>(없음, KRaft 필수)</td>
+              <td>컨트롤러 통신에 쓰는 리스너 이름 목록</td>
+              <td><strong>브로커에도 설정</strong>해야 합니다. 브로커의 <code>listeners</code>에는 넣지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.bootstrap.servers</code></th>
+              <td>""</td>
+              <td>컨트롤러 쿼럼을 찾기 위한 <code>host:port</code> 목록 (동적 쿼럼)</td>
+              <td>모든 브로커·컨트롤러에 설정. 가능한 많은 컨트롤러를 적으세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.voters</code></th>
+              <td>""</td>
+              <td><code>{id}@{host}:{port}</code> 목록 (정적 쿼럼). <strong>4.1에서 deprecated</strong></td>
+              <td>동적 쿼럼을 쓸 때는 <strong>설정하지 않아야</strong> 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.fetch.timeout.ms</code></th>
+              <td>2000</td>
+              <td>이 시간 안에 리더로부터 fetch를 못 받으면 새 선거를 시작</td>
+              <td>네트워크가 불안정한 환경에서 선거가 잦으면 올립니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.election.timeout.ms</code></th>
+              <td>1000</td>
+              <td>선거가 결론나기를 기다리는 시간</td>
+              <td>초과 시 새 선거를 시작합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.append.linger.ms</code></th>
+              <td>25</td>
+              <td>리더가 쓰기를 모아서 복제하기까지 대기하는 시간</td>
+              <td>메타데이터 쓰기 처리량과 지연의 트레이드오프</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.request.timeout.ms</code></th>
+              <td>30000</td>
+              <td>쿼럼 내부 요청 타임아웃</td>
+              <td>일반적으로 기본값을 유지합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.auto.join.enable</code></th>
+              <td>false</td>
+              <td>컨트롤러가 voter 집합에 <strong>스스로 합류</strong>할지 여부 (KIP-853)</td>
+              <td><code>true</code>로 두면 voter에서 제거하기 전에 <strong>반드시 프로세스를 먼저 내려야</strong> 합니다 — 그러지 않으면 제거된 컨트롤러가 다시 자동 합류합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.log.dir</code></th>
+              <td>null</td>
+              <td>메타데이터 로그를 둘 디렉터리</td>
+              <td>null이면 <code>log.dirs</code>의 첫 번째를 씁니다. <strong>데이터와 다른 디스크로 분리</strong>하는 것이 안전합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.log.segment.bytes</code></th>
+              <td>1073741824</td>
+              <td>메타데이터 로그의 세그먼트 크기</td>
+              <td>보통 기본값을 유지합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.log.max.record.bytes.between.snapshots</code></th>
+              <td>20971520</td>
+              <td>스냅샷 생성 기준 (누적 레코드 크기)</td>
+              <td>메타데이터 변경이 많으면 스냅샷이 자주 생깁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.log.max.snapshot.interval.ms</code></th>
+              <td>3600000</td>
+              <td>스냅샷 생성 기준 (시간)</td>
+              <td>0으로 두면 시간 기준 생성을 끕니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.max.idle.interval.ms</code></th>
+              <td>500</td>
+              <td>변경이 없을 때 하트비트 레코드를 append하는 주기</td>
+              <td>0이면 비활성화됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>broker.heartbeat.interval.ms</code></th>
+              <td>2000</td>
+              <td>브로커가 컨트롤러에 하트비트를 보내는 주기</td>
+              <td><code>broker.session.timeout.ms</code>와 함께 조정합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>broker.session.timeout.ms</code></th>
+              <td>9000</td>
+              <td>컨트롤러가 브로커를 죽었다고 판정하는 시간</td>
+              <td>짧으면 GC 정지에 브로커가 fenced됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>initial.broker.registration.timeout.ms</code></th>
+              <td>60000</td>
+              <td>기동 시 컨트롤러에 등록을 기다리는 시간</td>
+              <td>초과하면 기동이 실패합니다. 쿼럼 주소·리스너 설정 오류의 대표 증상입니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">흔한 오해</h2>
+
+      <aside class="note note--warn" data-label="오해 1">
+        <p>
+          <strong>"컨트롤러를 늘리면 클러스터가 빨라진다"</strong> —
+          반대입니다. 컨트롤러 쿼럼은 <strong>과반 합의</strong>이므로
+          컨트롤러가 많아질수록 <strong>메타데이터 쓰기 한 건에 필요한 복제 대상이 늘어납니다.</strong>
+          컨트롤러 수를 늘리는 목적은 <strong>장애 내성</strong>이지 처리량이 아닙니다.
+          그래서 5대를 넘길 이유가 거의 없고, 공식 문서도 3 또는 5를 제시합니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="오해 2">
+        <p>
+          <strong>"combined 모드는 노드가 적을 때만 다르고 기능은 같다"</strong> —
+          기능은 같지만 <strong>운영 특성이 다릅니다.</strong>
+          공식 문서가 지적하는 대로 combined 모드에서는
+          <strong>컨트롤러와 브로커를 따로 롤링·스케일할 수 없습니다.</strong>
+          브로커 설정 하나를 바꾸려고 재시작하면 컨트롤러도 함께 내려갑니다.
+          3노드 combined 클러스터에서 두 대를 동시에 재시작하면
+          쿼럼 과반이 깨져 메타데이터 쓰기가 멈춥니다.
+          "노드가 적으니 두 대씩 묶어 빨리 돌리자"는 판단이 장애를 만듭니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="오해 3">
+        <p>
+          <strong>"클러스터 ID는 노드마다 새로 만들면 된다"</strong> —
+          아닙니다. <code>kafka-storage.sh random-uuid</code>는
+          <strong>클러스터 전체에서 한 번만</strong> 실행하고,
+          그 값을 <strong>모든 노드의 <code>format</code>에 같이</strong> 넣어야 합니다.
+          노드마다 새 ID로 포맷하면 그 노드는 다른 클러스터로 인식되어 합류하지 못합니다.
+          반대로 <code>--initial-controllers</code>에 들어가는
+          <strong>replica directory id는 노드마다 달라야</strong> 합니다.
+          "클러스터 ID는 공유, directory id는 고유"로 기억하세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트 정리</h2>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Deployment Architecture">
+        <div class="table-scroll">
+          <table class="config-table">
+            <caption>3장 핵심 암기 항목</caption>
+            <thead>
+              <tr><th scope="col">항목</th><th scope="col">값 · 사실</th><th scope="col">함정</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>process.roles</code> 허용 값</th>
+                <td><code>broker</code> / <code>controller</code> / <code>broker,controller</code></td>
+                <td>프로덕션에서 combined를 권장한다고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">권장 컨트롤러 수</th>
+                <td>3 또는 5</td>
+                <td>브로커 수에 비례한다고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">장애 내성 공식</th>
+                <td><em>N</em>대 동시 장애 → <code>2N+1</code>대 필요</td>
+                <td>4대가 5대와 같다고 오답 (4대는 3대와 동등)</td>
+              </tr>
+              <tr>
+                <th scope="row">메타데이터 저장 위치</th>
+                <td><code>__cluster_metadata</code> 단일 파티션</td>
+                <td>여러 파티션이라고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">메타데이터 커밋 방식</th>
+                <td>Raft <strong>과반</strong> 합의</td>
+                <td>일반 토픽처럼 ISR 전원이라고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">브로커의 쿼럼 참여</th>
+                <td>observer — 투표하지 않음</td>
+                <td>브로커도 voter라고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">클러스터 ID 생성</th>
+                <td><code>kafka-storage.sh random-uuid</code> — 클러스터당 1회</td>
+                <td>노드마다 생성한다고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">디렉터리 포맷</th>
+                <td><code>kafka-storage.sh format</code> — <strong>필수 수동 단계</strong></td>
+                <td>자동 포맷된다고 오답 (이전 아키텍처의 동작)</td>
+              </tr>
+              <tr>
+                <th scope="row">정적 vs 동적 쿼럼</th>
+                <td><code>controller.quorum.voters</code> vs <code>controller.quorum.bootstrap.servers</code></td>
+                <td>둘을 함께 설정한다고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">마지막 브리지 릴리스</th>
+                <td>Kafka <strong>3.9</strong></td>
+                <td>3.6 또는 4.0이라고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">4.3 업그레이드 최소 요건</th>
+                <td>소프트웨어·메타데이터 버전 <strong>3.3.x 이상</strong>, KRaft</td>
+                <td>어느 버전에서든 바로 올릴 수 있다고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">컨트롤러 리소스 권장</th>
+                <td>메모리 5GB · 메타데이터 디스크 5GB</td>
+                <td>브로커와 같은 사양이 필요하다고 오답</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Troubleshooting">
+        <p>
+          KRaft 클러스터가 기동하지 않을 때 확인 순서입니다.
+        </p>
+        <ol>
+          <li><code>node.id</code>가 설정되어 있고 중복되지 않는가.</li>
+          <li><code>controller.listener.names</code>가 <strong>브로커에도</strong> 설정되어 있는가.</li>
+          <li><code>controller.quorum.bootstrap.servers</code>(또는 <code>voters</code>)의
+            호스트·포트가 실제 컨트롤러의 <code>listeners</code>와 일치하는가.</li>
+          <li>포맷에 쓴 <code>--cluster-id</code>가 모든 노드에서 같은가.
+            <code>meta.properties</code>로 확인할 수 있습니다.</li>
+          <li><code>initial.broker.registration.timeout.ms</code>(기본 60000ms) 초과로
+            죽었다면 쿼럼에 도달하지 못한 것입니다 — 방화벽·리스너를 봅니다.</li>
+        </ol>
+        <p>
+          진단 명령은 <code>kafka-metadata-quorum.sh describe --status</code>가 1순위입니다.
+          결정 트리는 <a href="../cheatsheet/troubleshooting.html">트러블슈팅 치트시트</a>에 있습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>
+          CCDAK(개발자 시험)에서 KRaft는 깊게 나오지 않습니다.
+          다만 다음 두 가지는 애플리케이션 개발자도 알아야 합니다.
+        </p>
+        <ul>
+          <li>클라이언트는 <strong>컨트롤러가 아니라 브로커</strong>에 붙습니다.
+            <code>bootstrap.servers</code>에 컨트롤러 포트(9093)를 적는 것은 오설정입니다.</li>
+          <li>Admin 도구 중 일부는 <code>--bootstrap-controller</code>를 쓰지만,
+            애플리케이션 코드의 <code>AdminClient</code>는 브로커를 대상으로 합니다.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="check-quiz">
+      <h2 id="check-quiz">확인 문제</h2>
+      <p>단일 선택 · 복수 선택 · 연결형 · 순서 배열이 섞여 있습니다.</p>
+      <div class="quiz-embed" data-set="basics-ch03" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="ch04.html">
+          <span class="card__title">4장 · Producer 심화</span>
+          <span class="card__desc">전송 파이프라인, 배치, <code>acks</code>, 멱등성, 순서 보장, 에러 처리.</span>
+          <span class="card__meta">CCDAK 최우선</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/cli.html">
+          <span class="card__title">CLI 치트시트</span>
+          <span class="card__desc"><code>kafka-storage</code>, <code>kafka-metadata-quorum</code>, <code>kafka-features</code> 등 목적별 명령 표.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../ccaak/index.html">
+          <span class="card__title">CCAAK 개요</span>
+          <span class="card__desc">운영자 시험의 도메인 구성과 챕터 매핑, 실습 필수 항목.</span>
+          <span class="card__meta">자격증</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex01.html">
+          <span class="card__title">예제 1 · 로컬 KRaft 클러스터</span>
+          <span class="card__desc">docker compose로 3노드 KRaft 클러스터를 직접 띄워 봅니다.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="appendix-legacy.html">
+          <span class="card__title">부록 · 버전 표기와 레거시</span>
+          <span class="card__desc">2.x/3.x 운영 배경, 버전 타임라인, 업그레이드 경로 상세.</span>
+          <span class="card__meta">실무</span>
+        </a></li>
+        <li><a class="card" href="ch11.html">
+          <span class="card__title">11장 · 운영 기초</span>
+          <span class="card__desc">보안 4계층, 필수 메트릭, 성능 튜닝, Share Groups.</span>
+          <span class="card__meta">CCAAK 중심</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>이 장의 명령어·설정 기본값·권장 사항은 모두 아래에서 확인했습니다 (Apache Kafka 4.3 문서 기준).</p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#kraft" rel="noopener noreferrer">KRaft</a> — <code>process.roles</code> 값, combined 서버의 단점, 컨트롤러 3/5 권장과 과반 요건, 배포 고려사항, 컨트롤러 메모리·디스크 5GB</li>
+        <li><a href="https://kafka.apache.org/documentation/#kraft_storage" rel="noopener noreferrer">KRaft — Provisioning Nodes</a> — <code>kafka-storage.sh random-uuid</code> / <code>format --standalone</code> / <code>--initial-controllers</code> / <code>--no-initial-controllers</code>, 자동 포맷을 없앤 이유</li>
+        <li><a href="https://kafka.apache.org/documentation/#kraft_reconfig" rel="noopener noreferrer">KRaft — Controller membership changes</a> — 정적/동적 쿼럼 구분, <code>kafka-metadata-quorum.sh add-controller</code> / <code>remove-controller</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#kraft_upgrade" rel="noopener noreferrer">KRaft — Upgrade</a> — <code>kraft.version=1</code>, <code>controller.quorum.voters</code> deprecated, <code>kafka-features.sh</code> 사용법</li>
+        <li><a href="https://kafka.apache.org/documentation/#kraft_debugging" rel="noopener noreferrer">KRaft — Debugging</a> — <code>kafka-metadata-quorum.sh describe --status</code>, <code>kafka-dump-log.sh --cluster-metadata-decoder</code>, <code>kafka-metadata-shell.sh</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#zk2kraft" rel="noopener noreferrer">Differences Between KRaft mode and ZooKeeper mode</a> — 제거된 설정 목록, 컨트롤 플레인 리스너 대체, 민감 데이터 미암호화, <code>advertised.listeners</code> 동적 변경 불가, 컨트롤러 로그 레벨 변경 시 <code>--bootstrap-controller</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> — <code>node.id</code>, <code>controller.listener.names</code>, <code>controller.quorum.*</code>, <code>metadata.log.*</code>, <code>broker.heartbeat.interval.ms</code>, <code>broker.session.timeout.ms</code>, <code>initial.broker.registration.timeout.ms</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#upgrade" rel="noopener noreferrer">Upgrading Apache Kafka</a> — 4.3 업그레이드 최소 요건(KRaft, 3.3.x 이상), 4.0에서 설정 파일이 <code>config/</code>로 통합된 사실</li>
+        <li><a href="https://kafka.apache.org/documentation/#kraft_migration" rel="noopener noreferrer">ZooKeeper to KRaft Migration</a> — 브리지 릴리스가 필요하며 마지막 브리지 릴리스가 3.9라는 안내</li>
+        <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-500:+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum" rel="noopener noreferrer">KIP-500 — Replace ZooKeeper with a Self-Managed Metadata Quorum</a> — 설계 동기(단순화·확장성), 스탠바이 컨트롤러로 로딩 시간 제거, 브로커가 메타데이터를 pull하는 구조</li>
+        <li><a href="https://cwiki.apache.org/confluence/x/nyH1D" rel="noopener noreferrer">KIP-853</a> — 동적 컨트롤러 쿼럼과 <code>controller.quorum.auto.join.enable</code> (4.3 업그레이드 문서가 인용하는 링크)</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

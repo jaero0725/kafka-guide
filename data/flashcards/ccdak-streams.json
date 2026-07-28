@@ -1,0 +1,272 @@
+{
+  "deckId": "ccdak-streams",
+  "title": "CCDAK — Kafka Streams",
+  "exam": "CCDAK",
+  "kafkaVersion": "4.3",
+  "cards": [
+    {
+      "id": "fc-str-001",
+      "deck": "ccdak-streams",
+      "front": "`map` — stateless/stateful? 리파티션?",
+      "back": "**stateless · 리파티션 유발**\n키를 바꿀 수 있는 시그니처라서 키를 실제로 바꾸지 않아도 \"리파티션 필요\"로 표시됩니다.",
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-002",
+      "deck": "ccdak-streams",
+      "front": "`mapValues` — stateless/stateful? 리파티션?",
+      "back": "**stateless · 리파티션 없음**\n키가 유지된다는 사실이 타입으로 보장되므로 표시가 붙지 않습니다.",
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-003",
+      "deck": "ccdak-streams",
+      "front": "`selectKey` — stateless/stateful? 리파티션?",
+      "back": "**stateless · 리파티션 유발**\n키를 명시적으로 바꾸므로 이후 키 기반 연산에서 리파티션 토픽이 생깁니다.",
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-004",
+      "deck": "ccdak-streams",
+      "front": "`flatMapValues` — stateless/stateful? 리파티션?",
+      "back": "**stateless · 리파티션 없음**\n값 하나를 여러 값으로 펼치지만 키는 그대로입니다.",
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-005",
+      "deck": "ccdak-streams",
+      "front": "`filter` — stateless/stateful? 리파티션?",
+      "back": "**stateless · 리파티션 없음**\n레코드를 걸러내기만 하며 키를 건드리지 않습니다.",
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-006",
+      "deck": "ccdak-streams",
+      "front": "`groupBy` — 리파티션을 유발하는가?",
+      "back": "**유발합니다.**\n새 그룹 키로 다시 분배해야 하기 때문입니다. 기존 키를 그대로 쓰는 `groupByKey` 는 유발하지 않습니다.",
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-007",
+      "deck": "ccdak-streams",
+      "front": "`groupByKey` — 리파티션을 유발하는가?",
+      "back": "**유발하지 않습니다.**\n다만 앞에서 키를 바꾼 연산이 있었다면 그 표시 때문에 리파티션이 일어납니다.",
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-008",
+      "deck": "ccdak-streams",
+      "front": "`count` — stateless/stateful?",
+      "back": "**stateful**\n키별 카운터를 보관해야 하므로 상태 저장소와 changelog 토픽이 생깁니다.",
+      "tags": [
+        "stateless-stateful",
+        "state-store",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-009",
+      "deck": "ccdak-streams",
+      "front": "`aggregate` / `reduce` — stateless/stateful?",
+      "back": "**stateful**\n중간 누적값을 보관하며, `reduce` 는 입력과 출력 타입이 같은 `aggregate` 의 특수형입니다.",
+      "tags": [
+        "stateless-stateful",
+        "state-store",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-010",
+      "deck": "ccdak-streams",
+      "front": "`suppress` — stateless/stateful?",
+      "back": "**stateful**\n중간 결과를 버퍼에 보관하다가 윈도우 최종 결과만 내보내기 때문입니다.",
+      "tags": [
+        "stateless-stateful",
+        "streams-windows",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-011",
+      "deck": "ccdak-streams",
+      "front": "모든 조인 연산은 stateless인가 stateful인가?",
+      "back": "**stateful**\n반대편 레코드를 보관해야 하므로 조인마다 상태 저장소가 만들어집니다.",
+      "tags": [
+        "stream-join",
+        "stateless-stateful",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-012",
+      "deck": "ccdak-streams",
+      "front": "`repartition()` 이 하는 일은?",
+      "back": "**즉시 리파티션 토픽을 만들어 키 기준으로 다시 분배합니다.**\n조인 전에 파티션 수를 맞출 때 씁니다.",
+      "tags": [
+        "repartition",
+        "stream-join",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-013",
+      "deck": "ccdak-streams",
+      "front": "`KStream` 이 표현하는 것은?",
+      "back": "**append-only 사실의 연속**\n같은 키가 다시 오면 갱신이 아니라 별개의 이벤트입니다 (클릭·결제·센서).",
+      "tags": [
+        "kstream-vs-ktable",
+        "streams",
+        "kstream"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-014",
+      "deck": "ccdak-streams",
+      "front": "`KTable` 이 표현하는 것은?",
+      "back": "**키별 최신 상태 (upsert)**\n같은 키가 다시 오면 갱신이고 `null` 값은 삭제입니다 (프로필·재고·잔액).",
+      "tags": [
+        "kstream-vs-ktable",
+        "streams",
+        "ktable"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-015",
+      "deck": "ccdak-streams",
+      "front": "`GlobalKTable` 의 성질은?",
+      "back": "**모든 인스턴스가 전체 사본을 보유 · 조인 시 co-partitioning 불필요**\n작고 잘 변하지 않는 참조 데이터에만 씁니다.",
+      "tags": [
+        "kstream-vs-ktable",
+        "stream-join",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-016",
+      "deck": "ccdak-streams",
+      "front": "co-partitioning의 요건은?",
+      "back": "**파티션 수가 같고 파티셔너가 같을 것**\n키가 같은 것은 equi-join의 전제이고, 런타임에 검증되는 것은 파티션 수뿐입니다.",
+      "tags": [
+        "stream-join",
+        "co-partitioning",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-017",
+      "deck": "ccdak-streams",
+      "front": "조인 대상 토픽의 파티션 수가 다르면?",
+      "back": "**`TopologyBuilderException`**\n반면 파티셔너 불일치는 감지되지 않아 조인 결과가 조용히 누락됩니다.",
+      "tags": [
+        "stream-join",
+        "co-partitioning",
+        "exception"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-018",
+      "deck": "ccdak-streams",
+      "front": "Tumbling 윈도우의 특성은?",
+      "back": "**고정 크기, 겹치지 않음 — 한 레코드가 정확히 한 윈도우에**\nadvance가 크기와 같은 Hopping의 특수한 경우입니다.",
+      "tags": [
+        "streams-windows",
+        "windowing",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-019",
+      "deck": "ccdak-streams",
+      "front": "Hopping 윈도우의 특성은?",
+      "back": "**고정 크기 + 별도 advance → 윈도우가 겹침**\n한 레코드는 크기÷advance 개의 윈도우에 속합니다.",
+      "tags": [
+        "streams-windows",
+        "windowing",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-020",
+      "deck": "ccdak-streams",
+      "front": "Sliding 윈도우의 특성은?",
+      "back": "**레코드 사이 시간 차 기준 — 데이터가 있는 구간만 생성**\n고정 격자를 만들지 않으므로 빈 윈도우가 남지 않습니다.",
+      "tags": [
+        "streams-windows",
+        "windowing",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-021",
+      "deck": "ccdak-streams",
+      "front": "Session 윈도우의 특성은?",
+      "back": "**비활성 gap으로 구분, 크기 가변, 세션 병합 가능**\n네 윈도우 타입 중 크기가 고정되지 않은 유일한 타입입니다.",
+      "tags": [
+        "streams-windows",
+        "windowing",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-str-022",
+      "deck": "ccdak-streams",
+      "front": "Streams 상태 저장소의 기본 구현과 백업 방식은?",
+      "back": "**RocksDB + `cleanup.policy=compact` changelog 토픽**\n리파티션 토픽은 반대로 `delete` 정책입니다.",
+      "tags": [
+        "state-store",
+        "changelog",
+        "streams"
+      ],
+      "chapter": "ch10"
+    }
+  ]
+}

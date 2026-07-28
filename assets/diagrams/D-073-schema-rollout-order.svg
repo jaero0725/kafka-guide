@@ -1,0 +1,84 @@
+<svg viewBox="0 0 720 344" role="img" class="kg-diagram"
+     aria-labelledby="d073-title d073-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d073-title">스키마 배포 순서 — BACKWARD 는 컨슈머 먼저, FORWARD 는 프로듀서 먼저</title>
+  <desc id="d073-desc">호환성 모드에 따른 배포 순서를 좌우로 비교한 그림입니다.
+    왼쪽 BACKWARD 는 새 스키마가 이전 스키마로 쓰인 데이터를 읽을 수 있음을 보장합니다.
+    허용되는 변경은 필드 삭제와 기본값 있는 필드 추가입니다.
+    따라서 새 스키마를 등록한 뒤 컨슈머를 먼저 새 스키마로 배포하고, 그 다음에 프로듀서를 배포합니다.
+    순서를 뒤바꿔 프로듀서를 먼저 올리면 새 데이터에서 필드가 사라졌는데
+    아직 옛 스키마를 쓰는 컨슈머가 그 필드를 요구하므로 역직렬화가 실패합니다.
+    오른쪽 FORWARD 는 새 스키마로 쓴 데이터를 이전 스키마가 읽을 수 있음을 보장합니다.
+    허용되는 변경은 필드 추가와 기본값 있던 필드 삭제입니다.
+    따라서 프로듀서를 먼저 새 스키마로 배포하고, 그 다음에 컨슈머를 배포합니다.
+    순서를 뒤바꿔 컨슈머를 먼저 올리면 새 컨슈머가 기본값 없는 새 필드를 요구하는데
+    아직 옛 스키마를 쓰는 프로듀서는 그 필드를 쓰지 않으므로 새 컨슈머가 실패합니다.
+    FULL 과 FULL_TRANSITIVE 는 양방향이 보장되므로 순서가 자유롭고,
+    NONE 은 어느 순서로 올려도 깨질 수 있습니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">배포 순서 — 무엇을 먼저 올리는지가 장애를 결정합니다</text>
+
+  <!-- ================= 왼쪽: BACKWARD ================= -->
+  <rect class="dg-node dg-node--accent" x="12" y="30" width="340" height="28" rx="4"/>
+  <text class="dg-fs-sm dg-mono dg-bold" x="22" y="49">BACKWARD</text>
+  <text class="dg-fs-sm" x="112" y="49">새 스키마가 옛 데이터를 읽음</text>
+
+  <text class="dg-fs-sm dg-bold" x="12" y="76">허용: 필드 삭제 · 기본값 있는 필드 추가</text>
+
+  <rect class="dg-node" x="12" y="86" width="340" height="26" rx="4"/>
+  <text class="dg-fs-sm" x="22" y="104">① 새 스키마를 레지스트리에 등록</text>
+  <line class="dg-edge" x1="182" y1="112" x2="182" y2="120"/>
+  <path class="dg-marker" d="M177,120 L187,120 L182,128 Z"/>
+
+  <rect class="dg-node dg-node--accent" x="12" y="130" width="340" height="26" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="148">② 컨슈머를 먼저 새 스키마로 배포</text>
+  <line class="dg-edge dg-edge--accent" x1="182" y1="156" x2="182" y2="164"/>
+  <path class="dg-marker--accent" d="M177,164 L187,164 L182,172 Z"/>
+
+  <rect class="dg-node" x="12" y="174" width="340" height="26" rx="4"/>
+  <text class="dg-fs-sm" x="22" y="192">③ 그 다음 프로듀서를 배포</text>
+
+  <rect class="dg-node dg-node--danger" x="12" y="212" width="340" height="76" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="230">뒤바꾸면 — 프로듀서를 먼저 올리면</text>
+  <text class="dg-fs-sm" x="22" y="248">새 데이터에서 필드가 사라졌는데</text>
+  <text class="dg-fs-sm" x="22" y="264">옛 스키마 컨슈머는 그 필드를 요구합니다.</text>
+  <text class="dg-fs-sm dg-bold" x="22" y="281">→ 구 컨슈머 역직렬화 실패</text>
+  <g data-dg="x-left">
+    <line class="dg-x" x1="322" y1="256" x2="340" y2="274"/>
+    <line class="dg-x" x1="340" y1="256" x2="322" y2="274"/>
+  </g>
+
+  <!-- ================= 오른쪽: FORWARD ================= -->
+  <rect class="dg-node dg-node--accent" x="368" y="30" width="340" height="28" rx="4"/>
+  <text class="dg-fs-sm dg-mono dg-bold" x="378" y="49">FORWARD</text>
+  <text class="dg-fs-sm" x="462" y="49">새 데이터를 옛 스키마가 읽음</text>
+
+  <text class="dg-fs-sm dg-bold" x="368" y="76">허용: 필드 추가 · 기본값 있던 필드 삭제</text>
+
+  <rect class="dg-node" x="368" y="86" width="340" height="26" rx="4"/>
+  <text class="dg-fs-sm" x="378" y="104">① 새 스키마를 레지스트리에 등록</text>
+  <line class="dg-edge" x1="538" y1="112" x2="538" y2="120"/>
+  <path class="dg-marker" d="M533,120 L543,120 L538,128 Z"/>
+
+  <rect class="dg-node dg-node--accent" x="368" y="130" width="340" height="26" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="378" y="148">② 프로듀서를 먼저 새 스키마로 배포</text>
+  <line class="dg-edge dg-edge--accent" x1="538" y1="156" x2="538" y2="164"/>
+  <path class="dg-marker--accent" d="M533,164 L543,164 L538,172 Z"/>
+
+  <rect class="dg-node" x="368" y="174" width="340" height="26" rx="4"/>
+  <text class="dg-fs-sm" x="378" y="192">③ 그 다음 컨슈머를 배포</text>
+
+  <rect class="dg-node dg-node--danger" x="368" y="212" width="340" height="76" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="378" y="230">뒤바꾸면 — 컨슈머를 먼저 올리면</text>
+  <text class="dg-fs-sm" x="378" y="248">새 컨슈머가 기본값 없는 새 필드를 요구하는데</text>
+  <text class="dg-fs-sm" x="378" y="264">옛 프로듀서는 아직 그 필드를 쓰지 않습니다.</text>
+  <text class="dg-fs-sm dg-bold" x="378" y="281">→ 새 컨슈머 역직렬화 실패</text>
+  <g data-dg="x-right">
+    <line class="dg-x" x1="678" y1="256" x2="696" y2="274"/>
+    <line class="dg-x" x1="696" y1="256" x2="678" y2="274"/>
+  </g>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="300" x2="708" y2="300"/>
+  <text class="dg-fs-sm dg-bold" x="12" y="318">외우는 방법: <tspan class="dg-mono">BACKWARD</tspan> = <tspan class="dg-bold">컨슈머(뒤에서 읽는 쪽)</tspan> 먼저 · <tspan class="dg-mono">FORWARD</tspan> = <tspan class="dg-bold">프로듀서(앞에서 쓰는 쪽)</tspan> 먼저</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="334">FULL · FULL_TRANSITIVE 는 양방향이므로 순서가 자유롭습니다. NONE 은 어느 순서로 올려도 깨질 수 있습니다.</text>
+</svg>

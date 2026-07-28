@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CCDAK 플래시카드 — Kafka Guide</title>
+  <meta name="description" content="CCDAK 설정 기본값·개념·예외 클래스를 간격 반복으로 암기하는 플래시카드. 도메인별 덱과 설정 기본값·예외 클래스 덱을 제공하며 '알았음' 3회 연속이면 졸업합니다.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccdak" data-page="flashcards"></div>
+
+  <main id="main" class="page" data-page-id="ccdak/flashcards">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCDAK</a></li>
+        <li><span aria-current="page">플래시카드</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCDAK 학습 도구</p>
+      <h1>플래시카드</h1>
+      <p class="page__lead">
+        CCDAK에서 <strong>설정 기본값과 예외 클래스 이름</strong>은 이해로 채울 수 없습니다.
+        반복 노출만이 방법입니다. 이 페이지는 간격 반복(spaced repetition)으로
+        <strong>"알았음" 3회 연속이면 졸업</strong>시키고, 모르는 카드만 계속 되돌려 줍니다.
+        하루 10분씩 매일 돌리는 것이 시험 전날 두 시간보다 효과적입니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">사용법 요약</h2>
+      <ul>
+        <li>아래 <strong>덱 선택</strong>에서 학습할 덱을 고릅니다. "전체"를 고르면 모든 CCDAK 덱이 섞입니다.</li>
+        <li>카드를 <strong>뒤집기 전에 답을 소리 내어 말해 보세요.</strong> 뒤집고 나서 "알았다"고 느끼는 것은 착각입니다.</li>
+        <li>애매하면 <strong>"몰랐음"</strong>을 누르세요. 연속 기록이 초기화되고 다시 나옵니다.</li>
+        <li>진도는 브라우저에 저장되므로 <strong>다음에 열면 이어서</strong> 학습합니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="keyboard">
+      <h2 id="keyboard">조작 안내</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>키보드만으로 완주할 수 있습니다</caption>
+          <thead>
+            <tr><th scope="col">키</th><th scope="col">동작</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><kbd>Space</kbd> 또는 <kbd>Enter</kbd></th><td>카드 뒤집기</td></tr>
+            <tr><th scope="row"><kbd>1</kbd></th><td><strong>몰랐음</strong> — 연속 기록이 초기화되고 다음 카드로</td></tr>
+            <tr><th scope="row"><kbd>2</kbd></th><td><strong>알았음</strong> — 연속 기록 +1, 3회 연속이면 졸업</td></tr>
+            <tr><th scope="row"><kbd>→</kbd> 또는 <kbd>N</kbd></th><td>기록하지 않고 다음 카드</td></tr>
+            <tr><th scope="row"><kbd>←</kbd></th><td>이전 카드</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="앞면에서 1 또는 2를 누르면">
+        <p>
+          아직 뒤집지 않은 상태에서 <kbd>1</kbd>이나 <kbd>2</kbd>를 누르면
+          <strong>먼저 카드가 뒤집힙니다.</strong> 답을 보지 않고 기록되는 일은 없습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="progress-model">
+      <h2 id="progress-model">진행 상황이 표시되는 곳</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>세 곳에서 진도를 확인할 수 있습니다</caption>
+          <thead>
+            <tr><th scope="col">위치</th><th scope="col">표시되는 것</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">카드 아래 <strong>연속 정답 표시</strong></th>
+              <td>점 3개로 현재 연속 기록. 3개가 모두 차면 <strong>졸업</strong> 표시가 붙습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">카드 아래 <strong>이번 세션</strong></th>
+              <td>이번에 앉아서 푼 "알았음 / 몰랐음" 개수</td>
+            </tr>
+            <tr>
+              <th scope="row">덱을 한 바퀴 돈 뒤 <strong>완주 화면</strong></th>
+              <td>세션 정답률과 <strong>"이 덱에서 졸업한 카드: N / 전체"</strong>.
+                여기서 <strong>몰랐던 카드만</strong> 다시 돌릴 수 있습니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ul>
+        <li><strong>학습 중</strong> = 졸업하지 않은 카드입니다. 툴바의 <strong>"졸업 카드 제외"</strong>를 켜면 이것만 남습니다.</li>
+        <li><strong>졸업</strong> = "알았음" 3회 연속을 달성한 카드입니다. "몰랐음"을 누르면 <strong>졸업이 취소</strong>됩니다.</li>
+        <li>진도는 브라우저 로컬 저장소에 남습니다. 다른 기기·다른 브라우저와는 공유되지 않습니다.</li>
+      </ul>
+
+      <aside class="note note--ok" data-label="추천 학습 루틴">
+        <ol>
+          <li><strong>1주차</strong> — "설정 기본값" 덱만 매일 1회. 이 덱이 가장 배점 효율이 높습니다.</li>
+          <li><strong>2~3주차</strong> — 진단 테스트에서 약했던 도메인 덱을 추가합니다.</li>
+          <li><strong>4주차</strong> — "졸업 카드 제외"를 켜고 <strong>남은 카드만</strong> 집중적으로 돌립니다.</li>
+          <li><strong>D-1</strong> — 졸업 카드 제외를 끄고 "설정 기본값" 덱을 전체 1회 훑습니다.</li>
+        </ol>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="cards">
+      <h2 id="cards">카드 학습</h2>
+
+      <p>
+        아래 툴바의 <strong>덱</strong> 선택 상자에서 학습할 덱을 고르세요.
+        <strong>셔플</strong>은 순서를 다시 섞고, <strong>졸업 카드 제외</strong>는 이미 외운 카드를 숨깁니다.
+      </p>
+
+      <!-- flashcard.js 가 .flashcard-embed 를 자동 마운트합니다.
+           data-exam="CCDAK" → data/flashcards/index.json 에서 exam 이 CCDAK 인 덱을 모두 로드하고,
+           엔진이 덱 선택 <select> 를 렌더링합니다. -->
+      <div class="flashcard-embed" data-exam="CCDAK" data-deck="all" data-shuffle="true"></div>
+
+      <aside class="note note--warn" data-label="카드가 보이지 않으면">
+        <p>
+          <strong>"플래시카드 덱이 아직 없습니다"</strong>라고 표시되면 덱 데이터가 아직 생성되지 않은 상태입니다.
+          페이지는 정상이며, 데이터가 추가되면 이 자리에 자동으로 나타납니다.
+        </p>
+        <p>
+          <strong>"file:// 로 열면 JSON 로드가 차단됩니다"</strong>라고 표시되면
+          파일을 직접 열어서 생긴 문제입니다. 로컬에서 확인할 때는
+          프로젝트 루트에서 <code>python3 -m http.server</code>를 실행한 뒤
+          <code>http://localhost:8000/ccdak/flashcards.html</code>로 접속하세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="deck-plan">
+      <h2 id="deck-plan">덱 구성</h2>
+
+      <p>
+        덱 목록과 카드는 <code>data/flashcards/</code>에서 읽어 옵니다.
+        아래는 이 사이트가 계획한 8개 덱입니다.
+        실제로 표시되는 덱 이름과 카드 수는 <strong>덱 목록 파일의 내용을 그대로 따릅니다</strong>
+        (여기 적힌 이름과 다를 수 있습니다).
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>계획된 8개 덱과 학습 우선순위</caption>
+          <thead>
+            <tr>
+              <th scope="col">덱</th>
+              <th scope="col">담는 내용</th>
+              <th scope="col">우선순위</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><strong>설정 기본값</strong></th>
+              <td>프로듀서·컨슈머·브로커·토픽·Streams·Connect의 기본값과 <strong>소속</strong></td>
+              <td><strong>1순위</strong> — 매일</td>
+            </tr>
+            <tr>
+              <th scope="row"><strong>예외 클래스</strong></th>
+              <td>예외 이름 ↔ 원인 ↔ 재시도 가능 여부</td>
+              <td><strong>2순위</strong> — matching 대비</td>
+            </tr>
+            <tr>
+              <th scope="row">Application Development</th>
+              <td>콜백 시점, 멱등성, 타임아웃 4종, 커밋 전략, 트랜잭션</td>
+              <td>가중치 28%</td>
+            </tr>
+            <tr>
+              <th scope="row">Fundamentals</th>
+              <td>ISR과 내구성, 오프셋 4종, 크기 5개 설정, 컴팩션, 스키마 호환성</td>
+              <td>가중치 23%</td>
+            </tr>
+            <tr>
+              <th scope="row">Kafka Connect</th>
+              <td>오프셋 저장 위치, 내부 토픽, SMT, DLQ, REST 경로</td>
+              <td>가중치 15%</td>
+            </tr>
+            <tr>
+              <th scope="row">Application Observability</th>
+              <td>메트릭 이름 ↔ 의미, lag 측정 3가지, 브로커 지표</td>
+              <td>가중치 13%</td>
+            </tr>
+            <tr>
+              <th scope="row">Kafka Streams</th>
+              <td>KStream/KTable, 리파티션 유발 연산, 조인 조건, 윈도우 4종</td>
+              <td>가중치 12%</td>
+            </tr>
+            <tr>
+              <th scope="row">Application Testing</th>
+              <td>도구 ↔ 브로커 필요 여부, <code>TopologyTestDriver</code> API</td>
+              <td>가중치 8%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="카드 앞면·뒷면에 쓰이는 표기">
+        <p>
+          카드 텍스트에는 <code>백틱</code>으로 감싼 코드 표기와 <strong>굵게</strong> 강조,
+          그리고 줄바꿈을 쓸 수 있습니다.
+          예를 들어 앞면이 <code>`acks` 의 기본값은?</code>이면
+          뒷면은 <code>`all` — Kafka 3.0부터 기본값이 `1` 에서 바뀌었습니다.</code>처럼 표시됩니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="how-to-memorize">
+      <h2 id="how-to-memorize">암기 요령</h2>
+
+      <h3 id="tip-ownership">소속을 값과 함께 외우세요</h3>
+      <p>
+        시험에서 가장 흔한 함정은 <strong>설정의 소속을 바꿔 놓는 것</strong>입니다
+        (<a href="traps.html#pattern-ownership">함정 사전 패턴 2</a>).
+        그러므로 <code>max.request.size = 1048576</code>이 아니라
+        <strong><code>max.request.size</code> = 프로듀서 · 1048576</strong>으로 한 묶음으로 외우세요.
+        같은 이유로 <code>message.max.bytes</code>는 <strong>브로커 · 1048588</strong>,
+        <code>max.message.bytes</code>는 <strong>토픽 · 1048588</strong>로 구분해야 합니다.
+      </p>
+
+      <h3 id="tip-groups">비슷한 것끼리 묶어서 외우세요</h3>
+      <ul>
+        <li><strong>타임아웃 4종</strong> — 3000 / 45000 / 300000 / 500 (heartbeat / session / poll interval / poll records)</li>
+        <li><strong>크기 5+1개</strong> — 1048576(프로듀서) / 1048588(브로커·토픽) / 1048576(컨슈머 파티션당) /
+          52428800(컨슈머 전체) / 1048576(팔로워)</li>
+        <li><strong>시간 예산 3종</strong> — 30000(요청) / 120000(전달) / 60000(블로킹)</li>
+        <li><strong>기본이 0인 것</strong> — <code>errors.retry.timeout</code> · <code>num.standby.replicas</code> ·
+          <code>max.task.idle.ms</code> · <code>min.compaction.lag.ms</code></li>
+        <li><strong>기본이 1인 것</strong> — <code>num.partitions</code> · <code>default.replication.factor</code> ·
+          <code>min.insync.replicas</code> · <code>num.stream.threads</code> · <code>fetch.min.bytes</code> ·
+          <code>num.replica.fetchers</code></li>
+      </ul>
+
+      <h3 id="tip-changed">4.x에서 바뀐 것은 따로 외우세요</h3>
+      <p>
+        <strong><code>linger.ms</code> 0→5</strong>,
+        <strong><code>acks</code> 1→all</strong>,
+        <strong><code>enable.idempotence</code> false→true</strong>,
+        <strong><code>session.timeout.ms</code> 10000→45000</strong>.
+        그리고 <strong>바뀌지 않은 것</strong> 하나 —
+        <strong><code>group.protocol</code>은 여전히 <code>classic</code></strong>입니다.
+        시중 자료가 가장 많이 틀리는 지점이므로 이 다섯 개는 별도로 반복하세요.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="cram.html">
+          <span class="card__title">벼락치기 요약</span>
+          <span class="card__desc">이 카드들의 원본 표. 설정 기본값 총정리와 숫자 25개.</span>
+          <span class="card__meta">CCDAK 도구</span>
+        </a></li>
+        <li><a class="card" href="traps.html">
+          <span class="card__title">함정 사전 40쌍</span>
+          <span class="card__desc">카드로 외운 값이 왜 헷갈리는지, 어떻게 출제되는지.</span>
+          <span class="card__meta">CCDAK 도구</span>
+        </a></li>
+        <li><a class="card" href="../quiz/review.html">
+          <span class="card__title">오답 노트</span>
+          <span class="card__desc">문제 쪽 간격 반복. 카드와 같은 3회 연속 졸업 규칙.</span>
+          <span class="card__meta">문제 풀이</span>
+        </a></li>
+        <li><a class="card" href="../quiz/diagnostic.html">
+          <span class="card__title">진단 테스트</span>
+          <span class="card__desc">어느 도메인 덱을 먼저 돌릴지 여기서 정하세요.</span>
+          <span class="card__meta">가장 먼저</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc">카드보다 넓은 범위의 설정 전체 표.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="index.html">
+          <span class="card__title">CCDAK 개요</span>
+          <span class="card__desc">4주 학습 플랜으로 돌아가기.</span>
+          <span class="card__meta">CCDAK</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">출처</h2>
+      <p>
+        카드에 담기는 설정 기본값·예외 클래스·메트릭 이름은 모두
+        <strong>Apache Kafka 4.3 공식 문서</strong> 기준입니다.
+      </p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs" rel="noopener noreferrer">Producer Configs</a> ·
+          <a href="https://kafka.apache.org/documentation/#consumerconfigs" rel="noopener noreferrer">Consumer Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> ·
+          <a href="https://kafka.apache.org/documentation/#topicconfigs" rel="noopener noreferrer">Topic Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#streamsconfigs" rel="noopener noreferrer">Streams Configs</a> ·
+          <a href="https://kafka.apache.org/documentation/#connectconfigs" rel="noopener noreferrer">Connect Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#monitoring" rel="noopener noreferrer">Monitoring</a> — 메트릭 이름</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+  <script src="../assets/js/flashcard.js" defer></script>
+</body>
+</html>

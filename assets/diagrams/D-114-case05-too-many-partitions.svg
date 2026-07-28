@@ -1,0 +1,94 @@
+<svg viewBox="0 0 720 564" role="img" class="kg-diagram"
+     aria-labelledby="d114-title d114-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d114-title">case05 — 파티션을 과도하게 늘려 오히려 처리량과 복구 시간이 나빠지는 흐름</title>
+  <desc id="d114-desc">정상 흐름에서 파티션은 병렬 처리의 단위이므로 컨슈머 수를 파티션 수 이하로 두고 필요한 만큼만 늘립니다. 어긋나는 지점에서는 "많을수록 빠르다"는 가정으로 파티션 수를 크게 잡아 클러스터 전체 파티션 수가 수만 개가 되고, 브로커마다 열어야 하는 세그먼트 파일과 유지할 리더 수, 복제 fetch 대상이 함께 늘어납니다. 결과적으로 프로듀서는 파티션마다 배치를 따로 쌓기 때문에 배치가 작아져 요청 수가 늘고, 브로커 장애 시 다시 선출해야 할 리더가 많아 복구가 길어집니다. 처방은 목표 처리량과 컨슈머 최대 병렬도에서 역산하고, 파티션은 늘릴 수만 있고 줄일 수 없다는 점을 전제로 여유를 조금만 두는 것입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<rect class="dg-node dg-node--ok" x="8" y="8" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="29">1. 정상 흐름</text>
+<text class="dg-fs-sm dg-muted" x="698" y="29" text-anchor="end">파티션 = 병렬 처리의 단위</text>
+<g>
+<rect class="dg-node" x="24" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="58.5" text-anchor="middle">파티션 6개</text>
+</g>
+<path class="dg-edge" d="M175.5,54 L194.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="198.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="58.5" text-anchor="middle">컨슈머 6명</text>
+</g>
+<path class="dg-edge" d="M350,54 L369,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="373" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="58.5" text-anchor="middle">배치가 충분히 큼</text>
+</g>
+<path class="dg-edge" d="M524.5,54 L543.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="547.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="58.5" text-anchor="middle">처리량 선형 증가</text>
+</g>
+<text class="dg-fs-sm" x="24" y="98">컨슈머 그룹에서 한 파티션은 한 컨슈머에게만 할당되므로 병렬도의 상한이 파티션 수입니다.</text>
+<text class="dg-fs-sm" x="24" y="116">컨슈머가 파티션보다 많으면 남는 컨슈머는 유휴 상태가 됩니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="152" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="173">2. 어긋나는 지점</text>
+<text class="dg-fs-sm dg-muted" x="698" y="173" text-anchor="end">"많을수록 빠르다"는 가정</text>
+<g>
+<rect class="dg-node dg-node--warn" x="24" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="202.6" text-anchor="middle">토픽 200개 × 파티션 500</text>
+</g>
+<path class="dg-edge" d="M175.5,198 L194.5,198" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="198.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="202.6" text-anchor="middle">클러스터 파티션 10만</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M350,198 L369,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="373" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="202.6" text-anchor="middle">브로커당 리더 수 급증</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M524.5,198 L543.5,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="547.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="202.6" text-anchor="middle">파일·메모리 부담 증가</text>
+</g>
+<text class="dg-fs-sm" x="24" y="242">브로커는 파티션마다 세그먼트 파일과 인덱스를 열고 리더 상태를 유지해야 합니다.</text>
+<text class="dg-fs-sm" x="24" y="260">복제도 파티션 단위이므로 팔로워의 fetch 대상 수가 함께 늘어납니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="296" width="704" height="140" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="317">3. 결과</text>
+<text class="dg-fs-sm dg-muted" x="698" y="317" text-anchor="end">처리량은 떨어지고 복구는 길어집니다</text>
+<g>
+<rect class="dg-node dg-node--danger" x="24" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="346.6" text-anchor="middle">파티션당 배치 작아짐</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M175.5,342 L194.5,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="198.5" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="346.6" text-anchor="middle">요청 수 증가</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M350,342 L369,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="373" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="346.6" text-anchor="middle">리더 재선출 대상 급증</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M524.5,342 L543.5,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="547.5" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="346.6" text-anchor="middle">장애 복구 지연</text>
+</g>
+<text class="dg-fs-sm" x="24" y="386">프로듀서는 파티션마다 배치를 따로 쌓으므로 파티션이 많을수록 배치가 잘게 쪼개집니다.</text>
+<text class="dg-fs-sm" x="24" y="404">브로커 한 대가 빠지면 그 브로커가 리더였던 파티션을 모두 다시 선출해야 합니다.</text>
+<text class="dg-fs-sm" x="24" y="422">즉 파티션 수에 비례해 장애 복구 시간이 길어집니다.</text>
+<path class="dg-edge dg-edge--danger" d="M360,132 L360,149" marker-end="url(#mk-arrow-danger)"/>
+<path class="dg-edge dg-edge--danger" d="M360,276 L360,293" marker-end="url(#mk-arrow-danger)"/>
+<rect class="dg-node dg-node--ok" x="8" y="458" width="704" height="98" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="479">처방</text>
+<text class="dg-fs-sm" x="70" y="479">목표 처리량과 컨슈머 최대 병렬도에서 역산해 정하고, 확장 여유는 조금만 둡니다.</text>
+<text class="dg-fs-sm" x="70" y="497">파티션은 늘릴 수만 있고 줄일 수 없습니다 — 처음부터 크게 잡는 대신 필요할 때 늘립니다.</text>
+<text class="dg-fs-sm" x="70" y="515">키 기반 순서를 쓰는 토픽은 파티션을 늘리면 키 → 파티션 매핑이 바뀌므로 함께 고려합니다.</text>
+<text class="dg-fs-sm" x="70" y="533">확인: kafka-topics.sh --bootstrap-server :9092 --describe --topic X (파티션 · 리더 분포)</text>
+</svg>

@@ -1,0 +1,75 @@
+<svg viewBox="0 0 720 512" role="img" class="kg-diagram"
+     aria-labelledby="d103-title d103-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d103-title">ACL 모델 — principal, resource, operation 의 조합과 판정 규칙</title>
+  <desc id="d103-desc">ACL 한 줄은 principal, host, operation, resource, patternType, permission 으로 구성됩니다. 예를 들어 User:app-billing 에게 모든 호스트에서 Topic orders 에 대한 Read 를 LITERAL 패턴으로 ALLOW 하는 형태입니다. Operation 은 Read, Write, Create, Delete, Alter, Describe, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, CreateTokens, DescribeTokens, All 의 13종이고 Resource type 은 Topic, Group, Cluster, TransactionalId, DelegationToken, User 의 6종입니다. 판정은 순서가 있습니다. DENY 가 하나라도 일치하면 거부하고, 그다음 ALLOW 가 일치하면 허용하며, 아무 ACL 도 일치하지 않으면 거부하되 super.users 만 예외입니다. allow.everyone.if.no.acl.found 를 true 로 두면 마지막 규칙이 허용으로 바뀌지만 권장되지 않습니다. 컨슈머는 토픽 Read 와 그룹 Read 가 모두 필요하며 한쪽만 부여하면 GROUP_AUTHORIZATION_FAILED 가 발생합니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">ACL 모델 — principal × resource × operation (+ host · 허용/거부)</text>
+<rect class="dg-panel" x="8" y="32" width="704" height="92" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="18" y="49">ACL 한 줄의 구성</text>
+<rect class="dg-node dg-node--accent" x="18" y="56" width="108" height="56" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="72" y="76" text-anchor="middle">Principal</text>
+<text class="dg-fs-sm dg-mono" x="72" y="96" text-anchor="middle">User:app-billing</text>
+<rect class="dg-node" x="134" y="56" width="108" height="56" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="188" y="76" text-anchor="middle">Host</text>
+<text class="dg-fs-sm dg-mono" x="188" y="96" text-anchor="middle">* 또는 IP</text>
+<rect class="dg-node dg-node--ok" x="250" y="56" width="108" height="56" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="304" y="76" text-anchor="middle">Operation</text>
+<text class="dg-fs-sm dg-mono" x="304" y="96" text-anchor="middle">Read</text>
+<rect class="dg-node dg-node--warn" x="366" y="56" width="108" height="56" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="420" y="76" text-anchor="middle">Resource</text>
+<text class="dg-fs-sm dg-mono" x="420" y="96" text-anchor="middle">Topic:orders</text>
+<rect class="dg-node" x="482" y="56" width="108" height="56" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="536" y="76" text-anchor="middle">PatternType</text>
+<text class="dg-fs-sm dg-mono" x="536" y="96" text-anchor="middle">LITERAL</text>
+<rect class="dg-node dg-node--danger" x="598" y="56" width="108" height="56" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="652" y="76" text-anchor="middle">Permission</text>
+<text class="dg-fs-sm dg-mono" x="652" y="96" text-anchor="middle">ALLOW | DENY</text>
+<rect class="dg-panel" x="8" y="136" width="348" height="166" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="18" y="153">Operation (13종)</text>
+<text class="dg-fs-sm dg-mono" x="22" y="180">· Read</text>
+<text class="dg-fs-sm dg-mono" x="190" y="180">· Write</text>
+<text class="dg-fs-sm dg-mono" x="22" y="198">· Create</text>
+<text class="dg-fs-sm dg-mono" x="190" y="198">· Delete</text>
+<text class="dg-fs-sm dg-mono" x="22" y="216">· Alter</text>
+<text class="dg-fs-sm dg-mono" x="190" y="216">· Describe</text>
+<text class="dg-fs-sm dg-mono" x="22" y="234">· ClusterAction</text>
+<text class="dg-fs-sm dg-mono" x="190" y="234">· DescribeConfigs</text>
+<text class="dg-fs-sm dg-mono" x="22" y="252">· AlterConfigs</text>
+<text class="dg-fs-sm dg-mono" x="190" y="252">· IdempotentWrite</text>
+<text class="dg-fs-sm dg-mono" x="22" y="270">· CreateTokens</text>
+<text class="dg-fs-sm dg-mono" x="190" y="270">· DescribeTokens</text>
+<text class="dg-fs-sm dg-mono" x="22" y="288">· All</text>
+<rect class="dg-panel" x="364" y="136" width="348" height="166" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="374" y="153">Resource type (6종)</text>
+<text class="dg-fs-sm dg-mono" x="378" y="180">· Topic</text>
+<text class="dg-fs-sm dg-muted" x="536" y="180">토픽 읽기·쓰기</text>
+<text class="dg-fs-sm dg-mono" x="378" y="198">· Group</text>
+<text class="dg-fs-sm dg-muted" x="536" y="198">컨슈머 그룹 참여</text>
+<text class="dg-fs-sm dg-mono" x="378" y="216">· Cluster</text>
+<text class="dg-fs-sm dg-muted" x="536" y="216">클러스터 단위 작업</text>
+<text class="dg-fs-sm dg-mono" x="378" y="234">· TransactionalId</text>
+<text class="dg-fs-sm dg-muted" x="536" y="234">트랜잭션</text>
+<text class="dg-fs-sm dg-mono" x="378" y="252">· DelegationToken</text>
+<text class="dg-fs-sm dg-muted" x="536" y="252">위임 토큰</text>
+<text class="dg-fs-sm dg-mono" x="378" y="270">· User</text>
+<text class="dg-fs-sm dg-muted" x="536" y="270">토큰 생성·조회 대상</text>
+<rect class="dg-node dg-node--warn" x="8" y="314" width="704" height="124" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="335">판정 규칙</text>
+<text class="dg-fs-sm dg-muted" x="698" y="335" text-anchor="end">순서가 정해져 있습니다</text>
+<text class="dg-fs-sm" x="22" y="356">1) DENY 가 하나라도 일치하면 거부합니다 — ALLOW 보다 우선합니다.</text>
+<text class="dg-fs-sm" x="22" y="374">2) ALLOW 가 일치하면 허용합니다.</text>
+<text class="dg-fs-sm" x="22" y="392">3) 아무 ACL 도 일치하지 않으면 거부합니다. super.users 만 예외입니다.</text>
+<text class="dg-fs-sm dg-mono" x="22" y="410">allow.everyone.if.no.acl.found=true 로 두면 3)이 "허용"으로 바뀝니다 (권장하지 않음)</text>
+<text class="dg-fs-sm" x="22" y="428">PatternType 은 LITERAL(정확히 일치) 또는 PREFIXED(접두어 일치) 중 하나입니다.</text>
+<text class="dg-fs-sm dg-bold" x="8" y="460">컨슈머는 토픽 Read 와 그룹 Read 가 둘 다 필요합니다 — 한쪽만 주면 실패합니다.</text>
+<text class="dg-fs-sm dg-mono" x="8" y="482">kafka-acls.sh --bootstrap-server :9092 --add --allow-principal User:app-billing</text>
+<text class="dg-fs-sm dg-mono" x="8" y="500">             --operation Read --topic orders --group billing</text>
+</svg>

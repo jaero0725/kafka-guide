@@ -1,0 +1,103 @@
+<svg viewBox="0 0 720 438" role="img" class="kg-diagram"
+     aria-labelledby="d041-title d041-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d041-title">poll 루프 내부 동작 — poll() 은 대개 네트워크 호출이 아니라 버퍼에서 꺼내는 일</title>
+  <desc id="d041-desc">컨슈머 내부를 두 구역으로 나눈 그림입니다.
+    위 구역은 데이터를 미리 받아 두는 경로입니다. 컨슈머 내부의 Fetcher 가 브로커에 FetchRequest 를 보내면
+    브로커는 fetch.min.bytes 만큼 데이터가 모이거나 fetch.max.wait.ms 가 지날 때까지 기다린 뒤 응답하고,
+    응답으로 온 레코드 배치들이 컨슈머 안의 완료된 fetch 큐에 쌓입니다.
+    아래 구역은 poll 이 무엇을 반환하는지 두 경우로 보여 줍니다.
+    첫째 경우는 큐에 이미 레코드가 있는 경우로, poll 은 네트워크 왕복 없이 큐에서 최대 max.poll.records 500 건을 꺼내 즉시 반환합니다.
+    둘째 경우는 큐가 빈 경우로, fetch 응답이 도착할 때까지 기다리고 timeout 안에 오지 않으면 빈 목록을 반환합니다.
+    max.poll.records 는 한 번에 몇 건을 돌려줄지만 정하고 브로커에서 얼마나 받아오는지는 바꾸지 않습니다.
+    받아온 레코드는 캐시에 두고 여러 번의 poll 에 나눠 반환합니다.
+    반환된 레코드를 처리하고 오프셋을 커밋한 뒤 다시 poll 을 부르는 것이 컨슈머 루프이며, poll 을 계속 부르는 것 자체가 그룹 멤버십 유지 조건입니다.</desc>
+
+  <defs>
+    <marker id="d041-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+    <marker id="d041-ah-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker--accent" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+  </defs>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold"><tspan class="dg-mono">poll()</tspan> 이 반환하는 곳은 <tspan class="dg-bold">내부 버퍼</tspan> 입니다. 브로커까지 가는 것은 그 앞 단계입니다.</text>
+
+  <!-- ═══ 구역 A : 미리 받아 두기 ═══ -->
+  <rect class="dg-panel" x="8" y="34" width="704" height="112" rx="4"/>
+  <text x="18" y="52" class="dg-fs-sm dg-bold">구역 A · 데이터를 미리 받아 큐에 쌓는 경로</text>
+
+  <rect class="dg-node" x="16" y="62" width="132" height="72" rx="4"/>
+  <text x="26" y="82" class="dg-fs-sm dg-bold">Fetcher</text>
+  <text x="26" y="100" class="dg-fs-sm">컨슈머 내부에서</text>
+  <text x="26" y="118" class="dg-fs-sm">fetch 요청을 보냄</text>
+
+  <line class="dg-edge" x1="148" y1="98" x2="188" y2="98" marker-end="url(#d041-ah)"/>
+  <text x="152" y="92" class="dg-fs-sm dg-muted">fetch</text>
+
+  <rect class="dg-node dg-node--alt" x="192" y="62" width="232" height="72" rx="4"/>
+  <text x="202" y="82" class="dg-fs-sm dg-bold">브로커</text>
+  <text x="202" y="100" class="dg-fs-sm"><tspan class="dg-mono">fetch.min.bytes=1</tspan> 만큼 모이거나</text>
+  <text x="202" y="118" class="dg-fs-sm"><tspan class="dg-mono">fetch.max.wait.ms=500</tspan> 까지 대기</text>
+
+  <line class="dg-edge" x1="424" y1="98" x2="464" y2="98" marker-end="url(#d041-ah)"/>
+  <text x="428" y="92" class="dg-fs-sm dg-muted">배치</text>
+
+  <rect class="dg-node dg-node--accent" x="468" y="62" width="236" height="72" rx="4"/>
+  <text x="478" y="82" class="dg-fs-sm dg-bold">완료된 fetch 큐 (내부 버퍼)</text>
+  <text x="478" y="100" class="dg-fs-sm">받아온 레코드가 여기 쌓입니다</text>
+  <text x="478" y="118" class="dg-fs-sm dg-muted">한도: <tspan class="dg-mono">max.partition.fetch.bytes</tspan></text>
+
+  <!-- ═══ 구역 B : poll 이 반환하는 두 경우 ═══ -->
+  <rect class="dg-panel" x="8" y="156" width="704" height="140" rx="4"/>
+  <text x="18" y="174" class="dg-fs-sm dg-bold">구역 B · <tspan class="dg-mono">poll(Duration)</tspan> 이 반환하는 두 경우</text>
+
+  <rect class="dg-node dg-node--accent" x="16" y="184" width="120" height="42" rx="4"/>
+  <text x="26" y="203" class="dg-fs-sm dg-bold dg-mono">poll()</text>
+  <text x="26" y="219" class="dg-fs-sm">경우 ①</text>
+  <line class="dg-edge dg-edge--accent" x1="136" y1="205" x2="172" y2="205" marker-end="url(#d041-ah-accent)"/>
+
+  <rect class="dg-node dg-node--accent" x="176" y="184" width="216" height="42" rx="4"/>
+  <text x="186" y="203" class="dg-fs-sm dg-bold">큐에 레코드가 있음</text>
+  <text x="186" y="219" class="dg-fs-sm">네트워크 왕복 없음</text>
+  <line class="dg-edge dg-edge--accent" x1="392" y1="205" x2="428" y2="205" marker-end="url(#d041-ah-accent)"/>
+
+  <rect class="dg-node dg-node--accent" x="432" y="184" width="272" height="42" rx="4"/>
+  <text x="442" y="203" class="dg-fs-sm dg-bold">최대 <tspan class="dg-mono">max.poll.records=500</tspan> 건 반환</text>
+  <text x="442" y="219" class="dg-fs-sm">즉시 돌아옵니다</text>
+
+  <rect class="dg-node" x="16" y="236" width="120" height="42" rx="4"/>
+  <text x="26" y="255" class="dg-fs-sm dg-bold dg-mono">poll()</text>
+  <text x="26" y="271" class="dg-fs-sm">경우 ②</text>
+  <line class="dg-edge" x1="136" y1="257" x2="172" y2="257" marker-end="url(#d041-ah)"/>
+
+  <rect class="dg-node dg-node--muted" x="176" y="236" width="216" height="42" rx="4"/>
+  <text x="186" y="255" class="dg-fs-sm dg-bold">큐가 비어 있음</text>
+  <text x="186" y="271" class="dg-fs-sm">fetch 응답을 기다림</text>
+  <line class="dg-edge" x1="392" y1="257" x2="428" y2="257" marker-end="url(#d041-ah)"/>
+
+  <rect class="dg-node" x="432" y="236" width="272" height="42" rx="4"/>
+  <text x="442" y="255" class="dg-fs-sm">도착분 반환 · 안 오면 빈 목록</text>
+  <text x="442" y="271" class="dg-fs-sm dg-muted"><tspan class="dg-mono">poll(Duration)</tspan> 인자만큼만 기다립니다</text>
+
+  <!-- ═══ 루프 ═══ -->
+  <rect class="dg-node" x="8" y="310" width="200" height="44" rx="4"/>
+  <text x="18" y="330" class="dg-fs-sm dg-bold">반환된 레코드 처리</text>
+  <text x="18" y="347" class="dg-fs-sm dg-muted">애플리케이션 스레드</text>
+  <line class="dg-edge" x1="208" y1="332" x2="248" y2="332" marker-end="url(#d041-ah)"/>
+
+  <rect class="dg-node" x="252" y="310" width="200" height="44" rx="4"/>
+  <text x="262" y="330" class="dg-fs-sm dg-bold">오프셋 커밋</text>
+  <text x="262" y="347" class="dg-fs-sm dg-muted">자동 또는 수동</text>
+  <line class="dg-edge" x1="452" y1="332" x2="492" y2="332" marker-end="url(#d041-ah)"/>
+
+  <rect class="dg-node dg-node--accent" x="496" y="310" width="208" height="44" rx="4"/>
+  <text x="506" y="330" class="dg-fs-sm dg-bold">다시 <tspan class="dg-mono">poll()</tspan></text>
+  <text x="506" y="347" class="dg-fs-sm">늦으면 그룹에서 빠집니다</text>
+
+  <!-- 정리 -->
+  <line class="dg-grid" x1="8" y1="370" x2="712" y2="370"/>
+  <text x="8" y="388" class="dg-fs-sm"><tspan class="dg-bold"><tspan class="dg-mono">max.poll.records</tspan> 는 fetch 크기를 바꾸지 않습니다.</tspan> 받아 둔 레코드를 몇 건씩 나눠 줄지만 정합니다.</text>
+  <text x="8" y="406" class="dg-fs-sm">그래서 이 값을 줄여도 네트워크 사용량은 그대로이고, 한 번의 처리 시간만 짧아집니다.</text>
+  <text x="8" y="424" class="dg-fs-sm dg-muted">받아오는 양은 <tspan class="dg-mono">fetch.max.bytes=52428800</tspan> 과 <tspan class="dg-mono">max.partition.fetch.bytes=1048576</tspan> 가 정합니다.</text>
+</svg>

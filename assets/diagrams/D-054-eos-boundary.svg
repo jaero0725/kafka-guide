@@ -1,0 +1,82 @@
+<svg viewBox="0 0 720 422" role="img" class="kg-diagram"
+     aria-labelledby="d054-title d054-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d054-title">EOS 의 경계 — Kafka 내부는 exactly-once, 외부 시스템은 아닙니다</title>
+  <desc id="d054-desc">exactly-once semantics 가 성립하는 범위와 성립하지 않는 범위를 굵은 경계선으로 나눈 그림입니다.
+    경계선 위쪽은 Kafka 내부입니다. 입력 토픽에서 읽어 처리한 뒤 출력 토픽에 쓰고
+    컨슈머 오프셋을 __consumer_offsets 에 쓰는 것까지가 하나의 트랜잭션이므로 원자적으로 확정됩니다.
+    경계선 아래쪽은 외부 시스템입니다. 애플리케이션이 처리 중에 호출하는 외부 데이터베이스 INSERT 나 UPDATE,
+    결제 API 의 HTTP POST, 이메일이나 SMS 발송은 Kafka 트랜잭션에 참여할 수 없습니다.
+    경계를 통과하는 화살표에 X 표시를 한 것은 그 지점에서 보장이 끊긴다는 뜻입니다.
+    따라서 트랜잭션이 abort 되거나 재처리가 일어나면 Kafka 쪽 결과는 되돌아가지만
+    이미 실행된 외부 작업은 되돌아가지 않아 중복이 남습니다.
+    EOS 를 켜면 데이터베이스 중복까지 막힌다는 것은 오해입니다.
+    해결책은 컨슈머 또는 싱크 쪽의 멱등성입니다.
+    업서트, 유니크 제약, 처리 기록 테이블로 이미 처리한 레코드를 걸러내야 합니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">EOS 의 경계 — 어디까지 Kafka 가 보장하는가</text>
+
+  <!-- ================= 경계 안: Kafka 내부 ================= -->
+  <rect class="dg-node dg-node--ok" x="12" y="30" width="696" height="120" rx="6"/>
+  <text x="24" y="48" class="dg-fs-sm dg-bold">EOS 성립 — Kafka 토픽 → Kafka 토픽 (트랜잭션 원자성)</text>
+
+  <rect class="dg-node dg-node--alt" x="24" y="78" width="112" height="44" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="80" y="97" text-anchor="middle">입력 토픽</text>
+  <text class="dg-fs-sm dg-mono dg-muted" x="80" y="113" text-anchor="middle">orders</text>
+
+  <line class="dg-edge" x1="136" y1="100" x2="153" y2="100"/>
+  <path class="dg-marker" d="M152,95 L160,100 L152,105 Z"/>
+
+  <rect class="dg-node dg-node--accent" x="160" y="58" width="268" height="84" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="172" y="76">애플리케이션 (Streams 또는 직접 구현)</text>
+  <text class="dg-fs-sm dg-mono" x="172" y="94">read_committed · auto.commit=false</text>
+  <text class="dg-fs-sm dg-mono" x="172" y="110">transactional.id 설정</text>
+  <text class="dg-fs-sm dg-muted" x="172" y="128">Streams: <tspan class="dg-mono">exactly_once_v2</tspan></text>
+
+  <line class="dg-edge dg-edge--accent" x1="428" y1="77" x2="445" y2="77"/>
+  <path class="dg-marker--accent" d="M444,72 L452,77 L444,82 Z"/>
+  <rect class="dg-node dg-node--accent" x="452" y="58" width="244" height="38" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="462" y="82">출력 토픽 — 커밋 마커로 확정</text>
+
+  <line class="dg-edge dg-edge--accent" x1="428" y1="123" x2="445" y2="123"/>
+  <path class="dg-marker--accent" d="M444,118 L452,123 L444,128 Z"/>
+  <rect class="dg-node dg-node--accent" x="452" y="104" width="244" height="38" rx="4"/>
+  <text class="dg-fs-sm dg-mono dg-bold" x="462" y="120">__consumer_offsets</text>
+  <text class="dg-fs-sm" x="462" y="136">같은 트랜잭션 안에서 커밋</text>
+
+  <!-- ================= 경계선 ================= -->
+  <text x="12" y="170" class="dg-fs-md dg-bold">EOS 경계 — Kafka 의 보장은 여기서 끊깁니다</text>
+  <line class="dg-edge dg-edge--danger dg-edge--dashdot" x1="12" y1="180" x2="708" y2="180"/>
+
+  <!-- 경계를 통과하는 외부 호출 -->
+  <line class="dg-edge dg-edge--danger" x1="294" y1="150" x2="294" y2="196"/>
+  <path class="dg-marker--danger" d="M289,196 L299,196 L294,204 Z"/>
+  <g data-dg="break-mark">
+    <line class="dg-x" x1="286" y1="172" x2="302" y2="188"/>
+    <line class="dg-x" x1="302" y1="172" x2="286" y2="188"/>
+  </g>
+  <text class="dg-fs-sm dg-bold" x="312" y="199">처리 중 외부 호출 — 트랜잭션에 참여하지 못합니다</text>
+
+  <!-- ================= 경계 밖: 외부 시스템 ================= -->
+  <rect class="dg-node dg-node--danger" x="12" y="204" width="696" height="102" rx="6"/>
+  <text x="24" y="222" class="dg-fs-sm dg-bold">EOS 성립 안 함 — 외부 시스템 (커밋도 롤백도 Kafka 와 무관)</text>
+
+  <rect class="dg-node" x="24" y="230" width="216" height="34" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="132" y="251" text-anchor="middle">외부 DB — INSERT / UPDATE</text>
+  <rect class="dg-node" x="252" y="230" width="216" height="34" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="360" y="251" text-anchor="middle">결제 API — HTTP POST</text>
+  <rect class="dg-node" x="480" y="230" width="216" height="34" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="588" y="251" text-anchor="middle">이메일 · SMS 발송</text>
+
+  <text class="dg-fs-sm dg-bold" x="24" y="286">“EOS 를 켰으니 DB 중복도 막힌다”는 오해입니다.</text>
+  <text class="dg-fs-sm" x="24" y="302">abort 나 재처리가 일어나면 Kafka 쪽은 되돌아가지만, 이미 실행된 외부 작업은 그대로 남습니다.</text>
+
+  <!-- ================= 해결책 ================= -->
+  <rect class="dg-node dg-node--ok" x="12" y="318" width="696" height="46" rx="6"/>
+  <text class="dg-fs-sm dg-bold" x="24" y="336">해결: 경계 밖에서는 컨슈머(싱크) 스스로 멱등성을 확보해야 합니다</text>
+  <text class="dg-fs-sm" x="24" y="355">업서트(UPSERT) · 유니크 제약 · 처리 기록 테이블(메시지 키 + 오프셋)로 재처리를 걸러냅니다.</text>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="376" x2="708" y2="376"/>
+  <text class="dg-fs-sm dg-muted" x="12" y="394">공식 문서: 외부 시스템에 쓸 때의 한계는 컨슈머의 위치와 실제 저장된 출력을 함께 맞춰야 한다는 점입니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="412">다른 목적지 시스템의 exactly-once 는 그 시스템의 협조가 필요합니다.</text>
+</svg>

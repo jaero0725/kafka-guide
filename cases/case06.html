@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>케이스 6 · RF=3인데 브로커 1대 죽자 유실됐다 — Kafka Guide</title>
+  <meta name="description" content="acks=all을 제대로 설정했는데도 min.insync.replicas가 기본값 1로 방치되어 유실이 발생한 사고. min.insync.replicas가 acks=all과만 상호작용한다는 점, NotEnoughReplicas 예외, RF와 min ISR의 관계를 다룹니다.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="cases" data-page="case06"></div>
+
+  <main id="main" class="page" data-page-id="cases/case06">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="case01.html">실수 케이스</a></li>
+        <li><span aria-current="page">케이스 6 · min.insync.replicas 방치</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실수 케이스 · 6</p>
+      <h1>RF=3인데 브로커 1대 죽자 유실됐다</h1>
+      <p class="page__lead">
+        직전 사고의 교훈으로 프로듀서를 <code>acks=all</code>, <code>enable.idempotence=true</code>로
+        모두 고쳤습니다. 그런데도 브로커 한 대의 장애로 다시 유실이 났습니다.
+        아무도 손대지 않은 설정이 하나 남아 있었습니다 —
+        <strong><code>min.insync.replicas</code>는 여전히 기본값 <code>1</code>이었습니다.</strong>
+        그 상태에서 <code>acks=all</code>은 <strong><code>acks=1</code>과 같습니다.</strong>
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 케이스에서 얻어 갈 것</h2>
+      <ul>
+        <li><code>min.insync.replicas</code>가 <strong>쓰기 거부라는 형태로는 <code>acks=all</code>과만</strong> 상호작용한다는 것을 정확히 설명할 수 있습니다.</li>
+        <li><code>acks</code> 설정과 무관하게 적용되는 부분(컨슈머 가시성)도 함께 구분할 수 있습니다.</li>
+        <li><code>NotEnoughReplicasException</code>과 <code>NotEnoughReplicasAfterAppendException</code>의 차이와 브로커가 뱉는 실제 메시지를 압니다.</li>
+        <li><code>RF</code>와 <code>min.insync.replicas</code>를 어떻게 조합해야 하는지, 그리고 <strong>같게 두면 왜 위험한지</strong> 압니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="situation">
+      <h2 id="situation">상황</h2>
+
+      <p>
+        회원 포인트 적립 파이프라인입니다. <code>member-points</code> 토픽은
+        <strong>파티션 18개, 복제 계수 3</strong>, 브로커 3대에서 <strong>일 90만 건</strong>의 적립·차감 이벤트를 받습니다.
+        포인트 잔액은 이 토픽을 소비해 만드는 원장이라 유실이 곧 금전 문제입니다.
+      </p>
+      <p>
+        반년 전 다른 토픽에서 유실 사고를 겪은 뒤 팀은 프로듀서 설정을 전면 점검했습니다.
+        결과는 정확했습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>producer.properties — 이 부분은 문제가 없었습니다</figcaption>
+        <pre><code class="lang-properties">acks=all
+enable.idempotence=true
+max.in.flight.requests.per.connection=5
+delivery.timeout.ms=120000
+compression.type=lz4</code></pre>
+      </figure>
+
+      <p>
+        그런데 <strong>토픽 설정은 아무도 확인하지 않았습니다.</strong>
+        <code>member-points</code>는 3년 전 만들어진 그대로였습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>토픽 설정 — 여기가 빠진 곳입니다</figcaption>
+        <pre><code class="lang-bash">$ kafka-configs.sh --bootstrap-server kafka-1:9092 \
+    --entity-type topics --entity-name member-points --describe
+
+Dynamic configs for topic member-points are:
+  retention.ms=1209600000 sensitive=false synonyms={DYNAMIC_TOPIC_CONFIG:retention.ms=1209600000}
+
+# min.insync.replicas 가 없습니다 → 기본값 1 이 적용됩니다.</code></pre>
+      </figure>
+
+      <p>
+        수요일 02:00, 정기 OS 패치를 위해 <code>kafka-3</code>을 계획대로 내렸습니다.
+        롤링 재시작이므로 문제가 없어야 했습니다. 그런데 02:04에
+        <code>kafka-2</code>에서 <strong>18초짜리 GC 일시 정지</strong>가 발생해 ISR에서 빠졌습니다.
+        그 순간 여러 파티션의 ISR이 <strong>리더 하나</strong>가 되었습니다.
+      </p>
+      <p>
+        <code>min.insync.replicas=1</code>이므로 브로커는 쓰기를 계속 받았고,
+        <code>acks=all</code>인 프로듀서도 <strong>"ISR 전원 = 리더 1대"</strong>의 기록만으로 성공 응답을 받았습니다.
+        02:06에 <code>kafka-1</code>의 EBS 볼륨이 분리되면서
+        <strong>02:04~02:06 사이의 12,447건이 사라졌습니다.</strong>
+      </p>
+
+      <aside class="note note--danger" data-label="이 케이스의 핵심 문장">
+        <p>
+          <code>acks=all</code>은 <strong>"모든 레플리카"가 아니라 "현재 ISR 전원"</strong>을 기다립니다.
+          ISR이 1로 줄어들면 <code>acks=all</code>은 <code>acks=1</code>과 동일한 보장을 제공합니다.
+        </p>
+        <p>
+          <code>min.insync.replicas</code>는 그 <strong>"현재 ISR"의 최소 크기를 강제</strong>하는 설정입니다.
+          <code>acks=all</code>과 <code>min.insync.replicas≥2</code>는
+          <strong>둘이 함께 있어야 의미가 있고, 하나만 있으면 아무 효과가 없습니다.</strong>
+        </p>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-115">
+        <figcaption>
+          <code>min.insync.replicas=1</code>에서 <code>acks=all</code>이 무력화되는 과정 —
+          ISR 3일 때의 정상 쓰기, ISR이 1로 줄어든 뒤에도 성공 응답이 나가는 구간,
+          그리고 그 리더가 사라지는 시점
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="symptoms">
+      <h2 id="symptoms">관측된 증상</h2>
+
+      <h3 id="metrics-shape">메트릭이 어떻게 보였는가</h3>
+      <ul>
+        <li><strong><code>UnderReplicatedPartitions</code></strong>: 02:00에 6(계획된 브로커 다운), 02:04에 18로 급등.</li>
+        <li>
+          <strong><code>UnderMinIsrPartitionCount</code></strong>: <strong>끝까지 0이었습니다.</strong>
+          <code>min.insync.replicas=1</code>이므로 ISR이 1이어도 "min ISR 미달"이 아닙니다.
+          <strong>이 지표에 알림을 걸어 두었는데도 울리지 않은 이유가 여기 있습니다.</strong>
+        </li>
+        <li>
+          <strong><code>AtMinIsrPartitionCount</code></strong>: 02:04에 18로 급등.
+          "ISR = min ISR"인 파티션 수이므로 이쪽이 울렸어야 했지만 알림 대상이 아니었습니다.
+        </li>
+        <li><strong>프로듀서 <code>record-error-rate</code></strong>: 0. 단 한 건도 실패하지 않았습니다.</li>
+        <li><strong>포인트 원장 대조</strong>: 02:04~02:06 구간 12,447건 누락.</li>
+      </ul>
+
+      <aside class="note note--warn" data-label="알림을 잘못 걸어 둔 것이 두 번째 실수">
+        <p>
+          <code>UnderMinIsrPartitionCount</code>는 <code>|ISR| &lt; min.insync.replicas</code>인 파티션 수입니다.
+          <code>min.insync.replicas=1</code>이면 <strong>ISR이 1이 되어도 이 값은 0</strong>입니다.
+          즉 이 지표는 <code>min.insync.replicas</code>를 제대로 설정하지 않으면 <strong>아무것도 감지하지 못합니다.</strong>
+        </p>
+        <p>
+          <code>UnderReplicatedPartitions</code>(<code>|ISR| &lt; |전체 레플리카|</code>)와
+          <code>AtMinIsrPartitionCount</code>(<code>|ISR| = min.insync.replicas</code>)를 함께 걸어야 합니다.
+          세 지표 모두 정상값은 <strong>0</strong>입니다.
+        </p>
+      </aside>
+
+      <h3 id="broker-log">브로커 로그</h3>
+      <figure class="code">
+        <figcaption>kafka-1 server.log 02:04 — ISR이 리더 하나로 줄어듭니다</figcaption>
+        <pre><code class="lang-bash">INFO [Partition member-points-3 broker=1] Shrinking ISR from 1,2 to 1. Leader: (highWatermark: 41288052, endOffset: 41288231). Out of sync replicas: (brokerId: 2, endOffset: 41287004, lastCaughtUpTimeMs: 1761789871442).</code></pre>
+      </figure>
+      <p>
+        그리고 <strong>그다음에 아무 로그도 나오지 않습니다.</strong>
+        <code>min.insync.replicas=1</code>이므로 브로커는 쓰기를 거부할 이유가 없고,
+        경고를 남길 이유도 없습니다. 이 조용함이 이 사고의 특징입니다.
+      </p>
+
+      <h3 id="what-should-have-happened">제대로 설정했다면 나왔을 로그</h3>
+      <p>
+        <code>min.insync.replicas=2</code>였다면 브로커는 쓰기를 <strong>거부</strong>하고
+        프로듀서에게 오류를 반환했을 것입니다.
+        브로커가 던지는 <code>NotEnoughReplicasException</code>의 메시지는 상황을 그대로 설명합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>프로듀서 쪽에서 보이는 형태 — 이 오류가 났다면 유실은 없었습니다</figcaption>
+        <pre><code class="lang-bash">WARN  [Producer clientId=points-writer-1] Got error produce response with correlation id 88213 on topic-partition member-points-3, retrying (2147483646 attempts left). Error: NOT_ENOUGH_REPLICAS
+
+# 재시도가 delivery.timeout.ms 를 넘기면 최종 실패로 콜백에 전달됩니다
+org.apache.kafka.common.errors.NotEnoughReplicasException: The size of the current ISR : 1 is insufficient to satisfy the min.isr requirement of 2 for partition member-points-3, live replica(s) broker.id are : [1]</code></pre>
+      </figure>
+
+      <aside class="note note--ok" data-label="이 오류는 재시도 가능합니다">
+        <p>
+          <code>NotEnoughReplicasException</code>은 <code>RetriableException</code>의 하위 클래스입니다.
+          즉 프로듀서는 <strong>실패로 끝내지 않고 계속 재시도</strong>합니다.
+          <code>retries</code> 기본값이 <strong>2147483647</strong>이고
+          <code>delivery.timeout.ms</code> 기본값이 <strong>120000</strong>(2분)이므로,
+          <strong>2분 안에 ISR이 회복되면 데이터는 정상적으로 들어갑니다.</strong>
+        </p>
+        <p>
+          이것이 핵심입니다. <code>min.insync.replicas=2</code>는 "장애 시 쓰기를 실패시킨다"가 아니라
+          <strong>"안전해질 때까지 기다리게 만든다"</strong>입니다.
+          짧은 GC 정지나 롤링 재시작은 대부분 이 시간 안에 회복됩니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="root-cause">
+      <h2 id="root-cause">원인 분석</h2>
+
+      <h3 id="step1-semantics">1단계 — 공식 정의를 정확히 읽는다</h3>
+      <p>공식 설명을 문장 단위로 나누면 상호작용 범위가 분명해집니다.</p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>min.insync.replicas</code>의 동작 (기본값 <code>1</code>, 브로커·토픽 양쪽에서 설정 가능)</caption>
+          <thead>
+            <tr>
+              <th scope="col">공식 서술</th>
+              <th scope="col">의미</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">"프로듀서가 <code>acks</code>를 <code>all</code>(또는 <code>-1</code>)로 설정했을 때 쓰기가 성공하기 위해 필요한 <strong>최소 in-sync 레플리카 수</strong>(리더 포함)"</th>
+              <td><strong>쓰기 거부는 <code>acks=all</code>일 때만</strong> 일어납니다. <code>acks=0</code>·<code>acks=1</code>에는 이 설정이 적용되지 않습니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">"<code>acks=all</code>인 경우 모든 in-sync 레플리카가 쓰기를 ack 해야 성공으로 간주된다. RF=3이고 ISR에 3개가 다 있으면 <code>min.insync.replicas</code>가 3보다 작아도 <strong>3개 모두</strong> ack 해야 한다"</th>
+              <td><code>min.insync.replicas</code>는 <strong>하한선</strong>일 뿐입니다. "2만 받으면 된다"는 뜻이 아닙니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">"<code>acks=all</code>이고 현재 ISR이 <code>min.insync.replicas</code>보다 적으면 프로듀서가 <strong><code>NotEnoughReplicas</code> 또는 <code>NotEnoughReplicasAfterAppend</code></strong> 예외를 받는다"</th>
+              <td>예외 이름이 두 개인 이유는 <strong>append 전에 걸리는 경우와 append 후에 걸리는 경우</strong>가 나뉘기 때문입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">"<strong><code>acks</code> 설정과 무관하게</strong>, 메시지는 모든 in-sync 레플리카에 복제되고 <code>min.insync.replicas</code> 조건이 충족될 때까지 <strong>컨슈머에게 보이지 않는다</strong>"</th>
+              <td><strong>여기는 <code>acks</code>와 무관합니다.</strong> 컨슈머 가시성(high watermark 전진)에는 <code>acks=1</code>이어도 이 조건이 걸립니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="가장 자주 틀리는 지점 — 정확히 구분하기">
+        <p>
+          <strong>"<code>min.insync.replicas</code>는 <code>acks=all</code>과만 상호작용한다"</strong>는 서술은
+          <strong>쓰기 거부에 관해서만</strong> 참입니다.
+        </p>
+        <ul>
+          <li>
+            <strong>쓰기 거부(프로듀서가 예외를 받음)</strong> → <code>acks=all</code>일 때만.
+            Kafka 4.3 브로커 코드의 조건이 <code>inSyncSize &lt; minIsr &amp;&amp; requiredAcks == -1</code>입니다.
+            <code>acks=1</code>로 보내면 ISR이 1이어도 브로커는 그냥 받습니다.
+          </li>
+          <li>
+            <strong>컨슈머 가시성(high watermark 전진)</strong> → <code>acks</code>와 무관.
+            <code>min.insync.replicas</code> 조건이 충족되지 않으면 컨슈머는 그 레코드를 볼 수 없습니다.
+          </li>
+        </ul>
+        <p>
+          시험에서는 대개 <strong>쓰기 거부 쪽</strong>을 묻습니다. 실무에서는 둘 다 중요합니다 —
+          <code>acks=1</code>로 보내고 "커밋됐다"고 가정하는 코드는 두 번째 규칙 때문에도 틀립니다.
+        </p>
+      </aside>
+
+      <h3 id="step2-two-exceptions">2단계 — 두 예외의 차이</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>ISR 부족 시 발생하는 두 예외 (둘 다 <code>RetriableException</code>)</caption>
+          <thead>
+            <tr>
+              <th scope="col">예외</th>
+              <th scope="col">에러 코드 / 프로토콜 메시지</th>
+              <th scope="col">발생 시점</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>NotEnoughReplicasException</code></th>
+              <td><code>NOT_ENOUGH_REPLICAS</code> (19)<br>"Messages are rejected since there are fewer in-sync replicas than required."</td>
+              <td><strong>로그에 쓰기 전</strong> — ISR 크기 검사에서 거부. 데이터가 로그에 들어가지 않습니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>NotEnoughReplicasAfterAppendException</code></th>
+              <td><code>NOT_ENOUGH_REPLICAS_AFTER_APPEND</code> (20)<br>"Messages are written to the log, but to fewer in-sync replicas than required."</td>
+              <td><strong>로그에 쓴 뒤</strong> — append는 됐지만 필요한 수만큼 복제되지 않아 성공으로 인정하지 못함.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="AfterAppend 가 중복을 만드는 경로">
+        <p>
+          <code>NotEnoughReplicasAfterAppendException</code>은 <strong>이미 로그에 쓰인 뒤</strong> 발생합니다.
+          프로듀서는 실패로 보고 재시도하므로, <strong>멱등성이 없으면 같은 레코드가 두 번 들어갈 수 있습니다.</strong>
+          그래서 <code>enable.idempotence=true</code>(4.x 기본값)가 이 조합의 필수 구성 요소입니다.
+          멱등 프로듀서는 시퀀스 번호로 파티션 단위 중복을 제거합니다
+          (<a href="../basics/ch06.html">6장 전달 보장과 트랜잭션</a>).
+        </p>
+      </aside>
+
+      <h3 id="step3-rf-vs-minisr">3단계 — RF와 min ISR의 조합</h3>
+      <p>
+        <code>min.insync.replicas</code>를 올리면 안전해지지만, <strong>너무 올리면 가용성이 사라집니다.</strong>
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>RF와 <code>min.insync.replicas</code> 조합별 결과 (<code>acks=all</code> 기준)</caption>
+          <thead>
+            <tr>
+              <th scope="col">RF</th>
+              <th scope="col">min ISR</th>
+              <th scope="col">견딜 수 있는 브로커 손실</th>
+              <th scope="col">평가</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">3</th>
+              <td>1</td>
+              <td>2대 (쓰기는 계속되지만 <strong>무보장</strong>)</td>
+              <td><span class="mark-no">위험</span> — 이 케이스의 설정. <code>acks=all</code>이 무력화됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row">3</th>
+              <td><strong>2</strong></td>
+              <td><strong>1대</strong> — 쓰기 정상, 유실 없음</td>
+              <td><span class="mark-ok">권장</span> — 공식 문서가 제시하는 전형적 시나리오</td>
+            </tr>
+            <tr>
+              <th scope="row">3</th>
+              <td>3</td>
+              <td>0대 — <strong>1대만 내려가도 쓰기 중단</strong></td>
+              <td><span class="mark-no">과도</span> — 롤링 재시작조차 못 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">2</th>
+              <td>2</td>
+              <td>0대</td>
+              <td><span class="mark-no">과도</span> — RF=2에서는 안전과 가용성을 동시에 얻을 수 없습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">5</th>
+              <td>3</td>
+              <td>2대</td>
+              <td><span class="mark-ok">고가용</span> — 브로커 5대 이상 클러스터의 중요 토픽</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--ok" data-label="규칙으로 외우기">
+        <p>
+          <strong><code>min.insync.replicas = RF - (허용할 브로커 손실 수)</code></strong><br>
+          그리고 <strong><code>RF &gt; min.insync.replicas</code></strong>여야 합니다.
+          같게 두면 브로커 1대 손실로 쓰기가 멈추고, 롤링 재시작도 불가능합니다.
+        </p>
+        <p>
+          공식 문서가 드는 전형적 시나리오도 이것입니다 —
+          <strong>"RF=3, <code>min.insync.replicas=2</code>, <code>acks=all</code>"</strong>.
+          이렇게 하면 과반의 레플리카가 기록을 영속화한 뒤에야 프로듀서가 성공으로 간주하고
+          컨슈머에게도 보이게 됩니다.
+        </p>
+      </aside>
+
+      <h3 id="step4-internal-topics">4단계 — 내부 토픽은 이미 안전하게 기본 설정되어 있다</h3>
+      <p>
+        여기서 팀이 놓친 힌트가 있었습니다.
+        Kafka는 <strong>자기 내부 토픽에는 이미 강한 기본값</strong>을 씁니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>내부 토픽 관련 브로커 설정 기본값 (Apache Kafka 4.3)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">대상</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>offsets.topic.replication.factor</code></th><td>3</td><td><code>__consumer_offsets</code></td></tr>
+            <tr><th scope="row"><code>transaction.state.log.replication.factor</code></th><td>3</td><td><code>__transaction_state</code></td></tr>
+            <tr><th scope="row"><code>transaction.state.log.min.isr</code></th><td><strong>2</strong></td><td><code>__transaction_state</code></td></tr>
+            <tr><th scope="row"><code>share.coordinator.state.topic.replication.factor</code></th><td>3</td><td><code>__share_group_state</code></td></tr>
+            <tr><th scope="row"><code>share.coordinator.state.topic.min.isr</code></th><td><strong>2</strong></td><td><code>__share_group_state</code></td></tr>
+            <tr><th scope="row"><code>min.insync.replicas</code></th><td><strong>1</strong></td><td>일반 토픽 (브로커·토픽 기본값)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="읽는 법">
+        <p>
+          Kafka는 <strong>트랜잭션 상태 로그에는 <code>min.isr=2</code>를 기본값으로 강제</strong>합니다.
+          자기가 잃으면 안 되는 데이터에는 2를 씁니다.
+          그런데 <strong>일반 토픽의 <code>min.insync.replicas</code> 기본값은 1</strong>입니다 —
+          Kafka가 여러분의 데이터 중요도를 알 수 없기 때문입니다.
+          <strong>중요 토픽에는 반드시 명시하세요.</strong>
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="reproduce">
+      <h2 id="reproduce">재현 방법</h2>
+
+      <p>
+        3노드 KRaft 클러스터가 필요합니다.
+        아래 compose는 Apache Kafka의 공식 3노드 combined 모드 예제를 YAML 앵커로 축약한 것입니다
+        (자세한 구성은 <a href="../practice/ex01.html">예제 1</a>).
+      </p>
+
+      <figure class="code">
+        <figcaption>docker-compose.yml — 3노드 KRaft</figcaption>
+        <pre><code class="lang-yaml">x-kafka-env: &amp;kenv
+  KAFKA_PROCESS_ROLES: 'broker,controller'
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+  KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093'
+  KAFKA_LISTENERS: 'PLAINTEXT://:19092,CONTROLLER://:9093,PLAINTEXT_HOST://:9092'
+  KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+  KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+  CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+
+services:
+  kafka-1:
+    image: apache/kafka:4.3.1
+    hostname: kafka-1
+    container_name: kafka-1
+    ports: ['29092:9092']
+    environment:
+      &lt;&lt;: *kenv
+      KAFKA_NODE_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-1:19092,PLAINTEXT_HOST://localhost:29092'
+  kafka-2:
+    image: apache/kafka:4.3.1
+    hostname: kafka-2
+    container_name: kafka-2
+    ports: ['39092:9092']
+    environment:
+      &lt;&lt;: *kenv
+      KAFKA_NODE_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-2:19092,PLAINTEXT_HOST://localhost:39092'
+  kafka-3:
+    image: apache/kafka:4.3.1
+    hostname: kafka-3
+    container_name: kafka-3
+    ports: ['49092:9092']
+    environment:
+      &lt;&lt;: *kenv
+      KAFKA_NODE_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-3:19092,PLAINTEXT_HOST://localhost:49092'</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>재현 절차 — 같은 <code>acks=all</code>로 두 토픽의 반응 차이를 봅니다</figcaption>
+        <pre><code class="lang-bash">docker compose up -d
+K=/opt/kafka/bin
+
+# 1. min ISR 을 다르게 준 토픽 두 개를 만든다
+docker exec -it kafka-1 $K/kafka-topics.sh --create --topic minisr-1 \
+  --partitions 1 --replication-factor 3 --bootstrap-server localhost:9092
+docker exec -it kafka-1 $K/kafka-topics.sh --create --topic minisr-2 \
+  --partitions 1 --replication-factor 3 --config min.insync.replicas=2 \
+  --bootstrap-server localhost:9092
+
+# 2. 브로커 두 대를 내려 ISR 을 리더 하나로 만든다
+docker stop kafka-2 kafka-3
+docker exec -it kafka-1 $K/kafka-topics.sh --describe --bootstrap-server localhost:9092 \
+  --topic minisr-1 --topic minisr-2
+#   → 둘 다 Isr: 1
+
+# 3. acks=all 로 minisr-1 (min ISR=1) 에 쓴다 → 성공합니다. 이게 사고의 원인입니다.
+echo "danger" | docker exec -i kafka-1 $K/kafka-console-producer.sh \
+  --topic minisr-1 --bootstrap-server localhost:9092 \
+  --producer-property acks=all
+#   → 아무 오류 없이 끝납니다.
+
+# 4. 같은 acks=all 로 minisr-2 (min ISR=2) 에 쓴다 → 거부됩니다.
+echo "safe" | docker exec -i kafka-1 $K/kafka-console-producer.sh \
+  --topic minisr-2 --bootstrap-server localhost:9092 \
+  --producer-property acks=all --producer-property delivery.timeout.ms=10000
+#   → NOT_ENOUGH_REPLICAS 로 재시도한 뒤 타임아웃으로 실패합니다:
+#     org.apache.kafka.common.errors.NotEnoughReplicasException: The size of the current ISR : 1
+#     is insufficient to satisfy the min.isr requirement of 2 for partition minisr-2-0, ...
+
+# 5. acks=1 로 minisr-2 에 쓴다 → 성공합니다.
+#    min.insync.replicas 는 쓰기 거부 측면에서 acks=all 과만 상호작용합니다.
+echo "acks-1-bypass" | docker exec -i kafka-1 $K/kafka-console-producer.sh \
+  --topic minisr-2 --bootstrap-server localhost:9092 \
+  --producer-property acks=1
+#   → 성공. 이것이 "min ISR 만 설정해도 안 되는" 이유입니다.
+
+# 6. 브로커를 복구하고 각 토픽의 데이터를 확인한다
+docker start kafka-2 kafka-3
+sleep 20
+docker exec -it kafka-1 $K/kafka-console-consumer.sh --topic minisr-2 \
+  --from-beginning --timeout-ms 8000 --bootstrap-server localhost:9092
+#   → "safe" 는 없고 "acks-1-bypass" 만 있습니다.</code></pre>
+      </figure>
+
+      <aside class="note note--ok" data-label="재현의 핵심 관찰">
+        <p>
+          3단계와 4단계의 차이가 이 케이스의 전부입니다. <strong>같은 프로듀서 설정, 같은 ISR 상태인데
+          토픽 설정 한 줄 때문에 한쪽은 조용히 성공하고 한쪽은 거부합니다.</strong>
+          5단계는 "<code>min.insync.replicas</code>만 설정해도 <code>acks=1</code> 프로듀서는 우회한다"는 점을 보여 줍니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="fix">
+      <h2 id="fix">해결</h2>
+
+      <h3 id="immediate">즉시 조치 — 토픽 설정을 동적으로 올린다</h3>
+      <p>
+        <code>min.insync.replicas</code>는 동적 토픽 설정이므로 <strong>재시작 없이 즉시 적용</strong>됩니다.
+        재배포도 필요 없습니다. 장애 대응 중이라면 이것이 가장 빠른 조치입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>즉시 조치 — 중요 토픽에 min ISR 을 심는다</figcaption>
+        <pre><code class="lang-bash"># 1. 개별 토픽에 적용
+kafka-configs.sh --bootstrap-server kafka-1:9092 \
+  --entity-type topics --entity-name member-points \
+  --alter --add-config min.insync.replicas=2
+
+# 2. RF 가 2 이하인 토픽에 2를 걸면 즉시 쓰기가 멈춥니다. 먼저 RF 를 확인하세요.
+kafka-topics.sh --bootstrap-server kafka-1:9092 --describe \
+  | awk '/^Topic:/ {print $1, $2, $6, $8}'
+
+# 3. min ISR 이 없는 토픽 목록을 뽑는다 (점검용)
+for t in $(kafka-topics.sh --bootstrap-server kafka-1:9092 --list | grep -v '^__'); do
+  v=$(kafka-configs.sh --bootstrap-server kafka-1:9092 \
+        --entity-type topics --entity-name "$t" --describe --all \
+        | grep -o 'min.insync.replicas=[0-9]*' | head -1)
+  echo "$t  $v"
+done
+
+# 4. 클러스터 기본값도 올린다 (신규 토픽에 적용)
+kafka-configs.sh --bootstrap-server kafka-1:9092 \
+  --entity-type brokers --entity-default \
+  --alter --add-config min.insync.replicas=2</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="순서를 틀리면 장애가 커집니다">
+        <p>
+          <strong>RF가 <code>min.insync.replicas</code>보다 큰지 먼저 확인하세요.</strong>
+          RF=1인 토픽에 <code>min.insync.replicas=2</code>를 걸면
+          <code>acks=all</code> 쓰기가 <strong>영구히 실패</strong>합니다 (ISR이 절대 2가 될 수 없으므로).
+          클러스터 기본값을 올릴 때는 RF=1로 자동 생성된 토픽이 없는지 반드시 확인하세요.
+        </p>
+        <p>
+          또한 <strong>브로커가 이미 내려가 있는 상태</strong>에서 min ISR을 올리면
+          그 순간부터 쓰기가 거부됩니다. 복구가 끝난 뒤에 적용하거나,
+          거부가 의도된 동작임을 관계자에게 알린 뒤 적용하세요.
+        </p>
+      </aside>
+
+      <h3 id="root-fix">근본 해결 — 프로듀서·토픽·알림을 한 세트로 관리한다</h3>
+
+      <div class="diff">
+        <div class="diff__before">
+          <p>
+            프로듀서는 완벽했지만 <strong>토픽 설정이 반쪽</strong>이었습니다.
+            알림도 감지하지 못하는 지표에 걸려 있었습니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 전</figcaption>
+            <pre><code class="lang-properties"># producer — 문제 없음
+acks=all
+enable.idempotence=true
+
+# 토픽 member-points
+retention.ms=1209600000
+# min.insync.replicas 없음 → 1
+
+# 알림
+# UnderMinIsrPartitionCount > 0  ← min ISR=1 이면 절대 울리지 않음</code></pre>
+          </figure>
+        </div>
+        <div class="diff__after">
+          <p>
+            세 가지를 한 세트로 봅니다.
+            <strong>프로듀서 <code>acks=all</code> + 토픽 <code>min.insync.replicas=2</code> + RF 3.</strong>
+            알림은 실제로 울리는 지표에 겁니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 후</figcaption>
+            <pre><code class="lang-properties"># producer
+acks=all
+enable.idempotence=true
+delivery.timeout.ms=120000       # ISR 회복을 기다릴 시간
+
+# 토픽 member-points
+retention.ms=1209600000
+min.insync.replicas=2            # RF=3 이므로 브로커 1대 손실을 견딘다
+
+# 브로커 (동적 기본값 — 신규 토픽 보호)
+min.insync.replicas=2
+unclean.leader.election.enable=false   # 4.x 기본값. 오버라이드하지 않는다
+
+# 알림
+# UnderReplicatedPartitions  > 0
+# UnderMinIsrPartitionCount  > 0
+# AtMinIsrPartitionCount     > 0   ← 이게 조기 경보 역할을 합니다
+# OfflinePartitionsCount     > 0</code></pre>
+          </figure>
+        </div>
+      </div>
+
+      <aside class="note note--ok" data-label="세 가지가 함께 있어야 합니다">
+        <p>
+          내구성은 <strong>프로듀서 · 토픽 · 클러스터의 세 설정이 정합할 때만</strong> 성립합니다.
+        </p>
+        <ul>
+          <li><strong>프로듀서</strong>: <code>acks=all</code>, <code>enable.idempotence=true</code></li>
+          <li><strong>토픽</strong>: <code>RF ≥ 3</code>, <code>min.insync.replicas = RF - 허용 손실</code></li>
+          <li><strong>클러스터</strong>: <code>unclean.leader.election.enable=false</code>(4.x 기본값)</li>
+        </ul>
+        <p>
+          하나만 빠져도 나머지가 무력화됩니다.
+          <code>acks</code>만 고친 것이 이 케이스, <code>unclean</code>만 켜 둔 것이
+          <a href="case03.html">케이스 3</a>입니다.
+          전체 조합은 <a href="../practice/ex03.html">예제 3 · 안전한 Producer 설정</a>에서 코드로 검증합니다.
+        </p>
+      </aside>
+
+      <h3 id="app-side">애플리케이션이 실패를 제대로 다루게 만든다</h3>
+      <p>
+        <code>min.insync.replicas=2</code>를 켜면 <strong>브로커 2대가 내려간 동안 쓰기가 실패</strong>합니다.
+        이것은 의도된 동작이지만, 애플리케이션이 그 실패를 삼키면 결국 같은 유실이 됩니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>콜백에서 실패를 반드시 다룬다 — 삼키면 min ISR 설정이 무의미해집니다</figcaption>
+        <pre><code class="lang-java">producer.send(record, (metadata, exception) -&gt; {
+    if (exception == null) {
+        return;
+    }
+    if (exception instanceof RetriableException) {
+        // delivery.timeout.ms 안에서는 클라이언트가 이미 재시도했습니다.
+        // 여기까지 왔다면 그 시간이 끝난 것입니다.
+        metrics.counter("kafka.produce.retriable_exhausted").increment();
+    }
+    // 유실을 만들지 않으려면 로컬에 보존하고 나중에 재전송해야 합니다.
+    outbox.save(record);                 // 예: DB outbox 테이블
+    log.error("produce failed, saved to outbox: topic={} key={}",
+              record.topic(), record.key(), exception);
+});</code></pre>
+      </figure>
+      <p>
+        DLQ·재시도·outbox 패턴의 구현은 <a href="../practice/ex06.html">예제 6 · DLQ + 재시도 패턴</a>에 있습니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prevention">
+      <h2 id="prevention">예방 체크리스트</h2>
+
+      <ul>
+        <li><label><input type="checkbox"> 중요 토픽에 <code>min.insync.replicas</code>가 <strong>명시</strong>되어 있다 (기본값 1 방치 아님)</label></li>
+        <li><label><input type="checkbox"> 모든 토픽에서 <strong><code>RF &gt; min.insync.replicas</code></strong>다</label></li>
+        <li><label><input type="checkbox"> 브로커 동적 기본값으로 <code>min.insync.replicas=2</code>를 걸었고, RF=1 토픽이 없는지 확인했다</label></li>
+        <li><label><input type="checkbox"> 프로듀서가 <code>acks=all</code>이다 (<code>min.insync.replicas</code>만 올려도 <code>acks=1</code>은 우회합니다)</label></li>
+        <li><label><input type="checkbox"> <code>enable.idempotence=true</code>다 (<code>NotEnoughReplicasAfterAppend</code> 재시도 중복 방지)</label></li>
+        <li><label><input type="checkbox"> <code>delivery.timeout.ms</code>가 롤링 재시작·GC 정지 회복 시간보다 길다</label></li>
+        <li><label><input type="checkbox"> 프로듀서 콜백이 실패를 <strong>삼키지 않는다</strong> (outbox 또는 알림)</label></li>
+        <li><label><input type="checkbox"> 알림이 <code>UnderReplicatedPartitions</code>·<code>UnderMinIsrPartitionCount</code>·<code>AtMinIsrPartitionCount</code>·<code>OfflinePartitionsCount</code> 네 개 모두에 걸려 있다</label></li>
+        <li><label><input type="checkbox"> 롤링 재시작 절차에 <strong>"한 대씩, ISR 회복 확인 후 다음"</strong>이 명시되어 있다</label></li>
+        <li><label><input type="checkbox"> 토픽 생성이 <strong>코드·IaC로 관리</strong>되고 <code>min.insync.replicas</code>가 템플릿에 들어 있다 (<code>auto.create.topics.enable</code>로 만들어지지 않는다)</label></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트</h2>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <ul>
+          <li>
+            <strong><code>min.insync.replicas</code>는 <code>acks=all</code>과만 상호작용</strong>합니다(쓰기 거부 측면).
+            <code>acks=0</code>·<code>acks=1</code> 프로듀서에는 쓰기 거부가 적용되지 않습니다.
+            이 조합을 묻는 문항이 매우 자주 나옵니다.
+          </li>
+          <li>
+            기본값: <code>min.insync.replicas</code> = <strong>1</strong>,
+            <code>default.replication.factor</code> = <strong>1</strong>,
+            <code>acks</code> = <strong><code>all</code></strong>.
+          </li>
+          <li>
+            RF=3 + <code>min.insync.replicas=2</code> + <code>acks=all</code>이
+            <strong>공식 문서가 드는 전형적 내구성 시나리오</strong>입니다.
+          </li>
+          <li>
+            <code>min.insync.replicas</code>는 <strong>하한선</strong>입니다.
+            ISR에 3개가 다 있으면 <code>acks=all</code>은 <strong>3개 모두</strong>의 ack를 기다립니다.
+            "2개만 받으면 된다"를 고르면 오답입니다.
+          </li>
+          <li>
+            <strong><code>acks</code>와 무관하게</strong>, 메시지는 모든 in-sync 레플리카에 복제되고
+            <code>min.insync.replicas</code> 조건이 충족될 때까지 <strong>컨슈머에게 보이지 않습니다.</strong>
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development (예외)">
+        <ul>
+          <li>
+            ISR 부족 시 프로듀서가 받는 예외는
+            <strong><code>NotEnoughReplicasException</code></strong>(로그에 쓰기 전 거부) 또는
+            <strong><code>NotEnoughReplicasAfterAppendException</code></strong>(쓴 뒤 복제 부족)입니다.
+          </li>
+          <li>
+            둘 다 <strong><code>RetriableException</code></strong>입니다 → 프로듀서가 재시도합니다.
+            <code>retries</code> 기본값 <strong>2147483647</strong>,
+            <code>delivery.timeout.ms</code> 기본값 <strong>120000</strong>.
+          </li>
+          <li>
+            프로토콜 에러 코드: <code>NOT_ENOUGH_REPLICAS</code> = <strong>19</strong>,
+            <code>NOT_ENOUGH_REPLICAS_AFTER_APPEND</code> = <strong>20</strong>.
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Cluster Configuration / Observability">
+        <ul>
+          <li>
+            <code>UnderReplicatedPartitions</code> = <code>|ISR| &lt; |전체 레플리카|</code><br>
+            <code>UnderMinIsrPartitionCount</code> = <code>|ISR| &lt; min.insync.replicas</code><br>
+            <code>AtMinIsrPartitionCount</code> = <code>|ISR| = min.insync.replicas</code><br>
+            세 지표 모두 <strong>정상값 0</strong>입니다. 정의를 서로 바꿔 놓은 선택지가 오답으로 나옵니다.
+          </li>
+          <li>
+            내부 토픽 기본값: <code>offsets.topic.replication.factor</code>=3,
+            <code>transaction.state.log.replication.factor</code>=3,
+            <strong><code>transaction.state.log.min.isr</code>=2</strong>.
+          </li>
+          <li>
+            <code>min.insync.replicas</code>는 <strong>동적 설정</strong>이라 재시작 없이 적용됩니다.
+            <code>kafka-configs --entity-type topics --alter --add-config</code>로 변경합니다.
+          </li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="case03.html">
+          <span class="card__title">케이스 3 · 브로커 장애 후 유실</span>
+          <span class="card__desc"><code>acks=1</code>과 unclean 리더 선출이 겹쳤을 때.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch02.html">
+          <span class="card__title">2장 · 아키텍처와 핵심 개념</span>
+          <span class="card__desc">ISR, high watermark, 복제와 리더 선출.</span>
+          <span class="card__meta">CCDAK Fundamentals</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch06.html">
+          <span class="card__title">6장 · 전달 보장과 트랜잭션</span>
+          <span class="card__desc">멱등 프로듀서가 재시도 중복을 제거하는 원리.</span>
+          <span class="card__meta">CCDAK Application Development</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex03.html">
+          <span class="card__title">예제 3 · 안전한 Producer 설정</span>
+          <span class="card__desc">무손실 조합을 실제로 검증하는 코드.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex06.html">
+          <span class="card__title">예제 6 · DLQ + 재시도 패턴</span>
+          <span class="card__desc">쓰기 실패를 유실로 만들지 않는 outbox·DLQ 구현.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/metrics.html">
+          <span class="card__title">JMX 메트릭 치트시트</span>
+          <span class="card__desc">ISR 관련 세 지표의 정의와 임계값.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas" rel="noopener noreferrer">Topic Configs — <code>min.insync.replicas</code></a> — 기본값 1, <code>acks=all</code>과의 상호작용, 두 예외, <code>acks</code>와 무관한 컨슈머 가시성 조건, RF=3 / min ISR=2 / <code>acks=all</code> 전형 시나리오</li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs_min.insync.replicas" rel="noopener noreferrer">Broker Configs — <code>min.insync.replicas</code></a> — 브로커 기본값 1, cluster-wide 동적 변경 가능</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_acks" rel="noopener noreferrer">Producer Configs — <code>acks</code></a> — <code>all</code>이 "현재 ISR 전원"을 의미한다는 정의</li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs_transaction.state.log.min.isr" rel="noopener noreferrer">Broker Configs — 내부 토픽 복제 설정</a> — <code>transaction.state.log.min.isr</code>=2 등</li>
+        <li><a href="https://kafka.apache.org/documentation/#monitoring" rel="noopener noreferrer">Monitoring</a> — <code>UnderReplicatedPartitions</code> / <code>UnderMinIsrPartitionCount</code> / <code>AtMinIsrPartitionCount</code>의 정의와 정상값</li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops_add_topic" rel="noopener noreferrer">Operations — Adding and removing topics</a> — 토픽 생성 시 설정 지정</li>
+        <li><a href="https://github.com/apache/kafka" rel="noopener noreferrer">Apache Kafka 소스 (4.3)</a> — <code>Partition</code>의 ISR 검사 조건(<code>inSyncSize &lt; minIsr &amp;&amp; requiredAcks == -1</code>)과 <code>NotEnoughReplicasException</code> 메시지, <code>Errors</code>의 에러 코드 19·20</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

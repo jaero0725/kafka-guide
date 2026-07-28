@@ -1,0 +1,2759 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>설정 치트시트 — Kafka Guide</title>
+  <meta name="description" content="Apache Kafka 4.3 기준 Broker · Topic · Producer · Consumer · Streams · Connect 설정 302개를 공식 문서에서 확인한 기본값과 함께 정리한 검색 가능한 표. 처리량·지연·내구성 우선 프리셋 포함.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="cheatsheet" data-page="config"></div>
+
+  <main id="main" class="page page--wide" data-page-id="cheatsheet/config">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="cli.html">빠른참조</a></li>
+        <li><span aria-current="page">설정</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">빠른참조 · 설정</p>
+      <h1>설정 치트시트</h1>
+      <p class="page__lead">
+        Broker · Topic · Producer · Consumer · Streams · Connect 설정 <strong>302개</strong>를
+        Apache Kafka 4.3.1 공식 문서에서 확인한 기본값과 함께 정리했습니다.
+        각 표 위의 검색창에 설정명을 입력하면 해당 행만 남습니다.
+        기본값을 확인하지 못한 설정은 <strong>표에 넣지 않았습니다.</strong>
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 페이지 쓰는 법</h2>
+      <ul>
+        <li>설정명을 알면 <strong>검색창</strong>에 입력하세요. 6개 표가 각각 독립적으로 필터링됩니다.</li>
+        <li>목적만 아는 경우 <a href="#presets">프리셋 3종</a>에서 시작해 개별 설정으로 내려가세요.</li>
+        <li>"이 설정을 잘못 두면 무슨 일이 생기는가"는 <a href="troubleshooting.html">트러블슈팅 치트시트</a>에 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="presets">
+      <h2 id="presets">프리셋 3종 — 처리량 / 지연 / 내구성</h2>
+
+      <p>
+        설정 하나씩 고민하기 전에 <strong>무엇을 포기할지</strong> 먼저 정하는 편이 빠릅니다.
+        아래 세 조합은 서로 배타적입니다. 처리량 우선 조합의 "<code>linger.ms</code> 올림"은
+        지연 우선 조합의 "<code>linger.ms</code> 내림"과 정면으로 충돌합니다.
+      </p>
+
+      <aside class="note note--danger" data-label="이 표를 읽는 방법">
+        <p>
+          <strong>"기본값" 열만 공식 문서에서 확인한 값입니다.</strong>
+          나머지 세 열은 <strong>구체적 숫자가 아니라 방향(↑ 올림 / ↓ 내림 / = 유지)</strong>으로만 적었습니다.
+          Apache Kafka 공식 문서는 이 설정들에 대한 <strong>권장 수치를 제시하지 않습니다.</strong>
+          시중에 돌아다니는 "<code>batch.size=65536</code>, <code>linger.ms=20</code>" 같은 숫자는
+          출처가 불분명하거나 특정 워크로드의 결과이므로 이 페이지에 싣지 않았습니다.
+        </p>
+        <p>
+          실제 값은 <a href="cli.html#oneliners"><code>kafka-producer-perf-test.sh</code></a>로
+          <strong>자기 워크로드에서 측정해 정하세요.</strong>
+          방향만 알면 어디를 움직여야 하는지는 충분히 판단할 수 있습니다.
+        </p>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-123">
+        <figcaption>
+          설정 프리셋 3종 비교 — 처리량 우선 · 지연 우선 · 내구성 우선이 각각
+          <code>acks</code>, <code>linger.ms</code>, <code>batch.size</code>,
+          <code>min.insync.replicas</code>를 어느 방향으로 밀어 놓는지
+        </figcaption>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>
+            목적별 조정 방향. <strong>↑</strong> 올림 · <strong>↓</strong> 내림 · <strong>=</strong> 기본값 유지.
+            기본값 열만 공식 확인값이며 나머지는 방향 제안입니다
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">기본값 (4.3)</th>
+              <th scope="col">처리량 우선</th>
+              <th scope="col">지연 우선</th>
+              <th scope="col">내구성 우선</th>
+              <th scope="col">왜 그 방향인가</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row" colspan="6">Producer</th></tr>
+            <tr>
+              <th scope="row"><code>acks</code></th>
+              <td><code>all</code></td>
+              <td class="t-center"><strong><code>1</code></strong>로 완화</td>
+              <td class="t-center"><strong><code>1</code></strong>로 완화</td>
+              <td class="t-center"><code>all</code> <strong>=</strong></td>
+              <td><code>1</code>은 리더만 확인하므로 왕복이 짧아지지만 <strong>리더 장애 시 유실을 허용</strong>합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>linger.ms</code></th>
+              <td><code>5</code></td>
+              <td class="t-center"><strong>↑</strong></td>
+              <td class="t-center"><strong>↓</strong> (<code>0</code>)</td>
+              <td class="t-center"><strong>=</strong></td>
+              <td>배치를 모으는 시간입니다. 올리면 배치가 커져 처리량이 늘고 <strong>그만큼 지연이 늘어납니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>batch.size</code></th>
+              <td><code>16384</code></td>
+              <td class="t-center"><strong>↑</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td><strong><code>linger.ms</code>와 함께 올려야</strong> 효과가 있습니다. 이 값만 올리면 배치가 차기 전에 전송됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.type</code></th>
+              <td><code>none</code></td>
+              <td class="t-center">압축 적용</td>
+              <td class="t-center">신중히</td>
+              <td class="t-center">압축 적용</td>
+              <td>압축은 네트워크·디스크를 줄이고 <strong>CPU를 씁니다.</strong> 코덱별 압축률·CPU 수치는 공식 문서에 없으므로 <a href="#compression">아래 비교</a>를 보고 직접 측정하세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>enable.idempotence</code></th>
+              <td><code>true</code></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td>세 조합 모두 유지합니다. 끌 이유가 없습니다 — 중복 제거와 순서 보장을 공짜로 얻습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.in.flight.requests.per.connection</code></th>
+              <td><code>5</code></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td>멱등성이 켜져 있으면 <strong>5가 상한</strong>입니다. 6 이상은 <code>ConfigException</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>delivery.timeout.ms</code></th>
+              <td><code>120000</code></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>↓</strong></td>
+              <td class="t-center"><strong>↑</strong></td>
+              <td>재시도의 실질 상한입니다. 지연 우선은 빨리 포기하고 폴백, 내구성 우선은 끝까지 재시도합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>buffer.memory</code></th>
+              <td><code>33554432</code></td>
+              <td class="t-center"><strong>↑</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td>배치를 크게 모으려면 버퍼도 커야 합니다. 고갈되면 <code>max.block.ms</code> 동안 블록합니다</td>
+            </tr>
+            <tr><th scope="row" colspan="6">Consumer</th></tr>
+            <tr>
+              <th scope="row"><code>fetch.min.bytes</code></th>
+              <td><code>1</code></td>
+              <td class="t-center"><strong>↑</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td>올리면 fetch 요청 수가 줄어 브로커 부하가 내려가고 <strong>지연이 늘어납니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch.max.wait.ms</code></th>
+              <td><code>500</code></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>↓</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td><code>fetch.min.bytes</code>가 안 차도 기다리는 상한입니다. 내리면 빈 응답이 늘어납니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.poll.records</code></th>
+              <td><code>500</code></td>
+              <td class="t-center"><strong>↑</strong></td>
+              <td class="t-center"><strong>↓</strong></td>
+              <td class="t-center"><strong>↓</strong></td>
+              <td>내구성 우선에서 내리는 이유는 처리량이 아니라 <strong>한 배치의 처리 시간을 <code>max.poll.interval.ms</code> 안에 넣기 위해서</strong>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>enable.auto.commit</code></th>
+              <td><code>true</code></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong><code>false</code></strong></td>
+              <td>자동 커밋은 <strong>처리 완료 전에 커밋될 수 있어</strong> 유실 위험이 있습니다. 정확성이 필요하면 처리 후 수동 커밋</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>isolation.level</code></th>
+              <td><code>read_uncommitted</code></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong><code>read_committed</code></strong></td>
+              <td>트랜잭션 프로듀서를 쓰면서 이걸 안 바꾸면 <strong>abort된 레코드까지 읽습니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>auto.offset.reset</code></th>
+              <td><code>latest</code></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong><code>none</code></strong></td>
+              <td><code>none</code>은 커밋이 없을 때 <strong>조용히 건너뛰는 대신 예외로 알려 줍니다</strong></td>
+            </tr>
+            <tr><th scope="row" colspan="6">Broker · Topic</th></tr>
+            <tr>
+              <th scope="row"><code>min.insync.replicas</code> <span class="badge">topic</span></th>
+              <td><code>1</code></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong><code>2</code></strong> (RF=3)</td>
+              <td><code>acks=all</code>과 <strong>함께여야만</strong> 의미가 있습니다. RF와 같게 두면 브로커 1대 손실로 쓰기가 멈춥니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>unclean.leader.election.enable</code></th>
+              <td><code>false</code></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td>세 조합 모두 <code>false</code> 유지입니다. <strong>켜는 것은 유실을 허용하는 결정</strong>이며 처리량·지연과 무관합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.replica.fetchers</code></th>
+              <td><code>1</code></td>
+              <td class="t-center"><strong>↑</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>↑</strong></td>
+              <td>내구성 우선에서도 올립니다 — 복제가 빨라야 ISR이 유지되고 <code>acks=all</code>이 지연되지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.io.threads</code></th>
+              <td><code>8</code></td>
+              <td class="t-center"><strong>↑</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td><code>RequestHandlerAvgIdlePercent</code>가 <strong>0.3 아래일 때만</strong> 올리세요. 디스크가 병목이면 무효입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.network.threads</code></th>
+              <td><code>3</code></td>
+              <td class="t-center"><strong>↑</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td class="t-center"><strong>=</strong></td>
+              <td><code>NetworkProcessorAvgIdlePercent</code>가 <strong>0.3 아래일 때만</strong> 올리세요</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="프리셋 사용 규칙">
+        <p>
+          방향은 <strong>한 번에 하나씩</strong> 움직이고 매번 측정하세요.
+          여러 개를 동시에 바꾸면 어느 것이 효과가 있었는지 알 수 없고,
+          되돌릴 때도 무엇을 되돌려야 하는지 모릅니다.
+        </p>
+        <p>
+          그리고 <strong>처리량 우선의 <code>acks=1</code>은 성능 설정이 아니라 내구성 포기</strong>입니다.
+          이 항목만은 "측정해서 정할 값"이 아니라 <strong>비즈니스가 유실을 허용하는지</strong>의 문제입니다.
+        </p>
+      </aside>
+
+      <h3 id="compression">압축 코덱 선택</h3>
+
+      <aside class="note note--warn" data-label="수치를 쓰지 않은 이유">
+        <p>
+          Apache Kafka 공식 문서는 <strong>코덱별 압축률·CPU 사용량·지연의 구체적 수치를 제시하지 않습니다.</strong>
+          시중 자료의 "gzip은 CPU를 N배 쓴다" 류 숫자는 특정 데이터·하드웨어의 결과이므로
+          이 페이지에 싣지 않았습니다. 공식 문서에서 확인된 값은 아래 <strong>기본값과 레벨 범위뿐</strong>입니다.
+        </p>
+      </aside>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>압축 관련 확인된 값 — 코덱별 성능 수치는 공식 문서에 없습니다</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">기본값</th>
+              <th scope="col">허용 범위</th>
+              <th scope="col">메모</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>compression.type</code> <span class="badge">producer</span></th>
+              <td><code>none</code></td>
+              <td><code>none</code> · <code>gzip</code> · <code>snappy</code> · <code>lz4</code> · <code>zstd</code></td>
+              <td>압축은 <strong>배치 단위</strong>로 적용됩니다. 배치가 작으면 압축 효과도 작습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.type</code> <span class="badge">topic</span></th>
+              <td><code>producer</code></td>
+              <td>위 목록 + <code>producer</code> · <code>uncompressed</code></td>
+              <td><code>producer</code>는 프로듀서가 압축한 배치를 <strong>그대로 보관</strong>합니다. 다른 값이면 브로커가 재압축해 CPU를 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.gzip.level</code></th>
+              <td><code>-1</code></td>
+              <td><code>1</code>~<code>9</code> 또는 <code>-1</code></td>
+              <td><code>-1</code>은 라이브러리 기본 레벨</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.lz4.level</code></th>
+              <td><code>9</code></td>
+              <td><code>1</code>~<code>17</code></td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.zstd.level</code></th>
+              <td><code>3</code></td>
+              <td><code>-131072</code>~<code>22</code></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="code">
+        <figcaption>코덱을 직접 측정하는 방법 — 추측하지 말고 재세요</figcaption>
+        <pre><code class="lang-bash"># 같은 데이터로 코덱만 바꿔 처리량과 지연을 비교합니다.
+# 압축률은 JMX 의 compression-rate-avg (압축후/압축전 비율) 로 확인합니다.
+for codec in none lz4 zstd gzip snappy; do
+  echo "=== $codec"
+  bin/kafka-producer-perf-test.sh     --bootstrap-server localhost:9092     --topic perf-test --num-records 500000 --record-size 1024 --throughput -1     --command-property compression.type=$codec     --command-property batch.size=16384     --command-property linger.ms=5
+done
+
+# 참고: --producer-props / --producer.config 는 deprecated 입니다.
+#       4.3 부터는 --command-property / --command-config 를 쓰세요.
+# 출력의 "records/sec", "avg latency", "99th" 를 비교하고
+# 브로커의 BytesInPerSec 감소량을 함께 보세요.
+# CPU 는 브로커·클라이언트 양쪽 모두 확인해야 합니다.</code></pre>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          "처리량을 올리려면 어떤 설정을 바꾸는가" 유형에서
+          <code>batch.size</code>만 올린 선택지는 <strong>부분 정답으로 오답 처리</strong>됩니다.
+          배치가 <code>batch.size</code>에 도달하지 않으면 <code>linger.ms</code>가 만료될 때 전송되므로
+          <strong>두 값을 함께</strong> 올려야 실제로 배치가 커집니다.
+        </p>
+        <p>
+          그리고 <code>enable.idempotence=true</code>(4.x 기본)일 때
+          <code>max.in.flight.requests.per.connection</code>은 <strong>5 이하</strong>여야 합니다.
+          6 이상을 지정하면 <code>ConfigException</code>이 발생합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="broker-configs">
+      <h2 id="broker-configs">Broker 설정</h2>
+      <p>
+        KRaft 기준입니다. <code>Update Mode</code>가 <code>read-only</code>인 설정은 재시작이 필요하고,
+        <code>cluster-wide</code>·<code>per-broker</code>는
+        <code>kafka-configs --entity-type brokers --alter</code>로 무중단 변경할 수 있습니다
+        (<a href="cli.html#configs">CLI 치트시트</a>).
+      </p>
+      <div class="toolbar">
+        <div class="field">
+          <label for="f-t-broker">Broker 설정 검색</label>
+          <input class="cheat-filter" id="f-t-broker" data-target="#t-broker" type="search"
+                 placeholder="설정명으로 검색" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="config-table" id="t-broker">
+          <caption>Broker 설정 — Apache Kafka 4.3.1 공식 문서 기준 기본값 (80개)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정명</th>
+              <th scope="col">기본값</th>
+              <th scope="col">범위 · 타입</th>
+              <th scope="col">설명</th>
+              <th scope="col">튜닝 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>process.roles</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>list</code><br>[broker, controller]</td>
+              <td>KRaft 노드 역할. <code>broker</code> / <code>controller</code> / <code>broker,controller</code>(combined)</td>
+              <td>프로덕션은 역할 분리를 권장합니다. combined는 개발·소규모 전용</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>node.id</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>KRaft 노드의 고유 정수 ID. 클러스터 내 유일해야 합니다</td>
+              <td>컨트롤러와 브로커가 ID 공간을 공유합니다. 재사용하면 등록이 거부됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.bootstrap.servers</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>list</code><br>non-empty list</td>
+              <td>컨트롤러 쿼럼을 찾기 위한 <code>host:port</code> 목록</td>
+              <td>4.x 권장 방식. 정적 <code>controller.quorum.voters</code>보다 유연합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.voters</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>list</code><br>non-empty list</td>
+              <td><code>id@host:port</code> 형식의 정적 투표자 목록</td>
+              <td>이 값을 쓰면 쿼럼 멤버가 고정됩니다. 동적 쿼럼은 bootstrap.servers 쪽을 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.listener.names</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>list</code></td>
+              <td>컨트롤러 요청을 받는 리스너 이름. 브로커 전용 노드도 반드시 정의해야 합니다</td>
+              <td><code>inter.broker.listener.name</code>과 같은 값을 쓸 수 없습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.fetch.timeout.ms</code></th>
+              <td><code>2000</code><br>(2 seconds)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>팔로워가 리더 fetch 실패를 선거 트리거로 판단하는 시간</td>
+              <td>값을 늘리면 불필요한 재선거가 줄지만 실제 장애 감지가 늦어집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.election.timeout.ms</code></th>
+              <td><code>1000</code><br>(1 second)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>선거를 재시작하기 전 대기 시간</td>
+              <td>네트워크 지연이 큰 멀티 AZ에서는 상향 검토</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.append.linger.ms</code></th>
+              <td><code>25</code></td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>메타데이터 레코드를 리더가 모아 두는 시간</td>
+              <td>낮추면 메타데이터 반영이 빨라지고 디스크 flush가 잦아집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.log.dir</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code></td>
+              <td><code>__cluster_metadata</code> 로그를 둘 디렉터리</td>
+              <td>미지정 시 <code>log.dirs</code>의 첫 디렉터리를 씁니다. 별도 디스크 분리를 권장</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.max.retention.bytes</code></th>
+              <td><code>104857600</code><br>(100 mebibytes)</td>
+              <td><code>long</code></td>
+              <td>메타데이터 로그·스냅샷 보관 크기 상한</td>
+              <td>스냅샷 주기와 함께 컨트롤러 디스크 사용량을 좌우합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.log.max.record.bytes.between.snapshots</code></th>
+              <td><code>20971520</code></td>
+              <td><code>long</code><br>[1,...]</td>
+              <td>스냅샷을 만들기까지 누적할 메타데이터 레코드 바이트</td>
+              <td>값이 크면 재시작 시 리플레이가 길어집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>listeners</code></th>
+              <td><code>PLAINTEXT://:9092</code></td>
+              <td><code>list</code></td>
+              <td>브로커가 바인딩할 <code>이름://호스트:포트</code> 목록</td>
+              <td>내부/외부 분리는 여기서 시작합니다. 상세 패턴은 보안 치트시트 참조</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>advertised.listeners</code></th>
+              <td><code>null</code></td>
+              <td><code>list</code></td>
+              <td>클라이언트에게 알릴 주소. 미지정이면 <code>listeners</code> 값을 그대로 알립니다</td>
+              <td>Docker·K8s에서 컨테이너 내부 주소를 그대로 알려 접속이 깨지는 원인 1위</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>listener.security.protocol.map</code></th>
+              <td><code>SASL_SSL:SASL_SSL,PLAINTEXT:PLAINTEXT,SSL:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT</code></td>
+              <td><code>string</code></td>
+              <td>리스너 이름 → 보안 프로토콜 매핑</td>
+              <td>리스너에 커스텀 이름을 붙였으면 반드시 함께 지정해야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>inter.broker.listener.name</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code></td>
+              <td>브로커 간 통신(주로 파티션 복제)에 쓰는 리스너</td>
+              <td>지정하지 않으면 <code>security.inter.broker.protocol</code>이 결정합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>security.inter.broker.protocol</code></th>
+              <td><code>PLAINTEXT</code></td>
+              <td><code>string</code><br>[PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL]</td>
+              <td>브로커 간 통신 보안 프로토콜</td>
+              <td><code>inter.broker.listener.name</code>과 동시에 설정할 수 없습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.dirs</code></th>
+              <td><code>null</code></td>
+              <td><code>list</code></td>
+              <td>로그 세그먼트를 저장할 디렉터리 목록(콤마 구분)</td>
+              <td>미지정이면 <code>log.dir</code>을 씁니다. JBOD는 여기에 여러 디렉터리를 나열</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.partitions</code></th>
+              <td><code>1</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>자동 생성 토픽의 기본 파티션 수</td>
+              <td>소비 병렬성 상한. 운영 토픽은 명시 생성하세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>default.replication.factor</code></th>
+              <td><code>1</code></td>
+              <td><code>int</code></td>
+              <td>자동 생성 토픽의 기본 복제 계수</td>
+              <td>기본값 1은 브로커 한 대 손실로 데이터가 사라집니다. 3으로 올리세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>auto.create.topics.enable</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>존재하지 않는 토픽 요청 시 자동 생성</td>
+              <td>오타 토픽이 조용히 생깁니다. 운영에서는 <code>false</code> 권장</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>delete.topic.enable</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>토픽 삭제 허용 여부</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>min.insync.replicas</code></th>
+              <td><code>1</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>ISR 최소 개수. <code>acks=all</code>일 때만 판정에 쓰입니다</td>
+              <td>RF=3이면 2가 표준. RF와 같게 두면 브로커 1대 손실로 쓰기가 멈춥니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>unclean.leader.election.enable</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>ISR 밖 레플리카를 리더로 승격할지</td>
+              <td><code>true</code>는 가용성을 위해 데이터 유실을 허용하는 선택입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>replica.lag.time.max.ms</code></th>
+              <td><code>30000</code><br>(30 seconds)</td>
+              <td><code>long</code></td>
+              <td>팔로워가 이 시간 안에 따라오지 못하면 ISR에서 제외</td>
+              <td>너무 짧으면 ISR이 자주 흔들려 <code>IsrShrinksPerSec</code>가 튑니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.replica.fetchers</code></th>
+              <td><code>1</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>팔로워가 리더에서 데이터를 당겨오는 스레드 수</td>
+              <td>복제 지연(URP 지속)이 보이면 먼저 올려 볼 값</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>replica.fetch.max.bytes</code></th>
+              <td><code>1048576</code><br>(1 mebibyte)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>파티션당 복제 fetch 최대 바이트</td>
+              <td><strong>절대 상한이 아닙니다</strong> — 첫 배치가 더 커도 반환해 복제 진행을 보장합니다(<q>This is not an absolute maximum</q>). 작으면 처리량만 떨어집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>message.max.bytes</code></th>
+              <td><code>1048588</code></td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>Kafka가 허용하는 최대 레코드 배치 크기(압축 후)</td>
+              <td>토픽의 <code>max.message.bytes</code>가 오버라이드합니다. 1MB가 아니라 1048588입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.network.threads</code></th>
+              <td><code>3</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>네트워크 요청 수신·응답 전송 스레드 수</td>
+              <td><code>NetworkProcessorAvgIdlePercent</code>가 0.3 아래면 상향</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.io.threads</code></th>
+              <td><code>8</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>디스크 I/O를 포함한 요청 처리 스레드 수</td>
+              <td><code>RequestHandlerAvgIdlePercent</code>가 0.3 아래면 상향. 디스크 수 이상 권장</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>queued.max.requests</code></th>
+              <td><code>500</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>네트워크 스레드가 대기시킬 요청 큐 길이</td>
+              <td>큐가 길면 지연이 숨겨집니다. 대기 시간 메트릭과 함께 보세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>background.threads</code></th>
+              <td><code>10</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>백그라운드 작업 처리 스레드 수</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.recovery.threads.per.data.dir</code></th>
+              <td><code>2</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>비정상 종료 후 로그 복구에 쓰는 디렉터리당 스레드 수</td>
+              <td>재시작 시간을 줄이는 가장 직접적인 값</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>socket.send.buffer.bytes</code></th>
+              <td><code>102400</code><br>(100 kibibytes)</td>
+              <td><code>int</code></td>
+              <td>SO_SNDBUF 크기</td>
+              <td>BDP가 큰 WAN 구간에서는 상향</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>socket.receive.buffer.bytes</code></th>
+              <td><code>102400</code><br>(100 kibibytes)</td>
+              <td><code>int</code></td>
+              <td>SO_RCVBUF 크기</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>socket.request.max.bytes</code></th>
+              <td><code>104857600</code><br>(100 mebibytes)</td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>요청 하나의 최대 바이트</td>
+              <td><code>message.max.bytes</code>보다 충분히 커야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.segment.bytes</code></th>
+              <td><code>1073741824</code><br>(1 gibibyte)</td>
+              <td><code>int</code><br>[1048576,...]</td>
+              <td>세그먼트 파일 하나의 크기</td>
+              <td>리텐션 삭제는 세그먼트 단위입니다. 크면 실제 보관량이 설정보다 커집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.roll.hours</code></th>
+              <td><code>168</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>크기에 도달하지 않아도 세그먼트를 새로 여는 시간</td>
+              <td><code>log.roll.ms</code>가 있으면 그쪽이 우선합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.retention.hours</code></th>
+              <td><code>168</code></td>
+              <td><code>int</code></td>
+              <td><code>delete</code> 정책의 기본 보관 시간</td>
+              <td><code>log.retention.ms</code> &gt; <code>log.retention.minutes</code> &gt; 이 값 순으로 우선</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.retention.bytes</code></th>
+              <td><code>-1</code></td>
+              <td><code>long</code></td>
+              <td>파티션당 보관 크기 상한. <code>-1</code>은 무제한</td>
+              <td>시간·크기 중 먼저 도달한 조건으로 삭제됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.retention.check.interval.ms</code></th>
+              <td><code>300000</code><br>(5 minutes)</td>
+              <td><code>long</code><br>[1,...]</td>
+              <td>리텐션 조건을 검사하는 주기</td>
+              <td>이 주기 때문에 삭제가 즉시 일어나지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.cleanup.policy</code></th>
+              <td><code>delete</code></td>
+              <td><code>list</code><br>[compact, delete]</td>
+              <td>기본 정리 정책. <code>delete</code> / <code>compact</code> (조합 가능)</td>
+              <td>토픽 레벨 <code>cleanup.policy</code>가 오버라이드합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.cleaner.enable</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>로그 컴팩션 스레드 활성화</td>
+              <td><code>false</code>면 <code>__consumer_offsets</code>도 컴팩션되지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.cleaner.threads</code></th>
+              <td><code>1</code></td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>컴팩션 스레드 수</td>
+              <td>컴팩션이 밀리면(dirty ratio 증가) 상향</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.cleaner.min.cleanable.ratio</code></th>
+              <td><code>0.5</code></td>
+              <td><code>double</code><br>[0,...,1]</td>
+              <td>컴팩션을 시작할 dirty 비율</td>
+              <td>낮추면 더 자주 컴팩션되고 CPU·I/O를 더 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.index.interval.bytes</code></th>
+              <td><code>4096</code><br>(4 kibibytes)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>오프셋 인덱스 항목을 추가하는 간격</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.local.retention.ms</code></th>
+              <td><code>-2</code></td>
+              <td><code>long</code><br>[-2,...]</td>
+              <td>Tiered Storage에서 로컬 디스크에 남길 시간. <code>-2</code>는 <code>retention.ms</code>를 따름</td>
+              <td>원격 계층을 켰을 때 로컬 디스크 사용량을 결정합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>remote.log.storage.system.enable</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>브로커에서 Tiered Storage 기능 활성화</td>
+              <td>켠 뒤 토픽별 <code>remote.storage.enable</code>로 개별 적용</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offsets.topic.replication.factor</code></th>
+              <td><code>3</code></td>
+              <td><code>short</code><br>[1,...]</td>
+              <td><code>__consumer_offsets</code> 복제 계수</td>
+              <td>브로커 수가 이보다 적으면 토픽 생성이 실패합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offsets.topic.num.partitions</code></th>
+              <td><code>50</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td><code>__consumer_offsets</code> 파티션 수</td>
+              <td>생성 후에는 변경하지 마세요. 그룹→파티션 매핑이 바뀝니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offsets.retention.minutes</code></th>
+              <td><code>10080</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>빈 그룹의 커밋 오프셋 보관 시간</td>
+              <td>만료되면 <code>auto.offset.reset</code>이 발동해 재처리·유실이 생깁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.state.log.replication.factor</code></th>
+              <td><code>3</code></td>
+              <td><code>short</code><br>[1,...]</td>
+              <td><code>__transaction_state</code> 복제 계수</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.state.log.min.isr</code></th>
+              <td><code>2</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td><code>__transaction_state</code>의 최소 ISR</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.max.timeout.ms</code></th>
+              <td><code>900000</code><br>(15 minutes)</td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>프로듀서가 요청할 수 있는 트랜잭션 타임아웃 상한</td>
+              <td>프로듀서의 <code>transaction.timeout.ms</code>가 이 값을 넘으면 거부됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transactional.id.expiration.ms</code></th>
+              <td><code>604800000</code><br>(7 days)</td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>트랜잭션 ID를 만료 처리하기까지의 유휴 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>producer.id.expiration.ms</code></th>
+              <td><code>86400000</code><br>(1 day)</td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>유휴 producer ID 만료 시간</td>
+              <td>만료 후 재사용하면 <code>UnknownProducerIdException</code>이 나올 수 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.initial.rebalance.delay.ms</code></th>
+              <td><code>3000</code><br>(3 seconds)</td>
+              <td><code>int</code></td>
+              <td>첫 리밸런스를 지연시켜 멤버가 모이길 기다리는 시간</td>
+              <td>개발 환경에서는 0으로 두면 기동이 빨라집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.min.session.timeout.ms</code></th>
+              <td><code>6000</code><br>(6 seconds)</td>
+              <td><code>int</code></td>
+              <td>컨슈머가 요청할 수 있는 세션 타임아웃 하한</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.max.session.timeout.ms</code></th>
+              <td><code>1800000</code><br>(30 minutes)</td>
+              <td><code>int</code></td>
+              <td>컨슈머가 요청할 수 있는 세션 타임아웃 상한</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.max.size</code></th>
+              <td><code>2147483647</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>한 컨슈머 그룹의 최대 멤버 수</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.coordinator.rebalance.protocols</code></th>
+              <td><code>classic,consumer,streams</code></td>
+              <td><code>list</code><br>[consumer, classic, share, streams]</td>
+              <td>코디네이터가 활성화할 그룹 프로토콜 목록</td>
+              <td><code>consumer</code>(KIP-848)·<code>share</code>(KIP-932)를 쓰려면 여기에 있어야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.consumer.session.timeout.ms</code></th>
+              <td><code>45000</code><br>(45 seconds)</td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>새 컨슈머 프로토콜의 세션 타임아웃 (브로커가 관리)</td>
+              <td><code>group.protocol=consumer</code>에서는 클라이언트 값이 무시됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.consumer.heartbeat.interval.ms</code></th>
+              <td><code>5000</code><br>(5 seconds)</td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>새 컨슈머 프로토콜의 하트비트 간격 (브로커가 관리)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.share.delivery.count.limit</code></th>
+              <td><code>5</code></td>
+              <td><code>int</code><br>[2,...,10]</td>
+              <td>Share Group에서 한 레코드의 최대 전달 시도 횟수</td>
+              <td>초과하면 레코드가 아카이브됩니다. DLQ 대체 설계 시 핵심 값</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.share.record.lock.duration.ms</code></th>
+              <td><code>30000</code><br>(30 seconds)</td>
+              <td><code>int</code><br>[1000,...,3600000]</td>
+              <td>Share Group에서 획득한 레코드 잠금 유지 시간</td>
+              <td>처리 시간이 이보다 길면 다른 컨슈머에게 재배달됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.share.max.size</code></th>
+              <td><code>200</code></td>
+              <td><code>int</code><br>[1,...,1000]</td>
+              <td>한 Share Group의 최대 멤버 수</td>
+              <td>컨슈머 수가 파티션 수를 넘어도 됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>auto.leader.rebalance.enable</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>리더 불균형을 주기적으로 자동 교정</td>
+              <td>재시작 직후 리더가 한쪽에 몰리는 것을 자동 완화합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>leader.imbalance.check.interval.seconds</code></th>
+              <td><code>300</code></td>
+              <td><code>long</code><br>[1,...]</td>
+              <td>리더 불균형 검사 주기</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>broker.rack</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code></td>
+              <td>브로커의 랙·AZ 식별자</td>
+              <td>지정하면 레플리카가 랙에 분산 배치됩니다. AZ 단위 장애 대비</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>broker.heartbeat.interval.ms</code></th>
+              <td><code>2000</code><br>(2 seconds)</td>
+              <td><code>int</code></td>
+              <td>브로커가 컨트롤러에 하트비트를 보내는 간격</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>broker.session.timeout.ms</code></th>
+              <td><code>9000</code><br>(9 seconds)</td>
+              <td><code>int</code></td>
+              <td>컨트롤러가 브로커를 fenced로 판단하는 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controlled.shutdown.enable</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>종료 전 리더십을 넘기고 내려가기</td>
+              <td><code>false</code>면 재시작마다 짧은 불가용 구간이 생깁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.type</code></th>
+              <td><code>producer</code></td>
+              <td><code>string</code><br>[uncompressed, zstd, lz4, snappy, gzip, producer]</td>
+              <td>브로커가 저장할 때 적용할 압축. <code>producer</code>는 프로듀서 설정을 그대로 유지</td>
+              <td><code>producer</code>가 아니면 재압축으로 CPU를 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.connections</code></th>
+              <td><code>2147483647</code></td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>브로커 전체 최대 연결 수</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.connections.per.ip</code></th>
+              <td><code>2147483647</code></td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>IP당 최대 연결 수</td>
+              <td>NAT·K8s에서는 여러 클라이언트가 같은 IP로 보입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>connections.max.idle.ms</code></th>
+              <td><code>600000</code><br>(10 minutes)</td>
+              <td><code>long</code></td>
+              <td>유휴 연결을 닫기까지의 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>authorizer.class.name</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>string</code><br>non-null string</td>
+              <td>Authorizer 구현 클래스. 미설정이면 인가를 하지 않습니다</td>
+              <td>KRaft는 <code>org.apache.kafka.metadata.authorizer.StandardAuthorizer</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ssl.client.auth</code></th>
+              <td><code>none</code></td>
+              <td><code>string</code><br>[required, requested, none]</td>
+              <td>리스너가 클라이언트 인증서를 요구할지</td>
+              <td><code>requested</code>는 잘못 설정된 클라이언트도 통과시켜 권장되지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>sasl.enabled.mechanisms</code></th>
+              <td><code>GSSAPI</code></td>
+              <td><code>list</code></td>
+              <td>브로커가 받아들일 SASL 메커니즘 목록</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.partition.verification.enable</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>트랜잭션 파티션 검증 활성화</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.dir.failure.timeout.ms</code></th>
+              <td><code>30000</code><br>(30 seconds)</td>
+              <td><code>long</code><br>[1,...]</td>
+              <td>로그 디렉터리 장애를 컨트롤러에 알리지 못할 때 브로커를 내리는 시간</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="topic-configs">
+      <h2 id="topic-configs">Topic 설정</h2>
+      <div class="toolbar">
+        <div class="field">
+          <label for="f-t-topic">Topic 설정 검색</label>
+          <input class="cheat-filter" id="f-t-topic" data-target="#t-topic" type="search"
+                 placeholder="설정명으로 검색" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+      <aside class="note" data-label="적용 순서">
+        <p>토픽 설정은 브로커의 같은 계열 설정(<code>log.*</code>)을 <strong>오버라이드</strong>합니다.
+          <code>kafka-configs --entity-type topics --alter</code>로 무중단 변경이 가능하지만,
+          <code>cleanup.policy</code> 변경은 <strong>기존 세그먼트에 소급 적용되지 않습니다.</strong></p>
+      </aside>
+      <div class="table-scroll">
+        <table class="config-table" id="t-topic">
+          <caption>Topic 설정 — Apache Kafka 4.3.1 공식 문서 기준 기본값 (33개)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정명</th>
+              <th scope="col">기본값</th>
+              <th scope="col">범위 · 타입</th>
+              <th scope="col">설명</th>
+              <th scope="col">튜닝 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>cleanup.policy</code></th>
+              <td><code>delete</code></td>
+              <td><code>list</code><br>[compact, delete]</td>
+              <td><code>delete</code> / <code>compact</code> / <code>compact,delete</code></td>
+              <td>기존 데이터에 소급 적용되지 않습니다. 변경 시점 이후 세그먼트에만 적용</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retention.ms</code></th>
+              <td><code>604800000</code><br>(7 days)</td>
+              <td><code>long</code><br>[-1,...]</td>
+              <td><code>delete</code> 정책의 보관 시간. <code>-1</code>은 무제한</td>
+              <td>재처리 여유 기간을 결정합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retention.bytes</code></th>
+              <td><code>-1</code></td>
+              <td><code>long</code></td>
+              <td>파티션당 보관 크기. <code>-1</code>은 무제한</td>
+              <td>토픽 전체가 아니라 <strong>파티션당</strong>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>segment.bytes</code></th>
+              <td><code>1073741824</code><br>(1 gibibyte)</td>
+              <td><code>int</code><br>[1048576,...]</td>
+              <td>세그먼트 파일 크기</td>
+              <td>삭제는 세그먼트 단위입니다. 짧은 리텐션을 원하면 이 값도 줄이세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>segment.ms</code></th>
+              <td><code>604800000</code><br>(7 days)</td>
+              <td><code>long</code><br>[1,...]</td>
+              <td>크기 미달이어도 세그먼트를 새로 여는 주기</td>
+              <td>리텐션이 짧을 때 실제 삭제 시점을 좌우합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>segment.index.bytes</code></th>
+              <td><code>10485760</code><br>(10 mebibytes)</td>
+              <td><code>int</code><br>[4,...]</td>
+              <td>오프셋 인덱스 파일 크기 상한</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>segment.jitter.ms</code></th>
+              <td><code>0</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>세그먼트 롤링 시점에 더할 무작위 지연</td>
+              <td>여러 파티션이 동시에 롤링하는 것을 분산시킵니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>min.insync.replicas</code></th>
+              <td><code>1</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td><code>acks=all</code> 쓰기가 성공하려면 필요한 최소 ISR</td>
+              <td>RF=3 → 2. RF와 같게 두면 브로커 1대 손실로 쓰기 중단</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>unclean.leader.election.enable</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>ISR 밖 레플리카의 리더 승격 허용</td>
+              <td>유실을 감수하고 가용성을 택하는 스위치</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.message.bytes</code></th>
+              <td><code>1048588</code></td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>이 토픽이 받는 최대 레코드 배치 크기(압축 후)</td>
+              <td>브로커 <code>message.max.bytes</code>를 오버라이드합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.type</code></th>
+              <td><code>producer</code></td>
+              <td><code>string</code><br>[uncompressed, zstd, lz4, snappy, gzip, producer]</td>
+              <td>토픽 저장 압축. <code>producer</code>면 프로듀서 배치를 그대로 보관</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>min.cleanable.dirty.ratio</code></th>
+              <td><code>0.5</code></td>
+              <td><code>double</code><br>[0,...,1]</td>
+              <td>컴팩션을 시작할 dirty 비율</td>
+              <td>낮추면 tombstone·중복 키가 더 빨리 사라집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>min.compaction.lag.ms</code></th>
+              <td><code>0</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>메시지가 컴팩션 대상이 되기까지 최소 유지 시간</td>
+              <td>컨슈머가 최신 레코드를 읽을 시간을 보장합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.compaction.lag.ms</code></th>
+              <td><code>9223372036854775807</code></td>
+              <td><code>long</code><br>[1,...]</td>
+              <td>컴팩션 대상이 되기까지 허용할 최대 시간</td>
+              <td>GDPR 삭제 요구처럼 상한이 필요한 경우에 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>delete.retention.ms</code></th>
+              <td><code>86400000</code><br>(1 day)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>tombstone(null value)을 유지하는 시간</td>
+              <td>이보다 오래 멈춘 컨슈머는 삭제 사실을 놓칩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>file.delete.delay.ms</code></th>
+              <td><code>60000</code><br>(1 minute)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>삭제 표시된 파일을 실제로 지우기까지의 지연</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>message.timestamp.type</code></th>
+              <td><code>CreateTime</code></td>
+              <td><code>string</code><br>[CreateTime, LogAppendTime]</td>
+              <td><code>CreateTime</code>(프로듀서 시각) / <code>LogAppendTime</code>(브로커 시각)</td>
+              <td>Streams의 이벤트 시간 처리와 리텐션 판정에 함께 영향</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>message.timestamp.after.max.ms</code></th>
+              <td><code>3600000</code><br>(1 hour)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>브로커 시각보다 미래인 타임스탬프 허용 폭</td>
+              <td>초과하면 <code>InvalidTimestampException</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>message.timestamp.before.max.ms</code></th>
+              <td><code>9223372036854775807</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>브로커 시각보다 과거인 타임스탬프 허용 폭</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>flush.messages</code></th>
+              <td><code>9223372036854775807</code></td>
+              <td><code>long</code><br>[1,...]</td>
+              <td>이 메시지 수마다 fsync. 기본은 사실상 무제한</td>
+              <td>Kafka는 복제로 내구성을 얻습니다. 임의로 낮추면 처리량이 급락합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>flush.ms</code></th>
+              <td><code>9223372036854775807</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>fsync 강제 주기</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>index.interval.bytes</code></th>
+              <td><code>4096</code><br>(4 kibibytes)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>인덱스 항목 추가 간격</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>preallocate</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>새 세그먼트 파일을 미리 할당</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>remote.storage.enable</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>이 토픽에 Tiered Storage 사용</td>
+              <td>브로커에서 <code>remote.log.storage.system.enable=true</code>가 먼저 필요합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>local.retention.ms</code></th>
+              <td><code>-2</code></td>
+              <td><code>long</code><br>[-2,...]</td>
+              <td>원격 계층으로 올린 뒤 로컬에 남길 시간. <code>-2</code>는 <code>retention.ms</code>를 따름</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>local.retention.bytes</code></th>
+              <td><code>-2</code></td>
+              <td><code>long</code><br>[-2,...]</td>
+              <td>로컬에 남길 크기. <code>-2</code>는 <code>retention.bytes</code>를 따름</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>remote.log.copy.disable</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>원격 계층으로의 복사만 중단</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>remote.log.delete.on.disable</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>Tiered Storage를 끌 때 원격 데이터를 삭제할지</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>leader.replication.throttled.replicas</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>list</code><br>[partitionId]:[brokerId],[partitionId]:[brokerId],...</td>
+              <td>리더 쪽 복제 대역폭 제한을 적용할 레플리카 목록</td>
+              <td>파티션 재할당 시 <code>kafka-reassign-partitions</code>가 자동으로 설정합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>follower.replication.throttled.replicas</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>list</code><br>[partitionId]:[brokerId],[partitionId]:[brokerId],...</td>
+              <td>팔로워 쪽 복제 대역폭 제한 대상</td>
+              <td>재할당이 끝나면 반드시 제거하세요. 남으면 복제가 계속 느립니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.gzip.level</code></th>
+              <td><code>-1</code></td>
+              <td><code>int</code><br>[1,...,9] or -1</td>
+              <td>gzip 압축 레벨</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.lz4.level</code></th>
+              <td><code>9</code></td>
+              <td><code>int</code><br>[1,...,17]</td>
+              <td>lz4 압축 레벨</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.zstd.level</code></th>
+              <td><code>3</code></td>
+              <td><code>int</code><br>[-131072,...,22]</td>
+              <td>zstd 압축 레벨</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="producer-configs">
+      <h2 id="producer-configs">Producer 설정</h2>
+      <p>
+        4.x에서 기본값이 바뀐 항목(<code>acks</code>, <code>enable.idempotence</code>,
+        <code>linger.ms</code>)에 특히 주의하세요. 상세한 전송 파이프라인은
+        <a href="../basics/ch04.html">4장 Producer 심화</a>에 있습니다.
+      </p>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <div class="table-scroll">
+          <table class="config-table config-table--plain">
+            <tbody>
+              <tr><th scope="row"><code>linger.ms</code></th><td>2.x·3.x는 <code>0</code>, <strong>4.0부터 <code>5</code></strong>. 시중 자료 대부분이 <code>0</code>으로 적혀 있습니다</td></tr>
+              <tr><th scope="row"><code>acks</code></th><td>2.x는 <code>1</code>, <strong>3.0부터 <code>all</code></strong></td></tr>
+              <tr><th scope="row"><code>enable.idempotence</code></th><td>2.x는 <code>false</code>, <strong>3.0부터 <code>true</code></strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </aside>
+      <div class="toolbar">
+        <div class="field">
+          <label for="f-t-producer">Producer 설정 검색</label>
+          <input class="cheat-filter" id="f-t-producer" data-target="#t-producer" type="search"
+                 placeholder="설정명으로 검색" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="config-table" id="t-producer">
+          <caption>Producer 설정 — Apache Kafka 4.3.1 공식 문서 기준 기본값 (48개)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정명</th>
+              <th scope="col">기본값</th>
+              <th scope="col">범위 · 타입</th>
+              <th scope="col">설명</th>
+              <th scope="col">튜닝 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>bootstrap.servers</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>list</code></td>
+              <td>초기 연결용 <code>host:port</code> 목록</td>
+              <td>부하 분산이 아니라 부트스트랩 단일 장애점 제거가 목적입니다. 2개 이상</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>key.serializer</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>class</code></td>
+              <td>키 직렬화 클래스</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>value.serializer</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>class</code></td>
+              <td>값 직렬화 클래스</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>acks</code></th>
+              <td><code>all</code></td>
+              <td><code>string</code><br>[all, -1, 0, 1]</td>
+              <td>쓰기 성공으로 볼 확인 수준. <code>0</code> / <code>1</code> / <code>all</code></td>
+              <td>4.x 기본값은 <code>all</code>입니다. 3.0 이전 자료의 <code>1</code>과 다릅니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>enable.idempotence</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>멱등 프로듀서. 파티션 단위 중복 제거와 순서 보장</td>
+              <td>기본 <code>true</code>. <code>acks=all</code>·<code>retries&gt;0</code>·in-flight ≤ 5가 필수 조건</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.in.flight.requests.per.connection</code></th>
+              <td><code>5</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>응답 대기 중 허용할 요청 수</td>
+              <td>멱등성이 켜져 있으면 <strong>5 이하</strong>여야 합니다. 6 이상은 <code>ConfigException</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retries</code></th>
+              <td><code>2147483647</code></td>
+              <td><code>int</code><br>[0,...,2147483647]</td>
+              <td>전송 재시도 횟수</td>
+              <td>4.x 기본값은 <code>Integer.MAX_VALUE</code>. 실질 상한은 <code>delivery.timeout.ms</code>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>delivery.timeout.ms</code></th>
+              <td><code>120000</code><br>(2 minutes)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td><code>send()</code>부터 성공·실패 확정까지의 총 시간</td>
+              <td><code>request.timeout.ms + linger.ms</code> 이상이어야 합니다. 재시도의 진짜 상한</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>request.timeout.ms</code></th>
+              <td><code>30000</code><br>(30 seconds)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>요청 하나에 대한 응답 대기 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>linger.ms</code></th>
+              <td><code>5</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>배치를 채우기 위해 전송을 미루는 시간</td>
+              <td><strong>4.0에서 0 → 5로 변경</strong>. 지연이 극도로 민감하면 명시적으로 0</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>batch.size</code></th>
+              <td><code>16384</code></td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>파티션별 배치의 바이트 상한</td>
+              <td>처리량을 올리려면 <code>linger.ms</code>와 함께 올려야 효과가 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>buffer.memory</code></th>
+              <td><code>33554432</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>전송 대기 레코드를 담는 총 버퍼 크기</td>
+              <td>고갈되면 <code>max.block.ms</code> 동안 블록한 뒤 예외</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.block.ms</code></th>
+              <td><code>60000</code><br>(1 minute)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td><code>send()</code>·<code>partitionsFor()</code>가 블록할 최대 시간</td>
+              <td>메타데이터 조회 실패도 이 값에 걸립니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.request.size</code></th>
+              <td><code>1048576</code></td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>요청 하나의 최대 바이트</td>
+              <td>토픽 <code>max.message.bytes</code>와 별개입니다. 둘 다 맞춰야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.type</code></th>
+              <td><code>none</code></td>
+              <td><code>string</code><br>[none, gzip, snappy, lz4, zstd]</td>
+              <td><code>none</code> / <code>gzip</code> / <code>snappy</code> / <code>lz4</code> / <code>zstd</code></td>
+              <td><code>lz4</code>·<code>zstd</code>가 실무 기본 선택. 압축은 배치 단위입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.gzip.level</code></th>
+              <td><code>-1</code></td>
+              <td><code>int</code><br>[1,...,9] or -1</td>
+              <td>gzip 압축 레벨</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.lz4.level</code></th>
+              <td><code>9</code></td>
+              <td><code>int</code><br>[1,...,17]</td>
+              <td>lz4 압축 레벨</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.zstd.level</code></th>
+              <td><code>3</code></td>
+              <td><code>int</code><br>[-131072,...,22]</td>
+              <td>zstd 압축 레벨</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partitioner.class</code></th>
+              <td><code>null</code></td>
+              <td><code>class</code></td>
+              <td>커스텀 파티셔너. 미지정이면 내장 로직</td>
+              <td>키가 있으면 키 해시, 없으면 배치 친화적으로 분배</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partitioner.ignore.keys</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>키를 무시하고 분배</td>
+              <td><code>true</code>로 두면 키 기반 순서 보장이 깨집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partitioner.adaptive.partitioning.enable</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>브로커 응답성에 따라 분배를 조정</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partitioner.availability.timeout.ms</code></th>
+              <td><code>0</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>이 시간 동안 응답 없는 파티션을 회피 (adaptive 필요)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transactional.id</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code><br>non-empty string</td>
+              <td>트랜잭션 프로듀서 식별자. 지정하면 EOS 가능</td>
+              <td>인스턴스마다 안정적으로 같은 값이어야 좀비 펜싱이 동작합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.timeout.ms</code></th>
+              <td><code>60000</code><br>(1 minute)</td>
+              <td><code>int</code></td>
+              <td>트랜잭션이 열려 있을 수 있는 최대 시간</td>
+              <td>브로커 <code>transaction.max.timeout.ms</code>를 넘으면 거부됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.two.phase.commit.enable</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>2PC 스타일 외부 조정 트랜잭션</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.max.age.ms</code></th>
+              <td><code>300000</code><br>(5 minutes)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>메타데이터 강제 갱신 주기</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.max.idle.ms</code></th>
+              <td><code>300000</code><br>(5 minutes)</td>
+              <td><code>long</code><br>[5000,...]</td>
+              <td>유휴 토픽의 메타데이터를 버리기까지의 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.recovery.strategy</code></th>
+              <td><code>rebootstrap</code></td>
+              <td><code>string</code><br>(case insensitive) [REBOOTSTRAP, NONE]</td>
+              <td>모든 노드 연결 실패 시 복구 방식</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retry.backoff.ms</code></th>
+              <td><code>100</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>재시도 사이 대기 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retry.backoff.max.ms</code></th>
+              <td><code>1000</code><br>(1 second)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>재시도 백오프 상한</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>reconnect.backoff.ms</code></th>
+              <td><code>50</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>재연결 대기 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>reconnect.backoff.max.ms</code></th>
+              <td><code>1000</code><br>(1 second)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>재연결 백오프 상한</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>connections.max.idle.ms</code></th>
+              <td><code>540000</code><br>(9 minutes)</td>
+              <td><code>long</code></td>
+              <td>유휴 연결 종료 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>client.id</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>string</code></td>
+              <td>요청에 실려 서버 로그·쿼터에 쓰이는 논리 이름</td>
+              <td>쿼터·메트릭 식별에 필수입니다. 반드시 설정하세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>client.dns.lookup</code></th>
+              <td><code>use_all_dns_ips</code></td>
+              <td><code>string</code><br>[use_all_dns_ips, resolve_canonical_bootstrap_servers_only]</td>
+              <td>DNS 결과 처리 방식</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>interceptor.classes</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>list</code></td>
+              <td>프로듀서 인터셉터 목록</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>security.protocol</code></th>
+              <td><code>PLAINTEXT</code></td>
+              <td><code>string</code><br>(case insensitive) [SASL_SSL, PLAINTEXT, SSL, SASL_PLAINTEXT]</td>
+              <td><code>PLAINTEXT</code> / <code>SSL</code> / <code>SASL_PLAINTEXT</code> / <code>SASL_SSL</code></td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>sasl.mechanism</code></th>
+              <td><code>GSSAPI</code></td>
+              <td><code>string</code></td>
+              <td>SASL 메커니즘</td>
+              <td>기본값이 <code>GSSAPI</code>이므로 SCRAM·PLAIN은 반드시 명시해야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>sasl.jaas.config</code></th>
+              <td><code>null</code></td>
+              <td><code>password</code></td>
+              <td>JAAS 로그인 설정을 프로퍼티로 인라인 지정</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ssl.keystore.location</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code></td>
+              <td>클라이언트 인증서 키스토어 경로 (mTLS)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ssl.truststore.location</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code></td>
+              <td>트러스트스토어 경로</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ssl.endpoint.identification.algorithm</code></th>
+              <td><code>https</code></td>
+              <td><code>string</code></td>
+              <td>서버 호스트명 검증 알고리즘</td>
+              <td>빈 문자열로 두면 검증을 끕니다. 운영에서는 <code>https</code> 유지</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ssl.protocol</code></th>
+              <td><code>TLSv1.3</code></td>
+              <td><code>string</code></td>
+              <td>SSLContext 프로토콜</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ssl.enabled.protocols</code></th>
+              <td><code>TLSv1.2,TLSv1.3</code></td>
+              <td><code>list</code></td>
+              <td>허용할 TLS 프로토콜 목록</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>send.buffer.bytes</code></th>
+              <td><code>131072</code><br>(128 kibibytes)</td>
+              <td><code>int</code><br>[-1,...]</td>
+              <td>SO_SNDBUF</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>receive.buffer.bytes</code></th>
+              <td><code>32768</code><br>(32 kibibytes)</td>
+              <td><code>int</code><br>[-1,...]</td>
+              <td>SO_RCVBUF</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metrics.recording.level</code></th>
+              <td><code>INFO</code></td>
+              <td><code>string</code><br>[INFO, DEBUG, TRACE]</td>
+              <td>메트릭 수집 상세도</td>
+              <td><code>DEBUG</code>로 올리면 파티션별 메트릭까지 나옵니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>enable.metrics.push</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>브로커로 클라이언트 메트릭 푸시 (KIP-714)</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="consumer-configs">
+      <h2 id="consumer-configs">Consumer 설정</h2>
+
+      <aside class="note note--danger" data-label="가장 많이 틀리는 두 개">
+        <p>
+          <code>group.protocol</code> 기본값은 <strong><code>classic</code></strong>입니다.
+          KIP-848 새 프로토콜은 Kafka 4.0에서 GA이지만 <strong>기본값이 아닙니다.</strong>
+          <code>consumer</code>로 명시해야 켜집니다.
+        </p>
+        <p>
+          <code>isolation.level</code> 기본값은 <strong><code>read_uncommitted</code></strong>입니다.
+          트랜잭션 프로듀서를 붙였는데 컨슈머를 그대로 두면 abort된 레코드까지 읽습니다.
+          자세한 내용은 <a href="../basics/ch06.html">6장 전달 보장과 트랜잭션</a>에 있습니다.
+        </p>
+      </aside>
+      <div class="toolbar">
+        <div class="field">
+          <label for="f-t-consumer">Consumer 설정 검색</label>
+          <input class="cheat-filter" id="f-t-consumer" data-target="#t-consumer" type="search"
+                 placeholder="설정명으로 검색" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="config-table" id="t-consumer">
+          <caption>Consumer 설정 — Apache Kafka 4.3.1 공식 문서 기준 기본값 (44개)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정명</th>
+              <th scope="col">기본값</th>
+              <th scope="col">범위 · 타입</th>
+              <th scope="col">설명</th>
+              <th scope="col">튜닝 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>bootstrap.servers</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>list</code></td>
+              <td>초기 연결용 <code>host:port</code> 목록</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>key.deserializer</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>class</code></td>
+              <td>키 역직렬화 클래스</td>
+              <td>역직렬화 실패는 <code>RecordDeserializationException</code>으로 poll 루프를 막습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>value.deserializer</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>class</code></td>
+              <td>값 역직렬화 클래스</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.id</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code></td>
+              <td>컨슈머 그룹 식별자</td>
+              <td>없으면 그룹 관리·오프셋 커밋을 못 합니다(<code>assign()</code> 전용)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.protocol</code></th>
+              <td><code>classic</code></td>
+              <td><code>string</code><br>(case insensitive) [CONSUMER, CLASSIC]</td>
+              <td><code>classic</code> / <code>consumer</code>(KIP-848)</td>
+              <td><strong>기본값은 여전히 <code>classic</code></strong>입니다. 4.0 GA지만 기본이 아닙니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.instance.id</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code><br>non-empty string</td>
+              <td>정적 멤버십 ID</td>
+              <td>지정하면 재시작이 리밸런스를 일으키지 않습니다(세션 타임아웃 내)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.remote.assignor</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code></td>
+              <td>브로커 측 할당자 이름 (새 프로토콜)</td>
+              <td><code>group.protocol=consumer</code>에서만 의미가 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partition.assignment.strategy</code></th>
+              <td><code>class org.apache.kafka.clients.consumer.RangeAssignor,class org.apache.kafka.clients.consumer.CooperativeStickyAssignor</code></td>
+              <td><code>list</code></td>
+              <td>할당 전략 목록 (classic 프로토콜)</td>
+              <td>새 프로토콜에서는 무시됩니다. 협조적 리밸런스 전환은 롤링 2회</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>session.timeout.ms</code></th>
+              <td><code>45000</code><br>(45 seconds)</td>
+              <td><code>int</code></td>
+              <td>하트비트가 끊긴 뒤 멤버를 죽었다고 볼 시간</td>
+              <td><code>heartbeat.interval.ms</code>의 3배 이상 권장. 새 프로토콜에서는 브로커가 관리</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>heartbeat.interval.ms</code></th>
+              <td><code>3000</code><br>(3 seconds)</td>
+              <td><code>int</code></td>
+              <td>하트비트 전송 간격</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.poll.interval.ms</code></th>
+              <td><code>300000</code><br>(5 minutes)</td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>연속된 <code>poll()</code> 사이 허용 시간</td>
+              <td>처리 시간이 길면 여기서 쫓겨납니다. 세션 타임아웃과 혼동 금지</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.poll.records</code></th>
+              <td><code>500</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td><code>poll()</code> 한 번에 반환할 최대 레코드 수</td>
+              <td>리밸런스가 반복되면 가장 먼저 줄여 볼 값</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>enable.auto.commit</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>주기적 오프셋 자동 커밋</td>
+              <td><code>true</code>는 처리 전 커밋 위험(유실). 정확성이 필요하면 수동 커밋</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>auto.commit.interval.ms</code></th>
+              <td><code>5000</code><br>(5 seconds)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>자동 커밋 주기</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>auto.offset.reset</code></th>
+              <td><code>latest</code></td>
+              <td><code>string</code><br>[latest, earliest, none, by_duration:PnDTnHnMn.nS]</td>
+              <td>커밋된 오프셋이 없거나 범위를 벗어났을 때. <code>earliest</code> / <code>latest</code> / <code>none</code> / <code>by_duration:…</code></td>
+              <td>기본 <code>latest</code>. 새 그룹으로 붙으면 과거 데이터를 건너뜁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>isolation.level</code></th>
+              <td><code>read_uncommitted</code></td>
+              <td><code>string</code><br>[read_committed, read_uncommitted]</td>
+              <td><code>read_uncommitted</code> / <code>read_committed</code></td>
+              <td>EOS 파이프라인의 컨슈머는 반드시 <code>read_committed</code>. 기본값이 아닙니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch.min.bytes</code></th>
+              <td><code>1</code></td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>브로커가 응답을 만들기 위해 모을 최소 바이트</td>
+              <td>올리면 요청 수가 줄고 지연이 늘어납니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch.max.wait.ms</code></th>
+              <td><code>500</code></td>
+              <td><code>int</code><br>[0,...]</td>
+              <td><code>fetch.min.bytes</code>가 안 차도 기다릴 최대 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch.max.bytes</code></th>
+              <td><code>52428800</code><br>(50 mebibytes)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>한 fetch 요청의 최대 바이트(전체)</td>
+              <td>첫 파티션의 첫 배치는 이 값을 넘어도 반환되어 진행이 보장됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.partition.fetch.bytes</code></th>
+              <td><code>1048576</code><br>(1 mebibyte)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>파티션당 fetch 최대 바이트</td>
+              <td>큰 레코드를 다루면 이 값과 <code>max.message.bytes</code>를 함께 맞춥니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>check.crcs</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>레코드 CRC 검증</td>
+              <td>끄면 CPU를 아끼지만 손상 감지를 포기합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>client.rack</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>string</code></td>
+              <td>컨슈머의 랙 ID</td>
+              <td>브로커 <code>replica.selector.class</code>와 함께 근접 레플리카에서 읽습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>allow.auto.create.topics</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>구독한 토픽이 없을 때 자동 생성 요청</td>
+              <td>오타 토픽을 만듭니다. <code>false</code> 권장</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>exclude.internal.topics</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>패턴 구독에서 내부 토픽 제외</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>default.api.timeout.ms</code></th>
+              <td><code>60000</code><br>(1 minute)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>타임아웃 인자가 없는 API의 기본 타임아웃</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>request.timeout.ms</code></th>
+              <td><code>30000</code><br>(30 seconds)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>요청 응답 대기 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.max.age.ms</code></th>
+              <td><code>300000</code><br>(5 minutes)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>메타데이터 강제 갱신 주기</td>
+              <td>패턴 구독에서 새 토픽 발견 지연의 원인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.recovery.strategy</code></th>
+              <td><code>rebootstrap</code></td>
+              <td><code>string</code><br>(case insensitive) [REBOOTSTRAP, NONE]</td>
+              <td>전 노드 연결 실패 시 복구 방식</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retry.backoff.ms</code></th>
+              <td><code>100</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>재시도 대기 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retry.backoff.max.ms</code></th>
+              <td><code>1000</code><br>(1 second)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>재시도 백오프 상한</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>reconnect.backoff.ms</code></th>
+              <td><code>50</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>재연결 대기 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>reconnect.backoff.max.ms</code></th>
+              <td><code>1000</code><br>(1 second)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>재연결 백오프 상한</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>connections.max.idle.ms</code></th>
+              <td><code>540000</code><br>(9 minutes)</td>
+              <td><code>long</code></td>
+              <td>유휴 연결 종료 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>receive.buffer.bytes</code></th>
+              <td><code>65536</code><br>(64 kibibytes)</td>
+              <td><code>int</code><br>[-1,...]</td>
+              <td>SO_RCVBUF</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>send.buffer.bytes</code></th>
+              <td><code>131072</code><br>(128 kibibytes)</td>
+              <td><code>int</code><br>[-1,...]</td>
+              <td>SO_SNDBUF</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>client.id</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>string</code></td>
+              <td>논리 클라이언트 이름</td>
+              <td>쿼터·메트릭 식별에 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>client.dns.lookup</code></th>
+              <td><code>use_all_dns_ips</code></td>
+              <td><code>string</code><br>[use_all_dns_ips, resolve_canonical_bootstrap_servers_only]</td>
+              <td>DNS 결과 처리 방식</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>interceptor.classes</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>list</code></td>
+              <td>컨슈머 인터셉터 목록</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>security.protocol</code></th>
+              <td><code>PLAINTEXT</code></td>
+              <td><code>string</code><br>(case insensitive) [SASL_SSL, PLAINTEXT, SSL, SASL_PLAINTEXT]</td>
+              <td>보안 프로토콜</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>sasl.mechanism</code></th>
+              <td><code>GSSAPI</code></td>
+              <td><code>string</code></td>
+              <td>SASL 메커니즘</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>share.acknowledgement.mode</code></th>
+              <td><code>implicit</code></td>
+              <td><code>string</code><br>[implicit, explicit]</td>
+              <td>Share Group ack 방식. <code>implicit</code> / <code>explicit</code></td>
+              <td>KIP-932 Share Consumer 전용. 레코드 단위 ack 제어</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>share.acquire.mode</code></th>
+              <td><code>BATCH_OPTIMIZED</code></td>
+              <td><code>string</code><br>[batch_optimized, record_limit]</td>
+              <td>Share Group 레코드 획득 방식</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metrics.recording.level</code></th>
+              <td><code>INFO</code></td>
+              <td><code>string</code><br>[INFO, DEBUG, TRACE]</td>
+              <td>메트릭 수집 상세도</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>enable.metrics.push</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>브로커로 클라이언트 메트릭 푸시</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="streams-configs">
+      <h2 id="streams-configs">Kafka Streams 설정</h2>
+      <p>
+        Streams는 내부적으로 프로듀서·컨슈머·Admin 클라이언트를 만들기 때문에
+        <code>producer.</code>·<code>consumer.</code>·<code>admin.</code> 접두어로
+        위의 클라이언트 설정을 그대로 넘길 수 있습니다.
+        DSL 연산자별 리파티션 유발 여부는 <a href="streams.html">Streams 치트시트</a>를 보세요.
+      </p>
+      <div class="toolbar">
+        <div class="field">
+          <label for="f-t-streams">Kafka Streams 설정 검색</label>
+          <input class="cheat-filter" id="f-t-streams" data-target="#t-streams" type="search"
+                 placeholder="설정명으로 검색" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="config-table" id="t-streams">
+          <caption>Kafka Streams 설정 — Apache Kafka 4.3.1 공식 문서 기준 기본값 (43개)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정명</th>
+              <th scope="col">기본값</th>
+              <th scope="col">범위 · 타입</th>
+              <th scope="col">설명</th>
+              <th scope="col">튜닝 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>application.id</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>string</code></td>
+              <td>애플리케이션 식별자. 컨슈머 <code>group.id</code>와 내부 토픽 접두어로 쓰입니다</td>
+              <td>바꾸면 완전히 새 애플리케이션이 됩니다(상태·오프셋 초기화)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>bootstrap.servers</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>list</code></td>
+              <td>초기 연결용 <code>host:port</code> 목록</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.stream.threads</code></th>
+              <td><code>1</code></td>
+              <td><code>int</code></td>
+              <td>인스턴스당 스트림 스레드 수</td>
+              <td>전체 병렬성 상한은 파티션 수입니다. 스레드를 그 이상 늘려도 유휴만 늘어납니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>processing.guarantee</code></th>
+              <td><code>at_least_once</code></td>
+              <td><code>string</code><br>[at_least_once, exactly_once_v2]</td>
+              <td><code>at_least_once</code> / <code>exactly_once_v2</code></td>
+              <td>기본값이 <code>at_least_once</code>입니다. EOS는 명시해야 켜집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>replication.factor</code></th>
+              <td><code>-1</code></td>
+              <td><code>int</code></td>
+              <td>내부 토픽(changelog·repartition) 복제 계수. <code>-1</code>은 브로커 기본값 사용</td>
+              <td>운영에서는 3으로 명시하세요. 브로커 기본이 1이면 상태 유실 위험</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>state.dir</code></th>
+              <td><code>${java.io.tmpdir}</code></td>
+              <td><code>string</code></td>
+              <td>RocksDB 상태 저장소 디렉터리</td>
+              <td>컨테이너에서 임시 볼륨을 쓰면 재시작마다 전체 복구가 일어납니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.standby.replicas</code></th>
+              <td><code>0</code></td>
+              <td><code>int</code></td>
+              <td>태스크별 hot standby 수</td>
+              <td>1로 두면 페일오버 복구 시간이 극적으로 줄어듭니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.warmup.replicas</code></th>
+              <td><code>2</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>동시에 워밍업할 수 있는 태스크 수</td>
+              <td>스케일 아웃 속도와 복제 부하의 트레이드오프</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>acceptable.recovery.lag</code></th>
+              <td><code>10000</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>태스크를 "따라잡았다"고 볼 changelog lag</td>
+              <td>이 값 이내면 활성 태스크로 승격됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>probing.rebalance.interval.ms</code></th>
+              <td><code>600000</code><br>(10 minutes)</td>
+              <td><code>long</code><br>[60000,...]</td>
+              <td>워밍업 진행을 확인하는 리밸런스 주기</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>commit.interval.ms</code></th>
+              <td><code>30000</code><br>(30 seconds)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>오프셋·상태 커밋 주기</td>
+              <td><code>exactly_once_v2</code>에서는 이 값이 종단 지연의 하한이 됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>statestore.cache.max.bytes</code></th>
+              <td><code>10485760</code><br>(10 mebibytes)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>인스턴스 전체 상태 저장소 캐시 크기</td>
+              <td>크게 하면 downstream 갱신이 줄고(중간 결과 억제) 지연이 늘어납니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>cache.max.bytes.buffering</code></th>
+              <td><code>10485760</code></td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>(deprecated) 이전 이름의 캐시 설정</td>
+              <td>신규 코드에서는 <code>statestore.cache.max.bytes</code>를 쓰세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>poll.ms</code></th>
+              <td><code>100</code></td>
+              <td><code>long</code></td>
+              <td>내부 컨슈머 <code>poll()</code> 블록 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>buffered.records.per.partition</code></th>
+              <td><code>1000</code></td>
+              <td><code>int</code></td>
+              <td>파티션당 버퍼링할 레코드 수</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.task.idle.ms</code></th>
+              <td><code>0</code></td>
+              <td><code>long</code></td>
+              <td>한쪽 입력이 비었을 때 조인·병합에서 기다릴 시간</td>
+              <td>양쪽 토픽 시간 정렬이 필요한 조인에서 순서 오류를 줄입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>task.timeout.ms</code></th>
+              <td><code>300000</code><br>(5 minutes)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>태스크가 재시도 가능한 오류로 멈춰 있을 수 있는 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>topology.optimization</code></th>
+              <td><code>none</code></td>
+              <td><code>string</code><br>[all, none, reuse.ktable.source.topics, merge.repartition.topics, single.store.self.join]</td>
+              <td>토폴로지 최적화. <code>none</code> / <code>all</code> 등</td>
+              <td><code>all</code>은 불필요한 repartition 토픽을 줄입니다. 기존 앱에 켜면 호환 문제 주의</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>default.key.serde</code></th>
+              <td><code>null</code></td>
+              <td><code>class</code></td>
+              <td>기본 키 Serde</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>default.value.serde</code></th>
+              <td><code>null</code></td>
+              <td><code>class</code></td>
+              <td>기본 값 Serde</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>default.timestamp.extractor</code></th>
+              <td><code>org.apache.kafka.streams.processor.FailOnInvalidTimestamp</code></td>
+              <td><code>class</code></td>
+              <td>기본 타임스탬프 추출기</td>
+              <td>기본은 잘못된 타임스탬프에서 실패합니다(<code>FailOnInvalidTimestamp</code>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>deserialization.exception.handler</code></th>
+              <td><code>org.apache.kafka.streams.errors.LogAndFailExceptionHandler</code></td>
+              <td><code>class</code></td>
+              <td>역직렬화 예외 처리기</td>
+              <td>기본은 로그 후 실패. 손상 레코드를 건너뛰려면 교체해야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>production.exception.handler</code></th>
+              <td><code>org.apache.kafka.streams.errors.DefaultProductionExceptionHandler</code></td>
+              <td><code>class</code></td>
+              <td>생산 예외 처리기</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>processing.exception.handler</code></th>
+              <td><code>org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler</code></td>
+              <td><code>class</code></td>
+              <td>처리 로직 예외 처리기</td>
+              <td>기본은 로그 후 실패</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>processing.exception.handler.global.enabled</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>전역 처리 예외 핸들러 활성화</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.dead.letter.queue.topic.name</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code></td>
+              <td>DLQ 토픽 이름</td>
+              <td>설정하지 않으면 DLQ가 동작하지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>default.dsl.store</code></th>
+              <td><code>rocksDB</code></td>
+              <td><code>string</code><br>[rocksDB, in_memory]</td>
+              <td>DSL 기본 저장소 타입</td>
+              <td><code>in_memory</code>로 바꾸면 디스크는 안 쓰지만 힙이 커집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>dsl.store.suppliers.class</code></th>
+              <td><code>org.apache.kafka.streams.state.BuiltInDslStoreSuppliers$RocksDBDslStoreSuppliers</code></td>
+              <td><code>class</code></td>
+              <td>DSL 저장소 공급자 클래스</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>rocksdb.config.setter</code></th>
+              <td><code>null</code></td>
+              <td><code>class</code></td>
+              <td>RocksDB 옵션 커스터마이저</td>
+              <td>블록 캐시·write buffer 튜닝 지점. 메모리 폭주의 원인이기도 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>windowstore.changelog.additional.retention.ms</code></th>
+              <td><code>86400000</code><br>(1 day)</td>
+              <td><code>long</code></td>
+              <td>윈도 스토어 changelog에 더할 추가 보관 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>repartition.purge.interval.ms</code></th>
+              <td><code>30000</code><br>(30 seconds)</td>
+              <td><code>long</code><br>[0,...]</td>
+              <td>repartition 토픽 purge 요청 주기</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>state.cleanup.delay.ms</code></th>
+              <td><code>600000</code><br>(10 minutes)</td>
+              <td><code>long</code></td>
+              <td>태스크 이관 후 로컬 상태를 지우기까지 대기</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>rack.aware.assignment.strategy</code></th>
+              <td><code>none</code></td>
+              <td><code>string</code><br>[none, min_traffic, balance_subtopology]</td>
+              <td>랙 인식 태스크 할당 전략</td>
+              <td>멀티 AZ에서 크로스 AZ 트래픽 비용을 줄입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>rack.aware.assignment.tags</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>list</code><br>List containing maximum of 5 elements</td>
+              <td>랙 인식에 쓸 클라이언트 태그</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>application.server</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>string</code></td>
+              <td>인터랙티브 쿼리용 <code>host:port</code></td>
+              <td>설정하면 다른 인스턴스로 쿼리를 라우팅할 수 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.protocol</code></th>
+              <td><code>classic</code></td>
+              <td><code>string</code><br>(case insensitive) [STREAMS, CLASSIC]</td>
+              <td>Streams가 쓰는 그룹 프로토콜</td>
+              <td>Streams Rebalance Protocol 관련. 기본은 <code>classic</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>task.assignor.class</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code></td>
+              <td>커스텀 태스크 할당자</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>default.deserialization.exception.handler</code></th>
+              <td><code>org.apache.kafka.streams.errors.LogAndFailExceptionHandler</code></td>
+              <td><code>class</code></td>
+              <td>(deprecated) 이전 이름의 역직렬화 예외 처리기</td>
+              <td>신규 코드에서는 <code>deserialization.exception.handler</code>를 쓰세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.summary.interval.ms</code></th>
+              <td><code>120000</code><br>(2 minutes)</td>
+              <td><code>long</code></td>
+              <td>요약 로그 출력 주기</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>upgrade.from</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code><br>[null, 2.4, 2.5, 2.6, 2.7, 2.8, 3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.0, 4.1, 4.2]</td>
+              <td>롤링 업그레이드 시 이전 버전 표기</td>
+              <td>메이저 업그레이드에서 2단계 롤링에 필요합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ensure.explicit.internal.resource.naming</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>내부 리소스 이름을 명시하도록 강제</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>request.timeout.ms</code></th>
+              <td><code>40000</code><br>(40 seconds)</td>
+              <td><code>int</code><br>[0,...]</td>
+              <td>요청 응답 대기 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metrics.recording.level</code></th>
+              <td><code>INFO</code></td>
+              <td><code>string</code><br>[INFO, DEBUG, TRACE]</td>
+              <td>메트릭 수집 상세도</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="connect-configs">
+      <h2 id="connect-configs">Kafka Connect 설정</h2>
+      <p>
+        REST API 전체 표와 SMT 목록은 <a href="connect.html">Connect 치트시트</a>에 있습니다.
+      </p>
+      <div class="toolbar">
+        <div class="field">
+          <label for="f-t-connect">Kafka Connect 설정 (워커 + 커넥터) 검색</label>
+          <input class="cheat-filter" id="f-t-connect" data-target="#t-connect" type="search"
+                 placeholder="설정명으로 검색" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+      <aside class="note" data-label="두 계층">
+        <p>이 표에는 <strong>워커 설정</strong>(<code>connect-distributed.properties</code>)과
+          <strong>커넥터 설정</strong>(REST로 넣는 JSON)이 섞여 있습니다.
+          <code>name</code>·<code>connector.class</code>·<code>tasks.max</code>·<code>topics</code>·
+          <code>transforms</code>·<code>errors.*</code>는 커넥터 설정입니다.</p>
+      </aside>
+      <div class="table-scroll">
+        <table class="config-table" id="t-connect">
+          <caption>Kafka Connect 설정 (워커 + 커넥터) — Apache Kafka 4.3.1 공식 문서 기준 기본값 (54개)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정명</th>
+              <th scope="col">기본값</th>
+              <th scope="col">범위 · 타입</th>
+              <th scope="col">설명</th>
+              <th scope="col">튜닝 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>bootstrap.servers</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>list</code></td>
+              <td>초기 연결용 <code>host:port</code> 목록</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.id</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>string</code></td>
+              <td>분산 모드 워커 그룹 ID</td>
+              <td>컨슈머 그룹 ID와 겹치면 안 됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>key.converter</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>class</code></td>
+              <td>키 컨버터 클래스</td>
+              <td>워커 기본값. 커넥터별로 오버라이드 가능합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>value.converter</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>class</code></td>
+              <td>값 컨버터 클래스</td>
+              <td>JSON 컨버터는 <code>schemas.enable</code>도 함께 봐야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>header.converter</code></th>
+              <td><code>org.apache.kafka.connect.storage.SimpleHeaderConverter</code></td>
+              <td><code>class</code></td>
+              <td>헤더 컨버터 클래스</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>config.storage.topic</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>string</code></td>
+              <td>커넥터 설정을 저장할 내부 토픽</td>
+              <td><strong>파티션 1개 · <code>cleanup.policy=compact</code></strong>가 필수입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>config.storage.replication.factor</code></th>
+              <td><code>3</code></td>
+              <td><code>short</code><br>Positive number not larger than the number of brokers in the Kafka cluster, or -1 to use the broker's default</td>
+              <td>설정 토픽 복제 계수</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.storage.topic</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>string</code></td>
+              <td>source 커넥터 오프셋을 저장할 내부 토픽</td>
+              <td>sink는 여기가 아니라 <code>__consumer_offsets</code>를 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.storage.partitions</code></th>
+              <td><code>25</code></td>
+              <td><code>int</code><br>Positive number, or -1 to use the broker's default</td>
+              <td>오프셋 토픽 파티션 수</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.storage.replication.factor</code></th>
+              <td><code>3</code></td>
+              <td><code>short</code><br>Positive number not larger than the number of brokers in the Kafka cluster, or -1 to use the broker's default</td>
+              <td>오프셋 토픽 복제 계수</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>status.storage.topic</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>string</code></td>
+              <td>커넥터·태스크 상태를 저장할 내부 토픽</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>status.storage.partitions</code></th>
+              <td><code>5</code></td>
+              <td><code>int</code><br>Positive number, or -1 to use the broker's default</td>
+              <td>상태 토픽 파티션 수</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>status.storage.replication.factor</code></th>
+              <td><code>3</code></td>
+              <td><code>short</code><br>Positive number not larger than the number of brokers in the Kafka cluster, or -1 to use the broker's default</td>
+              <td>상태 토픽 복제 계수</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.flush.interval.ms</code></th>
+              <td><code>60000</code><br>(1 minute)</td>
+              <td><code>long</code></td>
+              <td>오프셋 커밋 주기</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.flush.timeout.ms</code></th>
+              <td><code>5000</code><br>(5 seconds)</td>
+              <td><code>long</code></td>
+              <td>오프셋 커밋 완료 대기 시간</td>
+              <td>타임아웃이 반복되면 커밋이 계속 실패해 재처리가 늘어납니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>plugin.path</code></th>
+              <td><code>null</code></td>
+              <td><code>list</code></td>
+              <td>커넥터 플러그인 디렉터리 목록</td>
+              <td>클래스로딩 격리의 근거. 여기에 없으면 커넥터가 보이지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>plugin.discovery</code></th>
+              <td><code>hybrid_warn</code></td>
+              <td><code>string</code><br>(case insensitive) [ONLY_SCAN, SERVICE_LOAD, HYBRID_WARN, HYBRID_FAIL]</td>
+              <td>플러그인 검색 모드</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>listeners</code></th>
+              <td><code>http://:8083</code></td>
+              <td><code>list</code><br>List of comma-separated URLs, ex: http://localhost:8080,https://localhost:8443.</td>
+              <td>REST 인터페이스 바인딩 주소</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>rest.advertised.host.name</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code></td>
+              <td>다른 워커에게 알릴 호스트명</td>
+              <td>컨테이너에서 내부 주소를 알리면 워커 간 요청 전달이 깨집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>rest.advertised.port</code></th>
+              <td><code>null</code></td>
+              <td><code>int</code></td>
+              <td>다른 워커에게 알릴 포트</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>rest.advertised.listener</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code></td>
+              <td>알릴 리스너(http/https)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>admin.listeners</code></th>
+              <td><code>null</code></td>
+              <td><code>list</code></td>
+              <td>관리용(<code>/admin/loggers</code>) 별도 리스너</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>connect.protocol</code></th>
+              <td><code>sessioned</code></td>
+              <td><code>string</code><br>[eager, compatible, sessioned]</td>
+              <td>워커 그룹 프로토콜</td>
+              <td><code>sessioned</code>는 워커 간 요청에 서명을 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>scheduled.rebalance.max.delay.ms</code></th>
+              <td><code>300000</code><br>(5 minutes)</td>
+              <td><code>int</code><br>[0,...,2147483647]</td>
+              <td>워커 이탈 시 태스크 재배치를 미루는 최대 시간</td>
+              <td>롤링 재시작 중 불필요한 재배치를 막습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>rebalance.timeout.ms</code></th>
+              <td><code>60000</code><br>(1 minute)</td>
+              <td><code>int</code></td>
+              <td>리밸런스 완료 대기 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>session.timeout.ms</code></th>
+              <td><code>10000</code><br>(10 seconds)</td>
+              <td><code>int</code></td>
+              <td>워커 세션 타임아웃</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>heartbeat.interval.ms</code></th>
+              <td><code>3000</code><br>(3 seconds)</td>
+              <td><code>int</code></td>
+              <td>워커 하트비트 간격</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>task.shutdown.graceful.timeout.ms</code></th>
+              <td><code>5000</code><br>(5 seconds)</td>
+              <td><code>long</code></td>
+              <td>태스크 정상 종료 대기 시간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>exactly.once.source.support</code></th>
+              <td><code>disabled</code></td>
+              <td><code>string</code><br>(case insensitive) [DISABLED, ENABLED, PREPARING]</td>
+              <td>source 커넥터 EOS 지원. <code>disabled</code> / <code>preparing</code> / <code>enabled</code></td>
+              <td>전체 워커를 2단계 롤링으로 켜야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>connector.client.config.override.policy</code></th>
+              <td><code>All</code></td>
+              <td><code>string</code></td>
+              <td>커넥터가 클라이언트 설정을 덮어쓸 수 있는 범위</td>
+              <td><code>None</code>으로 좁히면 커넥터별 보안 설정을 막을 수 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>topic.creation.enable</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>커넥터의 토픽 자동 생성 허용</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>topic.tracking.enable</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>커넥터가 쓰는 토픽 추적</td>
+              <td><code>GET /connectors/{name}/topics</code>의 근거 데이터</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>topic.tracking.allow.reset</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td>토픽 추적 리셋 API 허용</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>inter.worker.key.ttl.ms</code></th>
+              <td><code>3600000</code><br>(1 hour)</td>
+              <td><code>int</code><br>[0,...,2147483647]</td>
+              <td>워커 간 서명 키 유효 기간</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>name</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>string</code><br>non-empty string without ISO control characters</td>
+              <td>커넥터 이름 (커넥터 설정)</td>
+              <td>REST 경로에 그대로 들어갑니다. URL 안전한 이름을 쓰세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>connector.class</code></th>
+              <td><em>필수 · 기본값 없음</em></td>
+              <td><code>string</code></td>
+              <td>커넥터 구현 클래스 (커넥터 설정)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>tasks.max</code></th>
+              <td><code>1</code></td>
+              <td><code>int</code><br>[1,...]</td>
+              <td>커넥터가 만들 최대 태스크 수 (커넥터 설정)</td>
+              <td>실제 병렬성 상한은 source의 분할 단위, sink는 파티션 수입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>tasks.max.enforce</code></th>
+              <td><code>true</code></td>
+              <td><code>boolean</code></td>
+              <td><code>tasks.max</code>를 초과하는 태스크 생성을 막을지</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>topics</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>list</code></td>
+              <td>sink 커넥터가 읽을 토픽 목록</td>
+              <td><code>topics.regex</code>와 동시에 쓸 수 없습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>topics.regex</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>string</code><br>valid regex</td>
+              <td>sink 커넥터가 읽을 토픽 정규식</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transforms</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>list</code><br>non-null string, unique transformation aliases</td>
+              <td>SMT 별칭 목록 (적용 순서)</td>
+              <td>별칭마다 <code>transforms.{별칭}.type</code>이 필요합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>predicates</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>list</code><br>non-null string, unique predicate aliases</td>
+              <td>SMT 조건 별칭 목록</td>
+              <td><code>transforms.{별칭}.predicate</code> + <code>negate</code>와 함께 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.tolerance</code></th>
+              <td><code>none</code></td>
+              <td><code>string</code><br>[none, all]</td>
+              <td><code>none</code> / <code>all</code></td>
+              <td><code>none</code>이면 첫 오류에서 태스크가 FAILED가 됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.retry.timeout</code></th>
+              <td><code>0</code></td>
+              <td><code>long</code></td>
+              <td>실패한 작업을 재시도할 총 시간. <code>0</code>은 재시도 없음</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.retry.delay.max.ms</code></th>
+              <td><code>60000</code><br>(1 minute)</td>
+              <td><code>long</code></td>
+              <td>재시도 사이 최대 지연</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.log.enable</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>오류를 로그로 남길지</td>
+              <td>DLQ를 쓸 때도 켜 두면 원인 추적이 쉬워집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.log.include.messages</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>로그에 레코드 내용을 포함할지</td>
+              <td>개인정보가 로그로 새어 나갈 수 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.deadletterqueue.topic.name</code></th>
+              <td><code>""</code><br>(빈 값)</td>
+              <td><code>string</code></td>
+              <td>DLQ 토픽 이름 (sink 전용)</td>
+              <td>비워 두면 DLQ가 동작하지 않습니다. <code>errors.tolerance=all</code>과 함께</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.deadletterqueue.topic.replication.factor</code></th>
+              <td><code>3</code></td>
+              <td><code>short</code></td>
+              <td>DLQ 토픽 복제 계수</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>errors.deadletterqueue.context.headers.enable</code></th>
+              <td><code>false</code></td>
+              <td><code>boolean</code></td>
+              <td>DLQ 레코드에 오류 컨텍스트 헤더 추가</td>
+              <td>원본 토픽·파티션·오프셋·예외를 헤더로 남깁니다. 반드시 켜세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>config.action.reload</code></th>
+              <td><code>restart</code></td>
+              <td><code>string</code><br>[none, restart]</td>
+              <td>외부 설정이 바뀔 때의 동작</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>exactly.once.support</code></th>
+              <td><code>requested</code></td>
+              <td><code>string</code><br>(case insensitive) [REQUIRED, REQUESTED]</td>
+              <td>source 커넥터의 EOS 요구 수준</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.boundary</code></th>
+              <td><code>poll</code></td>
+              <td><code>string</code><br>(case insensitive) [INTERVAL, POLL, CONNECTOR]</td>
+              <td>source EOS 트랜잭션 경계. <code>poll</code> / <code>interval</code> / <code>connector</code></td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offsets.storage.topic</code></th>
+              <td><code>null</code></td>
+              <td><code>string</code><br>non-empty string</td>
+              <td>커넥터별 오프셋 토픽 오버라이드</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="cli.html">
+          <span class="card__title">CLI 치트시트</span>
+          <span class="card__desc">목적별 명령 표. 설정을 실제로 바꾸는 <code>kafka-configs</code> 사용법.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="troubleshooting.html">
+          <span class="card__title">트러블슈팅 치트시트</span>
+          <span class="card__desc">증상 → 확인 명령 → 조치. 자주 보는 예외 20개.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="metrics.html">
+          <span class="card__title">메트릭 치트시트</span>
+          <span class="card__desc">설정을 바꾼 뒤 무엇을 봐야 하는지.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch04.html">
+          <span class="card__title">4장 · Producer 심화</span>
+          <span class="card__desc">배치·멱등성·순서 보장의 원리.</span>
+          <span class="card__meta">기본개념</span>
+        </a></li>
+        <li><a class="card" href="../cases/case06.html">
+          <span class="card__title">케이스 6</span>
+          <span class="card__desc"><code>min.insync.replicas</code>를 잘못 둬서 쓰기가 멈춘 사례.</span>
+          <span class="card__meta">케이스 스터디</span>
+        </a></li>
+        <li><a class="card" href="../ccdak/cram.html">
+          <span class="card__title">CCDAK 벼락치기</span>
+          <span class="card__desc">시험 D-1에 외워야 할 기본값만 모은 페이지.</span>
+          <span class="card__meta">자격증</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>
+        이 페이지의 모든 기본값은 Apache Kafka 4.3.1 배포판에 포함된 공식 설정 문서에서 확인했습니다.
+        확인하지 못한 설정은 표에 넣지 않았습니다.
+      </p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs" rel="noopener noreferrer">Topic-Level Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs" rel="noopener noreferrer">Producer Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#consumerconfigs" rel="noopener noreferrer">Consumer Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#streamsconfigs" rel="noopener noreferrer">Kafka Streams Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#connectconfigs" rel="noopener noreferrer">Kafka Connect Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#sinkconnectconfigs" rel="noopener noreferrer">Sink Connector Configs</a> — <code>errors.*</code> / DLQ</li>
+        <li><a href="https://kafka.apache.org/documentation/#sourceconnectconfigs" rel="noopener noreferrer">Source Connector Configs</a> — <code>transaction.boundary</code></li>
+        <li><a href="https://archive.apache.org/dist/kafka/4.3.1/" rel="noopener noreferrer">Apache Kafka 4.3.1 배포 아카이브</a> — <code>kafka_2.13-4.3.1-site-docs.tgz</code></li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

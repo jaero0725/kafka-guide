@@ -1,0 +1,77 @@
+<svg viewBox="0 0 720 314" role="img" class="kg-diagram"
+     aria-labelledby="d082-title d082-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d082-title">converter 와 SMT 체인의 위치 — source 와 sink 에서 순서가 반대입니다</title>
+  <desc id="d082-desc">소스 커넥터와 싱크 커넥터에서 SMT 체인과 converter 가 놓이는 순서를 위아래로 비교한 그림입니다.
+    소스는 SourceTask 가 만든 레코드가 SMT 체인을 지나고 그 다음 converter 가 바이트로 직렬화해 Kafka 토픽에 씁니다.
+    싱크는 Kafka 토픽에서 읽은 바이트를 converter 가 먼저 Connect 데이터 모델로 역직렬화하고
+    그 다음 SMT 체인을 지나 SinkTask 로 전달됩니다.
+    즉 순서가 서로 반대입니다.
+    외우는 규칙은 하나입니다.
+    converter 는 항상 Kafka 쪽에 붙고, SMT 는 항상 커넥터 쪽에 붙습니다.
+    SMT 는 Connect 의 내부 데이터 모델인 Struct 와 Schema 위에서 동작하기 때문에
+    바이트 상태에서는 실행될 수 없습니다.
+    실패 단계 이름은 KEY_CONVERTER, VALUE_CONVERTER, TRANSFORMATION 처럼
+    DLQ 헤더의 stage 값으로 남습니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">converter 와 SMT — 순서가 서로 반대입니다</text>
+
+  <!-- ================= SOURCE ================= -->
+  <text x="12" y="44" class="dg-fs-sm dg-bold">SOURCE — 외부 → Kafka</text>
+
+  <rect class="dg-node dg-node--ok" x="24" y="52" width="150" height="52" rx="4"/>
+  <text class="dg-fs-sm dg-mono dg-bold" x="99" y="74" text-anchor="middle">SourceTask</text>
+  <text class="dg-fs-sm dg-muted" x="99" y="92" text-anchor="middle">외부 레코드</text>
+  <line class="dg-edge dg-edge--accent" x1="174" y1="78" x2="191" y2="78"/>
+  <path class="dg-marker--accent" d="M190,73 L198,78 L190,83 Z"/>
+
+  <rect class="dg-node dg-node--warn" x="198" y="52" width="150" height="52" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="273" y="74" text-anchor="middle">SMT 체인</text>
+  <text class="dg-fs-sm dg-mono dg-muted" x="273" y="92" text-anchor="middle">transforms 순서대로</text>
+  <line class="dg-edge dg-edge--accent" x1="348" y1="78" x2="365" y2="78"/>
+  <path class="dg-marker--accent" d="M364,73 L372,78 L364,83 Z"/>
+
+  <rect class="dg-node dg-node--accent" x="372" y="52" width="150" height="52" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="447" y="74" text-anchor="middle">Converter</text>
+  <text class="dg-fs-sm dg-muted" x="447" y="92" text-anchor="middle">Struct → 바이트</text>
+  <line class="dg-edge dg-edge--accent" x1="522" y1="78" x2="539" y2="78"/>
+  <path class="dg-marker--accent" d="M538,73 L546,78 L538,83 Z"/>
+
+  <rect class="dg-node dg-node--alt" x="546" y="52" width="150" height="52" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="621" y="74" text-anchor="middle">Kafka 토픽</text>
+  <text class="dg-fs-sm dg-muted" x="621" y="92" text-anchor="middle">직렬화된 레코드</text>
+
+  <!-- ================= SINK ================= -->
+  <text x="12" y="134" class="dg-fs-sm dg-bold">SINK — Kafka → 외부</text>
+
+  <rect class="dg-node dg-node--alt" x="24" y="142" width="150" height="52" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="99" y="164" text-anchor="middle">Kafka 토픽</text>
+  <text class="dg-fs-sm dg-muted" x="99" y="182" text-anchor="middle">직렬화된 레코드</text>
+  <line class="dg-edge dg-edge--accent" x1="174" y1="168" x2="191" y2="168"/>
+  <path class="dg-marker--accent" d="M190,163 L198,168 L190,173 Z"/>
+
+  <rect class="dg-node dg-node--accent" x="198" y="142" width="150" height="52" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="273" y="164" text-anchor="middle">Converter</text>
+  <text class="dg-fs-sm dg-muted" x="273" y="182" text-anchor="middle">바이트 → Struct</text>
+  <line class="dg-edge dg-edge--accent" x1="348" y1="168" x2="365" y2="168"/>
+  <path class="dg-marker--accent" d="M364,163 L372,168 L364,173 Z"/>
+
+  <rect class="dg-node dg-node--warn" x="372" y="142" width="150" height="52" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="447" y="164" text-anchor="middle">SMT 체인</text>
+  <text class="dg-fs-sm dg-mono dg-muted" x="447" y="182" text-anchor="middle">transforms 순서대로</text>
+  <line class="dg-edge dg-edge--accent" x1="522" y1="168" x2="539" y2="168"/>
+  <path class="dg-marker--accent" d="M538,163 L546,168 L538,173 Z"/>
+
+  <rect class="dg-node dg-node--ok" x="546" y="142" width="150" height="52" rx="4"/>
+  <text class="dg-fs-sm dg-mono dg-bold" x="621" y="164" text-anchor="middle">SinkTask</text>
+  <text class="dg-fs-sm dg-muted" x="621" y="182" text-anchor="middle">외부로 쓸 레코드</text>
+
+  <!-- 규칙 -->
+  <rect class="dg-node dg-node--accent" x="12" y="210" width="696" height="60" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="228">규칙 하나로 외우세요</text>
+  <text class="dg-fs-sm" x="22" y="246"><tspan class="dg-bold">Converter 는 언제나 Kafka 쪽</tspan>에, <tspan class="dg-bold">SMT 는 언제나 커넥터 쪽</tspan>에 붙습니다. 그래서 순서가 뒤집혀 보입니다.</text>
+  <text class="dg-fs-sm" x="22" y="264">SMT 는 Connect 내부 데이터 모델(<tspan class="dg-mono">Struct</tspan> · <tspan class="dg-mono">Schema</tspan>)에서 동작하므로 바이트 상태에서는 실행될 수 없습니다.</text>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="282" x2="708" y2="282"/>
+  <text class="dg-fs-sm dg-muted" x="12" y="300">실패 단계는 <tspan class="dg-mono">KEY_CONVERTER</tspan> · <tspan class="dg-mono">VALUE_CONVERTER</tspan> · <tspan class="dg-mono">TRANSFORMATION</tspan> 처럼 DLQ 헤더에 남습니다 (D-083).</text>
+</svg>

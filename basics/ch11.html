@@ -1,0 +1,1543 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>11장 · 운영 기초 — Kafka Guide</title>
+  <meta name="description" content="Apache Kafka 4.3 기준 운영 정리. 보안 4계층과 listeners·advertised.listeners·listener.security.protocol.map의 관계, SASL 메커니즘과 ACL, 필수 JMX 메트릭과 consumer lag 측정법, 처리량과 지연 트레이드오프, 파티션 재할당, 그리고 4.2에서 production-ready가 된 Share Groups(KIP-932)를 다룹니다.">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="basics" data-page="ch11"></div>
+
+  <main id="main" class="page" data-page-id="basics/ch11">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="ch01.html">기본개념</a></li>
+        <li><span aria-current="page">11장 · 운영 기초</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">기본개념 · 11장</p>
+      <h1>운영 기초</h1>
+      <p class="page__lead">
+        클러스터를 세우는 것과 운영하는 것은 다른 일입니다.
+        이 장은 네 개의 대주제 — <strong>보안 · 모니터링 · 성능 튜닝 · 파티션 재할당</strong> — 와
+        4.2에서 production-ready가 된 <strong>Share Groups</strong>를 다룹니다.
+        특히 <code>listeners</code> · <code>advertised.listeners</code> · <code>listener.security.protocol.map</code>
+        세 설정의 관계는 운영자가 가장 많이 틀리는 지점이므로 별도 절로 정리했습니다.
+        CCAAK의 중심 내용이면서 CCDAK의 Application Observability(13%)와도 겹칩니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>암호화 · 인증 · 인가 · 감사 네 계층을 구분하고 <code>security.protocol</code> 네 값의 의미를 정확히 설명할 수 있습니다.</li>
+        <li><code>listeners</code> / <code>advertised.listeners</code> / <code>listener.security.protocol.map</code>의 역할을 구분하고, KRaft의 컨트롤러 리스너 요구사항을 설명할 수 있습니다.</li>
+        <li>ACL의 principal × resource × operation 모델과 <code>super.users</code> · <code>allow.everyone.if.no.acl.found</code>의 영향을 설명할 수 있습니다.</li>
+        <li>반드시 감시해야 할 브로커 JMX 메트릭과 각각의 정상 범위를 말할 수 있습니다.</li>
+        <li>consumer lag을 측정하는 세 가지 방법과 각각의 함정을 구분할 수 있습니다.</li>
+        <li><code>kafka-reassign-partitions.sh</code>의 3단계 워크플로와 throttle 해제의 중요성을 설명할 수 있습니다.</li>
+        <li>Share Groups가 컨슈머 그룹과 무엇이 다른지, ack 타입 4종의 의미를 설명할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- (1) 보안 -->
+    <!-- ================================================================= -->
+    <section aria-labelledby="security">
+      <h2 id="security">보안 — 네 개의 계층</h2>
+
+      <p>
+        Kafka의 보안은 서로 독립적인 네 계층으로 이루어집니다.
+        공식 문서는 지원되는 보안 조치를 <strong>연결 인증(SSL 또는 SASL)</strong>,
+        <strong>전송 데이터 암호화(SSL)</strong>,
+        <strong>클라이언트 읽기·쓰기 인가(authorization)</strong>,
+        그리고 <strong>인가의 플러그인화와 외부 인가 서비스 연동</strong>으로 정리합니다.
+        문서는 <strong>보안이 선택 사항이며, 인증·비인증·암호화·비암호화 클라이언트를 섞어 쓸 수도 있다</strong>는 점도 명시합니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-100">
+        <figcaption>
+          보안 4계층 — 암호화(TLS) · 인증(SASL/mTLS) · 인가(ACL) · 감사가
+          클라이언트와 브로커 사이에서 각각 어느 지점을 책임지는지
+        </figcaption>
+      </figure>
+
+      <h3 id="security-protocol">security.protocol 네 값</h3>
+
+      <div class="table-scroll">
+        <table>
+          <caption><code>security.protocol</code>의 네 값과 각각이 제공하는 것</caption>
+          <thead>
+            <tr>
+              <th scope="col">값</th>
+              <th scope="col">암호화</th>
+              <th scope="col">인증</th>
+              <th scope="col">설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>PLAINTEXT</code></th>
+              <td class="t-center mark-no">없음</td>
+              <td class="t-center mark-no">없음</td>
+              <td>공식 문서 표현대로 <strong>"어떤 보안도 제공하지 않고 추가 설정도 필요하지 않은"</strong> 프로토콜. 브로커 <code>listeners</code>의 기본값(<code>PLAINTEXT://:9092</code>)입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SSL</code></th>
+              <td class="t-center mark-ok">TLS</td>
+              <td class="t-center">선택적 (mTLS)</td>
+              <td>전송 암호화 + <strong>클라이언트 인증서 기반 인증(선택)</strong>. 브로커의 <code>ssl.client.auth</code>가 <code>required</code>일 때만 클라이언트 인증이 강제됩니다 (기본값은 <code>none</code>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SASL_PLAINTEXT</code></th>
+              <td class="t-center mark-no"><strong>없음</strong></td>
+              <td class="t-center mark-ok">SASL</td>
+              <td>인증은 하지만 <strong>전송은 평문</strong>입니다. <code>PLAIN</code> 메커니즘과 조합하면 <strong>비밀번호가 네트워크에 평문으로 흐릅니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SASL_SSL</code></th>
+              <td class="t-center mark-ok">TLS</td>
+              <td class="t-center mark-ok">SASL</td>
+              <td><strong>SASL로 인증 + TLS로 암호화.</strong> 프로덕션 권장 조합입니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Kafka Security / CCDAK Fundamentals">
+        <p>
+          <strong><code>security.protocol=SASL_SSL</code>의 의도는 "인증과 암호화를 동시에"</strong>입니다.
+          "SASL은 인증, SSL은 암호화"라는 분해가 이 값의 이름 그대로입니다.
+        </p>
+        <p>
+          가장 흔한 오답 유도는 <strong><code>SASL_PLAINTEXT</code>가 안전하다고 착각하게 만드는 것</strong>입니다.
+          이름에 <code>PLAINTEXT</code>가 들어간 이유가 <strong>전송이 암호화되지 않는다</strong>는 뜻이고,
+          여기에 <code>PLAIN</code> 메커니즘을 얹으면 자격증명이 그대로 노출됩니다.
+          <code>SASL_PLAINTEXT</code> + <code>SCRAM</code>도 비밀번호 자체는 평문으로 보내지 않지만
+          <strong>메시지 데이터는 여전히 평문</strong>입니다.
+        </p>
+        <p>
+          그리고 <strong>인증(authentication)과 인가(authorization)를 혼동하지 마세요.</strong>
+          인증은 "당신이 누구인가"이고 <code>security.protocol</code>·SASL이 담당합니다.
+          인가는 "그 사람이 무엇을 할 수 있는가"이고 <strong>ACL</strong>이 담당합니다.
+          <strong>인증만 켜고 ACL을 안 켜면 인증된 누구나 모든 것을 할 수 있습니다.</strong>
+        </p>
+      </aside>
+
+      <h3 id="sasl-mechanisms">SASL 메커니즘</h3>
+
+      <div class="table-scroll">
+        <table>
+          <caption>Kafka가 지원하는 SASL 메커니즘 (Apache Kafka 4.3 보안 문서 기준. 괄호는 도입 버전)</caption>
+          <thead>
+            <tr>
+              <th scope="col">메커니즘</th>
+              <th scope="col">자격증명</th>
+              <th scope="col">자격증명 저장 위치</th>
+              <th scope="col">언제 고르나</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>GSSAPI</code> (Kerberos)<br><span class="badge">0.9.0.0</span></th>
+              <td>Kerberos 티켓 / keytab</td>
+              <td>Kerberos KDC (외부)</td>
+              <td>사내에 이미 Kerberos·Active Directory가 있는 경우. <strong><code>sasl.enabled.mechanisms</code>의 기본값이자 유일한 기본 활성 메커니즘</strong>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>PLAIN</code><br><span class="badge">0.10.0.0</span></th>
+              <td>사용자명 / 비밀번호</td>
+              <td><strong>브로커의 JAAS 설정 파일</strong> (<code>user_{name}</code> 속성)</td>
+              <td>가장 단순합니다. 대신 <strong>사용자를 추가할 때마다 브로커 설정을 고치고 재시작</strong>해야 하고, <strong>반드시 <code>SASL_SSL</code>과 함께</strong> 써야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>SCRAM-SHA-256</code> / <code>SCRAM-SHA-512</code><br><span class="badge">0.10.2.0</span></th>
+              <td>사용자명 / 비밀번호 (챌린지-응답)</td>
+              <td><strong>Kafka 클러스터 메타데이터</strong>. <code>kafka-configs.sh</code>로 <strong>런타임에 추가·삭제</strong></td>
+              <td>외부 인증 시스템 없이 사용자 관리를 하고 싶을 때의 기본 선택. <strong>브로커 재시작 없이 사용자 추가</strong>가 가능합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>OAUTHBEARER</code><br><span class="badge">2.0</span></th>
+              <td>OAuth 2.0 Bearer 토큰 (JWT)</td>
+              <td>외부 인증 서버 (JWKS 엔드포인트로 검증)</td>
+              <td>이미 OAuth/OIDC 기반 인증 체계가 있는 경우. 토큰 만료·갱신이 자동화됩니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="diagram" data-diagram="D-102">
+        <figcaption>
+          SASL 메커니즘 비교 — PLAIN · SCRAM · GSSAPI · OAUTHBEARER의 자격증명 흐름과
+          자격증명이 어디에 저장되는지
+        </figcaption>
+      </figure>
+
+      <aside class="note note--danger" data-label="SASL 관련 기본값의 함정">
+        <p>
+          <code>sasl.enabled.mechanisms</code>의 기본값은 <strong><code>GSSAPI</code> 하나뿐</strong>입니다.
+          공식 문서가 <strong>"기본적으로 GSSAPI만 활성화되어 있다"</strong>고 명시합니다.
+          SCRAM이나 PLAIN을 쓰려면 이 목록에 <strong>명시적으로 추가</strong>해야 합니다.
+        </p>
+        <p>
+          같은 이유로 <code>sasl.mechanism.inter.broker.protocol</code>과
+          <code>sasl.mechanism.controller.protocol</code>의 기본값도 <strong>모두 <code>GSSAPI</code></strong>입니다.
+          클라이언트 리스너만 SCRAM으로 바꾸고 브로커 간·컨트롤러 통신 설정을 잊으면
+          <strong>클러스터가 자기 자신과 통신하지 못합니다.</strong>
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>SCRAM 사용자 생성·조회·삭제 (공식 문서 예시 기준)</figcaption>
+        <pre><code class="lang-bash"># 사용자 alice 에게 SCRAM-SHA-256 자격증명 부여 — 브로커 재시작이 필요 없습니다
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter \
+  --add-config 'SCRAM-SHA-256=[iterations=8192,password=alice-secret]' \
+  --entity-type users --entity-name alice \
+  --command-config client.properties
+
+# 조회
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --describe \
+  --entity-type users --entity-name alice --command-config client.properties
+
+# 삭제
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter \
+  --delete-config 'SCRAM-SHA-256' \
+  --entity-type users --entity-name alice --command-config client.properties</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>SASL_SSL + SCRAM-SHA-256 — 브로커와 클라이언트 설정 짝</figcaption>
+        <pre><code class="lang-properties"># ── server.properties (브로커) ─────────────────────────────
+listeners=CLIENT://:9092,BROKER://:9093,CONTROLLER://:9094
+inter.broker.listener.name=BROKER
+controller.listener.names=CONTROLLER
+listener.security.protocol.map=CLIENT:SASL_SSL,BROKER:SASL_SSL,CONTROLLER:SASL_SSL
+
+# 기본값은 GSSAPI 하나뿐이므로 반드시 명시합니다
+sasl.enabled.mechanisms=SCRAM-SHA-256
+sasl.mechanism.inter.broker.protocol=SCRAM-SHA-256
+sasl.mechanism.controller.protocol=SCRAM-SHA-256
+
+ssl.keystore.location=/etc/kafka/ssl/broker.keystore.jks
+ssl.keystore.password=changeit
+ssl.truststore.location=/etc/kafka/ssl/broker.truststore.jks
+ssl.truststore.password=changeit
+
+# 인가를 켭니다. KRaft 에서는 StandardAuthorizer 를 씁니다
+authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+# 구분자는 세미콜론입니다 (SSL 사용자명에 콤마가 들어갈 수 있으므로)
+super.users=User:admin
+
+# ── client.properties (클라이언트) ─────────────────────────
+security.protocol=SASL_SSL
+sasl.mechanism=SCRAM-SHA-256
+sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+    username="alice" \
+    password="alice-secret";
+ssl.truststore.location=/etc/kafka/ssl/client.truststore.jks
+ssl.truststore.password=changeit</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="listeners">
+      <h2 id="listeners">listeners · advertised.listeners · listener.security.protocol.map</h2>
+
+      <p>
+        이 세 설정을 헷갈리는 것이 Kafka 운영에서 가장 흔한 실수입니다.
+        브로커는 시작되고 <code>kafka-topics.sh --list</code>도 동작하는데
+        <strong>애플리케이션만 붙지 못하는</strong> 상황의 원인이 거의 항상 여기 있습니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>세 설정의 역할 구분 (Apache Kafka 4.3 브로커 설정 기준)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">질문에 답한다</th><th scope="col">형식</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>listeners</code></th>
+              <td><code>PLAINTEXT://:9092</code></td>
+              <td><strong>"브로커가 어느 주소·포트에 바인딩해 소켓을 열 것인가"</strong></td>
+              <td><code>{리스너이름}://{호스트}:{포트}</code> 콤마 구분. 호스트를 비우면 기본 인터페이스, <code>0.0.0.0</code>은 모든 인터페이스</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>advertised.listeners</code></th>
+              <td><code>null</code></td>
+              <td><strong>"클라이언트와 다른 브로커에게 알려 줄 접속 주소는 무엇인가"</strong></td>
+              <td>같은 형식. <code>null</code>이면 <code>listeners</code> 값이 그대로 광고됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>listener.security.protocol.map</code></th>
+              <td><code>SASL_SSL:SASL_SSL,<br>PLAINTEXT:PLAINTEXT,<br>SSL:SSL,<br>SASL_PLAINTEXT:SASL_PLAINTEXT</code></td>
+              <td><strong>"각 리스너 이름이 어떤 보안 프로토콜을 쓰는가"</strong></td>
+              <td><code>{리스너이름}:{보안프로토콜}</code> 콤마 구분</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        관계를 한 문장으로 정리하면 이렇습니다 —
+        <strong><code>listeners</code>는 바인딩, <code>advertised.listeners</code>는 광고,
+        <code>listener.security.protocol.map</code>은 이름과 프로토콜의 매핑</strong>입니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-101">
+        <figcaption>
+          listeners 3종의 관계 — 브로커가 바인딩한 소켓, 메타데이터로 광고되는 주소,
+          그리고 리스너 이름별 보안 프로토콜 매핑이 내부·외부 클라이언트를 각각 어디로 보내는지
+        </figcaption>
+      </figure>
+
+      <h3 id="listener-naming">리스너 이름을 왜 따로 두는가</h3>
+
+      <p>
+        리스너 이름이 보안 프로토콜 이름과 같다면 <code>listener.security.protocol.map</code>을 생략할 수 있습니다.
+        <code>listeners=SSL://localhost:9092,PLAINTEXT://localhost:9093</code>이 그런 예입니다.
+        하지만 공식 문서는 <strong>리스너의 용도가 명확해지므로 명시적인 이름을 권장</strong>합니다.
+        그리고 <strong>같은 보안 프로토콜을 두 개 이상의 포트에서 쓰려면 이름을 따로 붙이는 것이 필수</strong>입니다 —
+        내부 트래픽과 외부 트래픽을 분리하면서 양쪽 다 SSL을 쓰는 경우가 대표적입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>내부·외부 분리 — 컨테이너 환경에서 가장 자주 필요한 형태</figcaption>
+        <pre><code class="lang-properties"># 두 리스너가 같은 SSL 프로토콜을 쓰므로 이름을 따로 붙여야 합니다
+listeners=INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094
+listener.security.protocol.map=INTERNAL:SSL,EXTERNAL:SASL_SSL
+
+# 바인딩 주소와 광고 주소가 다릅니다.
+# 컨테이너 안에서는 0.0.0.0 에 바인딩하지만,
+# 클라이언트에게는 실제로 도달 가능한 이름을 알려 줘야 합니다
+advertised.listeners=INTERNAL://kafka-1.internal:9092,EXTERNAL://kafka.example.com:9094
+
+# 브로커 간 복제는 내부 리스너로
+inter.broker.listener.name=INTERNAL</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="가장 흔한 실패 모드">
+        <p>
+          <strong>증상:</strong> 브로커는 정상 기동되고 브로커와 같은 네트워크에서는 잘 동작하는데,
+          도커 밖이나 다른 네트워크의 클라이언트가 <strong>부트스트랩은 성공하고 그 다음에 타임아웃</strong>됩니다.
+        </p>
+        <p>
+          <strong>원인:</strong> 클라이언트는 <code>bootstrap.servers</code>로 최초 연결을 맺은 뒤
+          <strong>메타데이터로 받은 <code>advertised.listeners</code> 주소로 다시 접속</strong>합니다.
+          <code>advertised.listeners</code>가 <code>localhost</code>나 컨테이너 내부 호스트명이면,
+          클라이언트는 자기 쪽 <code>localhost</code>로 접속을 시도하고 실패합니다.
+          부트스트랩만 성공하고 실제 produce/fetch가 실패하는 이유입니다.
+        </p>
+        <p>
+          <strong>확인:</strong> <code>bin/kafka-broker-api-versions.sh --bootstrap-server ...</code>나
+          <code>kafka-metadata-quorum.sh</code> 출력에 나오는 주소가
+          <strong>클라이언트 쪽에서 실제로 resolve·접속 가능한 값인지</strong> 확인하세요.
+          자세한 조합 패턴은 <a href="../cheatsheet/security.html">보안 치트시트</a>에 정리되어 있습니다.
+        </p>
+      </aside>
+
+      <h3 id="kraft-listeners">KRaft에서의 리스너 규칙</h3>
+
+      <p>
+        KRaft에서는 <code>process.roles</code>에 <code>broker</code>가 있으면 브로커,
+        <code>controller</code>가 있으면 컨트롤러이고, <strong>역할에 따라 리스너 구성이 달라집니다.</strong>
+      </p>
+
+      <ul>
+        <li><code>inter.broker.listener.name</code>이 가리키는 리스너는 <strong>브로커 간 요청 전용</strong>입니다. 주 용도는 파티션 복제입니다. 지정하지 않으면 <code>security.inter.broker.protocol</code>(기본 <code>PLAINTEXT</code>)이 결정합니다. <strong>두 설정을 동시에 지정하면 오류</strong>입니다.</li>
+        <li>컨트롤러는 <strong><code>controller.listener.names</code>로 정의된 별도 리스너</strong>를 써야 하며, <strong>브로커 간 리스너와 같은 값일 수 없습니다.</strong></li>
+        <li><strong><code>controller</code> 역할이 없는 순수 브로커도 컨트롤러 리스너를 정의해야 합니다.</strong> 컨트롤러에 요청을 보내야 하기 때문입니다. 단 그 리스너를 <code>listeners</code>에 넣지는 않습니다 — 브로커는 컨트롤러 리스너를 노출하지 않습니다.</li>
+        <li>combined 모드(<code>broker,controller</code>)에서는 <strong>컨트롤러 리스너를 <code>listeners</code>에 포함</strong>해야 합니다.</li>
+        <li>컨트롤러 리스너가 여럿이면 <strong>목록의 첫 번째가 아웃바운드 요청에 쓰입니다.</strong></li>
+      </ul>
+
+      <div class="diff">
+        <div class="diff__before">
+          <p>순수 브로커인데 컨트롤러 리스너를 <code>listeners</code>에 넣었습니다. 브로커는 컨트롤러 리스너를 노출하지 않습니다.</p>
+          <figure class="code">
+            <figcaption>server.properties</figcaption>
+            <pre><code class="lang-properties">process.roles=broker
+listeners=BROKER://localhost:9092,CONTROLLER://localhost:9093
+inter.broker.listener.name=BROKER
+controller.listener.names=CONTROLLER</code></pre>
+          </figure>
+        </div>
+        <div class="diff__after">
+          <p>컨트롤러 리스너는 <strong>정의만</strong> 하고 바인딩하지 않습니다. 포트는 <code>controller.quorum.*</code>가 결정합니다.</p>
+          <figure class="code">
+            <figcaption>server.properties (공식 문서 예시 기준)</figcaption>
+            <pre><code class="lang-properties">process.roles=broker
+listeners=BROKER://localhost:9092
+inter.broker.listener.name=BROKER
+controller.quorum.bootstrap.servers=localhost:9093
+controller.listener.names=CONTROLLER
+listener.security.protocol.map=BROKER:SASL_SSL,CONTROLLER:SASL_SSL</code></pre>
+          </figure>
+        </div>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Kafka Security">
+        <p>
+          <strong>컨트롤러 리스너는 브로커 간 리스너와 같을 수 없습니다.</strong> 공식 문서가 못 박은 제약입니다.
+          그리고 <strong>순수 브로커도 컨트롤러 리스너를 정의해야</strong> 합니다 —
+          정의만 하고 <code>listeners</code>에는 넣지 않습니다.
+          이 미묘한 차이가 시나리오 문항으로 나옵니다.
+        </p>
+        <p>
+          또한 KRaft에서는 <strong><code>advertised.listeners</code>를 동적으로 바꿀 수 없습니다.</strong>
+          ZooKeeper 시대에는 동적 설정이었으나, KRaft에서는 이 값을 바꾸려면
+          <strong>브로커·컨트롤러를 재시작</strong>해야 합니다.
+          자세한 배경은 <a href="appendix-legacy.html">부록 · 버전 표기와 레거시</a>에 있습니다.
+        </p>
+      </aside>
+
+      <h3 id="acl">ACL — 인가</h3>
+
+      <p>
+        ACL은 <strong>플러그인 가능한 인가 프레임워크</strong>이며 <code>authorizer.class.name</code>으로 지정합니다.
+        KRaft 클러스터에서는 <strong>모든 노드(브로커·컨트롤러·combined)</strong>에
+        <code>org.apache.kafka.metadata.authorizer.StandardAuthorizer</code>를 설정합니다.
+        이 구현은 ACL을 <strong>클러스터 메타데이터(KRaft 메타데이터 로그)</strong>에 저장합니다.
+      </p>
+
+      <p>
+        ACL의 일반 형식은 공식 문서 표현 그대로입니다 —
+        <strong>"Principal {P}가 Host {H}에서 ResourcePattern {RP}에 매칭되는 Resource {R}에 대해
+        Operation {O}를 [허용|거부]한다"</strong>.
+      </p>
+
+      <figure class="diagram" data-diagram="D-103">
+        <figcaption>
+          ACL 모델 — principal · host · resource(패턴) · operation의 조합으로 허용/거부가 결정되고,
+          <code>super.users</code>와 <code>allow.everyone.if.no.acl.found</code>가 그 판단을 어떻게 바꾸는지
+        </figcaption>
+      </figure>
+
+      <div class="table-scroll">
+        <table>
+          <caption>ACL 오퍼레이션 13종 (Apache Kafka 4.3 인가 문서 기준)</caption>
+          <thead><tr><th scope="col">오퍼레이션</th><th scope="col">주요 용도</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>Read</code></th><td>토픽 소비, 그룹 참여</td></tr>
+            <tr><th scope="row"><code>Write</code></th><td>토픽 발행</td></tr>
+            <tr><th scope="row"><code>Create</code></th><td>토픽 생성</td></tr>
+            <tr><th scope="row"><code>Delete</code></th><td>토픽·그룹 삭제</td></tr>
+            <tr><th scope="row"><code>Alter</code></th><td>리소스 변경 (파티션 추가 등)</td></tr>
+            <tr><th scope="row"><code>Describe</code></th><td>메타데이터 조회</td></tr>
+            <tr><th scope="row"><code>ClusterAction</code></th><td>클러스터 수준 내부 동작 (브로커 간 요청 등)</td></tr>
+            <tr><th scope="row"><code>DescribeConfigs</code></th><td>설정 조회</td></tr>
+            <tr><th scope="row"><code>AlterConfigs</code></th><td>설정 변경</td></tr>
+            <tr><th scope="row"><code>IdempotentWrite</code></th><td>멱등 프로듀서 (2.8부터 deprecated)</td></tr>
+            <tr><th scope="row"><code>CreateTokens</code></th><td>위임 토큰 생성</td></tr>
+            <tr><th scope="row"><code>DescribeTokens</code></th><td>위임 토큰 조회</td></tr>
+            <tr><th scope="row"><code>All</code></th><td>모든 오퍼레이션</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-scroll">
+        <table>
+          <caption>ACL 리소스 타입과 권한 실패 시 반환되는 오류 코드</caption>
+          <thead><tr><th scope="col">리소스</th><th scope="col">무엇을 보호하는가</th><th scope="col">오류</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>Topic</code></th><td>토픽 읽기·쓰기 등</td><td><code>TOPIC_AUTHORIZATION_FAILED</code> (29)</td></tr>
+            <tr><th scope="row"><code>Group</code></th><td>컨슈머 그룹 참여 등</td><td><code>GROUP_AUTHORIZATION_FAILED</code> (30)</td></tr>
+            <tr><th scope="row"><code>Cluster</code></th><td>클러스터 전체에 영향을 주는 동작</td><td><code>CLUSTER_AUTHORIZATION_FAILED</code> (31)</td></tr>
+            <tr><th scope="row"><code>TransactionalId</code></th><td>트랜잭션 관련 동작</td><td><code>TRANSACTIONAL_ID_AUTHORIZATION_FAILED</code> (53)</td></tr>
+            <tr><th scope="row"><code>DelegationToken</code></th><td>위임 토큰</td><td>—</td></tr>
+            <tr><th scope="row"><code>User</code></th><td>다른 사용자의 토큰 생성·조회 권한</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="ACL 없을 때의 기본 동작">
+        <p>
+          공식 문서의 서술은 명확합니다 —
+          <strong>어떤 ACL도 매칭되지 않는 리소스는 접근이 제한되며, 이 경우 super user만 접근할 수 있습니다.</strong>
+        </p>
+        <p>
+          이 동작을 바꾸는 것이 <code>allow.everyone.if.no.acl.found=true</code>입니다.
+          이렇게 두면 <strong>ACL이 하나도 없는 리소스는 누구나 접근</strong>할 수 있게 됩니다.
+          단, <strong>ACL이 하나라도 정의된 리소스는 이 설정과 무관하게 ACL 규칙이 그대로 적용</strong>됩니다 —
+          여기서 사고가 납니다. 마이그레이션 중에 이 값을 <code>true</code>로 두고
+          토픽 하나에 ACL을 추가하면, <strong>그 토픽만 갑자기 잠깁니다.</strong>
+        </p>
+        <p>
+          <code>super.users</code>는 <strong>구분자가 세미콜론</strong>입니다
+          (SSL 사용자명에 콤마가 들어갈 수 있기 때문입니다).
+          그리고 기본 PrincipalType 문자열 <code>User</code>는 <strong>대소문자를 구분</strong>합니다 —
+          <code>user:admin</code>은 동작하지 않습니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>kafka-acls.sh 실사용 예 (공식 문서 예시 기준)</figcaption>
+        <pre><code class="lang-bash"># 특정 호스트에서만 Read/Write 허용
+bin/kafka-acls.sh --bootstrap-server localhost:9092 --add \
+  --allow-principal User:Bob --allow-principal User:Alice \
+  --allow-host 198.51.100.0 --allow-host 198.51.100.1 \
+  --operation Read --operation Write --topic Test-topic
+
+# 모두 허용하되 특정 사용자·호스트만 거부 (Deny 가 Allow 보다 우선합니다)
+bin/kafka-acls.sh --bootstrap-server localhost:9092 --add \
+  --allow-principal User:'*' --allow-host '*' \
+  --deny-principal User:BadBob --deny-host 198.51.100.3 \
+  --operation Read --topic Test-topic
+
+# 프로듀서 편의 옵션 — 필요한 오퍼레이션을 한 번에 부여합니다
+bin/kafka-acls.sh --bootstrap-server localhost:9092 --add \
+  --allow-principal User:Bob --producer --topic Test-topic
+
+# 컨슈머 편의 옵션 — 토픽 Read 와 그룹 Read 가 함께 필요합니다
+bin/kafka-acls.sh --bootstrap-server localhost:9092 --add \
+  --allow-principal User:Bob --consumer --topic Test-topic --group Group-1
+
+# 접두어 기반 (prefixed) 패턴 — 토픽이 늘어날 때 유용합니다
+bin/kafka-acls.sh --bootstrap-server localhost:9092 --add \
+  --allow-principal User:Jane --producer \
+  --topic Test- --resource-pattern-type prefixed
+
+# 목록 조회
+bin/kafka-acls.sh --bootstrap-server localhost:9092 --list --topic Test-topic</code></pre>
+      </figure>
+
+      <aside class="note" data-label="KRaft의 principal forwarding">
+        <p>
+          KRaft에서는 <code>CreateTopics</code>·<code>DeleteTopics</code> 같은 관리 요청이
+          클라이언트 → 브로커 리스너 → <strong><code>controller.listener.names</code>의 첫 리스너를 통해 액티브 컨트롤러</strong>로
+          전달되고, <strong>인가는 컨트롤러 노드에서</strong> 이루어집니다.
+          브로커는 원본 요청과 클라이언트 principal을 함께 담은 <code>Envelope</code> 요청으로 감싸 보냅니다.
+          컨트롤러는 먼저 브로커 principal로 <code>Envelope</code>를 인가하고, 그 다음 전달된 principal로 원본 요청을 인가합니다.
+        </p>
+        <p>
+          <strong>따라서 커스텀 <code>principal.builder.class</code>를 쓴다면
+          <code>org.apache.kafka.common.security.auth.KafkaPrincipalSerde</code>를 함께 구현해야 합니다.</strong>
+          그렇지 않으면 <strong>브로커가 컨트롤러로 요청을 전달할 수 없습니다.</strong>
+          4.2부터는 <code>KafkaPrincipalBuilder</code>가 <code>KafkaPrincipalSerde</code>를 상속하도록 바뀌어
+          이 구현이 강제됩니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- (2) 모니터링 -->
+    <!-- ================================================================= -->
+    <section aria-labelledby="monitoring">
+      <h2 id="monitoring">모니터링</h2>
+
+      <p>
+        Kafka는 JMX로 메트릭을 노출합니다. 문제는 개수가 수백 개라는 점입니다.
+        아래는 공식 문서가 <strong>"반드시 감시해야 한다"</strong>고 정리한 서버 메트릭과 그 정상 범위입니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-104">
+        <figcaption>
+          핵심 메트릭 대시보드 — UnderReplicatedPartitions · OfflinePartitionsCount ·
+          ActiveControllerCount · RequestHandlerAvgIdlePercent를 한 화면에 배치한 예시
+        </figcaption>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table config-table--plain">
+          <caption>반드시 감시할 브로커 JMX 메트릭 (Apache Kafka 4.3 모니터링 문서의 정상 범위 기준)</caption>
+          <thead>
+            <tr>
+              <th scope="col">메트릭</th>
+              <th scope="col">MBean</th>
+              <th scope="col">정상 범위</th>
+              <th scope="col">벗어나면</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Under-replicated partitions</th>
+              <td><code>kafka.server:type=ReplicaManager,<br>name=UnderReplicatedPartitions</code></td>
+              <td><strong>0</strong></td>
+              <td>ISR 크기가 전체 레플리카 수보다 작습니다. 브로커 장애, 느린 팔로워, 네트워크 문제를 의심합니다. <strong>가장 먼저 봐야 할 메트릭</strong>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">Under-min-ISR partitions</th>
+              <td><code>kafka.server:type=ReplicaManager,<br>name=UnderMinIsrPartitionCount</code></td>
+              <td><strong>0</strong></td>
+              <td>ISR이 <code>min.insync.replicas</code> 미달입니다. <strong><code>acks=all</code> 쓰기가 즉시 거부됩니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">Offline partitions</th>
+              <td><code>kafka.controller:type=KafkaController,<br>name=OfflinePartitionsCount</code></td>
+              <td><strong>0</strong></td>
+              <td>리더가 없는 파티션입니다. <strong>읽기도 쓰기도 불가</strong>합니다. 즉시 대응 대상</td>
+            </tr>
+            <tr>
+              <th scope="row">Active controller</th>
+              <td><code>kafka.controller:type=KafkaController,<br>name=ActiveControllerCount</code></td>
+              <td><strong>클러스터 전체에서 정확히 하나만 1</strong></td>
+              <td>합계가 0이면 컨트롤러 없음, 2 이상이면 split-brain 의심입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">Leader election rate</th>
+              <td><code>kafka.controller:type=ControllerStats,<br>name=LeaderElectionRateAndTimeMs</code></td>
+              <td><strong>브로커 장애 시에만 0이 아님</strong></td>
+              <td>평상시에 오르면 브로커가 반복적으로 이탈·복귀하고 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">Unclean leader election</th>
+              <td><code>kafka.controller:type=ControllerStats,<br>name=UncleanLeaderElectionsPerSec</code></td>
+              <td><strong>0</strong></td>
+              <td><strong>데이터 유실이 발생했다는 뜻</strong>입니다. ISR 밖 레플리카가 리더가 되었습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">ISR shrink rate</th>
+              <td><code>kafka.server:type=ReplicaManager,<br>name=IsrShrinksPerSec</code></td>
+              <td><strong>0</strong> (브로커 장애 중 제외)</td>
+              <td>공식 문서 표현: 브로커가 죽으면 일부 파티션의 ISR이 줄고, 복귀해 따라잡으면 다시 늘어납니다. <strong>그 외에는 shrink·expand 모두 0이 기대값</strong>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">Request handler idle</th>
+              <td><code>kafka.server:type=KafkaRequestHandlerPool,<br>name=RequestHandlerAvgIdlePercent</code></td>
+              <td>0~1 사이. <strong>이상적으로 0.3 초과</strong></td>
+              <td>0.3 아래로 떨어지면 I/O 스레드가 포화입니다. <code>num.io.threads</code>를 검토합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">Network processor idle</th>
+              <td><code>kafka.network:type=SocketServer,<br>name=NetworkProcessorAvgIdlePercent</code></td>
+              <td>0~1 사이. <strong>이상적으로 0.3 초과</strong></td>
+              <td>네트워크 스레드 포화입니다. <code>num.network.threads</code>를 검토합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">Request total time</th>
+              <td><code>kafka.network:type=RequestMetrics,<br>name=TotalTimeMs,request={Produce|FetchConsumer|FetchFollower}</code></td>
+              <td>워크로드에 따라 다름</td>
+              <td>공식 문서에 따르면 <strong>queue · local · remote · response send 시간으로 분해</strong>됩니다. 어느 구간이 늘었는지가 원인을 가릅니다</td>
+            </tr>
+            <tr>
+              <th scope="row">Offline log directory</th>
+              <td><code>kafka.log:type=LogManager,<br>name=OfflineLogDirectoryCount</code></td>
+              <td><strong>0</strong></td>
+              <td>디스크 장애입니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Observability / CCDAK Application Observability">
+        <p>
+          <strong><code>UnderReplicatedPartitions</code>와 <code>UnderMinIsrPartitionCount</code>는 다른 메트릭입니다.</strong>
+          앞의 것은 <em>ISR 크기 &lt; 전체 레플리카 수</em>이고,
+          뒤의 것은 <em>ISR 크기 &lt; <code>min.insync.replicas</code></em>입니다.
+          RF=3, <code>min.insync.replicas=2</code>일 때 ISR이 2로 줄면
+          <strong>URP는 1이 되지만 UnderMinIsr는 여전히 0</strong>이고 쓰기는 계속 성공합니다.
+          ISR이 1로 줄면 둘 다 1이 되고 <code>acks=all</code> 쓰기가 거부됩니다.
+        </p>
+        <p>
+          그리고 <strong><code>ActiveControllerCount</code>는 클러스터 전체 합이 1</strong>이어야 합니다.
+          "각 브로커에서 1이어야 한다"를 고르면 오답입니다.
+        </p>
+      </aside>
+
+      <h3 id="client-metrics">클라이언트 메트릭</h3>
+
+      <div class="table-scroll">
+        <table class="config-table config-table--plain">
+          <caption>프로듀서·컨슈머 쪽에서 보는 핵심 메트릭</caption>
+          <thead><tr><th scope="col">메트릭</th><th scope="col">MBean</th><th scope="col">의미</th></tr></thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>records-lag-max</code></th>
+              <td><code>kafka.consumer:type=consumer-fetch-manager-metrics,client-id={client-id}</code></td>
+              <td>컨슈머가 프로듀서보다 뒤처진 레코드 수. <strong>공식 문서가 명시하듯 브로커가 아니라 컨슈머가 발행하는 메트릭</strong>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>record-error-rate</code> / <code>record-retry-rate</code></th>
+              <td><code>kafka.producer:type=producer-topic-metrics</code></td>
+              <td>전송 실패·재시도율. 재시도율이 높으면 브로커 상태나 타임아웃 설정을 봅니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>request-latency-avg</code></th>
+              <td><code>kafka.producer:type=producer-metrics</code></td>
+              <td>프로듀서 요청 왕복 시간</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>buffer-available-bytes</code></th>
+              <td><code>kafka.producer:type=producer-metrics</code></td>
+              <td>남은 버퍼. 0에 가까워지면 <code>send()</code>가 <code>max.block.ms</code>만큼 블록됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>commit-latency-avg</code></th>
+              <td><code>kafka.consumer:type=consumer-coordinator-metrics,client-id={client-id}</code></td>
+              <td>커밋 요청 평균 시간</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="consumer-lag">consumer lag을 측정하는 세 가지 방법</h3>
+
+      <div class="table-scroll">
+        <table>
+          <caption>lag 측정 방법 비교와 각각의 함정</caption>
+          <thead>
+            <tr><th scope="col">방법</th><th scope="col">어떻게</th><th scope="col">함정</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">① CLI (<code>kafka-consumer-groups.sh</code>)</th>
+              <td><code>--describe --group {그룹}</code>으로 <code>CURRENT-OFFSET</code> · <code>LOG-END-OFFSET</code> · <code>LAG</code>을 봅니다</td>
+              <td><strong>커밋된 오프셋 기준</strong>입니다. 처리는 진행되는데 커밋 주기가 길면 lag이 실제보다 크게 보입니다. 반대로 <strong>처리 전에 커밋하는 코드</strong>면 실제보다 작게 보입니다. 또 스냅샷이라 추세를 못 봅니다</td>
+            </tr>
+            <tr>
+              <th scope="row">② 컨슈머 JMX (<code>records-lag-max</code>)</th>
+              <td>컨슈머 프로세스가 직접 발행하는 메트릭을 수집합니다</td>
+              <td><strong>컨슈머가 죽으면 메트릭도 사라집니다.</strong> "lag이 0"이 아니라 "컨슈머가 없음"인데 알림이 안 울립니다. 또 그 컨슈머가 <strong>할당받은 파티션만</strong> 반영합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">③ AdminClient로 직접 계산</th>
+              <td><code>listConsumerGroupOffsets()</code>와 <code>listOffsets(LATEST)</code>의 차를 외부 수집기가 계산합니다</td>
+              <td>컨슈머가 죽어도 계산되므로 ①·②의 사각지대를 메웁니다. 다만 <strong>폴링 주기만큼 늦고</strong>, 조회 권한(<code>Describe</code>)이 필요합니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="code">
+        <figcaption>lag 확인 — 가장 먼저 치는 명령</figcaption>
+        <pre><code class="lang-bash">bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group my-group
+
+# 출력 형식 (공식 문서 예시)
+# TOPIC   PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG      CONSUMER-ID  HOST  CLIENT-ID
+# topic3  0          241019          395308          154289   consumer2-…  /…    consumer2
+
+# 그룹 상태 요약 — 멤버 수와 코디네이터
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group my-group --state
+
+# 어느 멤버가 어느 파티션을 갖고 있는지
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group my-group --members --verbose</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="lag이 0인데 안심할 수 없는 경우">
+        <p>
+          <strong><code>CURRENT-OFFSET</code>이 비어 있으면 그 파티션에 커밋된 오프셋이 없다는 뜻</strong>입니다.
+          그룹이 방금 만들어졌거나, 오프셋이 <code>offsets.retention.minutes</code> 경과로 사라진 경우입니다.
+          이 상태에서 <code>auto.offset.reset</code>이 <code>latest</code>면 <strong>과거 데이터를 건너뜁니다</strong> —
+          <a href="../cases/case01.html">케이스 1</a>이 이 상황입니다.
+        </p>
+        <p>
+          그리고 <strong>컨슈머 그룹에 활성 멤버가 없어도 lag은 계속 계산됩니다.</strong>
+          lag 알림만 보고 있으면 "컨슈머가 아예 죽었다"를 놓칠 수 있으니
+          <strong>멤버 수(<code>#MEMBERS</code>)도 함께 감시</strong>해야 합니다.
+        </p>
+      </aside>
+
+      <h3 id="metrics-pipeline">JMX에서 대시보드까지</h3>
+
+      <p>
+        Kafka는 JMX를 통해서만 메트릭을 노출하므로, 일반적인 파이프라인은 다음과 같습니다.
+      </p>
+
+      <ol>
+        <li><strong>브로커에서 JMX 활성화</strong> — <code>JMX_PORT</code> 환경 변수를 지정해 기동합니다.</li>
+        <li><strong>JMX → Prometheus 변환</strong> — JMX exporter를 자바 에이전트로 붙이거나 별도 프로세스로 띄워 HTTP 엔드포인트로 노출합니다. (exporter는 Apache Kafka 배포판에 포함되지 않는 외부 프로젝트입니다.)</li>
+        <li><strong>Prometheus 수집</strong> — 브로커·컨트롤러·Connect 워커·Streams 애플리케이션을 각각 스크레이프합니다.</li>
+        <li><strong>Grafana 시각화 + 알림</strong> — 아래 임계값을 룰로 등록합니다.</li>
+      </ol>
+
+      <p>
+        Kafka에는 <strong>클라이언트 메트릭을 브로커 쪽 플러그인으로 수집하는 경로</strong>(KIP-714)도 있고,
+        4.0부터 <strong>Kafka Streams 런타임 자체의 메트릭</strong>까지 이 경로로 수집할 수 있습니다(KIP-1076).
+        클라이언트에 exporter를 붙이기 어려운 환경에서 검토할 만합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>알림 임계값 가이드. 공식 문서가 제시한 정상 범위를 기준으로 삼고, 서비스 특성에 맞게 조정하세요.</caption>
+          <thead>
+            <tr><th scope="col">대상</th><th scope="col">경고</th><th scope="col">긴급</th><th scope="col">근거</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>OfflinePartitionsCount</code></th>
+              <td>—</td>
+              <td><strong>&gt; 0</strong> (즉시)</td>
+              <td>공식 문서 정상값 0. 읽기·쓰기 불가 상태입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>UnderMinIsrPartitionCount</code></th>
+              <td>—</td>
+              <td><strong>&gt; 0</strong> (즉시)</td>
+              <td>공식 문서 정상값 0. <code>acks=all</code> 쓰기가 거부됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>UnderReplicatedPartitions</code></th>
+              <td>&gt; 0이 수 분 지속</td>
+              <td>계속 증가</td>
+              <td>공식 문서 정상값 0. 순간적인 값은 롤링 재시작 중 정상일 수 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ActiveControllerCount</code> 합</th>
+              <td>—</td>
+              <td><strong>≠ 1</strong></td>
+              <td>공식 문서: 클러스터에서 정확히 하나만 1</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>UncleanLeaderElectionsPerSec</code></th>
+              <td>—</td>
+              <td><strong>&gt; 0</strong></td>
+              <td>공식 문서 정상값 0. 유실 발생 신호입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>RequestHandlerAvgIdlePercent</code></th>
+              <td><strong>&lt; 0.3</strong></td>
+              <td>&lt; 0.1</td>
+              <td>공식 문서: "이상적으로 0.3 초과"</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>NetworkProcessorAvgIdlePercent</code></th>
+              <td><strong>&lt; 0.3</strong></td>
+              <td>&lt; 0.1</td>
+              <td>공식 문서: "이상적으로 0.3 초과"</td>
+            </tr>
+            <tr>
+              <th scope="row">consumer lag</th>
+              <td colspan="2">서비스별 SLO에서 역산. <strong>절대값보다 "증가 추세"에 알림을 거는 편이 유용</strong>합니다</td>
+              <td>공식 문서에 권장 임계값이 없습니다 — 워크로드에 따라 다릅니다</td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머 그룹 멤버 수</th>
+              <td colspan="2">기대 인스턴스 수보다 적을 때</td>
+              <td>lag 알림의 사각지대를 메웁니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- (3) 성능 튜닝 -->
+    <!-- ================================================================= -->
+    <section aria-labelledby="performance">
+      <h2 id="performance">성능 튜닝</h2>
+
+      <h3 id="throughput-vs-latency">처리량과 지연의 트레이드오프</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>같은 설정을 어느 방향으로 돌리면 무엇을 얻는가 (Apache Kafka 4.3 기본값)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">기본값</th>
+              <th scope="col">처리량에 유리</th>
+              <th scope="col">지연에 유리</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>linger.ms</code> <span class="badge">producer</span></th>
+              <td><strong>5</strong></td>
+              <td>올림 (배치를 더 모음)</td>
+              <td><strong>0</strong>으로 내림</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>batch.size</code> <span class="badge">producer</span></th>
+              <td>16384</td>
+              <td>올림</td>
+              <td>내림 (또는 그대로)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.type</code> <span class="badge">producer</span></th>
+              <td>none</td>
+              <td><code>lz4</code> / <code>zstd</code>로 네트워크·디스크 절약</td>
+              <td><code>none</code> 또는 CPU가 싼 <code>lz4</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>acks</code> <span class="badge">producer</span></th>
+              <td><strong>all</strong></td>
+              <td><code>1</code>로 낮추면 빨라지지만 <strong>내구성을 잃습니다</strong></td>
+              <td>같음</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch.min.bytes</code> <span class="badge">consumer</span></th>
+              <td>1</td>
+              <td>올림 (한 번에 더 많이 받음)</td>
+              <td>1 유지</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.poll.records</code> <span class="badge">consumer</span></th>
+              <td>500</td>
+              <td>올림</td>
+              <td>내림 (<code>max.poll.interval.ms</code> 초과 위험도 함께 줄어듭니다)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.io.threads</code> <span class="badge">broker</span></th>
+              <td>8</td>
+              <td><code>RequestHandlerAvgIdlePercent</code>가 낮으면 올림</td>
+              <td>같음</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.network.threads</code> <span class="badge">broker</span></th>
+              <td>3</td>
+              <td><code>NetworkProcessorAvgIdlePercent</code>가 낮으면 올림. <strong>컨트롤러 리스너를 제외한 각 리스너가 자기 스레드 풀을 갖습니다</strong></td>
+              <td>같음</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.replica.fetchers</code> <span class="badge">broker</span></th>
+              <td>1</td>
+              <td>올림 — 복제 I/O 병렬성이 늘지만 <strong>CPU·메모리를 더 씁니다.</strong> 브로커당 총 fetcher 수는 이 값 × 브로커 수입니다</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>queued.max.requests</code> <span class="badge">broker</span></th>
+              <td>500</td>
+              <td>큐를 늘려 버스트를 흡수</td>
+              <td>내리면 큐 대기 시간이 줄지만 네트워크 스레드가 더 자주 블록됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>socket.send.buffer.bytes</code> / <code>socket.receive.buffer.bytes</code> <span class="badge">broker</span></th>
+              <td>102400<br>(100KiB)</td>
+              <td>고지연·고대역 링크(DC 간)에서 올림. <code>-1</code>이면 OS 기본값</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.recovery.threads.per.data.dir</code> <span class="badge">broker</span></th>
+              <td><strong>2</strong></td>
+              <td>—</td>
+              <td>올리면 unclean shutdown 후 복구가 빨라지지만 I/O를 더 씁니다 (4.0에서 1→2로 변경)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          <code>linger.ms</code>의 기본값은 <strong>4.0에서 <code>0</code>에서 <code>5</code>로 변경</strong>되었습니다.
+          공식 문서의 근거는 <strong>"더 큰 배치의 효율 이득 덕분에 linger가 늘어도 프로듀서 지연이 비슷하거나 오히려 낮아진다"</strong>는 것입니다.
+          지연에 극도로 민감한 경로라면 <strong>명시적으로 <code>0</code>을 지정</strong>해야 예전 동작이 됩니다.
+          시중 자료 대부분이 3.x 기준이라 <code>0</code>으로 적혀 있습니다.
+        </p>
+      </aside>
+
+      <h3 id="os-tuning">OS 레벨</h3>
+
+      <p>
+        공식 문서는 <strong>"OS 수준 튜닝이 많이 필요하지는 않지만 세 가지가 중요할 수 있다"</strong>고 말합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>공식 문서가 지목한 OS 설정 3가지</caption>
+          <thead><tr><th scope="col">항목</th><th scope="col">권고</th><th scope="col">근거</th></tr></thead>
+          <tbody>
+            <tr>
+              <th scope="row">파일 디스크립터 한계</th>
+              <td>브로커 프로세스에 <strong>최소 100000개</strong>를 출발점으로 허용</td>
+              <td>Kafka는 로그 세그먼트와 연결에 fd를 씁니다. 필요량은 대략 <strong>(파티션 수) × (파티션 크기 / 세그먼트 크기) + 연결 수</strong>입니다. <code>mmap()</code>은 <code>close()</code> 후에도 참조를 남긴다는 점도 문서가 지적합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">최대 소켓 버퍼 크기</th>
+              <td>DC 간 고성능 전송이 필요하면 올립니다</td>
+              <td>브로커의 <code>socket.*.buffer.bytes</code>가 OS 상한을 넘을 수 없습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>vm.max_map_count</code></th>
+              <td>파티션 수를 늘릴 때 반드시 함께 확인</td>
+              <td>여러 Linux에서 기본값이 <strong>대략 65535</strong>입니다. <strong>로그 세그먼트 하나가 index·timeindex 두 개의 map area</strong>를 쓰므로, 파티션당 최소 2개입니다. 문서의 예시: <strong>브로커에 파티션 50000개를 만들면 100000개의 map area가 필요해 기본값에서는 <code>OutOfMemoryError (Map failed)</code>로 브로커가 죽을 수 있습니다</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="디스크와 파일시스템">
+        <p>
+          문서의 권고를 정리하면 이렇습니다.
+        </p>
+        <ul>
+          <li><strong>디스크를 여러 개 쓰고, Kafka 데이터와 애플리케이션 로그·OS 활동을 같은 드라이브에 섞지 않습니다.</strong></li>
+          <li>RAID로 묶든 각 드라이브를 별도 디렉터리로 마운트하든 선택입니다. <strong>여러 데이터 디렉터리를 쓰면 파티션이 라운드로빈으로 배정</strong>되고, 각 파티션은 하나의 디렉터리에 온전히 들어갑니다. 파티션 크기가 고르지 않으면 디스크 간 불균형이 생깁니다.</li>
+          <li>RAID의 단점: <strong>쓰기 처리량에 큰 손실</strong>이고 가용 용량이 줄어듭니다. 문서는 RAID 재구축이 서버를 사실상 마비시킬 만큼 I/O 집약적이라 가용성 개선 효과가 크지 않다고 평가합니다.</li>
+          <li>파일시스템은 <strong>EXT4와 XFS가 주로 쓰이며, XFS가 Kafka 워크로드에서 더 나은 성능</strong>을 보입니다 — 문서의 비교 테스트에서 Request Local Time이 <strong>XFS 160ms vs 최선의 EXT4 구성 250ms 이상</strong>이었습니다.</li>
+          <li>마운트 옵션으로 <strong><code>noatime</code></strong>을 권장합니다. Kafka는 atime을 전혀 쓰지 않으므로 안전하게 끌 수 있습니다.</li>
+          <li>플러시 정책은 <strong>기본값(애플리케이션 fsync를 끄고 OS 백그라운드 플러시에 맡김)을 권장</strong>합니다. 문서의 표현대로 <strong>Kafka의 내구성은 디스크 sync가 아니라 복제에서 옵니다.</strong></li>
+        </ul>
+      </aside>
+
+      <h3 id="jvm-tuning">JVM</h3>
+
+      <p>
+        공식 문서가 제시하는 인자 예시와 실제 운영 수치는 다음과 같습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>공식 문서가 제시하는 OpenJDK 계열 실행 인자</figcaption>
+        <pre><code class="lang-bash">-Xmx6g -Xms6g -XX:MetaspaceSize=96m -XX:+UseG1GC
+-XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M
+-XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80 -XX:+ExplicitGCInvokesConcurrent</code></pre>
+      </figure>
+
+      <aside class="note" data-label="힙을 키우는 것이 답이 아닙니다">
+        <p>
+          위 예시의 힙이 <strong>6GB</strong>인 이유가 중요합니다.
+          Kafka는 메시지를 JVM 힙에 캐시하지 않고 <strong>OS 페이지 캐시</strong>에 맡깁니다.
+          따라서 힙을 키우면 <strong>페이지 캐시로 쓸 메모리가 줄어들어 오히려 느려질 수 있습니다.</strong>
+          문서가 참고로 제시한 LinkedIn의 바쁜 클러스터 수치가 이 균형을 보여 줍니다 —
+          <strong>브로커 60대, 파티션 50000개(RF=2), 초당 80만 메시지,
+          인바운드 300MB/s · 아웃바운드 1GB/s 이상</strong>에서
+          <strong>90% GC pause가 약 21ms, 초당 young GC 1회 미만</strong>이었습니다.
+        </p>
+        <p>
+          Java 버전 권고도 함께 기억할 만합니다 — 문서는
+          <strong>가장 최신 LTS 릴리스로 운영할 것을 권장</strong>하며,
+          보안 관점에서는 <strong>최신 패치 버전</strong>을 권합니다.
+          4.3은 <strong>Java 17 · 21 · 25를 완전 지원</strong>하고
+          Java 11은 clients·streams 등 일부 모듈만 지원합니다.
+        </p>
+      </aside>
+
+      <h3 id="capacity-planning">용량 산정 워크시트</h3>
+
+      <p>
+        정확한 사이징은 워크로드 측정으로만 가능하지만, 출발점을 잡는 데 쓰는 계산은 다음과 같습니다.
+        공식 문서가 제시하는 유일한 메모리 근거는 <strong>"활성 reader/writer를 버퍼링하기 위해
+        30초 분량, 즉 <code>write_throughput × 30</code>"</strong>이라는 대략적 추정입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>산정 항목과 계산 방식</caption>
+          <thead><tr><th scope="col">항목</th><th scope="col">계산</th><th scope="col">주의</th></tr></thead>
+          <tbody>
+            <tr>
+              <th scope="row">디스크 용량</th>
+              <td><strong>일 유입량 × 보관 일수 × RF × (1 − 압축률)</strong> + 여유</td>
+              <td>삭제는 <strong>세그먼트 단위</strong>로 일어나므로 실제 사용량은 계산값보다 큽니다(<a href="ch07.html">7장</a>). 여유는 최소 30% 이상 두세요</td>
+            </tr>
+            <tr>
+              <th scope="row">파티션 수 (소비 기준)</th>
+              <td><strong>목표 처리량 ÷ 컨슈머 인스턴스 하나의 처리량</strong></td>
+              <td>파티션 수가 컨슈머 병렬성의 상한입니다. <strong>줄일 수 없습니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">파티션 수 (브로커 한계)</th>
+              <td>브로커당 파티션 수 × 2 ≤ <code>vm.max_map_count</code> (세그먼트가 1개일 때의 최소)</td>
+              <td>세그먼트가 여러 개면 훨씬 커집니다. 파일 디스크립터도 함께 확인하세요</td>
+            </tr>
+            <tr>
+              <th scope="row">브로커 수</th>
+              <td>max(디스크 요구 ÷ 브로커당 디스크, RF, 목표 처리량 ÷ 브로커당 처리량)</td>
+              <td><strong>RF보다 적은 브로커로는 그 RF를 만들 수 없습니다.</strong> 롤링 재시작 중에도 <code>min.insync.replicas</code>를 만족해야 하므로 여유가 필요합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">컨트롤러 수</th>
+              <td><strong>3 또는 5</strong></td>
+              <td>쿼럼이므로 홀수여야 하고, 3이면 1대, 5면 2대 장애를 견딥니다. 상세는 <a href="ch03.html">3장 KRaft</a></td>
+            </tr>
+            <tr>
+              <th scope="row">메모리</th>
+              <td>JVM 힙(예시 6GB) + <strong>나머지는 페이지 캐시로 남김</strong></td>
+              <td>공식 문서의 대략적 추정: <code>write_throughput × 30초</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="partition-reassignment">
+      <h2 id="partition-reassignment">파티션 재할당</h2>
+
+      <p>
+        브로커를 추가·제거하거나 데이터 분포를 고칠 때 쓰는 도구가
+        <code>kafka-reassign-partitions.sh</code>입니다.
+        공식 문서는 <strong>이 도구가 데이터 분포를 자동으로 분석해 균형을 맞춰 주지는 않으며,
+        어떤 토픽·파티션을 옮길지는 관리자가 판단해야 한다</strong>고 명시합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>실행 모드 (상호 배타적)</caption>
+          <thead><tr><th scope="col">모드</th><th scope="col">무엇을 하는가</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>--generate</code></th><td>토픽 목록과 대상 브로커 목록을 받아 <strong>후보 재할당 계획을 만듭니다.</strong> 실제로 옮기지는 않습니다</td></tr>
+            <tr><th scope="row"><code>--execute</code></th><td><code>--reassignment-json-file</code>의 계획대로 <strong>재할당을 시작합니다</strong></td></tr>
+            <tr><th scope="row"><code>--verify</code></th><td>직전 <code>--execute</code>의 진행 상태를 확인합니다 (완료 / 실패 / 진행 중). <strong>완료됐으면 throttle을 해제합니다</strong></td></tr>
+            <tr><th scope="row"><code>--cancel</code></th><td>진행 중인 재할당을 취소합니다</td></tr>
+            <tr><th scope="row"><code>--list</code></th><td>현재 활성 재할당을 모두 나열합니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="code">
+        <figcaption>3단계 워크플로 — 브로커 5, 6을 추가하고 토픽 두 개를 옮기는 경우</figcaption>
+        <pre><code class="lang-bash"># ── 0. 옮길 토픽 목록을 JSON 으로 ─────────────────────────
+cat &gt; topics-to-move.json &lt;&lt;'JSON'
+{
+  "topics": [
+    { "topic": "foo1" },
+    { "topic": "foo2" }
+  ],
+  "version": 1
+}
+JSON
+
+# ── 1. --generate : 후보 계획 생성 ────────────────────────
+# 출력의 "Current partition replica assignment" 를 반드시 파일로 저장하세요.
+# 롤백할 때 이것이 --reassignment-json-file 이 됩니다.
+bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \
+  --topics-to-move-json-file topics-to-move.json \
+  --broker-list "5,6" --generate
+
+# 제안된 계획을 저장
+#   → expand-cluster-reassignment.json
+
+# ── 2. --execute : throttle 과 함께 시작 ──────────────────
+# throttle 단위는 B/s 입니다. 운영 트래픽을 지키려면 반드시 지정하세요.
+bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \
+  --reassignment-json-file expand-cluster-reassignment.json --execute \
+  --throttle 50000000
+
+# 진행 중 throttle 을 올리려면 --additional 로 같은 파일을 다시 실행합니다
+bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \
+  --additional --execute \
+  --reassignment-json-file expand-cluster-reassignment.json \
+  --throttle 700000000
+
+# ── 3. --verify : 완료 확인 + throttle 해제 ───────────────
+# --execute 에 쓴 것과 같은 JSON 파일을 써야 합니다.
+bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \
+  --reassignment-json-file expand-cluster-reassignment.json --verify</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="throttle 해제를 잊지 마세요">
+        <p>
+          공식 문서의 경고를 그대로 옮기면 —
+          <strong>"재할당이 끝나면 관리자는 <code>--verify</code>로 명령을 실행해 제때 throttle을 제거해야 한다.
+          그렇지 않으면 일반 복제 트래픽까지 throttle이 걸릴 수 있다."</strong>
+        </p>
+        <p>
+          <code>--verify</code>가 완료를 확인하면 브로커·토픽 레벨 throttle을 해제하고 그 사실을 출력합니다.
+          해제 없이 방치하면 <strong>평상시 복제가 느려져 ISR이 줄고 URP가 오릅니다.</strong>
+          throttle 값을 직접 보고 싶으면 <code>kafka-configs.sh</code>로
+          브로커의 <code>leader.replication.throttled.rate</code> / <code>follower.replication.throttled.rate</code>와
+          토픽의 <code>leader.replication.throttled.replicas</code> /
+          <code>follower.replication.throttled.replicas</code>를 확인합니다.
+          <code>--preserve-throttles</code> 옵션은 <strong>throttle을 일부러 남길 때</strong> 씁니다.
+        </p>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Cluster Configuration">
+        <p>
+          <strong><code>kafka-reassign-partitions.sh</code>로는 파티션 수를 바꿀 수 없습니다.</strong>
+          이 도구는 <strong>레플리카의 위치(어느 브로커에 있는지)와 리더를 옮기는 것</strong>이고,
+          파티션 수 변경은 <code>kafka-topics.sh --alter --partitions</code>입니다.
+          "파티션을 늘리려면?"에 이 도구를 고르면 오답입니다.
+        </p>
+        <p>
+          반대로 <strong>복제 계수(RF)는 이 도구로 바꿉니다.</strong>
+          커스텀 계획 JSON의 <code>replicas</code> 배열에 브로커를 추가해 <code>--execute</code>하면 RF가 늘어납니다.
+          <code>kafka-topics.sh</code>에는 RF를 바꾸는 옵션이 없습니다.
+          그리고 <code>--generate</code>로 만든 계획은 <strong>RF를 그대로 유지</strong>합니다.
+        </p>
+        <p>
+          워크플로 순서는 <strong><code>--generate</code> → <code>--execute</code> → <code>--verify</code></strong>이고,
+          <code>--verify</code>까지 해야 throttle이 풀립니다.
+          <code>--generate</code>의 "Current partition replica assignment" 출력을 저장해 두는 것이
+          <strong>롤백 계획</strong>이라는 점도 자주 물어봅니다.
+        </p>
+      </aside>
+
+      <p>
+        브로커를 완전히 제거하려면 재할당으로 그 브로커의 모든 레플리카를 옮긴 뒤
+        브로커를 정지하고 <strong>클러스터에서 등록을 해제</strong>합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>브로커 등록 해제 (KRaft)</figcaption>
+        <pre><code class="lang-bash">bin/kafka-cluster.sh unregister --bootstrap-server localhost:9092 --id 1</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="내부 토픽의 파티션 수를 손대지 마세요">
+        <p>
+          공식 문서가 강한 표현으로 경고합니다 —
+          <strong><code>__consumer_offsets</code>, <code>__transaction_state</code>,
+          <code>__share_group_state</code>, <code>__cluster_metadata</code> 같은 내부 상태 토픽의
+          파티션 수를 절대 수동으로 늘리지 마세요.</strong>
+          코디네이터 매핑 로직이 깨져 상태 불일치와 데이터 손상, 시스템 장애로 이어질 수 있습니다.
+          이들은 Kafka가 자동으로 관리합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- (4) Share Groups -->
+    <!-- ================================================================= -->
+    <section aria-labelledby="share-groups">
+      <h2 id="share-groups">Share Groups — Queues for Kafka (KIP-932)</h2>
+
+      <p>
+        컨슈머 그룹의 파티션 배정 모델은 순서 보장과 확장성을 함께 주는 강력한 조합이지만,
+        공식 문서의 표현대로 <strong>"전통적인 메시징 워크로드 일부는 컨슈머 그룹에 잘 맞지 않습니다."</strong>
+        share group은 컨슈머 그룹과 <strong>나란히 존재하는 또 다른 그룹 종류</strong>이며,
+        파티션과 레코드를 더 세밀하게 나눠 쓰고 싶을 때의 대안입니다.
+        share group의 컨슈머는 <strong>share consumer</strong>라고 부르고 별도의 프로그래밍 인터페이스를 씁니다.
+      </p>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p><strong>Share Groups의 성숙도</strong></p>
+        <div class="table-scroll">
+          <table class="config-table config-table--plain">
+            <tbody>
+              <tr><th scope="row">Kafka 4.1</th><td><strong>preview.</strong> 명시적으로 활성화해야 했습니다 (<code>kafka-features.sh</code>로 <code>share.version=1</code>).</td></tr>
+              <tr><th scope="row">Kafka 4.2</th><td><strong>production-ready.</strong> 릴리스 노트가 "Queues for Kafka (KIP-932)가 4.2에서 production-ready"라고 명시합니다. <code>RENEW</code> ack 타입도 이때 추가되었습니다.</td></tr>
+              <tr><th scope="row">Kafka 4.3 (현행)</th><td><code>share.version=1</code>이 production 기본 레벨이며 4.2 이상으로 부트스트랩된 클러스터에서 활성화됩니다. 업그레이드해 온 클러스터는 <code>bin/kafka-features.sh upgrade</code>로 feature를 올려야 합니다. <code>share.delivery.count.limit</code>·<code>share.partition.max.record.locks</code>·<code>share.renew.acknowledge.enable</code> 그룹 설정이 추가되었습니다(KIP-1240).</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </aside>
+
+      <h3 id="share-vs-consumer">컨슈머 그룹과 무엇이 다른가</h3>
+
+      <div class="table-scroll">
+        <table>
+          <caption>공식 문서가 정리한 근본적 차이 4가지와 그 함의</caption>
+          <thead>
+            <tr><th scope="col"></th><th scope="col">컨슈머 그룹</th><th scope="col">share group</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">파티션 소유권</th>
+              <td>한 파티션은 그룹 안에서 <strong>정확히 한 컨슈머</strong>가 소비</td>
+              <td><strong>한 파티션을 여러 컨슈머가 함께 소비</strong>합니다 (배타적 배정이 없습니다)</td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머 수 상한</th>
+              <td>파티션 수를 넘으면 <strong>유휴</strong></td>
+              <td><strong>파티션 수를 넘어설 수 있습니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">진행 위치 단위</th>
+              <td><strong>파티션당 오프셋 하나</strong></td>
+              <td><strong>레코드 단위 개별 확인(ack)</strong>. 다만 효율을 위해 배치 처리에 최적화되어 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">전달 시도 추적</th>
+              <td>없음 (재처리는 오프셋 되돌리기)</td>
+              <td><strong>전달 시도 횟수를 집계</strong>합니다 → 처리 불가 레코드의 자동 처리가 가능합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">순서 보장</th>
+              <td><strong>파티션 단위 순서 보장</strong></td>
+              <td>여러 컨슈머가 같은 파티션을 나눠 처리하므로 <strong>파티션 단위 순서를 기대할 수 없습니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">적합한 워크로드</th>
+              <td>순서 있는 스트림 처리, 상태 있는 집계</td>
+              <td><strong>레코드를 하나씩 처리하는 작업 큐.</strong> 처리 시간 편차가 크거나, 컨슈머를 파티션 수와 무관하게 늘리고 싶을 때</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="diagram" data-diagram="D-105">
+        <figcaption>
+          Share Groups vs Consumer Groups — 파티션 배타 할당과 협력 소비의 차이,
+          그리고 획득 락(acquisition lock)과 레코드 단위 ack가 동작하는 방식
+        </figcaption>
+      </figure>
+
+      <h3 id="acquisition-lock">획득 락과 ack 타입</h3>
+
+      <p>
+        share consumer가 레코드를 fetch하면, 그 레코드는 <strong>시간 제한이 있는 획득 락(acquisition lock)</strong>과
+        함께 이 컨슈머에게 전달됩니다. 락이 걸려 있는 동안 그 레코드는
+        <strong>같은 share group의 다른 컨슈머에게 보이지 않습니다.</strong>
+        락은 기간이 지나면 자동으로 풀리고 레코드는 다시 전달 대상이 됩니다.
+        브로커는 이렇게 <strong>컨슈머가 죽어도 전달이 계속 진행되도록</strong> 보장합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>락을 쥔 share consumer가 취할 수 있는 행동 (<code>AcknowledgeType</code> enum과 대응)</caption>
+          <thead><tr><th scope="col">행동</th><th scope="col">ack 타입</th><th scope="col">결과</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">처리 성공을 확인</th><td><strong><code>ACCEPT</code></strong></td><td>레코드가 처리 완료로 기록됩니다</td></tr>
+            <tr><th scope="row">해제(release)</th><td><strong><code>RELEASE</code></strong></td><td>처리하지 못했으므로 <strong>다시 전달 대상</strong>으로 돌립니다</td></tr>
+            <tr><th scope="row">거부(reject)</th><td><strong><code>REJECT</code></strong></td><td>처리 불가 레코드로 표시하고 <strong>더 이상 전달하지 않습니다</strong></td></tr>
+            <tr><th scope="row">갱신(renew)</th><td><strong><code>RENEW</code></strong></td><td>아직 처리 중이므로 <strong>획득 락 기간을 연장</strong>합니다</td></tr>
+            <tr><th scope="row">아무것도 하지 않음</th><td>—</td><td>락 기간이 지나면 <strong>자동 해제</strong>되어 다시 전달됩니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK / CCDAK Fundamentals">
+        <p>
+          <strong>ack 타입 4종은 <code>ACCEPT</code> · <code>RELEASE</code> · <code>REJECT</code> · <code>RENEW</code></strong>입니다.
+          <code>RENEW</code>는 <strong>처리 시간이 긴 레코드를 위해 락을 연장</strong>하는 것으로,
+          Kafka 4.2에서 추가되었습니다.
+          그리고 <strong>아무것도 하지 않으면 락이 만료되어 자동으로 재전달</strong>된다는 점이
+          "ack하지 않으면 유실된다"는 오해와 대비되는 출제 지점입니다.
+        </p>
+        <p>
+          핵심 대비: <strong>컨슈머 그룹은 파티션 단위 오프셋 하나, share group은 레코드 단위 ack</strong>입니다.
+          그래서 share group에서는 <strong>파티션 단위 순서 보장을 기대할 수 없습니다</strong> —
+          순서가 필요하면 컨슈머 그룹을 쓰는 것이 맞습니다.
+        </p>
+      </aside>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>share group 설정 (Apache Kafka 4.3 그룹 설정 기준). <code>kafka-configs.sh --entity-type groups</code>로 그룹별 override가 가능합니다.</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">설명</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>share.record.lock.duration.ms</code></th>
+              <td><strong>30000</strong> (30초)</td>
+              <td>획득 락 유지 기간. 최소 1000</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>share.delivery.count.limit</code></th>
+              <td><strong>5</strong></td>
+              <td>한 레코드의 <strong>최대 전달 시도 횟수</strong>. 최소 2. 이 횟수를 넘으면 더 전달하지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>share.partition.max.record.locks</code></th>
+              <td><strong>2000</strong></td>
+              <td>share-partition당 락 상한. 도달하면 <strong>락이 자연히 만료될 때까지 fetch가 일시적으로 아무 레코드도 반환하지 않습니다</strong>. 브로커 쪽 대응 설정은 <code>group.share.partition.max.record.locks</code>(기본 2000, 유효 범위 100~10000)입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>share.auto.offset.reset</code></th>
+              <td><code>latest</code></td>
+              <td>share-partition 시작 오프셋 초기화 전략. <code>earliest</code> / <code>latest</code> / <strong><code>by_duration:PnDTnHnMn.nS</code></strong> (ISO 8601)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>share.isolation.level</code></th>
+              <td><code>read_uncommitted</code></td>
+              <td><code>read_committed</code>면 커밋된 트랜잭션 레코드만 전달합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>share.session.timeout.ms</code></th>
+              <td>45000 (45초)</td>
+              <td>share group 프로토콜에서의 클라이언트 장애 감지 시간</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>share.heartbeat.interval.ms</code></th>
+              <td>5000 (5초)</td>
+              <td>멤버에게 주어지는 하트비트 간격</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>share.renew.acknowledge.enable</code></th>
+              <td><code>true</code></td>
+              <td><code>RENEW</code> ack 타입 사용 가능 여부</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>group.share.max.size</code> <span class="badge">broker</span></th>
+              <td>200</td>
+              <td>하나의 share group이 수용할 수 있는 최대 멤버 수</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="브로커 3대 미만이면 먼저 설정해야 합니다">
+        <p>
+          share group은 <strong><code>__share_group_state</code></strong>라는 새 내부 토픽을 쓰며,
+          처음 share group을 쓸 때 자동 생성됩니다.
+          다른 내부 토픽처럼 <strong>기본 구성이 복제본 3개이므로 브로커가 최소 3대 필요</strong>합니다.
+          3대 미만 환경에서 쓰려면 <strong>share group을 쓰기 전에</strong>
+          <code>share.coordinator.state.topic.replication.factor</code>와
+          <code>share.coordinator.state.topic.min.isr</code>을 1로 설정해야 합니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>share group 운영 — kafka-share-groups.sh</figcaption>
+        <pre><code class="lang-bash"># feature 활성화 (4.2 이상으로 부트스트랩한 클러스터는 이미 켜져 있습니다)
+bin/kafka-features.sh --bootstrap-server localhost:9092 \
+  upgrade --feature share.version=1
+
+# 모든 그룹 종류를 한 번에 보기 (Consumer / Share / Streams)
+bin/kafka-groups.sh --bootstrap-server localhost:9092 --list
+# GROUP                TYPE       PROTOCOL
+# my-consumer-group    Consumer   consumer
+# my-share-group       Share      share
+
+# share group 목록
+bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --list
+
+# 진행 상황 — START-OFFSET 은 "전달 평가 대상 in-flight 레코드 중 가장 이른 오프셋"입니다.
+# 그 뒤 레코드 중 일부는 이미 전달이 끝났을 수 있습니다.
+bin/kafka-share-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group my-share-group
+
+# 활성 멤버 / 상태 요약
+bin/kafka-share-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group my-share-group --members
+bin/kafka-share-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group my-share-group --state
+
+# 오프셋 리셋 (활성 멤버가 없어야 합니다)
+bin/kafka-share-groups.sh --bootstrap-server localhost:9092 \
+  --reset-offsets --group my-share-group --topic topic1 --to-latest --execute
+
+# 그룹 삭제 — 활성 멤버가 없는 share group 만 삭제됩니다
+bin/kafka-share-groups.sh --bootstrap-server localhost:9092 \
+  --delete --group my-share-group
+
+# 그룹별 설정 override
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter \
+  --entity-type groups --entity-name my-share-group \
+  --add-config share.record.lock.duration.ms=60000</code></pre>
+      </figure>
+
+      <aside class="note" data-label="그룹 종류는 첫 하트비트로 결정됩니다">
+        <p>
+          하나의 그룹 ID는 <strong>consumer group · share group · streams group 중 하나</strong>이며,
+          <strong>그 GroupId로 들어온 첫 하트비트 요청</strong>이 종류를 결정합니다.
+          따라서 같은 이름을 종류만 바꿔 재사용하려면 <strong>기존 그룹을 먼저 비우고 삭제</strong>해야 합니다.
+        </p>
+        <p>
+          그리고 <strong>share group의 상태는 <code>__consumer_offsets</code>가 아니라
+          <code>__share_group_state</code></strong>에 저장됩니다.
+          컨슈머 그룹처럼 <code>kafka-consumer-groups.sh</code>로 관리되지 않습니다 —
+          전용 도구가 따로 있는 이유입니다.
+        </p>
+      </aside>
+
+      <h3 id="share-group-limits">제약 사항</h3>
+
+      <ul>
+        <li><strong>파티션 단위 순서 보장이 없습니다.</strong> 여러 컨슈머가 같은 파티션을 나눠 처리하므로 구조적으로 불가능합니다.</li>
+        <li><strong>레코드당 상태를 브로커가 관리</strong>하므로, share-partition당 in-flight 레코드 수에 상한이 있습니다(<code>share.partition.max.record.locks</code> 기본 2000). 상한에 닿으면 <strong>fetch가 일시적으로 빈 결과를 반환</strong>합니다.</li>
+        <li><strong>전달 시도 횟수 상한</strong>이 있습니다(<code>share.delivery.count.limit</code> 기본 5). 넘으면 그 레코드는 더 전달되지 않습니다.</li>
+        <li><strong>내부 토픽이 하나 더 생깁니다</strong>(<code>__share_group_state</code>). 브로커 3대 미만이면 사전 설정이 필요합니다.</li>
+        <li><strong>Kafka Streams와 함께 쓰는 경로가 아닙니다.</strong> Streams는 컨슈머 그룹 또는 streams group을 씁니다(<a href="ch10.html">10장</a>).</li>
+        <li>4.2.0에는 KIP-932 share group 경로에 심각한 데드락 버그(KAFKA-20505)가 있었고 <strong>4.2.1에서 수정</strong>되었습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트 정리</h2>
+
+      <aside class="note note--exam" data-label="CCAAK · Kafka Security / Cluster Configuration">
+        <ul>
+          <li><strong><code>listeners</code>는 바인딩, <code>advertised.listeners</code>는 광고, <code>listener.security.protocol.map</code>은 이름↔프로토콜 매핑.</strong></li>
+          <li>같은 보안 프로토콜을 두 포트에서 쓰려면 <strong>리스너 이름을 따로</strong> 붙여야 합니다.</li>
+          <li><strong>컨트롤러 리스너는 브로커 간 리스너와 같을 수 없고, 순수 브로커도 컨트롤러 리스너를 정의</strong>해야 합니다(단 <code>listeners</code>에는 넣지 않습니다).</li>
+          <li><code>inter.broker.listener.name</code>과 <code>security.inter.broker.protocol</code>을 <strong>동시에 지정하면 오류</strong>입니다.</li>
+          <li><strong>KRaft에서 <code>advertised.listeners</code>는 동적 변경이 불가</strong>합니다 (재시작 필요).</li>
+          <li><code>sasl.enabled.mechanisms</code> 기본값은 <strong><code>GSSAPI</code>뿐</strong>. <code>sasl.mechanism.inter.broker.protocol</code>·<code>sasl.mechanism.controller.protocol</code>도 기본 <code>GSSAPI</code>.</li>
+          <li>KRaft 인가자는 <strong><code>StandardAuthorizer</code></strong>이고 ACL은 <strong>메타데이터 로그</strong>에 저장됩니다.</li>
+          <li>ACL이 없는 리소스는 <strong>super user만</strong> 접근 가능. <code>allow.everyone.if.no.acl.found=true</code>로 바꿀 수 있지만 <strong>ACL이 하나라도 있는 리소스에는 영향이 없습니다.</strong></li>
+          <li><code>super.users</code>의 <strong>구분자는 세미콜론</strong>이고 <code>User</code>는 <strong>대소문자 구분</strong>입니다.</li>
+          <li><code>ssl.client.auth</code> 기본값은 <strong><code>none</code></strong> — <code>SSL</code>만 켜도 클라이언트 인증이 강제되지는 않습니다.</li>
+          <li><strong><code>kafka-reassign-partitions.sh</code>는 파티션 수를 바꾸지 못합니다.</strong> RF는 바꿉니다. 순서는 <code>--generate</code> → <code>--execute</code> → <code>--verify</code>이며 <strong><code>--verify</code>가 throttle을 해제</strong>합니다.</li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="CCDAK · Application Observability (13%)">
+        <ul>
+          <li><code>UnderReplicatedPartitions</code>(ISR &lt; 전체 레플리카)와 <code>UnderMinIsrPartitionCount</code>(ISR &lt; <code>min.insync.replicas</code>)는 <strong>다른 메트릭</strong>입니다.</li>
+          <li><code>ActiveControllerCount</code>는 <strong>클러스터 전체 합이 1</strong>이어야 합니다.</li>
+          <li><code>UncleanLeaderElectionsPerSec</code> &gt; 0은 <strong>유실 발생</strong> 신호이고 정상값은 0입니다.</li>
+          <li><code>RequestHandlerAvgIdlePercent</code>·<code>NetworkProcessorAvgIdlePercent</code>는 <strong>0.3 초과가 이상적</strong>입니다.</li>
+          <li><strong><code>records-lag-max</code>는 컨슈머가 발행</strong>합니다 — 브로커 메트릭이 아닙니다.</li>
+          <li>lag 측정 3방법: <strong>CLI(커밋 기준) · 컨슈머 JMX(컨슈머가 죽으면 사라짐) · AdminClient 계산.</strong> 각각의 사각지대가 다릅니다.</li>
+          <li>Share Groups ack 타입은 <strong><code>ACCEPT</code>/<code>RELEASE</code>/<code>REJECT</code>/<code>RENEW</code></strong>이고 락 기본 <strong>30초</strong>, 전달 시도 상한 <strong>5</strong>회입니다.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="check-quiz">
+      <h2 id="check-quiz">확인 문제</h2>
+      <p>
+        네 가지 문항 유형(단일 선택 · 복수 선택 · 연결형 · 순서 배열)이 섞여 있습니다.
+        리스너 3종의 역할 구분과 메트릭 정상 범위는 반드시 맞히고 넘어가세요.
+      </p>
+      <div class="quiz-embed" data-set="basics-ch11" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="appendix-legacy.html">
+          <span class="card__title">부록 · 버전 표기와 레거시</span>
+          <span class="card__desc">2.x/3.x 운영, 버전 타임라인, 2.x → 3.9 → 4.x 업그레이드 경로.</span>
+          <span class="card__meta">실무</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/security.html">
+          <span class="card__title">보안 치트시트</span>
+          <span class="card__desc">SSL/SASL 설정 스니펫, listeners 조합 패턴 5가지, 인증 실패 로그 읽기.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/metrics.html">
+          <span class="card__title">JMX 메트릭 치트시트</span>
+          <span class="card__desc">MBean 전체 표, 정상 범위, PromQL 알림 룰 예시.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/troubleshooting.html">
+          <span class="card__title">트러블슈팅 치트시트</span>
+          <span class="card__desc">증상 기반 결정 트리와 자주 보는 예외 20개.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../ccaak/index.html">
+          <span class="card__title">CCAAK 개요</span>
+          <span class="card__desc">운영자 관점 도메인 구성과 실습 중심 학습 플랜.</span>
+          <span class="card__meta">자격증</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex10.html">
+          <span class="card__title">예제 10 · 컨슈머 Lag 모니터링</span>
+          <span class="card__desc">JMX에서 대시보드까지 실제로 구성해 봅니다.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>이 장의 설정 기본값·메트릭 정상 범위·CLI 옵션은 모두 아래에서 확인했습니다 (Apache Kafka 4.3 문서 기준).</p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#security_overview" rel="noopener noreferrer">Security Overview</a> — 지원 보안 조치 4가지, SASL 메커니즘별 도입 버전</li>
+        <li><a href="https://kafka.apache.org/documentation/#listener_configuration" rel="noopener noreferrer">Listener Configuration</a> — <code>listeners</code> 형식, <code>listener.security.protocol.map</code>, 보안 프로토콜 4종, KRaft의 컨트롤러 리스너 규칙과 예시 설정</li>
+        <li><a href="https://kafka.apache.org/documentation/#security_sasl" rel="noopener noreferrer">Authentication using SASL</a> — <code>sasl.enabled.mechanisms</code>·<code>sasl.mechanism.inter.broker.protocol</code>, SCRAM 사용자 생성 명령, JAAS 설정</li>
+        <li><a href="https://kafka.apache.org/documentation/#security_authz" rel="noopener noreferrer">Authorization and ACLs</a> — <code>StandardAuthorizer</code>, ACL 일반 형식, 오퍼레이션 13종·리소스 6종과 오류 코드, <code>super.users</code>·<code>allow.everyone.if.no.acl.found</code>, KRaft principal forwarding, <code>kafka-acls.sh</code> 예시</li>
+        <li><a href="https://kafka.apache.org/documentation/#monitoring" rel="noopener noreferrer">Monitoring</a> — 서버 필수 메트릭과 정상 범위(URP 0, ActiveControllerCount 1, idle percent &gt; 0.3 등), <code>records-lag-max</code>가 컨슈머 발행임</li>
+        <li><a href="https://kafka.apache.org/documentation/#hwandos" rel="noopener noreferrer">Hardware and OS</a> — 파일 디스크립터 100000, <code>vm.max_map_count</code> 65535와 map area 계산, XFS vs EXT4 비교, <code>noatime</code>, 플러시 정책 권고</li>
+        <li><a href="https://kafka.apache.org/documentation/#java" rel="noopener noreferrer">Java Version</a> — Java 17·21·25 완전 지원, JVM 인자 예시, LinkedIn 클러스터 수치</li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops_partitionassignment" rel="noopener noreferrer">Expanding your cluster / Partition Reassignment</a> — <code>--generate</code>/<code>--execute</code>/<code>--verify</code>, 계획 JSON 형식, RF 유지, 롤백 계획 저장</li>
+        <li><a href="https://kafka.apache.org/documentation/#rep-throttle" rel="noopener noreferrer">Limiting Bandwidth Usage during Data Migration</a> — <code>--throttle</code>, <code>--additional</code>, <strong>throttle 해제 경고</strong>, <code>leader/follower.replication.throttled.*</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops_consumer_group" rel="noopener noreferrer">Managing Groups</a> — <code>kafka-groups.sh</code>, <code>kafka-consumer-groups.sh --describe</code> 출력 형식, <code>kafka-share-groups.sh</code> 전체 옵션, 내부 토픽 파티션 수 변경 금지 경고</li>
+        <li><a href="https://kafka.apache.org/documentation/#design_sharegroups" rel="noopener noreferrer">The Share Consumer</a> — share group과 consumer group의 근본 차이 4가지, 획득 락 기본 30초, 5가지 처리 행동, <code>group.share.partition.max.record.locks</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#groupconfigs" rel="noopener noreferrer">Group Configs</a> — <code>share.record.lock.duration.ms</code> 30000, <code>share.delivery.count.limit</code> 5, <code>share.partition.max.record.locks</code> 2000, <code>share.auto.offset.reset</code>, <code>share.isolation.level</code>, <code>share.renew.acknowledge.enable</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> — <code>num.io.threads</code> 8, <code>num.network.threads</code> 3, <code>num.replica.fetchers</code> 1, <code>queued.max.requests</code> 500, <code>socket.*.buffer.bytes</code> 102400, <code>num.recovery.threads.per.data.dir</code> 2, <code>replica.lag.time.max.ms</code> 30000, <code>ssl.client.auth</code> none</li>
+        <li><a href="https://kafka.apache.org/documentation/#upgrade" rel="noopener noreferrer">Upgrading Apache Kafka</a> — 4.2 Share Groups production-ready, <code>__share_group_state</code>와 3브로커 요건, KIP-1240 그룹 설정 추가, 4.2.1의 KAFKA-20505 수정, 4.0의 <code>linger.ms</code> 0→5</li>
+        <li><a href="https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/clients/consumer/AcknowledgeType.java" rel="noopener noreferrer">AcknowledgeType (Apache Kafka 4.3 소스)</a> — <code>ACCEPT</code>(1) · <code>RELEASE</code>(2) · <code>REJECT</code>(3) · <code>RENEW</code>(4)</li>
+        <li><a href="https://github.com/apache/kafka/blob/4.3/tools/src/main/java/org/apache/kafka/tools/reassign/ReassignPartitionsCommandOptions.java" rel="noopener noreferrer">ReassignPartitionsCommandOptions (Apache Kafka 4.3 소스)</a> — <code>--cancel</code>·<code>--list</code>·<code>--preserve-throttles</code> 등 실제 옵션 목록</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

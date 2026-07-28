@@ -1,0 +1,152 @@
+{
+  "deckId": "ccdak-testing",
+  "title": "CCDAK — Application Testing",
+  "exam": "CCDAK",
+  "kafkaVersion": "4.3",
+  "cards": [
+    {
+      "id": "fc-test-001",
+      "deck": "ccdak-testing",
+      "front": "`TopologyTestDriver` 의 용도와 브로커 필요 여부는?",
+      "back": "**Streams 토폴로지 단위 테스트 · 브로커 불필요**\n토폴로지를 단일 스레드로 직접 구동하므로 결과가 결정적입니다.",
+      "tags": [
+        "kafka-testing",
+        "topologytestdriver",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-test-002",
+      "deck": "ccdak-testing",
+      "front": "`TopologyTestDriver` 로 입출력을 다루는 객체는?",
+      "back": "**`TestInputTopic` (입력 주입) · `TestOutputTopic` (출력 검증)**\n`createInputTopic` 은 serializer, `createOutputTopic` 은 deserializer를 받습니다.",
+      "tags": [
+        "kafka-testing",
+        "topologytestdriver",
+        "streams"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-test-003",
+      "deck": "ccdak-testing",
+      "front": "`TopologyTestDriver` 로 검증할 수 없는 것은?",
+      "back": "**리밸런스 · 다중 인스턴스 · 브로커 장애**\n브로커와 그룹 조정이 없기 때문이며, 이런 검증은 통합 테스트의 몫입니다.",
+      "tags": [
+        "kafka-testing",
+        "topologytestdriver",
+        "integration-test"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-test-004",
+      "deck": "ccdak-testing",
+      "front": "`MockProducer` 로 전송 레코드를 검증하는 방법은?",
+      "back": "**`history()` 로 쌓인 레코드 목록 확인 · 브로커 불필요**\n`errorNext()` 로 실패를 주입해 오류 경로도 시험할 수 있습니다.",
+      "tags": [
+        "kafka-testing",
+        "mockproducer",
+        "unit-test"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-test-005",
+      "deck": "ccdak-testing",
+      "front": "`MockConsumer` 가 `poll()` 에서 레코드를 반환하지 않을 때 빠뜨린 준비는?",
+      "back": "**`updateBeginningOffsets()` 로 시작 오프셋 지정**\n파티션 할당 → 시작 오프셋 → `addRecord()` 순서를 지켜야 합니다.",
+      "tags": [
+        "kafka-testing",
+        "mockconsumer",
+        "unit-test"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-test-006",
+      "deck": "ccdak-testing",
+      "front": "Testcontainers의 용도와 전제 조건은?",
+      "back": "**실제 브로커 컨테이너로 통합 테스트 · 컨테이너 런타임 필요**\n테스트 코드가 컨테이너 수명을 관리하므로 CI 자동화에 적합합니다.",
+      "tags": [
+        "kafka-testing",
+        "testcontainers",
+        "integration-test"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-test-007",
+      "deck": "ccdak-testing",
+      "front": "`@EmbeddedKafka` 의 용도는?",
+      "back": "**Spring 통합 테스트에서 JVM 안에 브로커를 띄웁니다.**\nDocker 없이 통합 테스트를 돌릴 수 있지만 실제 배포 환경과는 차이가 있습니다.",
+      "tags": [
+        "kafka-testing",
+        "integration-test",
+        "spring"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-test-008",
+      "deck": "ccdak-testing",
+      "front": "`EmbeddedKafkaCluster` 를 \"Apache 제공 테스트 도구\"로 분류하면?",
+      "back": "**틀립니다. 공개 배포 아티팩트가 아닙니다.**\nStreams 통합 테스트용 내부 유틸리티이므로 의존성으로 끌어다 쓰는 것을 전제할 수 없습니다.",
+      "tags": [
+        "kafka-testing",
+        "integration-test",
+        "tooling"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-test-009",
+      "deck": "ccdak-testing",
+      "front": "`kafka-producer-perf-test.sh` / `kafka-consumer-perf-test.sh` 의 용도는?",
+      "back": "**쓰기·읽기 처리량과 지연 측정 · 브로커 필요**\n지연은 99th·99.9th 백분위로 판단하고, `--throughput -1` 은 최대 처리량 측정용입니다.",
+      "tags": [
+        "kafka-testing",
+        "perf-test",
+        "cli"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-test-010",
+      "deck": "ccdak-testing",
+      "front": "`kafka-consumer-perf-test.sh` 에서 `--messages` 를 대체한 4.3 옵션은?",
+      "back": "**`--num-records`**\nKIP-1147 변경이며 옛 옵션은 deprecated로 5.0에서 제거됩니다.",
+      "tags": [
+        "kafka-testing",
+        "perf-test",
+        "cli"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-test-011",
+      "deck": "ccdak-testing",
+      "front": "`kafka-producer-perf-test.sh` 에서 `--producer-props` 를 대체한 4.3 옵션은?",
+      "back": "**`--command-property`**\nKIP-1147로 도구 옵션 이름이 통일되었습니다.",
+      "tags": [
+        "kafka-testing",
+        "perf-test",
+        "cli"
+      ],
+      "chapter": "ch10"
+    },
+    {
+      "id": "fc-test-012",
+      "deck": "ccdak-testing",
+      "front": "perf 도구의 `--producer.config` / `--consumer.config` 를 대체한 4.3 옵션은?",
+      "back": "**`--command-config`**\n두 옵션이 하나로 합쳐졌습니다. 시중 예제는 대부분 옛 이름이라 `--help` 확인이 안전합니다.",
+      "tags": [
+        "kafka-testing",
+        "perf-test",
+        "cli"
+      ],
+      "chapter": "ch10"
+    }
+  ]
+}

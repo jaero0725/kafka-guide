@@ -1,0 +1,90 @@
+<svg viewBox="0 0 720 366" role="img" class="kg-diagram"
+     aria-labelledby="d047-title d047-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d047-title">static membership — group.instance.id 로 재시작 시 리밸런스를 건너뜁니다</title>
+  <desc id="d047-desc">컨슈머 한 대를 롤링 재시작할 때 동적 멤버와 정적 멤버가 어떻게 다른지 비교합니다.
+    동적 멤버는 종료할 때 코디네이터에 LeaveGroup 을 보내므로 즉시 리밸런스가 일어나고,
+    재시작하면 새로운 member.id 로 다시 합류하면서 또 한 번 리밸런스가 일어납니다. 재시작 한 번에 리밸런스 두 번, 처리 중단 두 번입니다.
+    정적 멤버는 group.instance.id 를 설정한 컨슈머입니다. 종료할 때 LeaveGroup 을 보내지 않으므로
+    코디네이터는 session.timeout.ms 동안 그 멤버가 돌아오기를 기다립니다. 그 사이 다른 컨슈머들은 자기 파티션을 계속 처리합니다.
+    같은 group.instance.id 로 다시 붙으면 코디네이터가 같은 멤버로 인식하고 이전 할당을 그대로 돌려주므로 리밸런스가 0 번입니다.
+    따라서 session.timeout.ms 를 재시작에 걸리는 시간보다 크게 잡아야 하고, 그 시간을 넘기면 결국 리밸런스가 일어납니다.
+    또한 정적 멤버가 max.poll.interval.ms 를 초과한 경우에는 파티션이 즉시 재할당되지 않고
+    하트비트를 멈춘 뒤 session 타임아웃이 지나서야 재할당됩니다.</desc>
+
+  <defs>
+    <marker id="d047-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+  </defs>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">같은 롤링 재시작 — 리밸런스가 2번이냐 0번이냐가 갈립니다</text>
+
+  <!-- ═══ 동적 멤버 ═══ -->
+  <rect class="dg-node dg-node--danger" x="8" y="32" width="704" height="24" rx="3"/>
+  <text x="18" y="49" class="dg-fs-sm dg-bold">동적 멤버 — <tspan class="dg-mono">group.instance.id</tspan> 없음 (기본값 <tspan class="dg-mono">null</tspan>)</text>
+
+  <rect class="dg-node dg-node--ok" x="8" y="64" width="134" height="60" rx="4"/>
+  <text x="16" y="84" class="dg-fs-sm dg-bold">① 정상 처리</text>
+  <text x="16" y="102" class="dg-fs-sm dg-mono">member.id=A1</text>
+  <line class="dg-edge" x1="142" y1="94" x2="164" y2="94" marker-end="url(#d047-ah)"/>
+
+  <rect class="dg-node" x="168" y="64" width="134" height="60" rx="4"/>
+  <text x="176" y="84" class="dg-fs-sm dg-bold">② 종료</text>
+  <text x="176" y="102" class="dg-fs-sm dg-mono">LeaveGroup</text>
+  <text x="176" y="118" class="dg-fs-sm dg-muted">즉시 통보</text>
+  <line class="dg-edge" x1="302" y1="94" x2="324" y2="94" marker-end="url(#d047-ah)"/>
+
+  <rect class="dg-node dg-node--danger" x="328" y="64" width="134" height="60" rx="4"/>
+  <text x="336" y="84" class="dg-fs-sm dg-bold">③ 리밸런스 1</text>
+  <text x="336" y="102" class="dg-fs-sm">전 그룹 처리 중단</text>
+  <line class="dg-edge" x1="462" y1="94" x2="484" y2="94" marker-end="url(#d047-ah)"/>
+
+  <rect class="dg-node" x="488" y="64" width="90" height="60" rx="4"/>
+  <text x="496" y="84" class="dg-fs-sm dg-bold">④ 재시작</text>
+  <text x="496" y="102" class="dg-fs-sm dg-mono">새 id</text>
+  <text x="496" y="118" class="dg-fs-sm dg-mono">=A2</text>
+  <line class="dg-edge" x1="578" y1="94" x2="600" y2="94" marker-end="url(#d047-ah)"/>
+
+  <rect class="dg-node dg-node--danger" x="604" y="64" width="108" height="60" rx="4"/>
+  <text x="612" y="84" class="dg-fs-sm dg-bold">⑤ 리밸런스 2</text>
+  <text x="612" y="102" class="dg-fs-sm">또 중단</text>
+  <text x="612" y="118" class="dg-fs-sm dg-muted">할당도 변함</text>
+
+  <text x="8" y="144" class="dg-fs-sm"><tspan class="dg-bold">재시작 1회 = 리밸런스 2회.</tspan> 컨슈머 10대를 순차 재시작하면 리밸런스가 20번 일어납니다.</text>
+
+  <!-- ═══ 정적 멤버 ═══ -->
+  <rect class="dg-node dg-node--ok" x="8" y="164" width="704" height="24" rx="3"/>
+  <text x="18" y="181" class="dg-fs-sm dg-bold">정적 멤버 — <tspan class="dg-mono">group.instance.id=consumer-a</tspan> 설정</text>
+
+  <rect class="dg-node dg-node--ok" x="8" y="196" width="134" height="60" rx="4"/>
+  <text x="16" y="216" class="dg-fs-sm dg-bold">① 정상 처리</text>
+  <text x="16" y="234" class="dg-fs-sm dg-mono">instance.id</text>
+  <text x="16" y="250" class="dg-fs-sm dg-mono">=consumer-a</text>
+  <line class="dg-edge" x1="142" y1="226" x2="164" y2="226" marker-end="url(#d047-ah)"/>
+
+  <rect class="dg-node" x="168" y="196" width="134" height="60" rx="4"/>
+  <text x="176" y="216" class="dg-fs-sm dg-bold">② 종료</text>
+  <text x="176" y="234" class="dg-fs-sm dg-bold">LeaveGroup 없음</text>
+  <text x="176" y="250" class="dg-fs-sm dg-muted">통보하지 않음</text>
+  <line class="dg-edge" x1="302" y1="226" x2="324" y2="226" marker-end="url(#d047-ah)"/>
+
+  <rect class="dg-node dg-node--accent" x="328" y="196" width="180" height="60" rx="4"/>
+  <text x="336" y="216" class="dg-fs-sm dg-bold">③ 코디네이터가 기다림</text>
+  <text x="336" y="234" class="dg-fs-sm dg-mono">session.timeout.ms</text>
+  <text x="336" y="250" class="dg-fs-sm">다른 컨슈머는 계속 처리</text>
+  <line class="dg-edge" x1="508" y1="226" x2="530" y2="226" marker-end="url(#d047-ah)"/>
+
+  <rect class="dg-node dg-node--ok" x="534" y="196" width="178" height="60" rx="4"/>
+  <text x="542" y="216" class="dg-fs-sm dg-bold">④ 같은 id 로 복귀</text>
+  <text x="542" y="234" class="dg-fs-sm">이전 할당 그대로</text>
+  <text x="542" y="250" class="dg-fs-sm dg-bold">리밸런스 0회</text>
+
+  <text x="8" y="276" class="dg-fs-sm"><tspan class="dg-bold">재시작 1회 = 리밸런스 0회.</tspan> 배포·재시작이 잦은 서비스에서 효과가 큽니다.</text>
+
+  <!-- 정리 -->
+  <line class="dg-grid" x1="8" y1="292" x2="712" y2="292"/>
+  <text x="8" y="310" class="dg-fs-sm"><tspan class="dg-mono">session.timeout.ms</tspan>(기본 45000) 를 <tspan class="dg-bold">재시작에 걸리는 시간보다 크게</tspan> 잡아야 합니다. 넘기면 결국 리밸런스가 납니다.</text>
+  <text x="8" y="328" class="dg-fs-sm"><tspan class="dg-mono">group.instance.id</tspan> 는 그룹 안에서 <tspan class="dg-bold">유일</tspan> 해야 합니다. 같은 값이 둘이면 나중에 붙은 쪽이 거부됩니다.</text>
+  <text x="8" y="346" class="dg-fs-sm dg-muted">정적 멤버가 <tspan class="dg-mono">max.poll.interval.ms</tspan> 를 넘기면 즉시 재할당되지 않고 session 만료 후 재할당됩니다.</text>
+  <text x="8" y="362" class="dg-fs-sm dg-muted">대가: 진짜로 죽은 인스턴스도 <tspan class="dg-mono">session.timeout.ms</tspan> 동안 파티션이 방치됩니다 — 그만큼 lag 이 늘어납니다.</text>
+</svg>

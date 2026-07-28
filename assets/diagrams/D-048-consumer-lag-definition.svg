@@ -1,0 +1,80 @@
+<svg viewBox="0 0 720 428" role="img" class="kg-diagram"
+     aria-labelledby="d048-title d048-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d048-title">컨슈머 lag 의 정확한 정의 — 무엇에서 무엇을 빼는가</title>
+  <desc id="d048-desc">파티션 하나의 로그를 12칸으로 그리고 네 지점을 표시했습니다.
+    커밋된 오프셋은 4 로, kafka-consumer-groups 명령의 CURRENT-OFFSET 열에 나오는 값입니다.
+    현재 위치는 7 로, 컨슈머가 실제로 읽어 간 지점이며 아직 커밋하지 않은 구간이 그 사이에 있습니다.
+    high watermark 는 10 으로, 클라이언트가 조회하는 로그 끝이고 CLI 의 LOG-END-OFFSET 열에 나옵니다.
+    read_uncommitted 기준으로 이 값은 ISR 전원이 복제를 마친 지점입니다.
+    리더의 LEO 는 12 이지만 아직 복제가 끝나지 않아 컨슈머에게 보이지 않으며 lag 계산에도 들어가지 않습니다.
+    따라서 CLI 가 보여 주는 LAG 는 LOG-END-OFFSET 에서 CURRENT-OFFSET 을 뺀 6 이고,
+    클라이언트 메트릭 records-lag 는 커밋 오프셋이 아니라 현재 위치를 기준으로 하므로 10 에서 7 을 뺀 3 입니다.
+    두 값이 다른 이유는 기준점이 다르기 때문이며, 그 차이가 바로 처리했지만 아직 커밋하지 않은 구간입니다.</desc>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">lag 은 <tspan class="dg-bold">기준점이 무엇이냐</tspan> 에 따라 값이 달라집니다</text>
+
+  <text x="8" y="46" class="dg-fs-sm dg-bold">파티션 <tspan class="dg-mono">orders-0</tspan> 의 로그</text>
+
+  <!-- 로그 칸 12개 -->
+  <rect class="dg-node dg-node--ok" x="96" y="56" width="40" height="40" rx="2"/>
+  <text x="116" y="81" class="dg-fs-sm dg-num" text-anchor="middle">0</text>
+  <rect class="dg-node dg-node--ok" x="136" y="56" width="40" height="40" rx="2"/>
+  <text x="156" y="81" class="dg-fs-sm dg-num" text-anchor="middle">1</text>
+  <rect class="dg-node dg-node--ok" x="176" y="56" width="40" height="40" rx="2"/>
+  <text x="196" y="81" class="dg-fs-sm dg-num" text-anchor="middle">2</text>
+  <rect class="dg-node dg-node--ok" x="216" y="56" width="40" height="40" rx="2"/>
+  <text x="236" y="81" class="dg-fs-sm dg-num" text-anchor="middle">3</text>
+  <rect class="dg-node dg-node--warn" x="256" y="56" width="40" height="40" rx="2"/>
+  <text x="276" y="81" class="dg-fs-sm dg-num" text-anchor="middle">4</text>
+  <rect class="dg-node dg-node--warn" x="296" y="56" width="40" height="40" rx="2"/>
+  <text x="316" y="81" class="dg-fs-sm dg-num" text-anchor="middle">5</text>
+  <rect class="dg-node dg-node--warn" x="336" y="56" width="40" height="40" rx="2"/>
+  <text x="356" y="81" class="dg-fs-sm dg-num" text-anchor="middle">6</text>
+  <rect class="dg-node dg-node--accent" x="376" y="56" width="40" height="40" rx="2"/>
+  <text x="396" y="81" class="dg-fs-sm dg-num" text-anchor="middle">7</text>
+  <rect class="dg-node dg-node--accent" x="416" y="56" width="40" height="40" rx="2"/>
+  <text x="436" y="81" class="dg-fs-sm dg-num" text-anchor="middle">8</text>
+  <rect class="dg-node dg-node--accent" x="456" y="56" width="40" height="40" rx="2"/>
+  <text x="476" y="81" class="dg-fs-sm dg-num" text-anchor="middle">9</text>
+  <rect class="dg-node dg-node--muted" x="496" y="56" width="40" height="40" rx="2"/>
+  <text x="516" y="81" class="dg-fs-sm dg-num" text-anchor="middle">10</text>
+  <rect class="dg-node dg-node--muted" x="536" y="56" width="40" height="40" rx="2"/>
+  <text x="556" y="81" class="dg-fs-sm dg-num" text-anchor="middle">11</text>
+  <text x="8" y="81" class="dg-fs-sm dg-bold">리더</text>
+
+  <!-- 지점 마커 -->
+  <line class="dg-edge dg-edge--warn" x1="256" y1="96" x2="256" y2="112"/>
+  <rect class="dg-node dg-node--warn" x="150" y="112" width="204" height="22" rx="3"/>
+  <text x="158" y="128" class="dg-fs-sm dg-bold">커밋 4 = CURRENT-OFFSET</text>
+  <line class="dg-edge dg-edge--accent" x1="376" y1="96" x2="376" y2="142"/>
+  <rect class="dg-node dg-node--accent" x="330" y="142" width="166" height="22" rx="3"/>
+  <text x="338" y="158" class="dg-fs-sm dg-bold">현재 위치 7 = position</text>
+
+  <line class="dg-edge dg-edge--accent dg-edge--dashed" x1="496" y1="96" x2="496" y2="172"/>
+  <rect class="dg-node dg-node--accent" x="430" y="172" width="212" height="22" rx="3"/>
+  <text x="438" y="188" class="dg-fs-sm dg-bold">HW 10 = LOG-END-OFFSET</text>
+
+  <line class="dg-edge dg-edge--muted dg-edge--dotted" x1="576" y1="96" x2="576" y2="202"/>
+  <rect class="dg-node dg-node--muted" x="500" y="202" width="160" height="22" rx="3"/>
+  <text x="508" y="218" class="dg-fs-sm">리더 LEO 12 · 복제 미완</text>
+
+  <!-- lag 구간 -->
+  <text x="8" y="248" class="dg-fs-sm dg-bold">두 가지 lag</text>
+
+  <rect class="dg-node dg-node--warn" x="256" y="256" width="240" height="20" rx="3"/>
+  <text x="264" y="271" class="dg-fs-sm dg-bold">CLI 의 LAG = 6</text>
+  <text x="504" y="271" class="dg-fs-sm dg-mono">LOG-END(10) − CURRENT(4)</text>
+
+  <rect class="dg-node dg-node--accent" x="376" y="282" width="120" height="20" rx="3"/>
+  <text x="384" y="297" class="dg-fs-sm dg-bold">records-lag = 3</text>
+  <text x="504" y="297" class="dg-fs-sm dg-mono">HW(10) − position(7)</text>
+
+  <text x="8" y="326" class="dg-fs-sm dg-muted">복제 미완 구간(10~11)은 어느 lag 에도 들어가지 않습니다 — 조회 자체가 HW 까지만 됩니다.</text>
+  <text x="8" y="344" class="dg-fs-sm dg-muted">두 값의 차이 3건 = 이미 처리했지만 아직 커밋하지 않은 구간입니다.</text>
+
+  <!-- 정리 -->
+  <line class="dg-grid" x1="8" y1="362" x2="712" y2="362"/>
+  <text x="8" y="382" class="dg-fs-sm"><tspan class="dg-bold">CLI 의 <tspan class="dg-mono">LOG-END-OFFSET</tspan> 은 리더의 LEO 가 아니라 high watermark 입니다</tspan> (<tspan class="dg-mono">read_uncommitted</tspan> 기준).</text>
+  <text x="8" y="402" class="dg-fs-sm"><tspan class="dg-mono">read_committed</tspan> 컨슈머는 이 값이 LSO(last stable offset)가 되고 lag 도 LSO 기준으로 바뀝니다.</text>
+  <text x="8" y="422" class="dg-fs-sm dg-muted">커밋을 자주 하지 않으면 실제 처리는 따라가고 있는데도 CLI 의 LAG 이 크게 보입니다.</text>
+</svg>

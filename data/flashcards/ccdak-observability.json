@@ -1,0 +1,224 @@
+{
+  "deckId": "ccdak-observability",
+  "title": "CCDAK — Application Observability",
+  "exam": "CCDAK",
+  "kafkaVersion": "4.3",
+  "cards": [
+    {
+      "id": "fc-obs-001",
+      "deck": "ccdak-observability",
+      "front": "`record-error-rate` 는 무엇을 나타내는가?",
+      "back": "**프로듀서에서 전송이 최종 실패한 레코드의 초당 건수**\n0을 벗어나면 유실 위험이므로 알림 1순위 지표입니다.",
+      "tags": [
+        "producer-metrics",
+        "monitoring",
+        "observability"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-obs-002",
+      "deck": "ccdak-observability",
+      "front": "`record-retry-rate` 는 무엇을 나타내는가?",
+      "back": "**프로듀서 레코드의 초당 재시도 건수**\n올라가면 아직 실패는 아니지만 브로커·네트워크에 문제가 생기고 있다는 선행 신호입니다.",
+      "tags": [
+        "producer-metrics",
+        "monitoring",
+        "observability"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-obs-003",
+      "deck": "ccdak-observability",
+      "front": "`record-queue-time-avg` 는 무엇을 나타내는가?",
+      "back": "**배치가 전송 큐에서 대기한 평균 시간**\n`linger.ms`·`batch.size` 튜닝과 버퍼 압박을 판단하는 근거입니다.",
+      "tags": [
+        "producer-metrics",
+        "monitoring",
+        "linger.ms"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-obs-004",
+      "deck": "ccdak-observability",
+      "front": "`batch-size-avg` 는 무엇을 나타내는가?",
+      "back": "**파티션별 평균 배치 크기**\n`batch.size` 에 한참 못 미치면 트래픽이 적거나 `linger.ms` 가 짧다는 뜻입니다.",
+      "tags": [
+        "producer-metrics",
+        "monitoring",
+        "batch.size"
+      ],
+      "chapter": "ch04"
+    },
+    {
+      "id": "fc-obs-005",
+      "deck": "ccdak-observability",
+      "front": "`records-lag-max` 는 무엇을 나타내는가?",
+      "back": "**컨슈머가 담당한 파티션 중 lag 최댓값** (fetch 메트릭)\n컨슈머 프로세스가 죽으면 값이 0이 되는 것이 아니라 메트릭 자체가 사라집니다.",
+      "tags": [
+        "consumer-lag",
+        "monitoring",
+        "jmx"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-obs-006",
+      "deck": "ccdak-observability",
+      "front": "`records-consumed-rate` 는 무엇을 나타내는가?",
+      "back": "**컨슈머가 초당 소비한 레코드 수**\n처리량 기준선을 잡는 지표이며, 갑자기 0이 되면 처리 정지를 의미합니다.",
+      "tags": [
+        "consumer-metrics",
+        "monitoring",
+        "observability"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-obs-007",
+      "deck": "ccdak-observability",
+      "front": "`time-between-poll-max` 는 무엇을 나타내는가?",
+      "back": "**두 `poll()` 호출 사이의 최대 간격**\n`max.poll.interval.ms` 초과를 **사전에** 예측할 수 있는 지표입니다.",
+      "tags": [
+        "max-poll-interval",
+        "monitoring",
+        "consumer-metrics"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-obs-008",
+      "deck": "ccdak-observability",
+      "front": "`poll-idle-ratio-avg` 는 무엇을 나타내는가?",
+      "back": "**컨슈머가 `poll()` 에서 대기한 시간 비율**\n낮으면 브로커 대기가 아니라 애플리케이션 처리가 병목이라는 뜻입니다.",
+      "tags": [
+        "consumer-metrics",
+        "monitoring",
+        "observability"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-obs-009",
+      "deck": "ccdak-observability",
+      "front": "`assigned-partitions` 가 0이면 무엇을 의심해야 하는가?",
+      "back": "**컨슈머 수가 파티션 수보다 많음, 또는 리밸런스 미완료**\n프로세스는 살아 있는데 아무것도 소비하지 않는 상태의 원인입니다.",
+      "tags": [
+        "consumer-metrics",
+        "rebalance-triggers",
+        "monitoring"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-obs-010",
+      "deck": "ccdak-observability",
+      "front": "`rebalance-rate-per-hour` 는 무엇을 나타내는가?",
+      "back": "**시간당 리밸런스 발생 횟수**\n값이 높으면 poll 간격 초과나 인스턴스 불안정을 의심하며, 실패분은 `failed-rebalance-rate-per-hour` 로 봅니다.",
+      "tags": [
+        "consumer-metrics",
+        "rebalance-triggers",
+        "monitoring"
+      ],
+      "chapter": "ch05"
+    },
+    {
+      "id": "fc-obs-011",
+      "deck": "ccdak-observability",
+      "front": "`UnderReplicatedPartitions` 의 정상값은?",
+      "back": "**0** · 브로커 메트릭\n0보다 크면 ISR이 복제 계수에 못 미치는 파티션이 있다는 뜻이므로 내구성 여유가 줄어든 상태입니다.",
+      "tags": [
+        "broker-metrics",
+        "monitoring",
+        "isr"
+      ],
+      "chapter": "ch11"
+    },
+    {
+      "id": "fc-obs-012",
+      "deck": "ccdak-observability",
+      "front": "`UnderMinIsrPartitionCount` 가 0보다 크면 어떤 증상이 나타나는가?",
+      "back": "**`acks=all` 쓰기가 `NotEnoughReplicasException` 으로 실패합니다.**\n이미 장애가 발생한 상태이므로 즉시 대응 대상입니다.",
+      "tags": [
+        "broker-metrics",
+        "min.insync.replicas",
+        "monitoring"
+      ],
+      "chapter": "ch11"
+    },
+    {
+      "id": "fc-obs-013",
+      "deck": "ccdak-observability",
+      "front": "`OfflinePartitionsCount` 가 0보다 크면 무슨 뜻인가?",
+      "back": "**리더가 없는 파티션이 있어 읽기와 쓰기가 모두 불가능합니다.**\n가장 심각한 브로커 지표이며 컨트롤러·브로커 장애를 함께 확인해야 합니다.",
+      "tags": [
+        "broker-metrics",
+        "monitoring",
+        "availability"
+      ],
+      "chapter": "ch11"
+    },
+    {
+      "id": "fc-obs-014",
+      "deck": "ccdak-observability",
+      "front": "`ActiveControllerCount` 는 어떻게 읽어야 하는가?",
+      "back": "**클러스터 전체 합이 정확히 1**\n0이면 컨트롤러 부재, 2 이상이면 스플릿 브레인 의심 상황입니다.",
+      "tags": [
+        "broker-metrics",
+        "kraft",
+        "monitoring"
+      ],
+      "chapter": "ch11"
+    },
+    {
+      "id": "fc-obs-015",
+      "deck": "ccdak-observability",
+      "front": "`connector-failed-task-count` 는 무엇을 나타내는가?",
+      "back": "**Connect에서 실패 상태인 태스크 수**\n태스크는 자동 재시작되지 않으므로 0을 넘으면 즉시 조사해야 합니다.",
+      "tags": [
+        "connect-logging",
+        "monitoring",
+        "connect"
+      ],
+      "chapter": "ch09"
+    },
+    {
+      "id": "fc-obs-016",
+      "deck": "ccdak-observability",
+      "front": "`total-records-skipped` 를 봐야 하는 이유는?",
+      "back": "**`errors.tolerance=all` 로 조용히 버려진 레코드를 드러내는 지표입니다.**\nDLQ 지표와 함께 보지 않으면 유실이 로그에만 남고 아무도 모릅니다.",
+      "tags": [
+        "connect-dlq",
+        "monitoring",
+        "errors.tolerance"
+      ],
+      "chapter": "ch09"
+    },
+    {
+      "id": "fc-obs-017",
+      "deck": "ccdak-observability",
+      "front": "`client.id` 를 지정하지 않으면 관측에서 무엇을 잃는가?",
+      "back": "**메트릭에서 인스턴스를 구분할 수 없습니다.**\n자동 생성 이름은 재기동마다 바뀌므로 시계열이 끊어집니다.",
+      "tags": [
+        "monitoring",
+        "client.id",
+        "observability"
+      ],
+      "chapter": "ch11"
+    },
+    {
+      "id": "fc-obs-018",
+      "deck": "ccdak-observability",
+      "front": "`kafka-consumer-groups --describe` 의 `LOG-END-OFFSET` 이 실제로 가리키는 값은?",
+      "back": "**파티션의 high watermark**\n이름과 달리 리더 LEO가 아니므로 `LAG = LOG-END-OFFSET − CURRENT-OFFSET` 이 곧 HW 기준 lag입니다.",
+      "tags": [
+        "consumer-lag",
+        "high-watermark",
+        "monitoring"
+      ],
+      "chapter": "ch05"
+    }
+  ]
+}

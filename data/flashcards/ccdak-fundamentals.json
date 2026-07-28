@@ -1,0 +1,427 @@
+{
+  "deckId": "ccdak-fundamentals",
+  "title": "CCDAK — Fundamentals",
+  "exam": "CCDAK",
+  "kafkaVersion": "4.3",
+  "cards": [
+    {
+      "id": "fc-fund-001",
+      "deck": "ccdak-fundamentals",
+      "front": "Kafka가 순서를 보장하는 단위는?",
+      "back": "**토픽-파티션**\n토픽 전역 순서나 전역 오프셋은 정의되지 않습니다. 오프셋은 파티션 안에서만 의미가 있습니다.",
+      "tags": [
+        "ordering",
+        "partitions",
+        "architecture"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-002",
+      "deck": "ccdak-fundamentals",
+      "front": "파티션 수는 어느 방향으로 바꿀 수 있는가?",
+      "back": "**늘리기만 가능** (줄일 수 없음)\n줄이려면 새 토픽을 만들어 재발행해야 합니다.",
+      "tags": [
+        "partitions",
+        "architecture"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-003",
+      "deck": "ccdak-fundamentals",
+      "front": "`acks=all` 이 기다리는 대상은?",
+      "back": "**그 시점의 ISR 전원**\n전체 레플리카가 아니므로 ISR이 줄면 더 적은 응답으로도 성공합니다.",
+      "tags": [
+        "acks-isr",
+        "isr",
+        "replication"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-004",
+      "deck": "ccdak-fundamentals",
+      "front": "쓰기를 유지하면서 견딜 수 있는 브로커 장애 수의 공식은?",
+      "back": "**복제 계수 − `min.insync.replicas`**\nRF=3, minISR=2면 1대까지 견딥니다.",
+      "tags": [
+        "acks-isr",
+        "min.insync.replicas",
+        "replication"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-005",
+      "deck": "ccdak-fundamentals",
+      "front": "레플리카가 ISR에서 빠지는 판정 기준은?",
+      "back": "**`replica.lag.time.max.ms`(30000)** 동안 따라오지 못함\n오프셋 차이가 아니라 시간 기준입니다.",
+      "tags": [
+        "isr",
+        "replica.lag.time.max.ms",
+        "replication"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-006",
+      "deck": "ccdak-fundamentals",
+      "front": "unclean leader election을 켜면 얻는 것과 잃는 것은?",
+      "back": "**가용성을 얻고 데이터를 잃습니다.**\nISR 밖 레플리카를 리더로 올리므로 복제되지 않은 구간이 사라집니다. 기본값은 `false` 입니다.",
+      "tags": [
+        "unclean.leader.election.enable",
+        "replication",
+        "durability"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-007",
+      "deck": "ccdak-fundamentals",
+      "front": "파티션의 오프셋 4종은?",
+      "back": "**log start offset · committed offset · high watermark · LEO**\n갱신 주체가 각각 리텐션, 컨슈머 그룹, ISR 복제, 리더입니다.",
+      "tags": [
+        "offsets",
+        "high-watermark",
+        "consumer-lag"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-008",
+      "deck": "ccdak-fundamentals",
+      "front": "consumer lag의 계산식은?",
+      "back": "**high watermark − committed offset**\nLEO로 계산하면 아직 복제 중이라 읽을 수도 없는 구간을 포함해 과대 계산됩니다.",
+      "tags": [
+        "consumer-lag",
+        "high-watermark",
+        "offsets"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-009",
+      "deck": "ccdak-fundamentals",
+      "front": "컨슈머가 읽을 수 있는 오프셋의 상한은?",
+      "back": "**high watermark**\nHW와 LEO 사이 구간은 아직 복제가 끝나지 않아 컨슈머에게 노출되지 않습니다.",
+      "tags": [
+        "high-watermark",
+        "offsets",
+        "consumer"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-010",
+      "deck": "ccdak-fundamentals",
+      "front": "high watermark의 정의는?",
+      "back": "**ISR 전원이 복제를 마친 상한**\n리더가 ISR 레플리카들의 최소 LEO로 계산합니다.",
+      "tags": [
+        "high-watermark",
+        "isr",
+        "replication"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-011",
+      "deck": "ccdak-fundamentals",
+      "front": "LEO(log end offset)의 정의는?",
+      "back": "**리더가 마지막으로 append한 레코드의 다음 위치**\n로그의 끝이며 아직 복제되지 않은 구간을 포함합니다.",
+      "tags": [
+        "offsets",
+        "high-watermark",
+        "replication"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-012",
+      "deck": "ccdak-fundamentals",
+      "front": "`kafka-get-offsets.sh --time -1` 이 반환하는 값은?",
+      "back": "**high watermark** (LEO가 아님)\n클라이언트에 노출되는 상한을 돌려주므로 lag 계산의 기준이 됩니다.",
+      "tags": [
+        "high-watermark",
+        "offsets",
+        "cli"
+      ],
+      "chapter": "ch02"
+    },
+    {
+      "id": "fc-fund-013",
+      "deck": "ccdak-fundamentals",
+      "front": "KRaft에서 클러스터 메타데이터가 저장되는 곳은?",
+      "back": "**`__cluster_metadata` 로그 (컨트롤러 쿼럼이 복제)**\nZooKeeper는 4.0에서 제거되었고 마지막 지원 버전은 3.9입니다.",
+      "tags": [
+        "kraft",
+        "architecture",
+        "metadata"
+      ],
+      "chapter": "ch03"
+    },
+    {
+      "id": "fc-fund-014",
+      "deck": "ccdak-fundamentals",
+      "front": "컨트롤러 쿼럼의 권장 노드 수는?",
+      "back": "**3 또는 5 (홀수)**\n과반이 살아 있어야 쓰기가 가능하므로 홀수로 두어 장애 허용 대수를 최대화합니다.",
+      "tags": [
+        "kraft",
+        "quorum",
+        "architecture"
+      ],
+      "chapter": "ch03"
+    },
+    {
+      "id": "fc-fund-015",
+      "deck": "ccdak-fundamentals",
+      "front": "`process.roles` 에 올 수 있는 값은?",
+      "back": "**`broker` · `controller` · `broker,controller`**\n마지막 조합 모드는 개발·소규모 클러스터용입니다.",
+      "tags": [
+        "kraft",
+        "process.roles",
+        "architecture"
+      ],
+      "chapter": "ch03"
+    },
+    {
+      "id": "fc-fund-016",
+      "deck": "ccdak-fundamentals",
+      "front": "`cleanup.policy=delete` 의 삭제 단위는?",
+      "back": "**세그먼트**\n레코드 하나씩 지우지 않으므로 `segment.ms`·`segment.bytes` 가 실제 삭제 시점을 좌우합니다.",
+      "tags": [
+        "retention",
+        "cleanup.policy",
+        "storage"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-fund-017",
+      "deck": "ccdak-fundamentals",
+      "front": "`cleanup.policy=compact` 가 남기는 것은?",
+      "back": "**키별 최신 값**\n키가 필수이므로 키 없는 레코드가 섞이면 컴팩션이 성립하지 않습니다.",
+      "tags": [
+        "compaction",
+        "cleanup.policy",
+        "storage"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-fund-018",
+      "deck": "ccdak-fundamentals",
+      "front": "컴팩션 대상에서 항상 제외되는 세그먼트는?",
+      "back": "**활성 세그먼트** (지금 쓰이고 있는 것)\n그래서 최근에 쓴 중복 키가 한동안 함께 보이는 것이 정상입니다.",
+      "tags": [
+        "compaction",
+        "storage",
+        "segment"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-fund-019",
+      "deck": "ccdak-fundamentals",
+      "front": "컴팩션 토픽에서 삭제를 표현하는 방법은?",
+      "back": "**tombstone — value가 `null` 인 레코드**\n수명은 `delete.retention.ms`(1일)이며 그 뒤에는 tombstone 자체도 제거됩니다.",
+      "tags": [
+        "compaction",
+        "tombstone",
+        "delete.retention.ms"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-fund-020",
+      "deck": "ccdak-fundamentals",
+      "front": "`retention.ms` 를 줄였는데 디스크가 줄지 않는 이유는?",
+      "back": "**삭제 단위가 세그먼트여서 `segment.ms`·`segment.bytes` 도 함께 줄여야 합니다.**\n마감되지 않은 세그먼트는 판정 대상이 아닙니다.",
+      "tags": [
+        "retention",
+        "segment.ms",
+        "storage"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-fund-021",
+      "deck": "ccdak-fundamentals",
+      "front": "`retention.bytes` 가 적용되는 범위는?",
+      "back": "**파티션당**\n토픽 전체 용량을 계산할 때는 파티션 수를 곱해야 합니다.",
+      "tags": [
+        "retention",
+        "retention.bytes",
+        "storage"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-fund-022",
+      "deck": "ccdak-fundamentals",
+      "front": "메시지 크기의 하드 게이트 두 곳은?",
+      "back": "**프로듀서 `max.request.size` · 브로커 `message.max.bytes`**(토픽은 `max.message.bytes`)\nfetch 관련 세 설정은 하드 상한이 아닙니다.",
+      "tags": [
+        "message-size",
+        "max.request.size",
+        "message.max.bytes"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-fund-023",
+      "deck": "ccdak-fundamentals",
+      "front": "`message.max.bytes` 가 기준으로 삼는 크기는?",
+      "back": "**압축 후 레코드 배치 크기**\n개별 레코드 크기가 아니므로 배치가 커지면 같은 레코드로도 초과할 수 있습니다.",
+      "tags": [
+        "message-size",
+        "message.max.bytes",
+        "compression"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-fund-024",
+      "deck": "ccdak-fundamentals",
+      "front": "fetch 3종이 하드 상한이 아닌 이유는?",
+      "back": "**첫 배치가 그 값보다 커도 그대로 반환하도록 문서가 보장합니다.**\n큰 레코드 때문에 복제나 소비가 멈추지 않게 하려는 설계입니다.",
+      "tags": [
+        "message-size",
+        "fetch.max.bytes",
+        "consumer"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-fund-025",
+      "deck": "ccdak-fundamentals",
+      "front": "브로커 `message.max.bytes` 에 대응하는 토픽 설정명은?",
+      "back": "**`max.message.bytes`**\n어순이 반전되어 있어 자주 틀립니다. 값은 둘 다 1048588입니다.",
+      "tags": [
+        "message-size",
+        "max.message.bytes",
+        "topic"
+      ],
+      "chapter": "ch07"
+    },
+    {
+      "id": "fc-fund-026",
+      "deck": "ccdak-fundamentals",
+      "front": "`BACKWARD` 호환성의 의미와 배포 순서는?",
+      "back": "**새 스키마로 옛 데이터를 읽을 수 있음 → 컨슈머 먼저 배포**\n기본 모드이며 필드 추가에는 `default` 가 필요합니다.",
+      "tags": [
+        "schema-compatibility",
+        "avro",
+        "schema-registry"
+      ],
+      "chapter": "ch08"
+    },
+    {
+      "id": "fc-fund-027",
+      "deck": "ccdak-fundamentals",
+      "front": "`FORWARD` 호환성의 의미와 배포 순서는?",
+      "back": "**옛 스키마로 새 데이터를 읽을 수 있음 → 프로듀서 먼저 배포**\n필드 추가는 자유롭지만 `default` 없는 필드 삭제는 거부됩니다.",
+      "tags": [
+        "schema-compatibility",
+        "avro",
+        "schema-registry"
+      ],
+      "chapter": "ch08"
+    },
+    {
+      "id": "fc-fund-028",
+      "deck": "ccdak-fundamentals",
+      "front": "`FULL` 호환성이 허용하는 변경은?",
+      "back": "**`default` 가 있는 필드의 추가와 삭제**\n양방향을 모두 만족해야 하므로 허용 범위가 가장 좁습니다.",
+      "tags": [
+        "schema-compatibility",
+        "avro",
+        "schema-registry"
+      ],
+      "chapter": "ch08"
+    },
+    {
+      "id": "fc-fund-029",
+      "deck": "ccdak-fundamentals",
+      "front": "`*_TRANSITIVE` 모드가 다른 점은?",
+      "back": "**직전 버전이 아니라 등록된 모든 이전 버전과 대조합니다.**\n오래된 데이터를 재처리해야 하면 transitive가 필요합니다.",
+      "tags": [
+        "schema-compatibility",
+        "schema-registry",
+        "avro"
+      ],
+      "chapter": "ch08"
+    },
+    {
+      "id": "fc-fund-030",
+      "deck": "ccdak-fundamentals",
+      "front": "Schema Registry 직렬화 형식의 앞부분 오버헤드는?",
+      "back": "**5바이트 — magic byte 1 + schema id 4**\n그 뒤에 payload가 붙습니다. Protobuf는 message index가 추가됩니다.",
+      "tags": [
+        "schema-registry",
+        "serialization",
+        "wire-format"
+      ],
+      "chapter": "ch08"
+    },
+    {
+      "id": "fc-fund-031",
+      "deck": "ccdak-fundamentals",
+      "front": "기본 subject 이름 규칙은?",
+      "back": "**`{topic}-key` / `{topic}-value`**\n토픽 단위로 스키마를 관리하므로 한 토픽에 여러 레코드 타입을 넣으면 호환성 검사가 깨집니다.",
+      "tags": [
+        "schema-registry",
+        "subject",
+        "avro"
+      ],
+      "chapter": "ch08"
+    },
+    {
+      "id": "fc-fund-032",
+      "deck": "ccdak-fundamentals",
+      "front": "한 토픽에 여러 레코드 타입을 담아야 할 때의 subject 전략은?",
+      "back": "**RecordName 또는 TopicRecordName 전략**\n후자는 `{topic}-{레코드 풀네임}` 이라 토픽 격리와 타입 구분을 함께 얻습니다.",
+      "tags": [
+        "schema-registry",
+        "subject",
+        "avro"
+      ],
+      "chapter": "ch08"
+    },
+    {
+      "id": "fc-fund-033",
+      "deck": "ccdak-fundamentals",
+      "front": "`security.protocol` 의 네 값은?",
+      "back": "**PLAINTEXT · SSL · SASL_PLAINTEXT · SASL_SSL**\n앞의 SASL은 인증, 뒤의 SSL/PLAINTEXT는 전송 암호화 여부를 가리킵니다.",
+      "tags": [
+        "security-protocol",
+        "security",
+        "authentication"
+      ],
+      "chapter": "ch11"
+    },
+    {
+      "id": "fc-fund-034",
+      "deck": "ccdak-fundamentals",
+      "front": "컨슈머 하나를 돌리는 데 필요한 ACL 두 개는?",
+      "back": "**토픽 READ + 그룹 READ**\n토픽 권한만 주고 그룹 권한을 빼먹으면 `GroupAuthorizationException` 이 발생합니다.",
+      "tags": [
+        "security-protocol",
+        "acl",
+        "security"
+      ],
+      "chapter": "ch11"
+    },
+    {
+      "id": "fc-fund-035",
+      "deck": "ccdak-fundamentals",
+      "front": "`SASL_PLAINTEXT` 의 위험은?",
+      "back": "**인증은 하지만 전송이 암호화되지 않습니다.**\n메커니즘 `PLAIN` 과 조합하면 비밀번호가 평문으로 흐릅니다. 프로덕션은 `SASL_SSL` 입니다.",
+      "tags": [
+        "security-protocol",
+        "security",
+        "sasl"
+      ],
+      "chapter": "ch11"
+    }
+  ]
+}

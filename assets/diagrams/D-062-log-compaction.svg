@@ -1,0 +1,123 @@
+<svg viewBox="0 0 720 312" role="img" class="kg-diagram"
+     aria-labelledby="d062-title d062-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d062-title">로그 컴팩션 before / after — 키별 최신값만 남고 활성 세그먼트는 제외됩니다</title>
+  <desc id="d062-desc">오프셋 0부터 11까지 열두 개의 레코드가 세그먼트 세 개에 나뉘어 있는 로그입니다.
+    S0 은 오프셋 0에서 3, S1 은 4에서 7 로 둘 다 봉인된 세그먼트이고, S2 는 오프셋 8에서 11 인 활성 세그먼트입니다.
+    레코드는 순서대로 A=1, B=1, A=2, C=1, B=2, A=3, B=null, D=1, A=4, C=2, B=3, D=2 입니다.
+    B=null 은 tombstone 즉 삭제 표시입니다.
+    컴팩션을 실행하면 봉인된 세그먼트 범위에서만 키별 최신값이 남습니다.
+    오프셋 0, 1, 2, 4 가 사라지고 C=1, A=3, B=null, D=1 이 남습니다.
+    tombstone 인 B=null 은 즉시 사라지지 않고 delete.retention.ms 기본값 86400000 즉 하루가 지난 뒤에 제거됩니다.
+    활성 세그먼트 S2 는 컴팩션 대상이 아니므로 A=4, C=2, B=3, D=2 는 중복이든 아니든 그대로 남습니다.
+    사라진 오프셋 번호는 재사용되지 않으며, 읽기는 그 자리를 건너뜁니다.
+    컨트롤로 컴팩션 실행과 delete.retention.ms 경과를 차례로 적용해 볼 수 있습니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">로그 컴팩션 — <tspan class="dg-mono">cleanup.policy=compact</tspan> 일 때 무엇이 남는가</text>
+
+  <!-- 단계 표시 -->
+  <rect data-dg="stage-box" class="dg-node dg-node--alt" x="12" y="28" width="696" height="22" rx="4"/>
+  <text data-dg="stage-label" class="dg-fs-sm dg-bold" x="22" y="43">1단계 — 컴팩션 전: 같은 키가 여러 번 나타난 채로 전부 남아 있습니다</text>
+
+  <!-- ===== 세그먼트 S0 (봉인) ===== -->
+  <rect class="dg-panel" x="12" y="56" width="224" height="98" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="74">S0 · 봉인 — 컴팩션 대상</text>
+  <g data-dg="rec-0">
+    <rect class="dg-node" x="22" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="46" y="98" text-anchor="middle">0</text>
+    <text class="dg-fs-md dg-bold" x="46" y="118" text-anchor="middle">A</text>
+    <text class="dg-fs-sm dg-mono" x="46" y="136" text-anchor="middle">= 1</text>
+  </g>
+  <g data-dg="rec-1">
+    <rect class="dg-node" x="74" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="98" y="98" text-anchor="middle">1</text>
+    <text class="dg-fs-md dg-bold" x="98" y="118" text-anchor="middle">B</text>
+    <text class="dg-fs-sm dg-mono" x="98" y="136" text-anchor="middle">= 1</text>
+  </g>
+  <g data-dg="rec-2">
+    <rect class="dg-node" x="126" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="150" y="98" text-anchor="middle">2</text>
+    <text class="dg-fs-md dg-bold" x="150" y="118" text-anchor="middle">A</text>
+    <text class="dg-fs-sm dg-mono" x="150" y="136" text-anchor="middle">= 2</text>
+  </g>
+  <g data-dg="rec-3">
+    <rect class="dg-node" x="178" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="202" y="98" text-anchor="middle">3</text>
+    <text class="dg-fs-md dg-bold" x="202" y="118" text-anchor="middle">C</text>
+    <text class="dg-fs-sm dg-mono" x="202" y="136" text-anchor="middle">= 1</text>
+  </g>
+
+  <!-- ===== 세그먼트 S1 (봉인) ===== -->
+  <rect class="dg-panel" x="244" y="56" width="224" height="98" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="254" y="74">S1 · 봉인 — 컴팩션 대상</text>
+  <g data-dg="rec-4">
+    <rect class="dg-node" x="254" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="278" y="98" text-anchor="middle">4</text>
+    <text class="dg-fs-md dg-bold" x="278" y="118" text-anchor="middle">B</text>
+    <text class="dg-fs-sm dg-mono" x="278" y="136" text-anchor="middle">= 2</text>
+  </g>
+  <g data-dg="rec-5">
+    <rect class="dg-node" x="306" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="330" y="98" text-anchor="middle">5</text>
+    <text class="dg-fs-md dg-bold" x="330" y="118" text-anchor="middle">A</text>
+    <text class="dg-fs-sm dg-mono" x="330" y="136" text-anchor="middle">= 3</text>
+  </g>
+  <g data-dg="rec-6">
+    <rect class="dg-node dg-node--warn" x="358" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="382" y="98" text-anchor="middle">6</text>
+    <text class="dg-fs-md dg-bold" x="382" y="118" text-anchor="middle">B</text>
+    <text class="dg-fs-sm dg-mono dg-bold" x="382" y="136" text-anchor="middle">null</text>
+  </g>
+  <g data-dg="rec-7">
+    <rect class="dg-node" x="410" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="434" y="98" text-anchor="middle">7</text>
+    <text class="dg-fs-md dg-bold" x="434" y="118" text-anchor="middle">D</text>
+    <text class="dg-fs-sm dg-mono" x="434" y="136" text-anchor="middle">= 1</text>
+  </g>
+
+  <!-- ===== 세그먼트 S2 (활성) ===== -->
+  <rect class="dg-node dg-node--accent" x="476" y="56" width="232" height="98" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="486" y="74">S2 · 활성 — 컴팩션 대상 아님</text>
+  <g data-dg="rec-8">
+    <rect class="dg-node" x="486" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="510" y="98" text-anchor="middle">8</text>
+    <text class="dg-fs-md dg-bold" x="510" y="118" text-anchor="middle">A</text>
+    <text class="dg-fs-sm dg-mono" x="510" y="136" text-anchor="middle">= 4</text>
+  </g>
+  <g data-dg="rec-9">
+    <rect class="dg-node" x="538" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="562" y="98" text-anchor="middle">9</text>
+    <text class="dg-fs-md dg-bold" x="562" y="118" text-anchor="middle">C</text>
+    <text class="dg-fs-sm dg-mono" x="562" y="136" text-anchor="middle">= 2</text>
+  </g>
+  <g data-dg="rec-10">
+    <rect class="dg-node" x="590" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="614" y="98" text-anchor="middle">10</text>
+    <text class="dg-fs-md dg-bold" x="614" y="118" text-anchor="middle">B</text>
+    <text class="dg-fs-sm dg-mono" x="614" y="136" text-anchor="middle">= 3</text>
+  </g>
+  <g data-dg="rec-11">
+    <rect class="dg-node" x="642" y="82" width="48" height="62" rx="3"/>
+    <text class="dg-fs-sm dg-num dg-muted" x="666" y="98" text-anchor="middle">11</text>
+    <text class="dg-fs-md dg-bold" x="666" y="118" text-anchor="middle">D</text>
+    <text class="dg-fs-sm dg-mono" x="666" y="136" text-anchor="middle">= 2</text>
+  </g>
+
+  <!-- 설명 2줄 -->
+  <text data-dg="note-1" class="dg-fs-sm" x="12" y="176">봉인된 S0·S1 에서 A 는 0·2·5 에, B 는 1·4·6 에 나타납니다. 컴팩션은 이 범위에서 <tspan class="dg-bold">키별 마지막 것만</tspan> 남깁니다.</text>
+  <text data-dg="note-2" class="dg-fs-sm" x="12" y="194">활성 세그먼트 S2 의 A=4 · B=3 은 중복이지만 손대지 않습니다. 봉인된 뒤에야 대상이 됩니다.</text>
+
+  <!-- 규칙 요약 -->
+  <rect class="dg-node dg-node--alt" x="12" y="208" width="340" height="60" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="226">tombstone (value = null)</text>
+  <text class="dg-fs-sm" x="22" y="244">그 키의 이전 값들을 지우는 <tspan class="dg-bold">삭제 표시</tspan>입니다.</text>
+  <text class="dg-fs-sm" x="22" y="262">자신은 <tspan class="dg-mono">delete.retention.ms</tspan> 뒤에 사라집니다.</text>
+
+  <rect class="dg-node dg-node--alt" x="368" y="208" width="340" height="60" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="378" y="226">기본값</text>
+  <text class="dg-fs-sm dg-mono" x="378" y="244">cleanup.policy = delete</text>
+  <text class="dg-fs-sm dg-mono" x="378" y="262">delete.retention.ms = 86400000 (1일)</text>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="280" x2="708" y2="280"/>
+  <text class="dg-fs-sm dg-muted" x="12" y="298">사라진 오프셋 번호는 <tspan class="dg-bold">재사용되지 않습니다</tspan>. 읽기는 그 자리를 건너뛰므로 오프셋이 띄어져 보이는 것은 정상입니다.</text>
+</svg>

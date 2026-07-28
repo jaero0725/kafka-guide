@@ -1,0 +1,295 @@
+{
+  "setId": "basics-ch08",
+  "title": "8장 확인 문제 — 스키마와 직렬화",
+  "exam": "BASICS",
+  "domain": "스키마와 직렬화",
+  "kafkaVersion": "4.3",
+  "questions": [
+    {
+      "id": "basics-ch08-001",
+      "exam": "BASICS",
+      "domain": "스키마와 직렬화",
+      "chapter": "ch08",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Schema Registry의 기본 호환성 모드와 그 모드가 보장하는 방향으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`FORWARD` — 새 스키마가 옛 스키마로 생산된 데이터를 읽을 수 있다." },
+        { "id": "B", "text": "`BACKWARD` — 새 스키마가 옛 스키마로 생산된 데이터를 읽을 수 있다." },
+        { "id": "C", "text": "`BACKWARD` — 옛 스키마가 새 스키마로 생산된 데이터를 읽을 수 있다." },
+        { "id": "D", "text": "`FULL_TRANSITIVE` — 모든 이전 버전과 양방향 호환을 강제한다." }
+      ],
+      "answer": ["B"],
+      "explanation": "Registry의 기본 호환성 모드는 `BACKWARD` 이고, 이 모드는 reader를 새 스키마, writer를 직전 버전으로 두고 검사합니다. 즉 보장되는 방향은 \"새 코드가 과거 데이터를 읽을 수 있다\"이며, 그 반대 방향은 보장되지 않습니다. 이름을 \"무엇에 대한 호환인가\"로 읽으면 헷갈리지 않습니다 — BACKWARD는 과거 데이터에 대한 호환, FORWARD는 미래 데이터에 대한 호환입니다. 이 방향을 뒤집어 이해하면 곧바로 배포 순서를 잘못 정하는 사고로 이어집니다.",
+      "distractorNotes": {
+        "A": "설명은 BACKWARD의 것입니다. `FORWARD` 는 옛 스키마가 새 데이터를 읽는 방향을 보장합니다.",
+        "C": "모드 이름은 맞지만 방향이 반대입니다. 이 서술은 `FORWARD` 에 해당합니다.",
+        "D": "`FULL_TRANSITIVE` 는 가장 엄격한 모드이며 기본값이 아닙니다."
+      },
+      "refs": [
+        { "title": "Confluent — Schema Evolution and Compatibility", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html" },
+        { "title": "Confluent — Schema Registry Fundamentals", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/index.html" }
+      ],
+      "tags": ["schema-compatibility", "schema-registry", "defaults"]
+    },
+    {
+      "id": "basics-ch08-002",
+      "exam": "BASICS",
+      "domain": "스키마와 직렬화",
+      "chapter": "ch08",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Confluent 직렬화기가 만든 메시지의 payload 앞에 붙는 바이트 구조로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "magic byte 1바이트(`0x00`) + schema id 4바이트, 합계 5바이트" },
+        { "id": "B", "text": "schema id 4바이트만 붙으며 magic byte는 없다" },
+        { "id": "C", "text": "magic byte 1바이트 + subject 이름 문자열 + version 4바이트" },
+        { "id": "D", "text": "스키마 본문 전체가 JSON으로 직렬화되어 앞에 붙는다" }
+      ],
+      "answer": ["A"],
+      "explanation": "wire format v0는 magic byte 1바이트와 big-endian 4바이트 정수 schema id, 그 뒤에 직렬화된 payload가 오는 구조입니다. 따라서 오버헤드는 정확히 5바이트이고, Protobuf만 schema id 뒤에 message index 배열이 추가됩니다. 메시지에 실리는 것은 스키마 본문도 version도 아닌 schema id뿐이므로, Registry가 응답하지 않으면 캐시에 없는 id를 만난 컨슈머는 역직렬화에 실패합니다. 이 5바이트 때문에 `kafka-console-consumer` 로 Avro 토픽을 그냥 읽으면 앞에 알 수 없는 바이트가 붙은 깨진 문자열이 보입니다.",
+      "distractorNotes": {
+        "B": "magic byte가 형식을 구분하므로 반드시 있습니다. 알 수 없는 값이면 \"Unknown magic byte!\" 로 실패합니다.",
+        "C": "subject 이름과 version은 메시지에 실리지 않습니다. 컨슈머는 id로 스키마를 조회합니다.",
+        "D": "스키마 본문은 Registry에 저장됩니다. 메시지마다 실어 보내지 않는 것이 이 구조의 목적입니다."
+      },
+      "refs": [
+        { "title": "Confluent — Wire Format", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format" },
+        { "title": "Confluent — Schema Registry Fundamentals", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/index.html" }
+      ],
+      "tags": ["schema-registry", "wire-format", "serialization"]
+    },
+    {
+      "id": "basics-ch08-003",
+      "exam": "BASICS",
+      "domain": "스키마와 직렬화",
+      "chapter": "ch08",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "subject, version, schema id의 관계로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "version은 Registry 전역 식별자이고 schema id는 subject 안의 순번이다." },
+        { "id": "B", "text": "세 값이 모두 메시지 헤더에 실려 컨슈머에게 전달된다." },
+        { "id": "C", "text": "subject는 호환성 규칙이 적용되는 단위, version은 subject 내 순번, schema id는 Registry 전역 식별자다." },
+        { "id": "D", "text": "subject를 삭제하고 다시 만들면 같은 스키마 본문도 새로운 schema id를 받는다." }
+      ],
+      "answer": ["C"],
+      "explanation": "subject는 스키마가 진화하는 이름 공간이며 호환성 검사가 적용되는 단위입니다. version은 그 subject 안에서 1부터 증가하는 순번이라 subject 밖에서는 의미가 없고, schema id는 스키마 본문에 부여되는 Registry 전역 식별자입니다. 그래서 같은 스키마 본문은 여러 subject에서 같은 id를 공유하고, 같은 id가 subject마다 다른 version일 수 있습니다. 메시지에 실리는 것은 id이므로 \"version을 지웠으니 그 데이터를 못 읽는다\"는 판단도 틀립니다.",
+      "distractorNotes": {
+        "A": "두 개념의 범위가 뒤바뀌었습니다. 전역인 쪽이 schema id입니다.",
+        "B": "메시지에는 magic byte와 schema id만 실립니다. subject 이름과 version은 실리지 않습니다.",
+        "D": "같은 스키마 본문은 같은 id를 다시 받습니다. id는 본문에 대한 식별자입니다."
+      },
+      "refs": [
+        { "title": "Confluent — Schema Registry Fundamentals", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/index.html" },
+        { "title": "Confluent — Schema Registry API Reference", "url": "https://docs.confluent.io/platform/current/schema-registry/develop/api.html" }
+      ],
+      "tags": ["schema-registry", "subject", "schema-id"]
+    },
+    {
+      "id": "basics-ch08-004",
+      "exam": "BASICS",
+      "domain": "스키마와 직렬화",
+      "chapter": "ch08",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "호환성 모드가 `BACKWARD` 인 subject에 새 스키마 버전을 적용한다. 배포 순서와 그 이유로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "프로듀서를 먼저 배포한다. 옛 컨슈머가 새 데이터를 읽을 수 있기 때문이다." },
+        { "id": "B", "text": "프로듀서를 먼저 배포한다. 새 스키마가 등록되어야 컨슈머가 조회할 수 있기 때문이다." },
+        { "id": "C", "text": "순서는 무관하다. 호환성 검사를 통과했다면 양방향이 보장되기 때문이다." },
+        { "id": "D", "text": "컨슈머를 먼저 배포한다. 새 스키마가 옛 데이터를 읽는 방향만 보장되기 때문이다." }
+      ],
+      "answer": ["D"],
+      "explanation": "`BACKWARD` 가 보장하는 것은 새 스키마(reader)가 옛 스키마로 생산된 데이터(writer)를 읽을 수 있다는 것뿐입니다. 반대 방향, 즉 옛 컨슈머가 새 데이터를 읽는 것은 보장되지 않으므로 새 스키마의 데이터가 토픽에 나타나기 전에 컨슈머를 모두 올려야 합니다. 컨슈머를 먼저 배포하면 전환 기간 동안 새 컨슈머가 옛 데이터를 읽게 되는데, 그것이 바로 이 모드가 보장하는 방향입니다. 순서를 뒤바꾸면 아직 옛 스키마를 쓰는 컨슈머가 새 데이터를 만나 역직렬화에 실패합니다.",
+      "distractorNotes": {
+        "A": "옛 컨슈머가 새 데이터를 읽는 방향을 보장하는 것은 `FORWARD` 입니다.",
+        "B": "등록 순서와 배포 순서는 다른 문제입니다. 배포 순서를 정하는 근거는 보장 방향입니다.",
+        "C": "양방향을 보장하는 것은 `FULL` 계열입니다. `BACKWARD` 는 한 방향만 봅니다."
+      },
+      "refs": [
+        { "title": "Confluent — Schema Evolution and Compatibility", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html" },
+        { "title": "Confluent — Schema Registry Fundamentals", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/index.html" }
+      ],
+      "tags": ["schema-compatibility", "deployment-order", "schema-registry"]
+    },
+    {
+      "id": "basics-ch08-005",
+      "exam": "BASICS",
+      "domain": "스키마와 직렬화",
+      "chapter": "ch08",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "Avro 스키마에 default가 없는 필수 필드를 추가하려고 한다. 모드별 판정으로 옳은 것은?",
+      "code": {
+        "lang": "json",
+        "caption": "v1 → v2 변경",
+        "body": "// v1\n{\"type\":\"record\",\"name\":\"Order\",\"fields\":[\n  {\"name\":\"id\",\"type\":\"string\"}\n]}\n\n// v2 — default 없는 필드 추가\n{\"type\":\"record\",\"name\":\"Order\",\"fields\":[\n  {\"name\":\"id\",\"type\":\"string\"},\n  {\"name\":\"channel\",\"type\":\"string\"}\n]}"
+      },
+      "choices": [
+        { "id": "A", "text": "`BACKWARD` 에서는 거부되고 `FORWARD` 에서는 허용된다." },
+        { "id": "B", "text": "`BACKWARD` 에서는 허용되고 `FORWARD` 에서는 거부된다." },
+        { "id": "C", "text": "두 모드 모두 허용되며 `FULL` 에서도 허용된다." },
+        { "id": "D", "text": "두 모드 모두 거부되므로 `NONE` 으로 바꾸는 것만이 방법이다." }
+      ],
+      "answer": ["A"],
+      "explanation": "`BACKWARD` 는 reader를 v2로 두므로, reader에만 있는 `channel` 필드에 default가 없어 `READER_FIELD_MISSING_DEFAULT_VALUE` 로 거부됩니다. `FORWARD` 는 reader가 v1이고 writer가 v2인데, writer에만 있는 필드는 reader가 무시하므로 통과합니다. `FULL` 은 양방향을 모두 요구하므로 거부되고, `NONE` 은 검사를 하지 않으니 통과하지만 런타임 실패를 그대로 떠안게 됩니다. 기본 모드인 `BACKWARD` 를 유지하려면 이 필드에 default를 주면 됩니다.",
+      "distractorNotes": {
+        "B": "방향이 반대입니다. 필드 추가가 막히는 쪽은 `BACKWARD` 입니다.",
+        "C": "`FULL` 은 양방향 검사이므로 한쪽에서 거부되면 전체가 거부됩니다.",
+        "D": "default를 추가하면 모든 모드에서 통과합니다. `NONE` 은 검사를 포기하는 선택입니다."
+      },
+      "refs": [
+        { "title": "Confluent — Schema Evolution and Compatibility", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html" },
+        { "title": "Confluent — Schema Registry Fundamentals", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/index.html" }
+      ],
+      "tags": ["schema-compatibility", "avro", "schema-evolution"]
+    },
+    {
+      "id": "basics-ch08-006",
+      "exam": "BASICS",
+      "domain": "스키마와 직렬화",
+      "chapter": "ch08",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "필드 이름을 바꾸면서 옛 필드와 새 필드 양쪽에 default를 넣었다. 호환성 검사는 통과했다. 실제로 무슨 일이 일어나는가?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "Registry가 이름 변경을 감지해 옛 이름의 값을 새 필드로 옮겨 준다." },
+        { "id": "B", "text": "reader가 자기 이름으로 필드를 찾지 못해 default를 채우므로 원래 값이 사라진다." },
+        { "id": "C", "text": "역직렬화 시 `NAME_MISMATCH` 예외가 발생해 처리가 중단된다." },
+        { "id": "D", "text": "두 필드가 모두 채워져 반환되므로 애플리케이션이 골라 쓰면 된다." }
+      ],
+      "answer": ["B"],
+      "explanation": "호환성 검사는 역직렬화가 예외 없이 끝나는지만 봅니다. 의미가 보존되는지는 검사 대상이 아니므로, 양쪽에 default가 있으면 검사는 통과하지만 reader는 자신의 필드 이름으로 writer 필드를 찾지 못해 default 값을 채워 넣고 원래 값은 유실됩니다. 그래서 이 행이 매트릭스에서 가장 위험합니다 — 모든 모드에서 통과하는데 데이터가 조용히 사라집니다. 안전한 방법은 새 필드를 default와 함께 추가하고 양쪽을 모두 채워 쓰다가 컨슈머 전환이 끝난 뒤 옛 필드를 지우는 단계적 진행이며, Avro `aliases` 를 쓸 수도 있지만 alias는 reader 쪽에서만 유효합니다.",
+      "distractorNotes": {
+        "A": "Registry는 이름 대응을 추론하지 않습니다. 필드 매칭은 이름 또는 reader의 alias로만 이루어집니다.",
+        "C": "`NAME_MISMATCH` 는 레코드 이름이 다를 때의 판정입니다. 필드 이름 변경은 삭제와 추가로 취급됩니다.",
+        "D": "writer가 보내지 않은 필드는 값이 없습니다. reader 쪽 default가 채워질 뿐입니다."
+      },
+      "refs": [
+        { "title": "Confluent — Schema Evolution and Compatibility", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html" },
+        { "title": "Confluent — Schema Registry Fundamentals", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/index.html" }
+      ],
+      "tags": ["schema-compatibility", "avro", "schema-evolution", "aliases"]
+    },
+    {
+      "id": "basics-ch08-007",
+      "exam": "BASICS",
+      "domain": "스키마와 직렬화",
+      "chapter": "ch08",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "`BACKWARD` 모드에서 허용되는 Avro 스키마 변경을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "필드를 삭제한다." },
+        { "id": "B", "text": "default가 있는 필드를 추가한다." },
+        { "id": "C", "text": "필드 타입을 `long` 에서 `int` 로 바꾼다." },
+        { "id": "D", "text": "레코드 이름을 alias 없이 바꾼다." },
+        { "id": "E", "text": "스키마 타입을 Avro에서 Protobuf로 바꾼다." }
+      ],
+      "answer": ["A", "B"],
+      "explanation": "`BACKWARD` 는 reader가 새 스키마이므로 writer에만 있는 잉여 필드는 무시됩니다 — 그래서 필드 삭제가 허용됩니다. 반대로 reader에만 있는 필드는 default가 있어야 통과하므로 default 있는 필드 추가도 허용됩니다. 타입은 승격 방향만 허용되는데 허용 경로는 `long ← int`, `float ← int|long`, `double ← int|long|float`, `bytes ↔ string` 이므로 `long` 을 `int` 로 좁히는 것은 거부됩니다. 레코드 이름 변경은 reader의 `aliases` 에 writer의 전체 이름이 있어야 통과하고, 스키마 타입 자체를 바꾸면 방향 검사 이전에 거부됩니다.",
+      "distractorNotes": {
+        "C": "승격 방향이 반대입니다. `int → long` 은 허용되지만 그 역방향은 거부됩니다.",
+        "D": "`NAME_MISMATCH` 로 거부됩니다. reader에 alias를 넣어야 통과합니다.",
+        "E": "Registry는 방향 검사 전에 스키마 타입 일치를 먼저 검사합니다."
+      },
+      "refs": [
+        { "title": "Confluent — Schema Evolution and Compatibility", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html" },
+        { "title": "Confluent — Schema Registry Fundamentals", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/index.html" }
+      ],
+      "tags": ["schema-compatibility", "avro", "schema-evolution"]
+    },
+    {
+      "id": "basics-ch08-008",
+      "exam": "BASICS",
+      "domain": "스키마와 직렬화",
+      "chapter": "ch08",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "Schema Registry를 쓰는 애플리케이션 운영에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`auto.register.schemas` 기본값은 `true` 이므로 프로덕션에서는 `false` 로 두고 배포 파이프라인에서 등록하는 편이 안전하다." },
+        { "id": "B", "text": "Registry가 응답하지 않으면 캐시에 없는 schema id를 만난 컨슈머는 역직렬화에 실패한다." },
+        { "id": "C", "text": "메시지에 스키마 본문이 함께 실리므로 Registry 없이도 역직렬화할 수 있다." },
+        { "id": "D", "text": "`specific.avro.reader` 기본값이 `true` 이므로 생성된 클래스로 바로 캐스팅할 수 있다." },
+        { "id": "E", "text": "`*_TRANSITIVE` 모드는 검사 방향을 반대로 뒤집는다." }
+      ],
+      "answer": ["A", "B"],
+      "explanation": "`auto.register.schemas` 는 기본으로 켜져 있어서 프로듀서가 실행되는 순간 새 스키마가 등록됩니다. 실수로 만든 스키마가 그대로 진화 이력에 남을 수 있으므로 프로덕션에서는 끄고 CI/CD에서 등록·검증하는 방식이 권장됩니다. 메시지에는 schema id만 실리므로 Registry는 가용성이 필요한 컴포넌트이며, 브로커가 정상이어도 Registry가 죽으면 직렬화·역직렬화가 실패할 수 있습니다. `*_TRANSITIVE` 는 대조 범위를 직전 버전에서 모든 이전 버전으로 넓히는 것이며 방향은 그대로입니다.",
+      "distractorNotes": {
+        "C": "실리는 것은 magic byte와 schema id 5바이트뿐입니다. 본문은 Registry에 있습니다.",
+        "D": "기본값은 `false` 여서 역직렬화 결과가 `GenericRecord` 입니다. 캐스팅하려면 `true` 로 바꿔야 합니다.",
+        "E": "방향은 바뀌지 않습니다. 바뀌는 것은 비교 범위입니다."
+      },
+      "refs": [
+        { "title": "Confluent — Schema Registry Configuration", "url": "https://docs.confluent.io/platform/current/installation/configuration/schema-registry-config.html" },
+        { "title": "Confluent — Serializers and Deserializers", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#subject-name-strategy" }
+      ],
+      "tags": ["schema-registry", "auto.register.schemas", "serialization"]
+    },
+    {
+      "id": "basics-ch08-009",
+      "exam": "BASICS",
+      "domain": "스키마와 직렬화",
+      "chapter": "ch08",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "각 호환성 모드를 그 모드가 요구하는 배포 순서 또는 검사 범위와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        { "id": "p1", "left": "`BACKWARD`", "right": "컨슈머를 먼저 배포한다" },
+        { "id": "p2", "left": "`FORWARD`", "right": "프로듀서를 먼저 배포한다" },
+        { "id": "p3", "left": "`FULL`", "right": "양방향 호환이므로 배포 순서 제약이 없다" },
+        { "id": "p4", "left": "`NONE`", "right": "호환성 검사를 아예 하지 않는다" },
+        { "id": "p5", "left": "`BACKWARD_TRANSITIVE`", "right": "새 스키마로 모든 이전 버전의 데이터를 읽을 수 있는지 대조한다" }
+      ],
+      "extraRights": ["새 스키마로 만든 데이터를 모든 이전 버전이 읽을 수 있는지 대조한다", "Avro에서 Protobuf로 형식을 바꿀 때만 적용된다", "스키마 등록 자체를 금지한다"],
+      "explanation": "배포 순서는 암기 사항이 아니라 각 모드가 보장하는 방향에서 논리적으로 따라옵니다. `BACKWARD` 는 새 코드가 옛 데이터를 읽는 방향만 보장하므로 컨슈머를 먼저 올려야 하고, `FORWARD` 는 옛 코드가 새 데이터를 읽는 방향을 보장하므로 프로듀서를 먼저 올릴 수 있습니다. `FULL` 은 양방향이므로 순서 제약이 없고 대신 허용되는 변경이 default 있는 필드의 추가·삭제로 좁아집니다. `BACKWARD_TRANSITIVE` 는 방향은 그대로 두고 대조 대상을 직전 버전에서 모든 이전 버전으로 넓힌 것이며, 미끼 설명은 `FORWARD_TRANSITIVE` 에 해당합니다.",
+      "distractorNotes": {
+        "p1": "\"과거 데이터에 대한 호환\"을 \"옛 코드가 읽는다\"로 착각하면 프로듀서를 먼저 올려 장애를 만듭니다.",
+        "p5": "`FORWARD_TRANSITIVE` 설명과 헷갈리기 쉽습니다. reader가 새 스키마인 쪽이 BACKWARD 계열입니다.",
+        "p3": "`FULL` 을 \"무엇이든 통과\"로 오해하기 쉽지만 실제로는 가장 제약이 큰 모드입니다."
+      },
+      "refs": [
+        { "title": "Confluent — Schema Evolution and Compatibility", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html" },
+        { "title": "Confluent — Schema Registry Fundamentals", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/index.html" }
+      ],
+      "tags": ["schema-compatibility", "deployment-order", "schema-registry"]
+    },
+    {
+      "id": "basics-ch08-010",
+      "exam": "BASICS",
+      "domain": "스키마와 직렬화",
+      "chapter": "ch08",
+      "difficulty": "hard",
+      "type": "ordering",
+      "question": "필드 이름을 바꾸면서 데이터 유실을 피하는 단계적 진화 절차를 순서대로 배열하세요.",
+      "code": null,
+      "items": [
+        { "id": "i3", "text": "컨슈머를 모두 새 필드를 읽는 버전으로 전환한다" },
+        { "id": "i1", "text": "새 이름의 필드를 default와 함께 스키마에 추가한다" },
+        { "id": "i4", "text": "옛 필드를 스키마에서 삭제한다" },
+        { "id": "i2", "text": "프로듀서가 옛 필드와 새 필드를 모두 채워 쓰도록 배포한다" }
+      ],
+      "answer": ["i1", "i2", "i3", "i4"],
+      "explanation": "이름 변경을 한 번에 하면 검사에서 거부되거나, 통과하더라도 reader가 default를 채워 원래 값이 사라집니다. 그래서 먼저 새 필드를 default와 함께 추가해 어느 모드에서도 안전한 변경으로 만들고, 프로듀서가 두 필드를 함께 채워 쓰는 전환 기간을 둡니다. 그 기간 동안 컨슈머를 새 필드를 읽는 버전으로 모두 전환하고, 옛 필드를 읽는 컨슈머가 남지 않은 뒤에 옛 필드를 지웁니다. 마지막 단계인 필드 삭제는 `BACKWARD` 에서 허용되는 변경이므로 기본 모드를 유지한 채로도 완료할 수 있습니다.",
+      "distractorNotes": {
+        "i2": "새 필드를 추가하기 전에 프로듀서를 바꾸는 것으로 착각하기 쉽습니다. 스키마 등록이 선행되어야 합니다.",
+        "i4": "옛 필드를 먼저 지우면 아직 옛 필드를 읽는 컨슈머가 값을 잃습니다. 반드시 마지막입니다."
+      },
+      "refs": [
+        { "title": "Confluent — Schema Evolution and Compatibility", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html" },
+        { "title": "Confluent — Schema Registry API Reference", "url": "https://docs.confluent.io/platform/current/schema-registry/develop/api.html" }
+      ],
+      "tags": ["schema-compatibility", "schema-evolution", "deployment-order"]
+    }
+  ]
+}
