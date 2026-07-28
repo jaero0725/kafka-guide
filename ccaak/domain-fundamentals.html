@@ -266,7 +266,7 @@ bin/kafka-groups.sh --bootstrap-server localhost:9092 --list</code></pre>
 
       <aside class="note note--version" data-label="버전 노트">
         <p>
-          메타데이터 조작에 쓰였던 <code>--zookeeper</code> 옵션은 <strong>4.0에서 제거</strong>되어 더 이상 존재하지 않습니다.
+          메타데이터 조작에 쓰였던 <code>--zookeeper</code> 옵션은 <strong>3.0에서 제거</strong>되었습니다(KIP-604). <code>kafka-configs.sh</code>만 3.9까지 deprecated 상태로 남았고 4.0에서 사라져, <strong>4.x에는 어떤 도구에도 존재하지 않습니다.</strong>
           모든 명령은 <code>--bootstrap-server</code>를 쓰고, 브로커에 접근할 수 없는 상황에서는
           <code>--bootstrap-controller</code>로 컨트롤러에 직접 붙습니다.
           이 두 옵션은 <strong>동시에 쓸 수 없습니다.</strong>

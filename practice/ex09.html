@@ -722,7 +722,7 @@ INFO o.a.k.c.p.internals.TransactionManager - [Producer clientId=clicks-aggregat
             <tr><th scope="row"><code>commit.interval.ms</code></th><td><code>30000</code><br>(EOS일 때 <strong><code>100</code></strong>)</td><td><code>5000</code> (ALO)</td><td>EOS를 켜면 기본값이 자동으로 100으로 바뀝니다</td></tr>
             <tr><th scope="row"><code>replication.factor</code></th><td><code>-1</code> (브로커 기본값)</td><td><code>3</code></td><td><strong>명시하지 않으면 브로커 <code>default.replication.factor</code>(기본 1)를 따라 상태가 단일 사본이 됩니다</strong></td></tr>
             <tr><th scope="row"><code>num.standby.replicas</code></th><td><code>0</code></td><td><code>1</code></td><td>장애 복구 시간을 줄입니다. 대가는 changelog 재생 트래픽과 디스크</td></tr>
-            <tr><th scope="row"><code>state.dir</code></th><td><code>/tmp/kafka-streams</code></td><td>동일</td><td><strong><code>/tmp</code>는 재부팅 시 사라집니다.</strong> 프로덕션에서는 영속 경로로 바꾸세요</td></tr>
+            <tr><th scope="row"><code>state.dir</code></th><td><code>${java.io.tmpdir}/kafka-streams</code><br><small>리눅스에서는 보통 <code>/tmp/kafka-streams</code></small></td><td>동일</td><td><strong><code>/tmp</code>는 재부팅 시 사라집니다.</strong> 프로덕션에서는 영속 경로로 바꾸세요</td></tr>
             <tr><th scope="row"><code>default.timestamp.extractor</code></th><td>레코드 타임스탬프 사용</td><td>커스텀</td><td>발행 지연이 큰 소스는 페이로드의 이벤트 시각을 써야 윈도우가 맞습니다</td></tr>
           </tbody>
         </table>
@@ -908,7 +908,7 @@ INFO o.a.k.c.p.internals.TransactionManager - [Producer clientId=clicks-aggregat
         <li><a href="https://kafka.apache.org/documentation/streams/architecture" rel="noopener noreferrer">Streams Architecture</a> — 태스크 수 = 입력 파티션 수, 스레드에 태스크가 배분되는 모델, 상태 저장소와 changelog</li>
         <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/manage-topics.html" rel="noopener noreferrer">Managing Streams Application Topics</a> — 내부 토픽 명명 규칙(<code>{application.id}-{store}-changelog</code>, <code>-repartition</code>)과 정책</li>
         <li><a href="https://kafka.apache.org/documentation/#kafka_streams_task_monitoring" rel="noopener noreferrer">Streams Task Metrics</a> — <code>dropped-records-total</code> / <code>dropped-records-rate</code></li>
-        <li><a href="https://kafka.apache.org/40/javadoc/org/apache/kafka/streams/errors/StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.html" rel="noopener noreferrer">StreamThreadExceptionResponse</a> — <code>REPLACE_THREAD</code> / <code>SHUTDOWN_CLIENT</code> / <code>SHUTDOWN_APPLICATION</code></li>
+        <li><a href="https://kafka.apache.org/43/javadoc/org/apache/kafka/streams/errors/StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.html" rel="noopener noreferrer">StreamThreadExceptionResponse</a> — <code>REPLACE_THREAD</code> / <code>SHUTDOWN_CLIENT</code> / <code>SHUTDOWN_APPLICATION</code></li>
         <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> — <code>default.replication.factor</code>=<code>1</code></li>
       </ul>
     </section>

@@ -15,12 +15,26 @@
       "question": "`producer.send(record, callback)` 에 넘긴 콜백에 대한 설명으로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`send()` 를 호출한 애플리케이션 스레드에서 실행되므로 안에서 블로킹해도 전송에는 영향이 없다." },
-        { "id": "B", "text": "Sender(I/O) 스레드에서 브로커 응답 또는 최종 실패 시점에 실행되므로, 안에서 블로킹하면 전송이 함께 지연된다." },
-        { "id": "C", "text": "`send()` 가 반환하는 즉시 호출되어 버퍼 적재 결과를 알려 준다." },
-        { "id": "D", "text": "예외가 발생한 경우 콜백의 `metadata` 인자가 `null` 로 전달된다." }
+        {
+          "id": "A",
+          "text": "`send()` 를 호출한 애플리케이션 스레드에서 실행되므로 안에서 블로킹해도 전송에는 영향이 없다."
+        },
+        {
+          "id": "B",
+          "text": "Sender(I/O) 스레드에서 브로커 응답 또는 최종 실패 시점에 실행되므로, 안에서 블로킹하면 전송이 함께 지연된다."
+        },
+        {
+          "id": "C",
+          "text": "`send()` 가 반환하는 즉시 호출되어 버퍼 적재 결과를 알려 준다."
+        },
+        {
+          "id": "D",
+          "text": "예외가 발생한 경우 콜백의 `metadata` 인자가 `null` 로 전달된다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "`Callback` 의 공식 javadoc은 이 콜백이 일반적으로 백그라운드 I/O 스레드에서 실행되므로 빨라야 한다고 명시합니다. 호출 시점은 레코드가 서버에서 acknowledge된 때, 또는 재시도 예산이 끝나 최종 실패가 확정된 때입니다. 실행 스레드가 Sender이므로 콜백 안에서 DB 호출이나 락 획득을 하면 그 프로듀서의 모든 파티션 전송이 함께 멈춥니다. 4.3부터는 잠재적 데드락을 막기 위해 콜백 안에서 `flush()` 를 호출하는 것 자체가 금지되었습니다.",
       "distractorNotes": {
         "A": "실행 스레드는 애플리케이션 스레드가 아니라 Sender 스레드입니다. 그래서 블로킹이 전송 파이프라인을 직접 막습니다.",
@@ -28,10 +42,20 @@
         "D": "예외가 있을 때도 `metadata` 는 `null` 이 아니라 모든 필드가 -1인 빈 메타데이터로 전달됩니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Javadoc: Callback", "url": "https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/Callback.html" },
-        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" }
+        {
+          "title": "Apache Kafka — Javadoc: Callback",
+          "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/Callback.html"
+        },
+        {
+          "title": "Apache Kafka — Upgrading Apache Kafka",
+          "url": "https://kafka.apache.org/documentation/#upgrade"
+        }
       ],
-      "tags": ["producer-callback", "sender-thread", "async"]
+      "tags": [
+        "producer-callback",
+        "sender-thread",
+        "async"
+      ]
     },
     {
       "id": "basics-ch04-002",
@@ -43,12 +67,26 @@
       "question": "Kafka 4.x 프로듀서에서 파티션별 배치 하나가 전송되는 조건으로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`batch.size`(기본 16384바이트)가 쌓이거나 `linger.ms`(기본 5ms)가 지나면, 먼저 충족된 쪽에서 전송된다." },
-        { "id": "B", "text": "`linger.ms` 기본값이 0이므로 배치가 만들어지지 않고 레코드마다 즉시 전송된다." },
-        { "id": "C", "text": "`batch.size` 와 `linger.ms` 조건이 모두 충족되어야 전송된다." },
-        { "id": "D", "text": "`buffer.memory` 가 가득 찰 때 모아 둔 배치를 한꺼번에 전송한다." }
+        {
+          "id": "A",
+          "text": "`batch.size`(기본 16384바이트)가 쌓이거나 `linger.ms`(기본 5ms)가 지나면, 먼저 충족된 쪽에서 전송된다."
+        },
+        {
+          "id": "B",
+          "text": "`linger.ms` 기본값이 0이므로 배치가 만들어지지 않고 레코드마다 즉시 전송된다."
+        },
+        {
+          "id": "C",
+          "text": "`batch.size` 와 `linger.ms` 조건이 모두 충족되어야 전송된다."
+        },
+        {
+          "id": "D",
+          "text": "`buffer.memory` 가 가득 찰 때 모아 둔 배치를 한꺼번에 전송한다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "공식 문서는 한 파티션에 `batch.size` 분량이 모이면 `linger.ms` 와 무관하게 즉시 보내고, 그보다 적으면 지정한 시간만큼 더 기다린다고 서술합니다. 즉 두 조건은 OR 관계이고 먼저 오는 쪽이 이깁니다. `linger.ms` 기본값은 Kafka 4.0에서 0에서 5로 바뀌었으므로 3.x 기준 자료를 그대로 믿으면 틀립니다. 지연에 극도로 민감한 경로라면 `linger.ms=0` 을 명시해야 예전 동작이 됩니다.",
       "distractorNotes": {
         "B": "4.x 기본값은 5입니다. 0은 3.x 이전의 기본값입니다.",
@@ -56,10 +94,21 @@
         "D": "`buffer.memory` 는 전송 대기 레코드를 담는 전체 버퍼 크기이며 전송 트리거가 아닙니다. 가득 차면 `send()` 가 블로킹됩니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Configs: linger.ms", "url": "https://kafka.apache.org/documentation/#producerconfigs_linger.ms" },
-        { "title": "Apache Kafka — Producer Configs: batch.size", "url": "https://kafka.apache.org/documentation/#producerconfigs_batch.size" }
+        {
+          "title": "Apache Kafka — Producer Configs: linger.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_linger.ms"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs: batch.size",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_batch.size"
+        }
       ],
-      "tags": ["linger.ms", "batch.size", "defaults", "batching"]
+      "tags": [
+        "linger.ms",
+        "batch.size",
+        "defaults",
+        "batching"
+      ]
     },
     {
       "id": "basics-ch04-003",
@@ -71,12 +120,26 @@
       "question": "키를 지정하지 않고 보낸 레코드의 파티션 분배 방식으로 옳은 것은? (Kafka 4.x 기본 파티셔너)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "레코드마다 파티션을 한 칸씩 옮겨 가는 완전한 라운드로빈으로 분배된다." },
-        { "id": "B", "text": "항상 파티션 0으로 보내고 컨슈머 쪽에서 다시 분배한다." },
-        { "id": "C", "text": "한 파티션에 `batch.size` 분량이 쌓일 때까지 그 파티션에 sticky하게 보내고 그다음 파티션으로 전환한다." },
-        { "id": "D", "text": "`partitioner.class` 에 `UniformStickyPartitioner` 를 지정해야 sticky 분배가 동작한다." }
+        {
+          "id": "A",
+          "text": "레코드마다 파티션을 한 칸씩 옮겨 가는 완전한 라운드로빈으로 분배된다."
+        },
+        {
+          "id": "B",
+          "text": "항상 파티션 0으로 보내고 컨슈머 쪽에서 다시 분배한다."
+        },
+        {
+          "id": "C",
+          "text": "한 파티션에 `batch.size` 분량이 쌓일 때까지 그 파티션에 sticky하게 보내고 그다음 파티션으로 전환한다."
+        },
+        {
+          "id": "D",
+          "text": "`partitioner.class` 에 `UniformStickyPartitioner` 를 지정해야 sticky 분배가 동작한다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "공식 문서는 파티션도 키도 없으면 그 파티션에 `batch.size` 이상이 생산될 때 바뀌는 sticky 파티션을 고른다고 서술합니다. 목적은 배치 효율입니다 — 레코드를 파티션마다 흩뿌리면 배치가 조각나 요청 수가 늘고 압축률도 떨어집니다. 장기적으로는 파티션들이 차례로 채워지므로 \"결과적으로 균등 분산\"이라는 서술은 맞지만, \"레코드 단위 라운드로빈\"은 틀립니다. 레코드 단위 순환이 필요하면 `RoundRobinPartitioner` 를 명시적으로 지정해야 합니다.",
       "distractorNotes": {
         "A": "레코드 단위 순환은 4.x 기본 동작이 아닙니다. 전환 단위는 레코드가 아니라 배치입니다.",
@@ -84,10 +147,20 @@
         "D": "`UniformStickyPartitioner` 는 4.0에서 제거되었습니다. 지정하면 프로듀서 생성이 실패하며, sticky 동작은 프로듀서 내부에 내장되어 있습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Configs: partitioner.class", "url": "https://kafka.apache.org/documentation/#producerconfigs_partitioner.class" },
-        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" }
+        {
+          "title": "Apache Kafka — Producer Configs: partitioner.class",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_partitioner.class"
+        },
+        {
+          "title": "Apache Kafka — Upgrading Apache Kafka",
+          "url": "https://kafka.apache.org/documentation/#upgrade"
+        }
       ],
-      "tags": ["partitioning", "sticky-partitioning", "partitioner.class"]
+      "tags": [
+        "partitioning",
+        "sticky-partitioning",
+        "partitioner.class"
+      ]
     },
     {
       "id": "basics-ch04-004",
@@ -103,23 +176,48 @@
         "body": "props.put(ProducerConfig.ACKS_CONFIG, \"1\");\nprops.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);\nprops.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 10);"
       },
       "choices": [
-        { "id": "A", "text": "정상 생성되며 멱등성만 조용히 비활성화된다." },
-        { "id": "B", "text": "정상 생성되고 in-flight 값이 허용 상한인 5로 자동 조정된다." },
-        { "id": "C", "text": "정상 생성되지만 첫 `send()` 호출에서 `ConfigException` 이 발생한다." },
-        { "id": "D", "text": "멱등성 조건 두 개를 위반하므로 생성 단계에서 `ConfigException` 이 발생한다." }
+        {
+          "id": "A",
+          "text": "정상 생성되며 멱등성만 조용히 비활성화된다."
+        },
+        {
+          "id": "B",
+          "text": "정상 생성되고 in-flight 값이 허용 상한인 5로 자동 조정된다."
+        },
+        {
+          "id": "C",
+          "text": "정상 생성되지만 첫 `send()` 호출에서 `ConfigException` 이 발생한다."
+        },
+        {
+          "id": "D",
+          "text": "멱등성 조건 두 개를 위반하므로 생성 단계에서 `ConfigException` 이 발생한다."
+        }
       ],
-      "answer": ["D"],
-      "explanation": "멱등성은 `acks=all`, `retries > 0`, `max.in.flight.requests.per.connection` 5 이하를 요구합니다. 이 설정은 `acks=1` 과 in-flight 10으로 두 조건을 동시에 위반합니다. 공식 문서가 규정하는 동작은 명시 여부로 갈립니다 — `enable.idempotence=true` 를 명시했는데 충돌하면 `ConfigException` 으로 생성이 실패하고, 명시하지 않고 기본값에 의존한 상태에서 충돌하면 멱등성이 예외 없이 조용히 꺼집니다. 후자가 실무에서 훨씬 위험하므로 멱등성에 의존한다면 항상 명시하는 편이 안전합니다.",
+      "answer": [
+        "D"
+      ],
+      "explanation": "멱등성은 `acks=all`, `retries > 0`, `max.in.flight.requests.per.connection` 5 이하를 요구합니다. 이 설정은 `acks=1` 과 in-flight 10으로 두 조건을 동시에 위반합니다. 공식 문서가 규정하는 동작은 명시 여부로 갈립니다 — `enable.idempotence=true` 를 명시했는데 충돌하면 `ConfigException` 으로 생성이 실패하고, 명시하지 않고 기본값에 의존한 상태에서 충돌하면 멱등성이 예외 없이 조용히 꺼집니다. 후자가 실무에서 훨씬 위험하므로 멱등성에 의존한다면 항상 명시하는 편이 안전합니다. 다만 세 충돌이 같은 규칙을 따르지는 않습니다 — `retries=0` 과 `acks≠all` 은 명시 여부로 갈리지만(미명시 시 조용히 비활성), **`max.in.flight.requests.per.connection > 5` 는 명시 여부와 무관하게 항상 `ConfigException`** 입니다. 소스에서 이 검사만 `userConfiguredIdempotence` 가드 밖에 있습니다. 이 비대칭이 출제 포인트입니다.",
       "distractorNotes": {
         "A": "조용한 비활성화는 `enable.idempotence` 를 명시하지 않았을 때의 동작입니다. 여기서는 명시했으므로 예외가 납니다.",
         "B": "Kafka는 충돌하는 값을 대신 낮춰 주지 않습니다. 설정 검증 단계에서 거부합니다.",
         "C": "검증은 프로듀서 생성 시점의 설정 파싱 단계에서 이루어집니다. `send()` 까지 미뤄지지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Configs: enable.idempotence", "url": "https://kafka.apache.org/documentation/#producerconfigs_enable.idempotence" },
-        { "title": "Apache Kafka — Producer Configs: max.in.flight.requests.per.connection", "url": "https://kafka.apache.org/documentation/#producerconfigs_max.in.flight.requests.per.connection" }
+        {
+          "title": "Apache Kafka — Producer Configs: enable.idempotence",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_enable.idempotence"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs: max.in.flight.requests.per.connection",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_max.in.flight.requests.per.connection"
+        }
       ],
-      "tags": ["idempotence-inflight", "enable.idempotence", "acks", "config-validation"]
+      "tags": [
+        "idempotence-inflight",
+        "enable.idempotence",
+        "acks",
+        "config-validation"
+      ]
     },
     {
       "id": "basics-ch04-005",
@@ -131,12 +229,26 @@
       "question": "값 직렬화가 실패하는 레코드가 섞여 들어온다. 이 실패를 애플리케이션에서 잡는 방법으로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "직렬화는 호출 스레드에서 수행되므로 `send()` 호출을 try-catch로 감싸야 잡을 수 있다." },
-        { "id": "B", "text": "콜백의 `exception` 인자로 `SerializationException` 이 전달되므로 콜백에서 처리한다." },
-        { "id": "C", "text": "`delivery.timeout.ms` 가 만료된 뒤 최종 실패로 콜백에 전달된다." },
-        { "id": "D", "text": "재시도 가능한 예외이므로 프로듀서가 자동 재시도하며 애플리케이션이 관여할 필요가 없다." }
+        {
+          "id": "A",
+          "text": "직렬화는 호출 스레드에서 수행되므로 `send()` 호출을 try-catch로 감싸야 잡을 수 있다."
+        },
+        {
+          "id": "B",
+          "text": "콜백의 `exception` 인자로 `SerializationException` 이 전달되므로 콜백에서 처리한다."
+        },
+        {
+          "id": "C",
+          "text": "`delivery.timeout.ms` 가 만료된 뒤 최종 실패로 콜백에 전달된다."
+        },
+        {
+          "id": "D",
+          "text": "재시도 가능한 예외이므로 프로듀서가 자동 재시도하며 애플리케이션이 관여할 필요가 없다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "전송 파이프라인에서 직렬화는 `send()` 안에서 호출 스레드가 처리하는 단계입니다. 그러므로 실패하면 비동기 경로를 타지 않고 `send()` 가 직접 예외를 던지며, `Callback` javadoc의 예외 목록에도 `SerializationException` 이 없습니다. 같은 이유로 메타데이터 미확보나 버퍼 소진으로 인한 `TimeoutException` 도 `send()` 가 동기적으로 던질 수 있습니다. 따라서 견고한 프로듀서 코드는 `send()` 를 try-catch로 감싸고, 그 안에서 콜백으로 비동기 실패를 따로 처리합니다.",
       "distractorNotes": {
         "B": "콜백은 브로커와 주고받는 과정에서 생긴 예외를 받습니다. 직렬화 실패는 브로커에 도달하기 전에 발생합니다.",
@@ -144,10 +256,20 @@
         "D": "데이터 자체의 문제이므로 몇 번을 다시 보내도 같은 결과입니다. 판정 기준인 `RetriableException` 을 상속하지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Javadoc: Callback", "url": "https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/Callback.html" },
-        { "title": "Apache Kafka — Javadoc: KafkaProducer", "url": "https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html" }
+        {
+          "title": "Apache Kafka — Javadoc: Callback",
+          "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/Callback.html"
+        },
+        {
+          "title": "Apache Kafka — Javadoc: KafkaProducer",
+          "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html"
+        }
       ],
-      "tags": ["retriable-errors", "serialization", "error-handling"]
+      "tags": [
+        "retriable-errors",
+        "serialization",
+        "error-handling"
+      ]
     },
     {
       "id": "basics-ch04-006",
@@ -159,12 +281,26 @@
       "question": "브로커 응답이 느려서 `request.timeout.ms` 를 30000에서 120000으로 올렸다. `delivery.timeout.ms` 는 기본값 그대로다. 결과로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "재시도가 `retries` 기본값만큼 늘어나 실패율이 크게 낮아진다." },
-        { "id": "B", "text": "첫 요청이 타임아웃되는 순간 배달 예산도 소진되어 재시도가 사실상 일어나지 못한다." },
-        { "id": "C", "text": "`delivery.timeout.ms` 가 자동으로 `request.timeout.ms` 이상으로 조정된다." },
-        { "id": "D", "text": "`linger.ms` 가 함께 늘어나 배치가 커지고 처리량이 올라간다." }
+        {
+          "id": "A",
+          "text": "재시도가 `retries` 기본값만큼 늘어나 실패율이 크게 낮아진다."
+        },
+        {
+          "id": "B",
+          "text": "첫 요청이 타임아웃되는 순간 배달 예산도 소진되어 재시도가 사실상 일어나지 못한다."
+        },
+        {
+          "id": "C",
+          "text": "`delivery.timeout.ms` 가 자동으로 `request.timeout.ms` 이상으로 조정된다."
+        },
+        {
+          "id": "D",
+          "text": "`linger.ms` 가 함께 늘어나 배치가 커지고 처리량이 올라간다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "`delivery.timeout.ms`(기본 120000ms)는 `send()` 반환 후 성공 또는 실패를 보고하기까지의 전체 상한이며, 배치 대기 시간과 요청 응답 대기, 재시도 시간이 모두 이 예산 안에 포함됩니다. `request.timeout.ms` 를 120000으로 올리면 첫 요청 하나가 예산을 전부 소진하므로 두 번째 시도가 들어갈 여지가 없습니다. 공식 문서도 `delivery.timeout.ms` 가 `request.timeout.ms` 와 `linger.ms` 의 합보다 크거나 같아야 한다고 명시합니다. 4.x에서 `retries` 기본값은 사실상 무한이므로 재시도의 실질적 상한은 횟수가 아니라 이 시간 예산입니다.",
       "distractorNotes": {
         "A": "`retries` 기본값은 이미 2147483647이므로 횟수가 병목이 아닙니다. 병목은 시간 예산입니다.",
@@ -172,10 +308,21 @@
         "D": "`linger.ms` 는 별개의 설정이며 요청 타임아웃과 연동되지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Configs: delivery.timeout.ms", "url": "https://kafka.apache.org/documentation/#producerconfigs_delivery.timeout.ms" },
-        { "title": "Apache Kafka — Producer Configs", "url": "https://kafka.apache.org/documentation/#producerconfigs" }
+        {
+          "title": "Apache Kafka — Producer Configs: delivery.timeout.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_delivery.timeout.ms"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs"
+        }
       ],
-      "tags": ["delivery.timeout.ms", "request.timeout.ms", "retriable-errors", "retries"]
+      "tags": [
+        "delivery.timeout.ms",
+        "request.timeout.ms",
+        "retriable-errors",
+        "retries"
+      ]
     },
     {
       "id": "basics-ch04-007",
@@ -187,13 +334,31 @@
       "question": "멱등성 프로듀서(`enable.idempotence=true`)가 보장하는 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "같은 프로듀서 인스턴스의 재시도 때문에 생기는 중복을 제거한다." },
-        { "id": "B", "text": "in-flight가 5 이하인 조건에서 단일 파티션 안의 쓰기 순서를 보장한다." },
-        { "id": "C", "text": "여러 파티션에 걸친 쓰기의 원자성을 보장한다." },
-        { "id": "D", "text": "애플리케이션이 같은 이벤트를 두 번 `send()` 한 경우의 중복도 막는다." },
-        { "id": "E", "text": "프로듀서를 재시작한 뒤 다시 보낸 레코드의 중복도 막는다." }
+        {
+          "id": "A",
+          "text": "같은 프로듀서 인스턴스의 재시도 때문에 생기는 중복을 제거한다."
+        },
+        {
+          "id": "B",
+          "text": "in-flight가 5 이하인 조건에서 단일 파티션 안의 쓰기 순서를 보장한다."
+        },
+        {
+          "id": "C",
+          "text": "여러 파티션에 걸친 쓰기의 원자성을 보장한다."
+        },
+        {
+          "id": "D",
+          "text": "애플리케이션이 같은 이벤트를 두 번 `send()` 한 경우의 중복도 막는다."
+        },
+        {
+          "id": "E",
+          "text": "프로듀서를 재시작한 뒤 다시 보낸 레코드의 중복도 막는다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "멱등성은 브로커가 부여한 PID와 파티션별 시퀀스 번호로 재시도된 배치를 판별해 폐기하는 장치입니다. 그래서 막을 수 있는 것은 \"같은 프로듀서 인스턴스가 같은 배치를 다시 보낸 경우\"로 한정되고, in-flight 5 이하 조건에서 단일 파티션 순서까지 함께 보장됩니다. 애플리케이션이 같은 내용을 두 번 `send()` 하면 서로 다른 시퀀스 번호가 붙으므로 정상 레코드 두 개가 됩니다. 프로듀서를 재시작하면 새 PID를 받으므로 재시작 경계를 넘는 중복 제거에는 `transactional.id` 가 필요하고, 여러 파티션의 원자성도 트랜잭션의 영역입니다.",
       "distractorNotes": {
         "C": "원자적 다중 파티션 쓰기는 트랜잭션 기능입니다. 멱등성만으로는 얻을 수 없습니다.",
@@ -201,10 +366,21 @@
         "E": "재시작하면 PID가 새로 발급되어 이전 시퀀스 상태와 연결되지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Configs: enable.idempotence", "url": "https://kafka.apache.org/documentation/#producerconfigs_enable.idempotence" },
-        { "title": "Apache Kafka — Design: Message Delivery Semantics", "url": "https://kafka.apache.org/documentation/#semantics" }
+        {
+          "title": "Apache Kafka — Producer Configs: enable.idempotence",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_enable.idempotence"
+        },
+        {
+          "title": "Apache Kafka — Design: Message Delivery Semantics",
+          "url": "https://kafka.apache.org/documentation/#semantics"
+        }
       ],
-      "tags": ["idempotence-inflight", "enable.idempotence", "ordering", "transactions"]
+      "tags": [
+        "idempotence-inflight",
+        "enable.idempotence",
+        "ordering",
+        "transactions"
+      ]
     },
     {
       "id": "basics-ch04-008",
@@ -216,13 +392,31 @@
       "question": "`send()` 의 동작과 프로듀서 종료에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "토픽 메타데이터를 아직 모르면 `send()` 가 `max.block.ms` 까지 블로킹될 수 있다." },
-        { "id": "B", "text": "`close()` 나 `flush()` 없이 프로세스를 종료하면 버퍼에 남은 배치가 전송되지 않는다." },
-        { "id": "C", "text": "커스텀 직렬화기 안에서의 블로킹도 `max.block.ms` 로 제한된다." },
-        { "id": "D", "text": "`send()` 가 반환하면 레코드가 브로커 로그에 기록된 것이 확정된다." },
-        { "id": "E", "text": "`send()` 직후 `Future.get()` 을 호출하면 배치가 커져 처리량이 올라간다." }
+        {
+          "id": "A",
+          "text": "토픽 메타데이터를 아직 모르면 `send()` 가 `max.block.ms` 까지 블로킹될 수 있다."
+        },
+        {
+          "id": "B",
+          "text": "`close()` 나 `flush()` 없이 프로세스를 종료하면 버퍼에 남은 배치가 전송되지 않는다."
+        },
+        {
+          "id": "C",
+          "text": "커스텀 직렬화기 안에서의 블로킹도 `max.block.ms` 로 제한된다."
+        },
+        {
+          "id": "D",
+          "text": "`send()` 가 반환하면 레코드가 브로커 로그에 기록된 것이 확정된다."
+        },
+        {
+          "id": "E",
+          "text": "`send()` 직후 `Future.get()` 을 호출하면 배치가 커져 처리량이 올라간다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "`send()` 는 두 곳에서 블로킹될 수 있습니다 — 토픽 메타데이터를 아직 모를 때와 `buffer.memory` 가 가득 찼을 때이며, 두 경우의 상한이 `max.block.ms`(기본 60000ms)입니다. 반환 시점의 레코드는 아직 프로듀서 힙의 버퍼에 있으므로, 그 상태로 프로세스가 죽거나 `close()` 없이 종료하면 브로커에 도달하지 않습니다. 특히 `linger.ms` 기본값이 5인 4.x에서는 마지막 몇 밀리초 분량이 항상 버퍼에 남아 있습니다. 공식 문서는 사용자가 제공한 직렬화기·파티셔너 내부의 블로킹은 `max.block.ms` 에 포함되지 않는다고 명시합니다.",
       "distractorNotes": {
         "C": "사용자 코드 내부의 블로킹은 이 타임아웃 밖입니다. 커스텀 직렬화기에서 외부 서버를 동기 호출하면 막을 수 없습니다.",
@@ -230,10 +424,21 @@
         "E": "매 레코드마다 왕복을 기다리므로 배치가 형성되지 못하고 처리량이 급락합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Configs: max.block.ms", "url": "https://kafka.apache.org/documentation/#producerconfigs_max.block.ms" },
-        { "title": "Apache Kafka — Javadoc: KafkaProducer", "url": "https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html" }
+        {
+          "title": "Apache Kafka — Producer Configs: max.block.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_max.block.ms"
+        },
+        {
+          "title": "Apache Kafka — Javadoc: KafkaProducer",
+          "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html"
+        }
       ],
-      "tags": ["max.block.ms", "producer-callback", "flush", "buffer.memory"]
+      "tags": [
+        "max.block.ms",
+        "producer-callback",
+        "flush",
+        "buffer.memory"
+      ]
     },
     {
       "id": "basics-ch04-009",
@@ -245,13 +450,37 @@
       "question": "각 프로듀서 예외를 그 예외가 발생하는 원인과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`RecordTooLargeException`", "right": "레코드가 `max.request.size` 또는 브로커 상한을 넘었다" },
-        { "id": "p2", "left": "`NotEnoughReplicasException`", "right": "ISR 크기가 `min.insync.replicas` 에 미달했다" },
-        { "id": "p3", "left": "`SerializationException`", "right": "직렬화기가 키·값을 바이트로 변환하지 못했다" },
-        { "id": "p4", "left": "`ProducerFencedException`", "right": "같은 `transactional.id` 의 새 인스턴스가 이 프로듀서를 밀어냈다" },
-        { "id": "p5", "left": "`NotLeaderOrFollowerException`", "right": "리더가 다른 브로커로 이동해 메타데이터가 낡았다" }
+        {
+          "id": "p1",
+          "left": "`RecordTooLargeException`",
+          "right": "레코드가 `max.request.size` 또는 브로커 상한을 넘었다"
+        },
+        {
+          "id": "p2",
+          "left": "`NotEnoughReplicasException`",
+          "right": "ISR 크기가 `min.insync.replicas` 에 미달했다"
+        },
+        {
+          "id": "p3",
+          "left": "`SerializationException`",
+          "right": "직렬화기가 키·값을 바이트로 변환하지 못했다"
+        },
+        {
+          "id": "p4",
+          "left": "`ProducerFencedException`",
+          "right": "같은 `transactional.id` 의 새 인스턴스가 이 프로듀서를 밀어냈다"
+        },
+        {
+          "id": "p5",
+          "left": "`NotLeaderOrFollowerException`",
+          "right": "리더가 다른 브로커로 이동해 메타데이터가 낡았다"
+        }
       ],
-      "extraRights": ["두 `poll()` 호출 간격이 `max.poll.interval.ms` 를 넘었다", "브로커가 이 프로듀서의 PID 상태를 잃어버렸다", "토픽 이름이 이름 규칙을 위반했다"],
+      "extraRights": [
+        "두 `poll()` 호출 간격이 `max.poll.interval.ms` 를 넘었다",
+        "브로커가 이 프로듀서의 PID 상태를 잃어버렸다",
+        "토픽 이름이 이름 규칙을 위반했다"
+      ],
       "explanation": "재시도 가능 여부의 판정 기준은 예외가 `RetriableException` 을 상속하는지입니다. 외우기 쉬운 구분선은 원인이 클러스터 상태인지 데이터·권한인지입니다 — 리더 이동과 ISR 부족은 시간이 지나면 해소되므로 retriable이고, 레코드 크기 초과와 직렬화 실패는 다시 보내도 같은 결과이므로 non-retriable입니다. `ProducerFencedException` 은 애플리케이션이 복구해야 하는 부류로, 같은 `transactional.id` 를 쓰는 새 인스턴스가 등장했음을 알립니다. 4.x에서 `NotLeaderForPartitionException` 은 제거되었고 `NotLeaderOrFollowerException` 이 대체 클래스입니다.",
       "distractorNotes": {
         "p1": "\"브로커가 PID 상태를 잃음\"은 `UnknownProducerIdException` 의 원인입니다. 크기 초과와 혼동하지 마세요.",
@@ -259,10 +488,20 @@
         "p3": "직렬화 실패는 콜백이 아니라 `send()` 가 동기적으로 던지는 예외입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Javadoc: Callback", "url": "https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/Callback.html" },
-        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" }
+        {
+          "title": "Apache Kafka — Javadoc: Callback",
+          "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/Callback.html"
+        },
+        {
+          "title": "Apache Kafka — Upgrading Apache Kafka",
+          "url": "https://kafka.apache.org/documentation/#upgrade"
+        }
       ],
-      "tags": ["retriable-errors", "exceptions", "error-handling"]
+      "tags": [
+        "retriable-errors",
+        "exceptions",
+        "error-handling"
+      ]
     },
     {
       "id": "basics-ch04-010",
@@ -274,23 +513,55 @@
       "question": "`producer.send()` 를 호출했을 때 레코드가 거치는 단계를 실행 순서대로 배열하세요.",
       "code": null,
       "items": [
-        { "id": "i4", "text": "Sender 스레드가 전송 가능한 배치를 모아 압축한 뒤 ProduceRequest로 보낸다" },
-        { "id": "i2", "text": "파티셔너가 목표 파티션을 결정한다" },
-        { "id": "i5", "text": "브로커 응답을 받아 `Future` 를 완료하고 콜백을 실행한다" },
-        { "id": "i1", "text": "키와 값을 직렬화기로 바이트 배열로 변환한다" },
-        { "id": "i3", "text": "RecordAccumulator의 파티션별 배치에 적재하고 `send()` 가 반환한다" }
+        {
+          "id": "i4",
+          "text": "Sender 스레드가 전송 가능한 배치를 모아 압축한 뒤 ProduceRequest로 보낸다"
+        },
+        {
+          "id": "i2",
+          "text": "파티셔너가 목표 파티션을 결정한다"
+        },
+        {
+          "id": "i5",
+          "text": "브로커 응답을 받아 `Future` 를 완료하고 콜백을 실행한다"
+        },
+        {
+          "id": "i1",
+          "text": "키와 값을 직렬화기로 바이트 배열로 변환한다"
+        },
+        {
+          "id": "i3",
+          "text": "RecordAccumulator의 파티션별 배치에 적재하고 `send()` 가 반환한다"
+        }
       ],
-      "answer": ["i1", "i2", "i3", "i4", "i5"],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4",
+        "i5"
+      ],
       "explanation": "앞의 세 단계는 `send()` 를 호출한 스레드가 처리합니다. 직렬화가 먼저인 이유는 파티션 결정이 직렬화된 키 바이트의 murmur2 해시를 쓰기 때문이고, 그래서 직렬화기를 바꾸면 같은 논리적 키가 다른 파티션으로 갈 수 있습니다. 버퍼에 적재되는 순간 `send()` 가 반환하므로 그 시점의 데이터는 아직 프로듀서 힙 안에 있습니다. 뒤의 두 단계는 Sender 스레드의 몫이며, 배치 드레인과 압축, 전송, 응답 처리, 콜백 실행이 모두 이 스레드에서 일어납니다.",
       "distractorNotes": {
         "i2": "파티션 결정을 직렬화보다 앞에 두는 것으로 착각하기 쉽습니다. 해시 대상이 직렬화된 바이트이므로 직렬화가 먼저입니다.",
         "i4": "이 단계가 `send()` 호출 안에서 일어난다고 오해하기 쉽지만, 별도의 Sender 스레드가 처리합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Javadoc: KafkaProducer", "url": "https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html" },
-        { "title": "Apache Kafka — Producer Configs: partitioner.class", "url": "https://kafka.apache.org/documentation/#producerconfigs_partitioner.class" }
+        {
+          "title": "Apache Kafka — Javadoc: KafkaProducer",
+          "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs: partitioner.class",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_partitioner.class"
+        }
       ],
-      "tags": ["producer-callback", "partitioning", "sender-thread", "pipeline"]
+      "tags": [
+        "producer-callback",
+        "partitioning",
+        "sender-thread",
+        "pipeline"
+      ]
     }
   ]
 }

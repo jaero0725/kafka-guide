@@ -64,7 +64,7 @@
   --dg-warn-soft: #fdf3e0;
   --dg-muted-soft: #eef0f3;
   --dg-text-muted: #5c6673;
-  --dg-grid: #d8dde4;
+  --dg-grid: #c9d0d9;
 
   /* ---- 기하 (테마 무관) ----------------------------------------------- */
   --dg-sw-1: 1.5;
@@ -144,7 +144,7 @@
   --dg-warn-soft: #fdf3e0;
   --dg-muted-soft: #eef0f3;
   --dg-text-muted: #5c6673;
-  --dg-grid: #d8dde4;
+  --dg-grid: #c9d0d9;
 }
 
 /* ==========================================================================
@@ -213,7 +213,9 @@ svg.kg-diagram .dg-node--danger  { fill: var(--dg-danger-soft); stroke: var(--dg
 svg.kg-diagram .dg-node--ok      { fill: var(--dg-ok-soft);     stroke: var(--dg-ok);     stroke-width: var(--dg-sw-2); }
 svg.kg-diagram .dg-node--warn    { fill: var(--dg-warn-soft);   stroke: var(--dg-warn);   stroke-width: var(--dg-sw-2); }
 svg.kg-diagram .dg-node--muted   { fill: var(--dg-muted-soft);  stroke: var(--dg-muted);  stroke-dasharray: var(--dg-dash-1); }
-svg.kg-diagram .dg-node--empty   { fill: none; stroke: var(--dg-muted); stroke-dasharray: var(--dg-dash-2); }
+svg.kg-diagram .dg-node--empty   { fill: none; stroke: var(--dg-muted); stroke-width: var(--dg-sw-1); stroke-dasharray: var(--dg-dash-2); }
+/* D-001·D-021 이 쓰는데 정의가 없어 일반 노드와 구분되지 않았습니다. */
+svg.kg-diagram .dg-node--done    { fill: var(--dg-ok-soft); stroke: var(--dg-ok); stroke-width: var(--dg-sw-1); }
 
 svg.kg-diagram .dg-edge {
   fill: none;

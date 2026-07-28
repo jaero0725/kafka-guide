@@ -69,8 +69,8 @@ p, li, td, th, dd, dt, figcaption, blockquote { overflow-wrap: break-word; }
   border-radius: var(--radius-2);
   text-decoration: none;
 }
-:root[data-theme="dark"] .skip-link,
-.skip-link { color: #fff; }
+/* 배경이 --c-accent 이므로 글자는 반전색을 써야 라이트·다크 양쪽에서 읽힙니다. */
+.skip-link { color: var(--c-text-inverse); }
 .skip-link:focus { top: var(--space-3); }
 
 /* ---------- 타이포 ------------------------------------------------------- */
@@ -148,7 +148,8 @@ kbd {
   top: 0;
   left: 0;
   right: 0;
-  z-index: var(--z-sticky);
+  /* 드로어 오버레이(--z-overlay)보다 위여야 햄버거 버튼을 다시 누를 수 있습니다. */
+  z-index: calc(var(--z-overlay) + 1);
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -322,7 +323,8 @@ kbd {
   min-width: 1.75em;
   font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
-  color: var(--c-text-muted);
+  /* 현재 페이지 행에서는 배경이 --c-accent-soft 라 muted 로는 4.5:1 에 못 미칩니다. */
+  color: var(--c-text-secondary);
 }
 .sidebar__read {
   flex: 0 0 auto;
@@ -508,6 +510,11 @@ section { margin-bottom: var(--space-6); }
 .note--warn > strong:first-child,
 .note--warn > p:first-child > strong:first-child,
 .note--warn[data-label]::before { color: var(--c-warn-text); }
+
+.note--info { border-color: var(--c-info-border); background: var(--c-info-bg); }
+.note--info > strong:first-child,
+.note--info > p:first-child > strong:first-child,
+.note--info[data-label]::before { color: var(--c-info-text); }
 
 .note--danger { border-color: var(--c-danger-border); background: var(--c-danger-bg); }
 .note--danger > strong:first-child,
@@ -852,6 +859,11 @@ select, input[type="text"], input[type="search"], input[type="number"] {
    허브·복습의 data-quiz-host 는 사용자가 "시작"을 눌러야 채워지므로(=의도된 상호작용)
    여기서 자리를 잡으면 빈 공간만 남습니다. 그래서 result 페이지로 한정합니다. */
 [data-quiz-page="result"] [data-quiz-host]:empty { min-height: 11rem; }
+/* 오답 노트·진단도 로드와 동시에 채워지므로 같은 처리를 합니다. */
+[data-quiz-page="review"] [data-quiz-host]:empty,
+[data-quiz-page="diagnostic"] [data-quiz-host]:empty { min-height: 11rem; }
+/* 홈 대시보드 — home.js 가 골격을 통째로 교체합니다. 실측 렌더 높이 기준. */
+#home-dashboard[aria-busy="true"] { min-height: 34rem; }
 @media (max-width: 420px) {
   [data-quiz-panel]:empty { min-height: 22rem; }
   [data-review-summary]:empty { min-height: 14rem; }
@@ -1140,7 +1152,8 @@ a.card:hover { border-color: var(--c-accent-border); background: var(--c-accent-
   background: var(--c-surface-sunken);
 }
 .quiz__actions-spacer { flex: 1 1 auto; }
-.quiz__hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* 배경이 --c-surface-sunken 이라 muted 로는 4.5:1 미달 */
+.quiz__hint { font-size: var(--fs-xs); color: var(--c-text-secondary); }
 
 .quiz__nav {
   display: flex;
@@ -1232,6 +1245,10 @@ a.card:hover { border-color: var(--c-accent-border); background: var(--c-accent-
 .kpi__link:hover .kpi__label { color: var(--c-link); }
 
 .dash__note { font-size: var(--fs-sm); color: var(--c-text-secondary); }
+
+/* JS 가 없으면 상단바가 주입되지 않으므로 예약해 둔 자리를 되돌립니다.
+   boot.js 가 <html> 에 .js 를 붙입니다(렌더 차단이라 깜빡임 없음). */
+html:not(.js) body { padding-top: 0; }
 
 /* 순수 CSS 바 차트 */
 .bar-chart { list-style: none; margin: var(--space-4) 0; padding: 0; display: grid; gap: var(--space-3); }

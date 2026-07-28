@@ -11,11 +11,16 @@
  */
 (function () {
   'use strict';
+  var root = document.documentElement;
+
+  /* JS 가 살아 있다는 표시 — main.css 가 html:not(.js) 로 상단바 자리 예약을 되돌립니다.
+     localStorage 가 막혀도 app.js 는 상단바를 주입하므로, 이 줄은 try 밖에 있어야 합니다. */
+  root.className = root.className ? root.className + ' js' : 'js';
+
   try {
     var raw = window.localStorage.getItem('kg:settings');
     var s = raw ? JSON.parse(raw) : null;
     if (!s || typeof s !== 'object') s = {};
-    var root = document.documentElement;
 
     /* auto 는 CSS 의 prefers-color-scheme 에 맡깁니다 — 속성을 건드리지 않습니다. */
     if (s.theme === 'light' || s.theme === 'dark') root.setAttribute('data-theme', s.theme);

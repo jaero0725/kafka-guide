@@ -1897,8 +1897,8 @@ props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 10);</code></pre
         <li><a href="https://kafka.apache.org/documentation/#semantics" rel="noopener noreferrer">Design — Message Delivery Semantics</a> — 멱등 전달, PID와 시퀀스 번호로 중복 제거</li>
         <li><a href="https://kafka.apache.org/documentation/#design_ha" rel="noopener noreferrer">Design — Availability and Durability Guarantees</a> — <code>acks=all</code>이 "현재 ISR 전원" 기준이라는 서술과 예시</li>
         <li><a href="https://kafka.apache.org/documentation/#messageformat" rel="noopener noreferrer">Implementation — Record Batch</a> — <code>producerId</code> · <code>producerEpoch</code> · <code>baseSequence</code>, 중복 판별에 첫·마지막 시퀀스를 쓰는 방식</li>
-        <li><a href="https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/Callback.html" rel="noopener noreferrer">Javadoc — <code>Callback</code></a> — 백그라운드 I/O 스레드 실행, 예외 시 metadata의 <code>-1</code>, retriable / non-retriable 예외 목록</li>
-        <li><a href="https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html" rel="noopener noreferrer">Javadoc — <code>KafkaProducer.send()</code></a> — 같은 파티션 콜백의 순서 보장</li>
+        <li><a href="https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/Callback.html" rel="noopener noreferrer">Javadoc — <code>Callback</code></a> — 백그라운드 I/O 스레드 실행, 예외 시 metadata의 <code>-1</code>, retriable / non-retriable 예외 목록</li>
+        <li><a href="https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html" rel="noopener noreferrer">Javadoc — <code>KafkaProducer.send()</code></a> — 같은 파티션 콜백의 순서 보장</li>
         <li><a href="https://kafka.apache.org/documentation/#upgrade" rel="noopener noreferrer">Upgrading Apache Kafka</a> — 4.0에서 <code>DefaultPartitioner</code> · <code>UniformStickyPartitioner</code> · <code>NotLeaderForPartitionException</code> 제거, <code>Partitioner.onNewBatch</code> 제거</li>
       </ul>
     </section>

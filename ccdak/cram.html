@@ -170,7 +170,7 @@
             <tr><th scope="row"><code>auto.commit.interval.ms</code></th><td>5000</td><td></td></tr>
             <tr><th scope="row"><code>auto.offset.reset</code></th><td><code>latest</code></td><td>커밋 없거나 범위 밖일 때만</td></tr>
             <tr><th scope="row"><code>isolation.level</code></th><td><code>read_uncommitted</code></td><td><strong>컨슈머 설정</strong></td></tr>
-            <tr><th scope="row"><code>partition.assignment.strategy</code></th><td><code>[Range,<br>CooperativeSticky]</code></td><td>classic에서만 유효</td></tr>
+            <tr><th scope="row"><code>partition.assignment.strategy</code></th><td><code>[RangeAssignor,<br>CooperativeStickyAssignor]</code></td><td>classic에서만 유효</td></tr>
             <tr><th scope="row"><code>fetch.min.bytes</code></th><td>1</td><td><code>fetch.max.wait.ms</code>=500</td></tr>
             <tr><th scope="row"><code>fetch.max.bytes</code></th><td>52428800</td><td>요청 전체</td></tr>
             <tr><th scope="row"><code>max.partition.fetch.bytes</code></th><td>1048576</td><td>파티션당</td></tr>
@@ -620,7 +620,7 @@
 2. kafka-storage.sh format -t {UUID} -c server.properties
 3. kafka-server-start.sh server.properties
 4. kafka-topics.sh --create --bootstrap-server localhost:9092
-   ※ --zookeeper 는 4.0에서 제거되어 존재하지 않는 옵션</code></pre>
+   ※ --zookeeper 는 3.0 제거(KIP-604). kafka-configs.sh 만 3.9까지 남았고 4.x 엔 없음</code></pre>
       </figure>
 
       <figure class="code">
@@ -709,7 +709,7 @@
             <tr><th scope="row">KRaft production-ready</th><td>3.3</td></tr>
             <tr><th scope="row">Tiered Storage EA</th><td>3.6</td></tr>
             <tr><th scope="row"><strong>마지막 ZooKeeper 지원 버전</strong></th><td><strong>3.9</strong></td></tr>
-            <tr><th scope="row"><strong>ZooKeeper 제거 · <code>--zookeeper</code> 제거 · Java 8 제거</strong></th><td><strong>4.0</strong></td></tr>
+            <tr><th scope="row"><strong>ZooKeeper 제거 · Java 8 제거</strong> (<code>--zookeeper</code> CLI 옵션은 <strong>3.0</strong>)</th><td><strong>4.0</strong></td></tr>
             <tr><th scope="row">KIP-848 GA (기본값은 여전히 <code>classic</code>)</th><td>4.0</td></tr>
             <tr><th scope="row"><strong><code>linger.ms</code> 0 → 5</strong></th><td><strong>4.0</strong></td></tr>
             <tr><th scope="row">Streams Rebalance Protocol Early Access</th><td>4.1</td></tr>

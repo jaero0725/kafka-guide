@@ -27,7 +27,10 @@ const argv = process.argv.slice(2);
 const QUIET = argv.includes('--quiet');
 const maxTextArg = argv.find((a) => a.startsWith('--max-text='));
 let MAX_TEXT = maxTextArg ? parseInt(maxTextArg.split('=')[1], 10) : 6000;
-const SIZE_LIMIT = 1.5 * 1024 * 1024;
+/* 검색 인덱스는 app.js 가 검색을 "열 때" 만 받습니다(부팅 시 아님).
+   1.5MB 상한 때문에 66페이지 중 60페이지가 6000자에서 잘려 나가
+   'group.instance.id' 같은 롱테일 용어가 검색되지 않았습니다. */
+const SIZE_LIMIT = 4 * 1024 * 1024;
 
 const log = (...a) => { if (!QUIET) console.log(...a); };
 const read = (p) => fs.readFileSync(p, 'utf8');
