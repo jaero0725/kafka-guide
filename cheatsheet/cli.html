@@ -570,6 +570,129 @@ bin/kafka-reassign-partitions.sh --bootstrap-server $BS \
     </section>
 
     <!-- ============================================================== -->
+    <section aria-labelledby="perf-tools">
+      <h2 id="perf-tools">성능 측정 도구 — 4.3에서 옵션이 바뀌었습니다</h2>
+
+      <aside class="note note--version" data-label="버전 노트 · KIP-1147">
+        <p>
+          perf 도구의 옵션 이름이 <strong>다른 CLI와 통일되도록 변경</strong>되었습니다.
+          구 옵션은 <strong>아직 동작하지만 deprecated이며 향후 제거 예정</strong>입니다
+          (실행 시 경고가 출력됩니다).
+          <strong>시중 자료와 블로그는 거의 전부 구 옵션으로 되어 있으니 주의하세요.</strong>
+        </p>
+      </aside>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-perf">
+          <caption>
+            perf 도구 옵션 변경 — 4.3 소스(<code>ProducerPerformance.java</code> ·
+            <code>ConsumerPerformance.java</code>)의 deprecation 경고 메시지로 확인
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">도구</th>
+              <th scope="col">구 옵션 (deprecated)</th>
+              <th scope="col">4.3 신규</th>
+              <th scope="col">용도</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>kafka-producer-perf-test.sh</code></th>
+              <td><code>--producer-props</code></td>
+              <td><strong><code>--command-property</code></strong></td>
+              <td>프로듀서 설정을 인라인으로. <strong>키마다 옵션을 반복</strong>합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka-producer-perf-test.sh</code></th>
+              <td><code>--producer.config</code></td>
+              <td><strong><code>--command-config</code></strong></td>
+              <td>프로퍼티 파일로 설정 전달</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka-consumer-perf-test.sh</code></th>
+              <td><code>--messages</code></td>
+              <td><strong><code>--num-records</code></strong></td>
+              <td>소비할 레코드 수. 프로듀서 쪽 이름과 통일되었습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka-consumer-perf-test.sh</code></th>
+              <td><code>--consumer.config</code></td>
+              <td><strong><code>--command-config</code></strong></td>
+              <td>프로퍼티 파일로 설정 전달</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka-share-consumer-perf-test.sh</code></th>
+              <td><code>--messages</code> · <code>--consumer.config</code></td>
+              <td><strong><code>--num-records</code></strong> · <strong><code>--command-config</code></strong></td>
+              <td>Share Consumer도 같은 규칙을 따릅니다 (4.2+)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-perf-new">
+          <caption>4.3에서 추가된 옵션</caption>
+          <thead>
+            <tr><th scope="col">옵션</th><th scope="col">도구</th><th scope="col">용도</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>--bootstrap-server</code></th><td>producer-perf-test</td><td>다른 CLI와 동일하게 브로커를 직접 지정합니다. 예전에는 <code>--producer-props bootstrap.servers=…</code>로 넘겨야 했습니다</td></tr>
+            <tr><th scope="row"><code>--reporting-interval</code></th><td>producer · consumer · share-consumer</td><td>중간 통계 출력 주기(ms)</td></tr>
+            <tr><th scope="row"><code>--include</code></th><td>consumer-perf-test</td><td>소비할 토픽을 정규식으로 지정</td></tr>
+            <tr><th scope="row"><code>--command-property</code></th><td>producer · consumer · share-consumer</td><td>인라인 설정. 세 도구 모두 지원합니다</td></tr>
+            <tr><th scope="row"><code>--warmup-records</code></th><td>producer-perf-test</td><td>통계에서 제외할 워밍업 레코드 수. <strong>JIT 워밍업 때문에 초반 수치가 왜곡되는 문제를 없앱니다</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="diff">
+        <div class="diff__before">
+          <p>구 옵션. 아직 동작하지만 실행 시 deprecation 경고가 출력되고 향후 제거됩니다.</p>
+          <figure class="code">
+            <figcaption>3.x 스타일</figcaption>
+            <pre><code class="lang-bash">bin/kafka-producer-perf-test.sh \
+  --topic perf-test \
+  --num-records 500000 --record-size 1024 --throughput -1 \
+  --producer-props bootstrap.servers=localhost:9092 \
+    compression.type=lz4 linger.ms=5
+
+bin/kafka-consumer-perf-test.sh \
+  --bootstrap-server localhost:9092 \
+  --topic perf-test --messages 500000</code></pre>
+          </figure>
+        </div>
+        <div class="diff__after">
+          <p>4.3 스타일. 다른 CLI와 옵션 이름이 통일됩니다.</p>
+          <figure class="code">
+            <figcaption>4.3 스타일</figcaption>
+            <pre><code class="lang-bash">bin/kafka-producer-perf-test.sh \
+  --bootstrap-server localhost:9092 \
+  --topic perf-test \
+  --num-records 500000 --record-size 1024 --throughput -1 \
+  --warmup-records 10000 \
+  --command-property compression.type=lz4 \
+  --command-property linger.ms=5
+
+bin/kafka-consumer-perf-test.sh \
+  --bootstrap-server localhost:9092 \
+  --topic perf-test --num-records 500000</code></pre>
+          </figure>
+        </div>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Observability">
+        <p>
+          설정을 <strong>여러 개</strong> 넘길 때 문법이 달라진 점에 주의하세요.
+          <code>--producer-props</code>는 <strong>공백으로 구분해 여러 키를 한 번에</strong> 받았지만,
+          <code>--command-property</code>는 <strong>키마다 옵션을 반복</strong>해야 합니다.
+          기계적으로 이름만 바꾸면 두 번째 키부터 무시됩니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
     <section aria-labelledby="share-groups">
       <h2 id="share-groups">Share Groups (4.2+)</h2>
 

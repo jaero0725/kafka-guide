@@ -1,0 +1,43 @@
+<svg viewBox="0 0 720 516" role="img" class="kg-diagram"
+     aria-labelledby="d102-title d102-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d102-title">SASL 메커니즘 4종 비교 — PLAIN · SCRAM · GSSAPI · OAUTHBEARER</title>
+  <desc id="d102-desc">SASL/PLAIN 은 브로커의 정적 JAAS 설정에 자격 증명을 두므로 사용자 변경 시 재시작이 필요하고 반드시 SASL_SSL 과 함께 써야 합니다. 메커니즘 이름 PLAIN 과 보안 프로토콜 PLAINTEXT 는 다른 개념입니다. SASL/SCRAM 은 SHA-256 과 SHA-512 를 지원하며 자격 증명을 클러스터 메타데이터 로그에 salt 와 iterations, StoredKey, ServerKey 형태로 저장하므로 kafka-configs.sh 로 브로커 재시작 없이 사용자를 추가하고 변경할 수 있습니다. SASL/GSSAPI 는 Kerberos 기반으로 KDC 와 keytab 을 쓰며 기존 엔터프라이즈 SSO 환경에 적합하지만 설정이 복잡하고 시간 동기에 민감합니다. SASL/OAUTHBEARER 는 외부 인증 서버가 발급한 토큰을 검증하는 방식이며 Kafka 4.0 부터 시스템 속성 org.apache.kafka.sasl.oauthbearer.allowed.urls 를 명시해야 하고 기본값이 빈 목록이라 업그레이드 후 엔드포인트가 막히는 사고가 자주 발생합니다. 어느 메커니즘이든 인증 결과는 하나의 principal 로 수렴하고 그 principal 로 ACL 을 검사합니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">SASL 메커니즘 4종 비교 — 자격 증명을 어디에 두는가</text>
+<rect class="dg-node dg-node--danger" x="8" y="34" width="704" height="88" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="55">SASL/PLAIN</text>
+<text class="dg-fs-sm dg-muted" x="698" y="55" text-anchor="end">가장 단순 · 평문 전송</text>
+<text class="dg-fs-sm" x="22" y="76">자격 증명: 브로커의 JAAS 설정(정적 파일). 사용자를 추가·변경하면 브로커 재시작이 필요합니다.</text>
+<text class="dg-fs-sm" x="22" y="94">반드시 SASL_SSL 과 함께 씁니다 — SASL_PLAINTEXT 로 쓰면 비밀번호가 평문으로 흐릅니다.</text>
+<text class="dg-fs-sm" x="22" y="112">이름이 PLAINTEXT 프로토콜과 비슷해 혼동하기 쉽습니다. PLAIN 은 메커니즘, PLAINTEXT 는 프로토콜입니다.</text>
+<rect class="dg-node dg-node--ok" x="8" y="134" width="704" height="106" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="155">SASL/SCRAM-SHA-256 · SCRAM-SHA-512</text>
+<text class="dg-fs-sm dg-muted" x="698" y="155" text-anchor="end">동적 사용자 관리</text>
+<text class="dg-fs-sm" x="22" y="176">자격 증명: 클러스터의 메타데이터 로그에 저장됩니다 (salt · iterations · StoredKey · ServerKey).</text>
+<text class="dg-fs-sm dg-mono" x="22" y="194">kafka-configs.sh --alter --entity-type users --entity-name alice</text>
+<text class="dg-fs-sm dg-mono" x="22" y="212">                  --add-config 'SCRAM-SHA-256=[password=...]'</text>
+<text class="dg-fs-sm" x="22" y="230">브로커 재시작 없이 사용자를 추가·변경할 수 있고, 비밀번호 원문이 저장되지 않습니다.</text>
+<rect class="dg-node" x="8" y="252" width="704" height="88" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="273">SASL/GSSAPI (Kerberos)</text>
+<text class="dg-fs-sm dg-muted" x="698" y="273" text-anchor="end">엔터프라이즈 SSO</text>
+<text class="dg-fs-sm" x="22" y="294">자격 증명: KDC 가 관리하고 서비스는 keytab 을 씁니다. 티켓 갱신 주기 관리가 필요합니다.</text>
+<text class="dg-fs-sm" x="22" y="312">기존 Active Directory·Kerberos 인프라가 있는 조직에 적합합니다.</text>
+<text class="dg-fs-sm" x="22" y="330">설정 항목이 많고 시간 동기(clock skew)에 민감합니다.</text>
+<rect class="dg-node dg-node--accent" x="8" y="352" width="704" height="106" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="373">SASL/OAUTHBEARER</text>
+<text class="dg-fs-sm dg-muted" x="698" y="373" text-anchor="end">외부 IdP 토큰</text>
+<text class="dg-fs-sm" x="22" y="394">자격 증명: 외부 인증 서버가 발급한 토큰(JWT). Kafka 는 검증만 합니다.</text>
+<text class="dg-fs-sm" x="22" y="412">4.0 부터 시스템 속성으로 허용 URL 을 명시해야 합니다:</text>
+<text class="dg-fs-sm dg-mono" x="22" y="430">org.apache.kafka.sasl.oauthbearer.allowed.urls</text>
+<text class="dg-fs-sm" x="22" y="448">기본값이 빈 목록이므로 4.0 으로 올린 뒤 토큰·jwks 엔드포인트가 막히는 사고가 자주 납니다.</text>
+<text class="dg-fs-sm dg-bold" x="8" y="484">어느 메커니즘이든 인증 결과는 principal 하나로 수렴하고, 그 principal 로 ACL 을 검사합니다.</text>
+<text class="dg-fs-sm" x="8" y="504">여러 메커니즘을 동시에 허용할 수 있습니다: sasl.enabled.mechanisms=SCRAM-SHA-512,OAUTHBEARER</text>
+</svg>

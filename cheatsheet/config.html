@@ -326,9 +326,11 @@
 # 압축률은 JMX 의 compression-rate-avg (압축후/압축전 비율) 로 확인합니다.
 for codec in none lz4 zstd gzip snappy; do
   echo "=== $codec"
-  bin/kafka-producer-perf-test.sh     --topic perf-test --num-records 500000 --record-size 1024 --throughput -1     --producer-props bootstrap.servers=localhost:9092       compression.type=$codec batch.size=16384 linger.ms=5
+  bin/kafka-producer-perf-test.sh     --bootstrap-server localhost:9092     --topic perf-test --num-records 500000 --record-size 1024 --throughput -1     --command-property compression.type=$codec     --command-property batch.size=16384     --command-property linger.ms=5
 done
 
+# 참고: --producer-props / --producer.config 는 deprecated 입니다.
+#       4.3 부터는 --command-property / --command-config 를 쓰세요.
 # 출력의 "records/sec", "avg latency", "99th" 를 비교하고
 # 브로커의 BytesInPerSec 감소량을 함께 보세요.
 # CPU 는 브로커·클라이언트 양쪽 모두 확인해야 합니다.</code></pre>

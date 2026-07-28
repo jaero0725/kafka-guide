@@ -1,0 +1,77 @@
+<svg viewBox="0 0 720 590" role="img" class="kg-diagram"
+     aria-labelledby="d106-title d106-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d106-title">Kafka 버전 타임라인 — 2.4 부터 4.3 까지의 주요 변경</title>
+  <desc id="d106-desc">가로 타임라인을 세 시대로 나눕니다. 2.4 부터 3.0 까지는 ZooKeeper 시대, 3.3 부터 3.9 까지는 KRaft 와 ZooKeeper 공존기, 4.0 부터는 KRaft 전용입니다. 2.4 에서 기본 파티셔너가 sticky 방식으로 바뀌고 증분 협력적 리밸런스와 CooperativeStickyAssignor 가 도입되었습니다. 2.8 에서 KRaft 가 early access 로 처음 등장했습니다. 3.0 에서 acks 기본값이 1 에서 all 로, enable.idempotence 가 true 로 바뀌고 session.timeout.ms 가 10초에서 45초로 늘었습니다. 3.3 에서 KRaft 가 신규 클러스터에 대해 production ready 가 되었고 4.x 로 올리려면 최소 이 버전을 거쳐야 합니다. 3.6 에서 Tiered Storage 가 early access 로 들어오고 3.9 에서 production ready 가 되었으며 3.9 가 ZooKeeper 에서 KRaft 로 가는 마지막 브리지 릴리스입니다. 4.0 에서 ZooKeeper 모드가 제거되고 KIP-848 이 GA 되었으며 linger.ms 기본값이 0 에서 5 로 바뀌고 Scala 2.12 와 Java 8 지원이 사라졌습니다. 4.2 에서 share groups 와 Streams 리밸런스 프로토콜이 production-ready 가 되었고 4.3 이 이 사이트의 기준 버전입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">Kafka 버전 타임라인 — 시험과 운영에 실제로 영향을 준 변경만</text>
+<rect class="dg-node dg-node--muted" x="8" y="40" width="234.7" height="22" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="125.3" y="56" text-anchor="middle">ZooKeeper 시대</text>
+<rect class="dg-node dg-node--warn" x="242.7" y="40" width="234.7" height="22" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="360" y="56" text-anchor="middle">KRaft·ZK 공존기</text>
+<rect class="dg-node dg-node--accent" x="477.3" y="40" width="234.7" height="22" rx="3"/>
+<text class="dg-fs-sm dg-bold" x="594.7" y="56" text-anchor="middle">KRaft 전용</text>
+<line class="dg-edge" x1="8" y1="78" x2="712" y2="78"/>
+<line class="dg-edge" x1="47.1" y1="72" x2="47.1" y2="84"/>
+<text class="dg-fs-md dg-bold dg-num" x="47.1" y="100" text-anchor="middle">2.4</text>
+<line class="dg-edge" x1="125.3" y1="72" x2="125.3" y2="84"/>
+<text class="dg-fs-md dg-bold dg-num" x="125.3" y="100" text-anchor="middle">2.8</text>
+<line class="dg-edge" x1="203.6" y1="72" x2="203.6" y2="84"/>
+<text class="dg-fs-md dg-bold dg-num" x="203.6" y="100" text-anchor="middle">3.0</text>
+<line class="dg-edge" x1="281.8" y1="72" x2="281.8" y2="84"/>
+<text class="dg-fs-md dg-bold dg-num" x="281.8" y="100" text-anchor="middle">3.3</text>
+<line class="dg-edge" x1="360" y1="72" x2="360" y2="84"/>
+<text class="dg-fs-md dg-bold dg-num" x="360" y="100" text-anchor="middle">3.6</text>
+<line class="dg-edge" x1="438.2" y1="72" x2="438.2" y2="84"/>
+<text class="dg-fs-md dg-bold dg-num" x="438.2" y="100" text-anchor="middle">3.9</text>
+<line class="dg-edge" x1="516.4" y1="72" x2="516.4" y2="84"/>
+<text class="dg-fs-md dg-bold dg-num" x="516.4" y="100" text-anchor="middle">4.0</text>
+<line class="dg-edge" x1="594.7" y1="72" x2="594.7" y2="84"/>
+<text class="dg-fs-md dg-bold dg-num" x="594.7" y="100" text-anchor="middle">4.2</text>
+<line class="dg-edge" x1="672.9" y1="72" x2="672.9" y2="84"/>
+<text class="dg-fs-md dg-bold dg-num" x="672.9" y="100" text-anchor="middle">4.3</text>
+<rect class="dg-node" x="8" y="118" width="704" height="42" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-num" x="22" y="136">2.4</text>
+<text class="dg-fs-sm" x="58" y="136">DefaultPartitioner 가 sticky 파티셔닝으로 바뀌고, 증분 협력적 리밸런스와</text>
+<text class="dg-fs-sm" x="58" y="154">CooperativeStickyAssignor 가 도입되었습니다 (KIP-429).</text>
+<rect class="dg-node" x="8" y="168" width="704" height="42" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-num" x="22" y="186">2.8</text>
+<text class="dg-fs-sm" x="58" y="186">KRaft 모드가 early access 로 처음 등장했습니다 (KIP-500). 운영에는 쓸 수 없는</text>
+<text class="dg-fs-sm" x="58" y="204">단계였습니다.</text>
+<rect class="dg-node dg-node--accent" x="8" y="218" width="704" height="42" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-num" x="22" y="236">3.0</text>
+<text class="dg-fs-sm" x="58" y="236">acks 기본값이 1 에서 all 로, enable.idempotence 가 true 로 바뀌었습니다.</text>
+<text class="dg-fs-sm" x="58" y="254">session.timeout.ms 는 10초에서 45초로 늘었습니다.</text>
+<rect class="dg-node" x="8" y="268" width="704" height="42" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-num" x="22" y="286">3.3</text>
+<text class="dg-fs-sm" x="58" y="286">KRaft 가 신규 클러스터에 대해 production ready 가 되었습니다 (3.3.1). 4.x 로</text>
+<text class="dg-fs-sm" x="58" y="304">올리려면 최소 이 버전을 거쳐야 합니다.</text>
+<rect class="dg-node" x="8" y="318" width="704" height="26" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-num" x="22" y="336">3.6</text>
+<text class="dg-fs-sm" x="58" y="336">Tiered Storage 가 early access 로 들어왔습니다 (KIP-405).</text>
+<rect class="dg-node" x="8" y="352" width="704" height="42" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-num" x="22" y="370">3.9</text>
+<text class="dg-fs-sm" x="58" y="370">Tiered Storage 가 production ready 가 되었고, 이 버전이</text>
+<text class="dg-fs-sm" x="58" y="388">ZooKeeper→KRaft 마이그레이션을 위한 마지막 브리지 릴리스입니다.</text>
+<rect class="dg-node dg-node--accent" x="8" y="402" width="704" height="42" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-num" x="22" y="420">4.0</text>
+<text class="dg-fs-sm" x="58" y="420">ZooKeeper 모드가 제거되고 KIP-848 컨슈머 리밸런스 프로토콜이 GA 되었습니다. linger.ms</text>
+<text class="dg-fs-sm" x="58" y="438">기본값이 0 에서 5 로 바뀌고 Scala 2.12 배포와 Java 8 지원이 사라졌습니다.</text>
+<rect class="dg-node" x="8" y="452" width="704" height="42" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-num" x="22" y="470">4.2</text>
+<text class="dg-fs-sm" x="58" y="470">Queues for Kafka(share groups, KIP-932)가 production-ready 가</text>
+<text class="dg-fs-sm" x="58" y="488">되었고 Streams 리밸런스 프로토콜(KIP-1071)도 production-ready 가 되었습니다.</text>
+<rect class="dg-node" x="8" y="502" width="704" height="26" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-num" x="22" y="520">4.3</text>
+<text class="dg-fs-sm" x="58" y="520">이 사이트의 기준 버전입니다. 업그레이드는 3.3.x 이상에서만 가능하고 KRaft 가 필수입니다.</text>
+<line class="dg-grid" x1="8" y1="538" x2="712" y2="538"/>
+<text class="dg-fs-sm dg-muted" x="8" y="560">각 항목은 Apache Kafka 4.3.1 · 3.9.0 공식 문서(site-docs)로 확인했습니다.</text>
+<text class="dg-fs-sm dg-muted" x="8" y="578">2.8 의 KRaft early access 만 웹 검색으로 확인했습니다.</text>
+</svg>

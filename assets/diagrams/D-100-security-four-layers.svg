@@ -1,0 +1,41 @@
+<svg viewBox="0 0 720 480" role="img" class="kg-diagram"
+     aria-labelledby="d100-title d100-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d100-title">보안 4계층 — 암호화 · 인증 · 인가 · 감사</title>
+  <desc id="d100-desc">보안을 네 계층으로 나눠 아래에서 위로 쌓는 그림입니다. 첫째 암호화는 security.protocol 을 SSL 또는 SASL_SSL 로 두고 keystore 와 truststore 를 설정해 전송 구간을 보호합니다. 리스너마다 다르게 걸 수 있으며 디스크에 저장된 데이터의 암호화는 Kafka 기능이 아니라 볼륨 암호화로 처리합니다. 둘째 인증은 SASL 의 PLAIN, SCRAM, GSSAPI, OAUTHBEARER 또는 mTLS 로 상대를 확인하고 그 결과로 principal 이 만들어집니다. 셋째 인가는 authorizer.class.name 에 StandardAuthorizer 를 지정하고 ACL 로 권한을 정하며, ACL 이 없는 리소스는 기본적으로 거부되고 super.users 만 접근할 수 있습니다. 넷째 감사는 authorizer 로그와 kafka-acls.sh --list 로 현황을 남기지만 Kafka 자체에 감사 저장소는 없습니다. 암호화 없이 SASL PLAIN 을 쓰면 비밀번호가 평문으로 흐르고 인증 없이 ACL 을 걸면 주체를 구분할 수 없다는 점이 계층 순서의 이유입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">보안 4계층 — 아래 계층이 없으면 위 계층은 의미가 없습니다</text>
+<rect class="dg-node dg-node--accent" x="8" y="34" width="704" height="88" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="55">1. 암호화 — 전송 구간을 감춥니다</text>
+<text class="dg-fs-sm dg-muted" x="698" y="55" text-anchor="end">security.protocol</text>
+<text class="dg-fs-sm dg-mono" x="22" y="76">security.protocol=SSL 또는 SASL_SSL   ssl.keystore.location   ssl.truststore.location</text>
+<text class="dg-fs-sm" x="22" y="94">리스너마다 다르게 걸 수 있습니다 (listener.security.protocol.map · D-101).</text>
+<text class="dg-fs-sm" x="22" y="112">디스크에 저장된 데이터의 암호화는 Kafka 기능이 아닙니다 — 볼륨·디스크 암호화로 처리합니다.</text>
+<rect class="dg-node dg-node--ok" x="8" y="134" width="704" height="88" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="155">2. 인증 — 상대가 누구인지 확인합니다</text>
+<text class="dg-fs-sm dg-muted" x="698" y="155" text-anchor="end">SASL 또는 mTLS</text>
+<text class="dg-fs-sm dg-mono" x="22" y="176">SASL: PLAIN · SCRAM-SHA-256/512 · GSSAPI · OAUTHBEARER   |   mTLS: ssl.client.auth</text>
+<text class="dg-fs-sm" x="22" y="194">인증이 끝나면 principal(예: User:app-billing)이 만들어지고 이것이 인가의 주체가 됩니다.</text>
+<text class="dg-fs-sm" x="22" y="212">인증 없이 인가만 켜면 모두가 같은 익명 주체가 되어 ACL 이 의미를 잃습니다.</text>
+<rect class="dg-node dg-node--warn" x="8" y="234" width="704" height="88" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="255">3. 인가 — 무엇을 할 수 있는지 정합니다</text>
+<text class="dg-fs-sm dg-muted" x="698" y="255" text-anchor="end">ACL</text>
+<text class="dg-fs-sm dg-mono" x="22" y="276">authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer</text>
+<text class="dg-fs-sm" x="22" y="294">ACL 이 하나도 없는 리소스는 기본적으로 거부되고 super.users 만 접근할 수 있습니다.</text>
+<text class="dg-fs-sm" x="22" y="312">allow.everyone.if.no.acl.found=true 로 바꾸면 ACL 없는 리소스가 전부 공개됩니다 (권장하지 않음).</text>
+<rect class="dg-node" x="8" y="334" width="704" height="88" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="355">4. 감사 — 무엇을 했는지 남깁니다</text>
+<text class="dg-fs-sm dg-muted" x="698" y="355" text-anchor="end">로그 · 메트릭</text>
+<text class="dg-fs-sm" x="22" y="376">authorizer 로그로 거부·허용 기록을 남기고, 실패 코드는 클라이언트 예외로도 드러납니다.</text>
+<text class="dg-fs-sm dg-mono" x="22" y="394">현황 확인: kafka-acls.sh --bootstrap-server :9092 --list</text>
+<text class="dg-fs-sm" x="22" y="412">Kafka 자체에는 별도 감사 로그 저장소가 없습니다 — 로그 수집 파이프라인으로 보냅니다.</text>
+<text class="dg-fs-sm dg-bold" x="8" y="448">순서가 중요합니다 — 암호화 없이 SASL/PLAIN 을 쓰면 비밀번호가 평문으로 흐릅니다.</text>
+<text class="dg-fs-sm dg-bold" x="8" y="468">인증 없이 인가만 켜면 구분할 주체가 없어 ACL 이 의미를 잃습니다.</text>
+</svg>

@@ -1,0 +1,92 @@
+<svg viewBox="0 0 720 538" role="img" class="kg-diagram"
+     aria-labelledby="d105-title d105-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d105-title">Share Groups 와 Consumer Groups 비교 — 파티션 배타 할당 대 레코드 단위 공유</title>
+  <desc id="d105-desc">왼쪽 컨슈머 그룹에서는 한 파티션이 한 컨슈머에게만 할당되므로 컨슈머가 파티션보다 많으면 남는 컨슈머는 유휴 상태가 되고, 오프셋 하나로 진행 위치를 표시하므로 파티션 안의 순서가 보장됩니다. 오른쪽 share group 에서는 같은 파티션이 여러 컨슈머에게 동시에 배정되고 컨슈머 수가 파티션 수를 넘어도 됩니다. 레코드마다 기본 30초의 획득 잠금을 걸고 개별로 확인하며 순서 보장 대신 건별 처리에 맞춘 모델입니다. ack 유형은 AcknowledgeType 의 네 가지로 ACCEPT 는 처리 성공, RELEASE 는 놓아 줘 다시 전달, REJECT 는 처리 불가 표시, RENEW 는 잠금 연장입니다. 아무것도 하지 않으면 잠금 만료와 함께 자동으로 다시 전달되고 전달 시도 횟수를 세므로 처리 불가 레코드를 자동으로 걸러 낼 수 있습니다. Queues for Kafka 는 4.1 에서 preview, 4.2 에서 production-ready 이며 상태는 내부 토픽 __share_group_state 에 저장됩니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">Share Groups vs Consumer Groups — 파티션 배타 할당인가, 레코드 단위 공유인가</text>
+<rect class="dg-panel" x="8" y="34" width="348" height="250" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="18" y="51">Consumer Group — 파티션을 나눠 갖습니다</text>
+<g>
+<rect class="dg-node" x="22" y="60" width="130" height="36" rx="4"/>
+<text class="dg-fs-sm" x="87" y="82.5" text-anchor="middle">파티션 0</text>
+</g>
+<g>
+<rect class="dg-node dg-node--ok" x="216" y="60" width="126" height="36" rx="4"/>
+<text class="dg-fs-sm" x="279" y="82.5" text-anchor="middle">컨슈머 A</text>
+</g>
+<path class="dg-edge dg-edge--ok" d="M154,78 L212,78" marker-end="url(#mk-arrow-ok)"/>
+<g>
+<rect class="dg-node" x="22" y="104" width="130" height="36" rx="4"/>
+<text class="dg-fs-sm" x="87" y="126.5" text-anchor="middle">파티션 1</text>
+</g>
+<g>
+<rect class="dg-node dg-node--ok" x="216" y="104" width="126" height="36" rx="4"/>
+<text class="dg-fs-sm" x="279" y="126.5" text-anchor="middle">컨슈머 B</text>
+</g>
+<path class="dg-edge dg-edge--ok" d="M154,122 L212,122" marker-end="url(#mk-arrow-ok)"/>
+<g>
+<rect class="dg-node" x="22" y="148" width="130" height="36" rx="4"/>
+<text class="dg-fs-sm" x="87" y="170.6" text-anchor="middle">파티션 2</text>
+</g>
+<g>
+<rect class="dg-node dg-node--ok" x="216" y="148" width="126" height="36" rx="4"/>
+<text class="dg-fs-sm" x="279" y="170.6" text-anchor="middle">컨슈머 C</text>
+</g>
+<path class="dg-edge dg-edge--ok" d="M154,166 L212,166" marker-end="url(#mk-arrow-ok)"/>
+<text class="dg-fs-sm" x="22" y="208">한 파티션은 한 컨슈머에게만 할당됩니다.</text>
+<text class="dg-fs-sm" x="22" y="226">컨슈머가 파티션보다 많으면 남는 쪽은 유휴입니다.</text>
+<text class="dg-fs-sm" x="22" y="244">오프셋 하나로 진행 위치를 표시하므로</text>
+<text class="dg-fs-sm" x="22" y="262">파티션 안 순서가 보장됩니다.</text>
+<rect class="dg-panel" x="364" y="34" width="348" height="250" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="374" y="51">Share Group — 같은 파티션을 함께 소비합니다</text>
+<g>
+<rect class="dg-node" x="378" y="60" width="130" height="36" rx="4"/>
+<text class="dg-fs-sm" x="443" y="82.5" text-anchor="middle">파티션 0</text>
+</g>
+<g>
+<rect class="dg-node dg-node--accent" x="572" y="60" width="126" height="36" rx="4"/>
+<text class="dg-fs-sm" x="635" y="82.5" text-anchor="middle">share 컨슈머 X</text>
+</g>
+<path class="dg-edge dg-edge--accent" d="M510,78 L568,78" marker-end="url(#mk-arrow-accent)"/>
+<g>
+<rect class="dg-node dg-node--accent" x="572" y="104" width="126" height="36" rx="4"/>
+<text class="dg-fs-sm" x="635" y="126.5" text-anchor="middle">share 컨슈머 Y</text>
+</g>
+<path class="dg-edge dg-edge--accent" d="M510,78 L568,122" marker-end="url(#mk-arrow-accent)"/>
+<g>
+<rect class="dg-node dg-node--accent" x="572" y="148" width="126" height="36" rx="4"/>
+<text class="dg-fs-sm" x="635" y="170.6" text-anchor="middle">share 컨슈머 Z</text>
+</g>
+<path class="dg-edge dg-edge--accent" d="M510,78 L568,166" marker-end="url(#mk-arrow-accent)"/>
+<g>
+<rect class="dg-node dg-node--warn" x="378" y="116" width="130" height="80" rx="4"/>
+<text class="dg-fs-sm" x="443" y="144.6" text-anchor="middle">레코드마다</text>
+<text class="dg-fs-sm" x="443" y="160.6" text-anchor="middle">획득 잠금</text>
+<text class="dg-fs-sm" x="443" y="176.6" text-anchor="middle">기본 30초</text>
+</g>
+<text class="dg-fs-sm" x="378" y="208">파티션이 여러 컨슈머에게 동시에 배정됩니다.</text>
+<text class="dg-fs-sm" x="378" y="226">컨슈머 수가 파티션 수를 넘어도 됩니다.</text>
+<text class="dg-fs-sm" x="378" y="244">레코드마다 획득 잠금을 걸고 개별 ack 합니다.</text>
+<text class="dg-fs-sm" x="378" y="262">순서 보장 대신 건별 처리에 맞춘 모델입니다.</text>
+<rect class="dg-node dg-node--accent" x="8" y="296" width="704" height="106" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="317">ack 유형 4종 (AcknowledgeType)</text>
+<text class="dg-fs-sm dg-muted" x="698" y="317" text-anchor="end">share 컨슈머만 사용</text>
+<text class="dg-fs-sm dg-mono" x="22" y="338">ACCEPT(1) 처리 성공        RELEASE(2) 놓아 줌 → 다시 전달</text>
+<text class="dg-fs-sm dg-mono" x="22" y="356">REJECT(3) 처리 불가로 표시  RENEW(4) 처리 중이라 잠금 연장</text>
+<text class="dg-fs-sm" x="22" y="374">아무것도 하지 않으면 잠금이 만료되면서 자동으로 다시 전달됩니다.</text>
+<text class="dg-fs-sm" x="22" y="392">전달 시도 횟수를 세므로 처리 불가 레코드를 자동으로 걸러 낼 수 있습니다 (share.delivery.count.limit 기본 5).</text>
+<rect class="dg-node" x="8" y="414" width="704" height="88" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="435">버전 · 내부 토픽</text>
+<text class="dg-fs-sm" x="22" y="456">Queues for Kafka(KIP-932)는 4.1 preview, 4.2 에서 production-ready 입니다.</text>
+<text class="dg-fs-sm" x="22" y="474">상태는 내부 토픽 __share_group_state 에 저장되고 기본 복제 계수는 3 입니다.</text>
+<text class="dg-fs-sm" x="22" y="492">브로커가 3대 미만이면 share.coordinator.state.topic.replication.factor 등을 1 로 낮춰야 합니다.</text>
+<text class="dg-fs-sm dg-bold" x="8" y="526">컨슈머 그룹을 대체하는 것이 아니라, 순서보다 건별 처리·경쟁 소비가 필요한 작업 큐형 워크로드용 선택지입니다.</text>
+</svg>
