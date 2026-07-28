@@ -26,13 +26,10 @@
       </p>
     </header>
 
-    <aside class="note note--warn" data-label="빌드 진행 중">
-      <p>
-        이 페이지는 <strong>Wave 0 기반 구축 단계의 스텁</strong>입니다.
-        진도 대시보드(전체 진도 %, 도메인별 숙련도, 다음 학습 추천)는 Wave 4에서 완성됩니다.
-        아래 목록에서 아직 만들어지지 않은 페이지는 사이드바에 회색으로 표시됩니다.
-      </p>
-    </aside>
+    <section id="home-dashboard" aria-labelledby="dashboard">
+      <h2 id="dashboard">내 진도</h2>
+      <p class="dash__note">진도를 불러오고 있습니다…</p>
+    </section>
 
     <section aria-labelledby="start-here">
       <h2 id="start-here">여기서 시작하세요</h2>
@@ -44,7 +41,7 @@
         </a></li>
         <li><a class="card" href="basics/ch01.html">
           <span class="card__title">2. 기본개념 1장</span>
-          <span class="card__desc">이벤트 스트리밍, 토픽·파티션·오프셋, 생태계, 그리고 <code>kafka_2.13-4.3.0</code> 표기 읽는 법.</span>
+          <span class="card__desc">이벤트 스트리밍, 토픽·파티션·오프셋, 생태계, 그리고 <code>kafka_2.13-4.3.1</code> 표기 읽는 법(2.13은 Scala 버전).</span>
           <span class="card__meta">기본개념</span>
         </a></li>
         <li><a class="card" href="quiz/index.html">
@@ -120,5 +117,6 @@
   <script src="assets/js/highlight.js" defer></script>
   <script src="assets/js/viz.js" defer></script>
   <script src="assets/js/app.js" defer></script>
+  <script src="assets/js/home.js" defer></script>
 </body>
 </html>

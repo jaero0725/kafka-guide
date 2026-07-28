@@ -20,12 +20,26 @@
         "body": "// enable.auto.commit=true, auto.commit.interval.ms=5000\nwhile (true) {\n    ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));\n    for (ConsumerRecord<String, String> r : records) {\n        sendToWarehouse(r);   // 건당 수백 ms, 여기서 프로세스가 죽었다\n    }\n}"
       },
       "choices": [
-        { "id": "A", "text": "직전 `poll()` 이 반환한 레코드가 이미 커밋되었을 수 있어, 처리되지 않은 레코드가 유실된다." },
-        { "id": "B", "text": "자동 커밋은 처리 완료를 확인하므로 미처리 레코드는 반드시 재전달된다." },
-        { "id": "C", "text": "커밋은 5초 타이머로만 일어나므로 5초 안에 죽었다면 커밋이 전혀 없다." },
-        { "id": "D", "text": "자동 커밋은 종료 시 `close()` 에서만 수행되므로 커밋된 것이 없다." }
+        {
+          "id": "A",
+          "text": "직전 `poll()` 이 반환한 레코드가 이미 커밋되었을 수 있어, 처리되지 않은 레코드가 유실된다."
+        },
+        {
+          "id": "B",
+          "text": "자동 커밋은 처리 완료를 확인하므로 미처리 레코드는 반드시 재전달된다."
+        },
+        {
+          "id": "C",
+          "text": "커밋은 5초 타이머로만 일어나므로 5초 안에 죽었다면 커밋이 전혀 없다."
+        },
+        {
+          "id": "D",
+          "text": "자동 커밋은 종료 시 `close()` 에서만 수행되므로 커밋된 것이 없다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "자동 커밋은 `poll()` 이 호출될 때 커밋 간격이 지났는지 확인하고 직전에 반환한 레코드까지의 위치를 커밋합니다. 즉 커밋 시점이 처리 완료와 무관하므로, 다음 `poll()` 이 커밋을 수행한 뒤 처리 중 죽으면 그 레코드는 재전달되지 않고 유실됩니다. 이것이 자동 커밋이 at-most-once에 가까워지는 이유이며, at-least-once가 필요하면 `enable.auto.commit=false` 로 두고 처리 후에 커밋해야 합니다. 트랜잭션을 쓸 때도 자동 커밋은 원자성을 깨므로 반드시 꺼야 합니다.",
       "distractorNotes": {
         "B": "자동 커밋은 애플리케이션의 처리 완료 여부를 알 수 없습니다. 시간 조건만 확인합니다.",
@@ -33,10 +47,20 @@
         "D": "`close()` 시점 커밋도 일어나지만 그 전에도 주기적으로 커밋됩니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Consumer Configs: enable.auto.commit", "url": "https://kafka.apache.org/documentation/#consumerconfigs_enable.auto.commit" },
-        { "title": "Kafka Docs — Message Delivery Semantics", "url": "https://kafka.apache.org/documentation/#semantics" }
+        {
+          "title": "Kafka Docs — Consumer Configs: enable.auto.commit",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_enable.auto.commit"
+        },
+        {
+          "title": "Kafka Docs — Message Delivery Semantics",
+          "url": "https://kafka.apache.org/documentation/#semantics"
+        }
       ],
-      "tags": ["offset-reset", "consumer", "delivery-semantics"]
+      "tags": [
+        "offset-reset",
+        "consumer",
+        "delivery-semantics"
+      ]
     },
     {
       "id": "ccdak-mock-2-002",
@@ -52,12 +76,26 @@
         "body": "Topic: payments  PartitionCount: 3  ReplicationFactor: 3  Configs: min.insync.replicas=2\n  Partition: 0  Leader: 1  Replicas: 1,2,3  Isr: 1,2\n  Partition: 1  Leader: 2  Replicas: 2,3,1  Isr: 2\n  Partition: 2  Leader: 3  Replicas: 3,1,2  Isr: 3,1"
       },
       "choices": [
-        { "id": "A", "text": "세 파티션 모두 리더가 있으므로 쓰기는 정상이고 복제만 지연된 상태다." },
-        { "id": "B", "text": "파티션 1만 쓰기가 거부되고 나머지 두 파티션은 정상적으로 쓰기가 성립한다." },
-        { "id": "C", "text": "복제 계수가 3이므로 ISR이 몇이든 `acks=all` 쓰기는 세 레플리카의 응답을 기다린다." },
-        { "id": "D", "text": "세 파티션 모두 under-replicated이므로 토픽 전체 쓰기가 중단된다." }
+        {
+          "id": "A",
+          "text": "세 파티션 모두 리더가 있으므로 쓰기는 정상이고 복제만 지연된 상태다."
+        },
+        {
+          "id": "B",
+          "text": "파티션 1만 쓰기가 거부되고 나머지 두 파티션은 정상적으로 쓰기가 성립한다."
+        },
+        {
+          "id": "C",
+          "text": "복제 계수가 3이므로 ISR이 몇이든 `acks=all` 쓰기는 세 레플리카의 응답을 기다린다."
+        },
+        {
+          "id": "D",
+          "text": "세 파티션 모두 under-replicated이므로 토픽 전체 쓰기가 중단된다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "`acks=all` 은 모든 레플리카가 아니라 현재 ISR 전원의 응답을 요구하고, 그 ISR 크기가 `min.insync.replicas` 미만이면 브로커가 쓰기를 거부합니다. 파티션 0과 2는 ISR이 2이므로 조건을 충족하지만 파티션 1은 ISR이 1이라 `NotEnoughReplicasException` 이 반환됩니다. 판정은 파티션 단위이므로 토픽 전체가 멈추는 것이 아니라 해당 파티션으로 향하는 키의 쓰기만 실패합니다. 세 파티션 모두 ISR이 복제 계수보다 작으므로 `UnderReplicatedPartitions` 는 3이지만, 쓰기 실패를 보여 주는 지표는 `UnderMinIsrPartitionCount` 이며 값은 1입니다.",
       "distractorNotes": {
         "A": "파티션 1은 최소 ISR 조건을 못 채워 쓰기가 이미 거부됩니다. 리더 존재만으로는 충분하지 않습니다.",
@@ -65,10 +103,20 @@
         "D": "판정 단위는 파티션입니다. ISR이 2 이상인 파티션은 정상 동작합니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Producer Configs: acks", "url": "https://kafka.apache.org/documentation/#producerconfigs_acks" },
-        { "title": "Kafka Docs — Topic Configs: min.insync.replicas", "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas" }
+        {
+          "title": "Kafka Docs — Producer Configs: acks",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_acks"
+        },
+        {
+          "title": "Kafka Docs — Topic Configs: min.insync.replicas",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas"
+        }
       ],
-      "tags": ["acks-isr", "isr", "monitoring"]
+      "tags": [
+        "acks-isr",
+        "isr",
+        "monitoring"
+      ]
     },
     {
       "id": "ccdak-mock-2-003",
@@ -80,12 +128,26 @@
       "question": "운영 중인 커넥터를 잠시 멈추려 한다. `PUT /connectors/{name}/pause` 와 `PUT /connectors/{name}/stop` 의 차이로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "둘은 같은 동작의 별칭이며 `stop` 이 더 새로운 이름이다." },
-        { "id": "B", "text": "`pause` 는 커넥터 설정을 삭제하고 `stop` 은 설정을 유지한다." },
-        { "id": "C", "text": "`pause` 는 오프셋을 초기화하고 `stop` 은 오프셋을 유지한다." },
-        { "id": "D", "text": "`pause` 는 태스크를 유지한 채 처리를 멈추고, `stop` 은 태스크를 해제해 오프셋 조작이 가능한 상태로 만든다." }
+        {
+          "id": "A",
+          "text": "둘은 같은 동작의 별칭이며 `stop` 이 더 새로운 이름이다."
+        },
+        {
+          "id": "B",
+          "text": "`pause` 는 커넥터 설정을 삭제하고 `stop` 은 설정을 유지한다."
+        },
+        {
+          "id": "C",
+          "text": "`pause` 는 오프셋을 초기화하고 `stop` 은 오프셋을 유지한다."
+        },
+        {
+          "id": "D",
+          "text": "`pause` 는 태스크를 유지한 채 처리를 멈추고, `stop` 은 태스크를 해제해 오프셋 조작이 가능한 상태로 만든다."
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "`pause` 는 커넥터와 태스크를 그대로 두고 처리만 일시 중단하므로 워커 자원을 계속 점유합니다. `stop` 은 태스크를 모두 해제해 커넥터를 STOPPED 상태로 두므로 자원을 반환하며, 오프셋 조회·변경·초기화 요청은 커넥터가 이 상태일 때만 허용됩니다. 두 상태 모두 커넥터 설정은 `config.storage.topic` 에 남아 있고 `PUT /connectors/{name}/resume` 로 되살릴 수 있습니다. 커넥터를 삭제해 다시 만드는 방식은 오프셋을 잃을 수 있어 대개 과잉 조치입니다.",
       "distractorNotes": {
         "A": "동작이 다릅니다. 태스크를 유지하는지 여부와 오프셋 조작 허용 여부가 갈립니다.",
@@ -93,9 +155,16 @@
         "C": "어느 쪽도 오프셋을 자동으로 초기화하지 않습니다. 초기화는 STOPPED 상태에서 별도 요청으로 합니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Connect REST API", "url": "https://kafka.apache.org/documentation/#connect_rest" }
+        {
+          "title": "Kafka Docs — Connect REST API",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
       ],
-      "tags": ["connect-rest", "connect", "connect-offsets"]
+      "tags": [
+        "connect-rest",
+        "connect",
+        "connect-offsets"
+      ]
     },
     {
       "id": "ccdak-mock-2-004",
@@ -111,12 +180,26 @@
         "body": "TOPIC     PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG     CONSUMER-ID  HOST  CLIENT-ID\nsettle    0          88120           130450          42330   -            -     -\nsettle    1          79004           121880          42876   -            -     -"
       },
       "choices": [
-        { "id": "A", "text": "그룹에 활성 멤버가 하나도 없다 — 소비가 멈춘 상태다." },
-        { "id": "B", "text": "컨슈머가 살아 있지만 커밋만 실패하고 있다." },
-        { "id": "C", "text": "그룹이 이미 삭제되어 커밋 오프셋도 사라졌다." },
-        { "id": "D", "text": "파티션 리더가 없어 조회가 실패한 상태다." }
+        {
+          "id": "A",
+          "text": "그룹에 활성 멤버가 하나도 없다 — 소비가 멈춘 상태다."
+        },
+        {
+          "id": "B",
+          "text": "컨슈머가 살아 있지만 커밋만 실패하고 있다."
+        },
+        {
+          "id": "C",
+          "text": "그룹이 이미 삭제되어 커밋 오프셋도 사라졌다."
+        },
+        {
+          "id": "D",
+          "text": "파티션 리더가 없어 조회가 실패한 상태다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "`CONSUMER-ID`·`HOST`·`CLIENT-ID` 열이 모두 `-` 로 표시되는 것은 그 파티션에 할당된 활성 멤버가 없다는 뜻입니다. 커밋 오프셋과 `LAG` 은 정상적으로 조회되므로 그룹 자체는 남아 있고, 애플리케이션이 내려갔거나 전원 이탈한 상태입니다. 이때 클라이언트 JMX 지표는 프로세스와 함께 사라지므로 `records-lag-max` 만 보고 있었다면 결측이 0으로 오해되어 장애를 놓칠 수 있습니다. 그래서 lag 감시는 클라이언트 지표와 그룹 상태 조회를 함께 두어야 합니다.",
       "distractorNotes": {
         "B": "멤버가 붙어 있으면 `CONSUMER-ID` 가 채워집니다. 지금은 멤버 자체가 없습니다.",
@@ -124,10 +207,20 @@
         "D": "리더가 없으면 `LOG-END-OFFSET` 조회가 실패하거나 오류가 표시됩니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Managing Consumer Groups", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" },
-        { "title": "Kafka Docs — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" }
+        {
+          "title": "Kafka Docs — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        },
+        {
+          "title": "Kafka Docs — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
       ],
-      "tags": ["consumer-lag", "monitoring", "kafka-consumer-groups"]
+      "tags": [
+        "consumer-lag",
+        "monitoring",
+        "kafka-consumer-groups"
+      ]
     },
     {
       "id": "ccdak-mock-2-005",
@@ -136,30 +229,54 @@
       "chapter": "ch06",
       "difficulty": "hard",
       "type": "single",
-      "question": "트랜잭션 프로듀서를 운영 중 아래 예외가 발생했다. 올바른 처리는?",
+      "question": "아래 코드를 실행하면 어떤 일이 일어나는가?",
       "code": {
         "lang": "java",
-        "caption": "트랜잭션 루프의 예외 처리",
-        "body": "try {\n    producer.beginTransaction();\n    producer.send(out);\n    producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());\n    producer.commitTransaction();\n} catch (ProducerFencedException e) {\n    // (1) 여기서 무엇을 해야 하는가\n}"
+        "caption": "트랜잭션 프로듀서 사용",
+        "body": "Properties p = new Properties();\np.put(\"transactional.id\", \"enrich-1\");\nKafkaProducer<String, String> producer = new KafkaProducer<>(p, ser, ser);\n\nproducer.beginTransaction();          // (1)\nproducer.send(record);\nproducer.commitTransaction();"
       },
-      "choices": [
-        { "id": "A", "text": "`producer.close()` 로 프로듀서를 닫고 이 인스턴스의 처리를 종료해야 한다 — 같은 `transactional.id` 의 새 세션이 이미 존재한다." },
-        { "id": "B", "text": "`abortTransaction()` 후 같은 프로듀서로 트랜잭션을 다시 열어 재처리하면 된다." },
-        { "id": "C", "text": "`initTransactions()` 를 다시 호출해 세션을 갱신한 뒤 계속 사용한다." },
-        { "id": "D", "text": "재시도 가능한 예외이므로 잠시 대기한 뒤 같은 트랜잭션을 다시 커밋한다." }
-      ],
-      "answer": ["A"],
-      "explanation": "`ProducerFencedException` 은 같은 `transactional.id` 로 더 새로운 프로듀서 세션이 `initTransactions()` 를 수행해 이 인스턴스가 차단되었음을 알리는 예외입니다. 차단된 프로듀서는 어떤 트랜잭션도 더 진행할 수 없으므로 복구가 아니라 종료가 정답이며, 애플리케이션은 프로듀서를 닫고 물러나야 합니다. 같은 성질의 치명적 예외로 `OutOfOrderSequenceException` 과 인가 관련 예외가 있으며, 모두 재시도 대상이 아닙니다. 반대로 `abortTransaction()` 으로 되돌린 뒤 재시도할 수 있는 것은 전송 중 발생한 일시적 오류입니다.",
+      "explanation": "`initTransactions()` 는 트랜잭션 코디네이터를 찾고 프로듀서 id와 에포크를 확보하며 같은 `transactional.id` 의 이전 세션을 차단하는 필수 초기화 단계입니다. 이 단계를 건너뛰면 트랜잭션 상태가 초기화되지 않은 상태이므로 `beginTransaction()` 이 잘못된 상태 전이로 판단해 예외를 던집니다. 초기화는 프로듀서 생애에 한 번만 수행하고, 그 뒤 각 처리 단위마다 열고 커밋하는 순서를 반복합니다. `transactional.id` 설정만으로 자동 초기화되지 않는다는 점이 이 주제의 대표적인 함정입니다.",
       "distractorNotes": {
-        "B": "차단된 프로듀서는 `abortTransaction()` 조차 정상 수행할 수 없습니다. 이 인스턴스는 더 쓸 수 없습니다.",
-        "C": "같은 id의 새 세션이 이미 소유권을 가져갔으므로 재초기화로 되찾는 흐름은 정상 운영 방식이 아닙니다.",
-        "D": "재시도 가능한 예외가 아닙니다. 기다려도 상태가 되돌아오지 않습니다."
+        "A": "설정만으로 초기화가 대체되지 않습니다. 명시적 호출이 필요합니다.",
+        "B": "이 예외는 같은 id의 더 새로운 세션이 등장했을 때 발생합니다.",
+        "D": "트랜잭션 프로듀서로 구성된 뒤에는 일반 전송으로 조용히 처리되지 않습니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Producer API", "url": "https://kafka.apache.org/documentation/#producerapi" },
-        { "title": "Kafka Docs — Transaction Protocol", "url": "https://kafka.apache.org/documentation/#transaction_protocol" }
+        {
+          "title": "Kafka Docs — Producer API",
+          "url": "https://kafka.apache.org/documentation/#producerapi"
+        },
+        {
+          "title": "Kafka Docs — Transaction Protocol",
+          "url": "https://kafka.apache.org/documentation/#transaction_protocol"
+        }
       ],
-      "tags": ["transactions", "retriable-errors", "eos"]
+      "tags": [
+        "transactions",
+        "eos",
+        "producer"
+      ],
+      "choices": [
+        {
+          "id": "A",
+          "text": "정상 동작한다 — `transactional.id` 가 있으면 첫 `beginTransaction()` 이 초기화를 대신한다."
+        },
+        {
+          "id": "B",
+          "text": "`commitTransaction()` 에서 `ProducerFencedException` 이 발생한다."
+        },
+        {
+          "id": "C",
+          "text": "(1)에서 `IllegalStateException` 이 발생한다 — `initTransactions()` 를 먼저 호출해야 한다."
+        },
+        {
+          "id": "D",
+          "text": "`send()` 가 트랜잭션 없이 일반 전송으로 처리된다."
+        }
+      ],
+      "answer": [
+        "C"
+      ]
     },
     {
       "id": "ccdak-mock-2-006",
@@ -171,12 +288,26 @@
       "question": "국가 코드와 환율처럼 작고 자주 변하지 않는 참조 데이터를 조인에 쓰려 한다. `GlobalKTable` 이 적절한 이유로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "파티션별로 인스턴스에 분산되므로 메모리 사용이 가장 적다." },
-        { "id": "B", "text": "모든 인스턴스가 전체 사본을 갖기 때문에 co-partitioning 없이 조인할 수 있다." },
-        { "id": "C", "text": "조인 시 윈도우를 지정할 수 있어 시간 범위를 좁힐 수 있다." },
-        { "id": "D", "text": "입력 토픽의 파티션 수를 자동으로 조정해 양쪽을 맞춰 준다." }
+        {
+          "id": "A",
+          "text": "파티션별로 인스턴스에 분산되므로 메모리 사용이 가장 적다."
+        },
+        {
+          "id": "B",
+          "text": "모든 인스턴스가 전체 사본을 갖기 때문에 co-partitioning 없이 조인할 수 있다."
+        },
+        {
+          "id": "C",
+          "text": "조인 시 윈도우를 지정할 수 있어 시간 범위를 좁힐 수 있다."
+        },
+        {
+          "id": "D",
+          "text": "입력 토픽의 파티션 수를 자동으로 조정해 양쪽을 맞춰 준다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "`GlobalKTable` 은 각 애플리케이션 인스턴스가 해당 토픽의 모든 파티션을 읽어 전체 사본을 유지합니다. 그래서 조인 시 같은 키가 같은 태스크로 모일 필요가 없어 co-partitioning 요건이 면제되고, `KeyValueMapper` 로 키가 아닌 값을 기준으로도 조인할 수 있습니다. 대신 모든 인스턴스가 전체를 적재하므로 데이터가 크면 메모리와 시작 시간이 급격히 늘어나 오히려 부적절합니다. 그래서 작고 변경이 드문 마스터 데이터에 한해 쓰는 것이 원칙입니다.",
       "distractorNotes": {
         "A": "분산 보관은 `KTable` 의 성질입니다. `GlobalKTable` 은 전체 복제이므로 메모리를 더 씁니다.",
@@ -184,9 +315,16 @@
         "D": "파티션 수를 자동 조정하는 기능은 없습니다. 필요하면 `repartition()` 으로 직접 맞춥니다."
       },
       "refs": [
-        { "title": "Kafka Streams — DSL: GlobalKTable", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#globalktable" }
+        {
+          "title": "Kafka Streams — DSL: GlobalKTable",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#globalktable"
+        }
       ],
-      "tags": ["kstream-vs-ktable", "globalktable", "stream-join"]
+      "tags": [
+        "kstream-vs-ktable",
+        "globalktable",
+        "stream-join"
+      ]
     },
     {
       "id": "ccdak-mock-2-007",
@@ -198,10 +336,26 @@
       "question": "각 스키마 변경 유형을 그것이 통과하는 호환성 모드와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "default가 있는 필드 추가", "right": "BACKWARD · FORWARD · FULL 모두 통과" },
-        { "id": "p2", "left": "default가 없는 필드 추가", "right": "FORWARD에서는 통과하지만 BACKWARD에서는 거부" },
-        { "id": "p3", "left": "default가 없는 필드 삭제", "right": "BACKWARD에서는 통과하지만 FORWARD에서는 거부" },
-        { "id": "p4", "left": "필드 이름 변경 (alias 없음)", "right": "어느 모드에서도 안전하지 않아 alias가 필요" }
+        {
+          "id": "p1",
+          "left": "default가 있는 필드 추가",
+          "right": "BACKWARD · FORWARD · FULL 모두 통과"
+        },
+        {
+          "id": "p2",
+          "left": "default가 없는 필드 추가",
+          "right": "FORWARD에서는 통과하지만 BACKWARD에서는 거부"
+        },
+        {
+          "id": "p3",
+          "left": "default가 없는 필드 삭제",
+          "right": "BACKWARD에서는 통과하지만 FORWARD에서는 거부"
+        },
+        {
+          "id": "p4",
+          "left": "필드 이름 변경 (alias 없음)",
+          "right": "어느 모드에서도 안전하지 않아 alias가 필요"
+        }
       ],
       "extraRights": [
         "NONE에서만 통과하고 다른 모드에서는 모두 거부",
@@ -213,9 +367,16 @@
         "p3": "삭제에 관대한 쪽은 `BACKWARD` 입니다. 두 항목을 세트로 기억하면 헷갈리지 않습니다."
       },
       "refs": [
-        { "title": "Confluent Docs — Schema Evolution and Compatibility", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html" }
+        {
+          "title": "Confluent Docs — Schema Evolution and Compatibility",
+          "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html"
+        }
       ],
-      "tags": ["schema-compatibility", "avro", "schema-registry"]
+      "tags": [
+        "schema-compatibility",
+        "avro",
+        "schema-registry"
+      ]
     },
     {
       "id": "ccdak-mock-2-008",
@@ -224,30 +385,54 @@
       "chapter": "ch04",
       "difficulty": "medium",
       "type": "single",
-      "question": "아래 설정으로 프로듀서를 기동했다. 실제로 적용되는 동작은?",
+      "question": "아래처럼 토픽과 프로듀서의 압축 설정이 다를 때 브로커에 저장되는 형태로 옳은 것은?",
       "code": {
         "lang": "properties",
-        "caption": "producer.properties (enable.idempotence 은 명시하지 않음)",
-        "body": "acks=1\nretries=2147483647\nmax.in.flight.requests.per.connection=5\n# enable.idempotence 는 설정하지 않았다 (4.x 기본값 true)"
+        "caption": "설정",
+        "body": "# 프로듀서\ncompression.type=zstd\n\n# 토픽 events\ncompression.type=producer   # 토픽 기본값"
       },
-      "choices": [
-        { "id": "A", "text": "`acks` 가 자동으로 `all` 로 올라가고 멱등성이 유지된다." },
-        { "id": "B", "text": "멱등성이 조용히 비활성화된 상태로 정상 기동한다." },
-        { "id": "C", "text": "`ConfigException` 이 발생해 기동하지 못한다." },
-        { "id": "D", "text": "기동은 되지만 첫 전송에서 `OutOfOrderSequenceException` 이 발생한다." }
-      ],
-      "answer": ["B"],
-      "explanation": "멱등성은 `acks=all` 과 `retries>0` 을 전제로 하므로 `acks=1` 과는 함께 성립할 수 없습니다. 이때 동작이 갈리는 기준은 사용자가 `enable.idempotence` 를 직접 적었는지 여부인데, 명시하지 않았다면 클라이언트가 멱등성을 조용히 끄고 로그만 남긴 뒤 정상 기동합니다. 반대로 `enable.idempotence=true` 를 명시한 상태에서 `acks=1` 을 주면 `ConfigException` 으로 기동이 막힙니다. 이 조용한 비활성화 때문에 중복 제거가 되고 있다고 착각하기 쉬우므로, 기동 로그를 확인하거나 두 설정을 함께 명시하는 것이 안전합니다.",
+      "explanation": "토픽의 압축 설정 기본값은 프로듀서가 사용한 코덱을 그대로 유지하라는 의미이므로, 이 구성에서는 프로듀서가 압축한 배치가 재압축 없이 저장됩니다. 반대로 토픽에 특정 코덱을 지정하면 프로듀서가 다른 코덱을 썼을 때 브로커가 압축을 풀고 다시 압축하므로 CPU 비용이 브로커로 옮겨 갑니다. 프로듀서 쪽 기본값은 압축을 하지 않는 것이므로 처리량 개선을 원하면 명시적으로 코덱을 지정해야 합니다. 그리고 브로커의 크기 한도는 압축 후 배치 크기로 판정된다는 점을 함께 기억해야 합니다.",
       "distractorNotes": {
-        "A": "클라이언트가 `acks` 값을 사용자 의도와 반대로 올리는 보정은 하지 않습니다.",
-        "C": "예외는 `enable.idempotence=true` 를 명시했을 때 발생합니다. 단, in-flight가 5를 넘는 경우는 명시 여부와 무관하게 예외입니다.",
-        "D": "멱등성이 꺼졌으므로 시퀀스 검증 자체가 수행되지 않습니다."
+        "A": "값이 `producer` 인 경우에는 압축을 풀지 않고 그대로 보관합니다.",
+        "C": "압축 비활성을 뜻하는 값은 `uncompressed` 이며 `producer` 는 프로듀서 코덱을 따르라는 의미입니다.",
+        "D": "브로커가 항상 재압축하는 것이 아니라 토픽 설정이 다를 때만 재압축합니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Producer Configs: enable.idempotence", "url": "https://kafka.apache.org/documentation/#producerconfigs_enable.idempotence" },
-        { "title": "Kafka Docs — Producer Configs: acks", "url": "https://kafka.apache.org/documentation/#producerconfigs_acks" }
+        {
+          "title": "Kafka Docs — Topic Configs: compression.type",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_compression.type"
+        },
+        {
+          "title": "Kafka Docs — Producer Configs: compression.type",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_compression.type"
+        }
       ],
-      "tags": ["idempotence-inflight", "acks-isr", "producer"]
+      "tags": [
+        "compression.type",
+        "message-size",
+        "producer"
+      ],
+      "choices": [
+        {
+          "id": "A",
+          "text": "브로커가 압축을 풀어 원본으로 저장하므로 디스크 이득이 사라진다."
+        },
+        {
+          "id": "B",
+          "text": "프로듀서가 압축한 배치가 그대로 저장되어 브로커의 재압축이 일어나지 않는다."
+        },
+        {
+          "id": "C",
+          "text": "토픽 값이 `producer` 이므로 압축이 비활성화되고 원본으로 저장된다."
+        },
+        {
+          "id": "D",
+          "text": "브로커가 항상 기본 코덱으로 다시 압축하므로 프로듀서 설정은 무시된다."
+        }
+      ],
+      "answer": [
+        "B"
+      ]
     },
     {
       "id": "ccdak-mock-2-009",
@@ -263,12 +448,26 @@
         "body": "TestInputTopic<String, Long> in =\n    driver.createInputTopic(\"in\", (1), (1));\nTestOutputTopic<String, Long> out =\n    driver.createOutputTopic(\"out\", (2), (2));"
       },
       "choices": [
-        { "id": "A", "text": "(1)은 Serializer, (2)는 Deserializer" },
-        { "id": "B", "text": "(1)과 (2) 모두 Serde" },
-        { "id": "C", "text": "(1)은 Deserializer, (2)는 Serializer" },
-        { "id": "D", "text": "(1)과 (2) 모두 Serializer" }
+        {
+          "id": "A",
+          "text": "(1)은 Serializer, (2)는 Deserializer"
+        },
+        {
+          "id": "B",
+          "text": "(1)과 (2) 모두 Serde"
+        },
+        {
+          "id": "C",
+          "text": "(1)은 Deserializer, (2)는 Serializer"
+        },
+        {
+          "id": "D",
+          "text": "(1)과 (2) 모두 Serializer"
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "입력 토픽은 테스트가 값을 써 넣는 쪽이므로 직렬화기가 필요하고, 출력 토픽은 결과를 읽어 검증하는 쪽이므로 역직렬화기가 필요합니다. 즉 `createInputTopic(name, keySerializer, valueSerializer)` 와 `createOutputTopic(name, keyDeserializer, valueDeserializer)` 로 방향이 반대입니다. 이 방향을 뒤바꾸면 컴파일이 되지 않으므로 시험에서는 개념 확인용으로 자주 나옵니다. 입력 토픽 생성 시 시작 타임스탬프와 자동 증가 간격을 함께 지정하는 오버로드도 있어 event time 기반 윈도우 테스트에 유용합니다.",
       "distractorNotes": {
         "B": "Serde를 그대로 받는 오버로드는 없습니다. Serde에서 `serializer()`·`deserializer()` 를 꺼내 전달합니다.",
@@ -276,9 +475,16 @@
         "D": "출력 토픽은 읽기 전용이므로 역직렬화기가 필요합니다."
       },
       "refs": [
-        { "title": "Kafka Streams — Testing a Streams Application", "url": "https://kafka.apache.org/documentation/streams/developer-guide/testing.html" }
+        {
+          "title": "Kafka Streams — Testing a Streams Application",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/testing.html"
+        }
       ],
-      "tags": ["kafka-testing", "topologytestdriver", "streams"]
+      "tags": [
+        "kafka-testing",
+        "topologytestdriver",
+        "streams"
+      ]
     },
     {
       "id": "ccdak-mock-2-010",
@@ -294,12 +500,26 @@
         "body": "{\n  \"tasks.max\": \"6\"\n}"
       },
       "choices": [
-        { "id": "A", "text": "지정한 키만 갱신되고 나머지 설정은 그대로 유지된다." },
-        { "id": "B", "text": "설정 전체가 이 본문으로 교체되어 필수 설정이 빠졌다는 검증 오류가 발생한다." },
-        { "id": "C", "text": "커넥터가 STOPPED 상태가 아니므로 409 Conflict가 반환된다." },
-        { "id": "D", "text": "`tasks.max` 는 런타임 변경이 불가한 설정이므로 요청이 무시된다." }
+        {
+          "id": "A",
+          "text": "지정한 키만 갱신되고 나머지 설정은 그대로 유지된다."
+        },
+        {
+          "id": "B",
+          "text": "설정 전체가 이 본문으로 교체되어 필수 설정이 빠졌다는 검증 오류가 발생한다."
+        },
+        {
+          "id": "C",
+          "text": "커넥터가 STOPPED 상태가 아니므로 409 Conflict가 반환된다."
+        },
+        {
+          "id": "D",
+          "text": "`tasks.max` 는 런타임 변경이 불가한 설정이므로 요청이 무시된다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "`PUT /connectors/{name}/config` 는 설정 전체를 주어진 본문으로 교체하는 요청이므로, 커넥터 클래스나 연결 정보 같은 필수 항목을 함께 보내지 않으면 검증에서 걸립니다. 일부 키만 바꾸려면 `PATCH /connectors/{name}/config` 를 써야 하며, PATCH 본문에서 값을 `null` 로 주면 그 키를 제거하는 의미가 됩니다. 설정이 갱신되면 커넥터가 재구성되면서 태스크가 다시 배분되므로 짧은 재시작이 따릅니다. 이 두 메서드의 차이를 모르면 운영 중 커넥터 설정을 통째로 날리는 사고가 발생합니다.",
       "distractorNotes": {
         "A": "부분 갱신은 PATCH의 동작입니다. PUT은 전체 교체입니다.",
@@ -307,9 +527,16 @@
         "D": "`tasks.max` 는 설정 갱신으로 변경할 수 있는 값입니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Connect REST API", "url": "https://kafka.apache.org/documentation/#connect_rest" }
+        {
+          "title": "Kafka Docs — Connect REST API",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
       ],
-      "tags": ["connect-rest", "connect", "tasks.max"]
+      "tags": [
+        "connect-rest",
+        "connect",
+        "tasks.max"
+      ]
     },
     {
       "id": "ccdak-mock-2-011",
@@ -321,22 +548,49 @@
       "question": "컴팩션 토픽에서 특정 키의 옛 값과 tombstone이 최종적으로 사라지기까지의 단계를 올바른 순서로 배열하세요.",
       "code": null,
       "items": [
-        { "id": "i3", "text": "로그 클리너가 해당 로그를 골라 키별 최신 값만 남기고 세그먼트를 다시 쓴다" },
-        { "id": "i1", "text": "쓰기가 진행 중인 활성 세그먼트가 마감되어 정리 대상 후보가 된다" },
-        { "id": "i4", "text": "tombstone이 `delete.retention.ms` 를 넘긴 뒤 다음 정리에서 제거된다" },
-        { "id": "i2", "text": "dirty 비율이 `min.cleanable.dirty.ratio` 를 넘어 정리가 트리거된다" }
+        {
+          "id": "i3",
+          "text": "로그 클리너가 해당 로그를 골라 키별 최신 값만 남기고 세그먼트를 다시 쓴다"
+        },
+        {
+          "id": "i1",
+          "text": "쓰기가 진행 중인 활성 세그먼트가 마감되어 정리 대상 후보가 된다"
+        },
+        {
+          "id": "i4",
+          "text": "tombstone이 `delete.retention.ms` 를 넘긴 뒤 다음 정리에서 제거된다"
+        },
+        {
+          "id": "i2",
+          "text": "dirty 비율이 `min.cleanable.dirty.ratio` 를 넘어 정리가 트리거된다"
+        }
       ],
-      "answer": ["i1", "i2", "i3", "i4"],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
+      ],
       "explanation": "컴팩션은 활성 세그먼트를 건드리지 않으므로, 방금 쓴 중간 값들은 세그먼트가 마감될 때까지 그대로 보입니다. 마감된 뒤에도 정리되지 않은 비율이 기준을 넘어야 로그 클리너가 그 로그를 대상으로 골라 세그먼트를 재작성합니다. 이 재작성에서 같은 키의 옛 값이 사라지지만 tombstone은 곧바로 지우지 않고, 삭제 사실을 컨슈머가 볼 수 있도록 `delete.retention.ms` 동안 남겨 둡니다. 그 기간이 지나면 다음 정리에서 tombstone까지 제거되어 키의 흔적이 완전히 사라집니다.",
       "distractorNotes": {
         "i1": "쓰기 직후 바로 정리된다고 착각하기 쉽습니다. 활성 세그먼트는 대상이 아닙니다.",
         "i4": "tombstone이 컴팩션과 동시에 사라진다고 오해하면, 삭제가 하위 시스템에 전파되지 않는 사고의 원인을 찾지 못합니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Log Compaction", "url": "https://kafka.apache.org/documentation/#compaction" },
-        { "title": "Kafka Docs — Topic Configs: delete.retention.ms", "url": "https://kafka.apache.org/documentation/#topicconfigs_delete.retention.ms" }
+        {
+          "title": "Kafka Docs — Log Compaction",
+          "url": "https://kafka.apache.org/documentation/#compaction"
+        },
+        {
+          "title": "Kafka Docs — Topic Configs: delete.retention.ms",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_delete.retention.ms"
+        }
       ],
-      "tags": ["compaction", "tombstone", "cleanup.policy"]
+      "tags": [
+        "compaction",
+        "tombstone",
+        "cleanup.policy"
+      ]
     },
     {
       "id": "ccdak-mock-2-012",
@@ -352,12 +606,26 @@
         "body": "consumer.subscribe(List.of(\"orders\"), new ConsumerRebalanceListener() {\n    public void onPartitionsRevoked(Collection<TopicPartition> parts) {\n        // (1)\n    }\n    public void onPartitionsAssigned(Collection<TopicPartition> parts) {\n        // 필요하면 seek() 으로 시작 위치 조정\n    }\n});"
       },
       "choices": [
-        { "id": "A", "text": "`consumer.unsubscribe()` — 할당을 정리해야 다음 멤버가 파티션을 받을 수 있다." },
-        { "id": "B", "text": "`consumer.close()` — 회수 시점에 컨슈머를 닫아야 오프셋이 보존된다." },
-        { "id": "C", "text": "처리 완료분에 대한 `commitSync()` — 파티션을 잃기 전에 마지막 위치를 확정해야 새 소유자가 중복을 덜 읽는다." },
-        { "id": "D", "text": "`consumer.pause(parts)` — 회수 중 새 레코드가 들어오지 않게 막아야 한다." }
+        {
+          "id": "A",
+          "text": "`consumer.unsubscribe()` — 할당을 정리해야 다음 멤버가 파티션을 받을 수 있다."
+        },
+        {
+          "id": "B",
+          "text": "`consumer.close()` — 회수 시점에 컨슈머를 닫아야 오프셋이 보존된다."
+        },
+        {
+          "id": "C",
+          "text": "처리 완료분에 대한 `commitSync()` — 파티션을 잃기 전에 마지막 위치를 확정해야 새 소유자가 중복을 덜 읽는다."
+        },
+        {
+          "id": "D",
+          "text": "`consumer.pause(parts)` — 회수 중 새 레코드가 들어오지 않게 막아야 한다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "`onPartitionsRevoked` 는 파티션 소유권을 넘기기 직전에 호출되므로, 여기서 처리 완료분을 동기 커밋해 두면 새 소유자가 그 뒤부터 읽어 중복 처리 구간이 줄어듭니다. 커밋을 생략하면 마지막 커밋 이후 처리한 레코드를 다른 멤버가 다시 읽게 됩니다. cooperative 방식에서는 회수가 증분으로 일어나므로 이 콜백이 호출되는 파티션만 정리하면 되고, 소유권을 이미 잃어 커밋이 불가능한 경우에는 `onPartitionsLost` 가 호출되므로 그쪽에서는 커밋을 시도하지 말고 로컬 상태만 버려야 합니다. 리스너는 poll 스레드에서 실행되므로 오래 걸리는 작업을 넣으면 리밸런스가 지연됩니다.",
       "distractorNotes": {
         "A": "구독 해제는 리밸런스 절차의 일부가 아니며, 컨슈머를 그룹에서 빼 버립니다.",
@@ -365,10 +633,20 @@
         "D": "일시 정지는 백프레셔 조절 수단이며 소유권 이전과 무관합니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Consumer API", "url": "https://kafka.apache.org/documentation/#consumerapi" },
-        { "title": "Kafka Docs — Consumer Rebalance Protocol", "url": "https://kafka.apache.org/documentation/#consumer_rebalance_protocol" }
+        {
+          "title": "Kafka Docs — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        },
+        {
+          "title": "Kafka Docs — Consumer Rebalance Protocol",
+          "url": "https://kafka.apache.org/documentation/#consumer_rebalance_protocol"
+        }
       ],
-      "tags": ["rebalance-triggers", "consumer", "sticky-assignor"]
+      "tags": [
+        "rebalance-triggers",
+        "consumer",
+        "sticky-assignor"
+      ]
     },
     {
       "id": "ccdak-mock-2-013",
@@ -377,28 +655,59 @@
       "chapter": "ch11",
       "difficulty": "medium",
       "type": "matching",
-      "question": "lag을 확인하는 각 수단을 그 성질·함정과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "question": "`kafka-consumer-groups.sh --describe --state` 가 보고하는 각 그룹 상태를 그 의미와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
-      "pairs": [
-        { "id": "p1", "left": "`kafka-consumer-groups.sh --describe`", "right": "커밋 오프셋 기준이므로 커밋 주기가 길면 실제보다 크게 보인다" },
-        { "id": "p2", "left": "클라이언트 JMX `records-lag-max`", "right": "현재 fetch 위치 기준이며 컨슈머가 죽으면 지표 자체가 사라진다" },
-        { "id": "p3", "left": "브로커 JMX `FetcherLagMetrics,name=ConsumerLag`", "right": "팔로워 복제 lag이므로 애플리케이션 밀림과는 다른 축이다" },
-        { "id": "p4", "left": "Connect `sink-record-lag-max`", "right": "sink 커넥터 태스크에만 존재하는 커넥터 단위 지표다" }
-      ],
-      "extraRights": [
-        "`__consumer_offsets` 에 브로커가 계산해 저장해 두는 값이다",
-        "컨트롤러가 파티션별로 집계해 그룹 전체 lag을 제공한다"
-      ],
-      "explanation": "같은 단어가 붙어 있어도 계산 주체와 기준이 다르므로 수단을 섞으면 오진이 발생합니다. CLI는 커밋 오프셋을 기준으로 하므로 처리는 정상이어도 커밋 주기가 길면 lag이 과대 표시되고, 클라이언트 지표는 현재 위치 기준이라 값은 정확하지만 프로세스가 죽으면 결측이 됩니다. 브로커의 `ConsumerLag` 은 이름과 달리 팔로워 복제 지연이므로 컨슈머 문제로 해석하면 안 됩니다. Connect의 sink 전용 지표는 커넥터 단위로 밀림을 보여 주므로 커넥터 운영에는 이 값을 씁니다.",
+      "explanation": "그룹 상태는 리밸런스가 진행 중인지, 아무도 붙어 있지 않은지를 한눈에 알려 주므로 장애 조사에서 먼저 확인할 값입니다. 준비와 완료 두 단계가 오래 머문다면 멤버가 합류를 못 하거나 할당 배포가 지연되는 것이므로 poll 간격과 세션 타임아웃 축을 확인해야 합니다. 활성 멤버가 없는 상태는 커밋 오프셋이 남아 있는 상태이므로, 이 상태로 `offsets.retention.minutes` 를 넘기면 오프셋이 삭제되어 다음 기동에서 시작 위치 폴백이 적용됩니다. 그룹이 완전히 사라진 상태는 조회 자체가 비어 보이므로 커밋 오프셋도 기대할 수 없습니다.",
       "distractorNotes": {
-        "p1": "lag이 커 보인다고 곧바로 처리 지연이라고 결론 내리면 안 됩니다. 커밋 주기를 먼저 확인해야 합니다.",
-        "p3": "이름에 `ConsumerLag` 이 들어 있어 컨슈머 지표로 오해하기 가장 쉬운 항목입니다."
+        "p4": "그룹이 삭제된 상태와 혼동하기 쉽습니다. 오프셋이 남아 있는지가 갈림길입니다.",
+        "p2": "완료 단계와 순서를 뒤바꾸기 쉽습니다. 준비가 먼저이고 배포가 나중입니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Kafka Docs — Checking consumer position", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_lag" }
+        {
+          "title": "Kafka Docs — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        },
+        {
+          "title": "Kafka Docs — Consumer Rebalance Protocol",
+          "url": "https://kafka.apache.org/documentation/#consumer_rebalance_protocol"
+        }
       ],
-      "tags": ["consumer-lag", "monitoring", "jmx"]
+      "tags": [
+        "monitoring",
+        "consumer-group",
+        "rebalance-triggers"
+      ],
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "Stable",
+          "right": "할당이 완료되어 멤버들이 정상적으로 소비하고 있다"
+        },
+        {
+          "id": "p2",
+          "left": "PreparingRebalance",
+          "right": "멤버 변경이 감지되어 리밸런스를 준비하며 멤버 합류를 기다린다"
+        },
+        {
+          "id": "p3",
+          "left": "CompletingRebalance",
+          "right": "할당 계산이 끝나 멤버들에게 배포되는 중이다"
+        },
+        {
+          "id": "p4",
+          "left": "Empty",
+          "right": "활성 멤버가 없지만 커밋 오프셋은 남아 있다"
+        },
+        {
+          "id": "p5",
+          "left": "Dead",
+          "right": "그룹 메타데이터가 사라져 더 이상 존재하지 않는다"
+        }
+      ],
+      "extraRights": [
+        "멤버 수가 파티션 수를 초과해 일부가 유휴 상태다",
+        "커밋 오프셋이 만료되어 다음 기동 시 폴백이 적용된다"
+      ]
     },
     {
       "id": "ccdak-mock-2-014",
@@ -414,12 +723,26 @@
         "body": "builder.stream(\"orders\")            // 6 파티션\n       .selectKey((k, v) -> v.customerId())\n       .groupByKey()\n       .count()\n       .toStream()\n       .to(\"orders-per-customer\");"
       },
       "choices": [
-        { "id": "A", "text": "리파티션 토픽 1 파티션, 태스크 1개" },
-        { "id": "B", "text": "리파티션 토픽 6 파티션, 태스크 6개" },
-        { "id": "C", "text": "리파티션 토픽 12 파티션, 태스크 12개" },
-        { "id": "D", "text": "리파티션 토픽 6 파티션, 태스크 12개 (서브토폴로지 2개 × 6)" }
+        {
+          "id": "A",
+          "text": "리파티션 토픽 1 파티션, 태스크 1개"
+        },
+        {
+          "id": "B",
+          "text": "리파티션 토픽 6 파티션, 태스크 6개"
+        },
+        {
+          "id": "C",
+          "text": "리파티션 토픽 12 파티션, 태스크 12개"
+        },
+        {
+          "id": "D",
+          "text": "리파티션 토픽 6 파티션, 태스크 12개 (서브토폴로지 2개 × 6)"
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "`selectKey` 로 키가 바뀌고 그 뒤에 `groupByKey().count()` 가 오므로 Streams는 리파티션 토픽을 만들어 토폴로지를 두 개의 서브토폴로지로 나눕니다. 리파티션 토픽의 파티션 수는 원본 입력에 맞춰 6이 되고, 태스크는 서브토폴로지별로 파티션 수만큼 생성되므로 6 + 6 = 12개가 됩니다. 태스크 수가 곧 병렬성 상한이므로 스레드를 12개까지 늘려 분산할 수 있습니다. 값만 바꾸면 되는 경우 `mapValues` 를 쓰면 리파티션과 추가 서브토폴로지가 생기지 않습니다.",
       "distractorNotes": {
         "A": "리파티션 토픽의 파티션 수는 입력에 맞춰지며 1로 줄어들지 않습니다.",
@@ -427,10 +750,20 @@
         "C": "파티션 수가 두 배로 늘어나는 규칙은 없습니다."
       },
       "refs": [
-        { "title": "Kafka Streams — Architecture: Stream Partitions and Tasks", "url": "https://kafka.apache.org/documentation/streams/architecture#streams_architecture_tasks" },
-        { "title": "Kafka Streams — DSL: Stateless Transformations", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#stateless-transformations" }
+        {
+          "title": "Kafka Streams — Architecture: Stream Partitions and Tasks",
+          "url": "https://kafka.apache.org/documentation/streams/architecture#streams_architecture_tasks"
+        },
+        {
+          "title": "Kafka Streams — DSL: Stateless Transformations",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#stateless-transformations"
+        }
       ],
-      "tags": ["stateless-stateful", "repartition", "streams"]
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "streams"
+      ]
     },
     {
       "id": "ccdak-mock-2-015",
@@ -442,13 +775,31 @@
       "question": "프로듀서에 멱등성과 `acks=all` 을 적용했는데도 하위 시스템에 중복이 남는다. 그 원인이 될 수 있는 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "애플리케이션 로직이 같은 이벤트에 대해 `send()` 를 두 번 호출했다." },
-        { "id": "B", "text": "컨슈머가 레코드를 처리한 뒤 오프셋 커밋 전에 크래시해 재시작 후 다시 처리했다." },
-        { "id": "C", "text": "멱등성이 켜져 있으면 프로듀서 재시도로 중복이 남는다." },
-        { "id": "D", "text": "`acks=all` 이므로 ISR 팔로워마다 레코드가 한 번씩 더 기록된다." },
-        { "id": "E", "text": "`max.in.flight.requests.per.connection` 이 5이므로 같은 배치가 다섯 번 전송된다." }
+        {
+          "id": "A",
+          "text": "애플리케이션 로직이 같은 이벤트에 대해 `send()` 를 두 번 호출했다."
+        },
+        {
+          "id": "B",
+          "text": "컨슈머가 레코드를 처리한 뒤 오프셋 커밋 전에 크래시해 재시작 후 다시 처리했다."
+        },
+        {
+          "id": "C",
+          "text": "멱등성이 켜져 있으면 프로듀서 재시도로 중복이 남는다."
+        },
+        {
+          "id": "D",
+          "text": "`acks=all` 이므로 ISR 팔로워마다 레코드가 한 번씩 더 기록된다."
+        },
+        {
+          "id": "E",
+          "text": "`max.in.flight.requests.per.connection` 이 5이므로 같은 배치가 다섯 번 전송된다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "멱등성이 제거하는 중복은 클라이언트 내부 재시도로 같은 배치가 다시 도착하는 경우로 한정됩니다. 애플리케이션이 서로 다른 두 번의 `send()` 를 호출하면 브로커는 별개의 레코드로 보고 둘 다 기록하며, 컨슈머 쪽에서 처리 후 커밋 전에 죽으면 재시작 후 같은 레코드를 다시 처리합니다. 후자는 at-least-once의 본질적 성질이므로, 외부 시스템 중복을 막으려면 멱등 키나 UPSERT 같은 소비 측 멱등성을 직접 구현해야 합니다. Kafka 트랜잭션은 Kafka 토픽 경계 안에서만 원자성을 제공한다는 점을 함께 기억해야 합니다.",
       "distractorNotes": {
         "C": "멱등성은 재시도 중복을 제거하는 기능입니다. 중복의 원인이 아닙니다.",
@@ -456,10 +807,20 @@
         "E": "in-flight 값은 동시 전송 요청 수이며 같은 배치를 여러 번 보내는 설정이 아닙니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Message Delivery Semantics", "url": "https://kafka.apache.org/documentation/#semantics" },
-        { "title": "Kafka Docs — Producer Configs: enable.idempotence", "url": "https://kafka.apache.org/documentation/#producerconfigs_enable.idempotence" }
+        {
+          "title": "Kafka Docs — Message Delivery Semantics",
+          "url": "https://kafka.apache.org/documentation/#semantics"
+        },
+        {
+          "title": "Kafka Docs — Producer Configs: enable.idempotence",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_enable.idempotence"
+        }
       ],
-      "tags": ["eos", "idempotence-inflight", "delivery-semantics"]
+      "tags": [
+        "eos",
+        "idempotence-inflight",
+        "delivery-semantics"
+      ]
     },
     {
       "id": "ccdak-mock-2-016",
@@ -471,12 +832,26 @@
       "question": "주문 ID를 키로 사용해 온 토픽의 파티션 수를 3에서 6으로 늘렸다. 그 직후 발생할 수 있는 문제는?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "기존 레코드가 새 파티션으로 재분배되며 그 사이 소비가 중단된다." },
-        { "id": "B", "text": "키가 있는 레코드는 파티션 수와 무관하게 배치되므로 아무 변화가 없다." },
-        { "id": "C", "text": "같은 주문 ID가 이전과 다른 파티션으로 가게 되어 그 주문의 이벤트 순서가 깨질 수 있다." },
-        { "id": "D", "text": "컨슈머 그룹이 자동으로 초기화되어 처음부터 다시 읽는다." }
+        {
+          "id": "A",
+          "text": "기존 레코드가 새 파티션으로 재분배되며 그 사이 소비가 중단된다."
+        },
+        {
+          "id": "B",
+          "text": "키가 있는 레코드는 파티션 수와 무관하게 배치되므로 아무 변화가 없다."
+        },
+        {
+          "id": "C",
+          "text": "같은 주문 ID가 이전과 다른 파티션으로 가게 되어 그 주문의 이벤트 순서가 깨질 수 있다."
+        },
+        {
+          "id": "D",
+          "text": "컨슈머 그룹이 자동으로 초기화되어 처음부터 다시 읽는다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "키 기반 파티션 선택은 키 해시를 파티션 수로 나눈 나머지를 쓰므로, 파티션 수가 바뀌면 같은 키의 목적지도 바뀝니다. 그러면 같은 주문의 옛 이벤트는 이전 파티션에, 새 이벤트는 다른 파티션에 남게 되고 파티션 간에는 순서가 정의되지 않으므로 순서 보장이 깨집니다. 기존 레코드는 재분배되지 않으며 파티션 수 증가는 되돌릴 수도 없습니다. 그래서 순서가 중요한 토픽은 파티션 수를 처음에 넉넉히 잡거나, 증설 시 소비 재설계를 함께 계획해야 합니다.",
       "distractorNotes": {
         "A": "파티션 증설은 기존 데이터를 옮기지 않습니다. 재분배는 일어나지 않습니다.",
@@ -484,10 +859,20 @@
         "D": "커밋 오프셋은 파티션별로 유지되며 증설로 초기화되지 않습니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Modifying topics", "url": "https://kafka.apache.org/documentation/#basic_ops_modify_topic" },
-        { "title": "Kafka Docs — Producer Configs: partitioner.class", "url": "https://kafka.apache.org/documentation/#producerconfigs_partitioner.class" }
+        {
+          "title": "Kafka Docs — Modifying topics",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_modify_topic"
+        },
+        {
+          "title": "Kafka Docs — Producer Configs: partitioner.class",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_partitioner.class"
+        }
       ],
-      "tags": ["partitioning", "ordering", "rebalance-triggers"]
+      "tags": [
+        "partitioning",
+        "ordering",
+        "rebalance-triggers"
+      ]
     },
     {
       "id": "ccdak-mock-2-017",
@@ -503,12 +888,26 @@
         "body": "key.converter=org.apache.kafka.connect.storage.StringConverter\nvalue.converter=org.apache.kafka.connect.json.JsonConverter\nvalue.converter.schemas.enable=false"
       },
       "choices": [
-        { "id": "A", "text": "키와 값에 서로 다른 converter를 쓸 수 있고, `schemas.enable=false` 는 JSON에 스키마 필드를 포함하지 않겠다는 뜻이다." },
-        { "id": "B", "text": "converter는 커넥터당 하나만 지정할 수 있으므로 뒤에 온 `value.converter` 가 키에도 적용된다." },
-        { "id": "C", "text": "`schemas.enable=false` 는 Schema Registry를 사용하지 않겠다는 뜻이므로 Avro로 자동 전환된다." },
-        { "id": "D", "text": "converter 설정은 워커 전역에만 존재하므로 커넥터 설정에서는 무시된다." }
+        {
+          "id": "A",
+          "text": "키와 값에 서로 다른 converter를 쓸 수 있고, `schemas.enable=false` 는 JSON에 스키마 필드를 포함하지 않겠다는 뜻이다."
+        },
+        {
+          "id": "B",
+          "text": "converter는 커넥터당 하나만 지정할 수 있으므로 뒤에 온 `value.converter` 가 키에도 적용된다."
+        },
+        {
+          "id": "C",
+          "text": "`schemas.enable=false` 는 Schema Registry를 사용하지 않겠다는 뜻이므로 Avro로 자동 전환된다."
+        },
+        {
+          "id": "D",
+          "text": "converter 설정은 워커 전역에만 존재하므로 커넥터 설정에서는 무시된다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "Connect는 키와 값을 각각 다른 converter로 처리할 수 있고, 워커 기본값을 커넥터 설정에서 덮어쓸 수 있습니다. `JsonConverter` 의 `schemas.enable` 은 JSON 안에 `schema` 와 `payload` 구조를 넣을지 결정하며 `false` 면 값만 담긴 평범한 JSON을 다룹니다. 스키마를 유지해야 하고 Schema Registry를 쓰려면 Avro·Protobuf·JSON Schema converter를 사용하는데, 이들은 Confluent가 제공하는 별도 구성 요소입니다. converter를 잘못 지정하면 sink 쪽에서 변환 실패로 `DataException` 이 발생합니다.",
       "distractorNotes": {
         "B": "키와 값 converter는 독립적으로 지정됩니다.",
@@ -516,10 +915,20 @@
         "D": "워커 기본값을 커넥터 설정에서 오버라이드할 수 있습니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Connect: Converters", "url": "https://kafka.apache.org/documentation/#connect_configuring" },
-        { "title": "Kafka Docs — Connect Configs", "url": "https://kafka.apache.org/documentation/#connectconfigs" }
+        {
+          "title": "Kafka Docs — Connect: Converters",
+          "url": "https://kafka.apache.org/documentation/#connect_configuring"
+        },
+        {
+          "title": "Kafka Docs — Connect Configs",
+          "url": "https://kafka.apache.org/documentation/#connectconfigs"
+        }
       ],
-      "tags": ["connect", "converter", "smt"]
+      "tags": [
+        "connect",
+        "converter",
+        "smt"
+      ]
     },
     {
       "id": "ccdak-mock-2-018",
@@ -535,12 +944,26 @@
         "body": "for (ConsumerRecord<String, String> r : records) {\n    process(r);\n    last = r;\n}\nconsumer.commitSync(Map.of(\n    new TopicPartition(last.topic(), last.partition()),\n    new OffsetAndMetadata(last.offset())));      // (1)"
       },
       "choices": [
-        { "id": "A", "text": "`commitSync(Map)` 은 비동기로 처리되므로 커밋이 반영되기 전에 루프가 끝난다." },
-        { "id": "B", "text": "커밋 오프셋에는 파티션마다 리더 에포크를 함께 넣어야 하며 빠지면 커밋이 무시된다." },
-        { "id": "C", "text": "`commitSync(Map)` 은 파티션 하나만 커밋할 수 없으므로 전체 할당을 넣어야 한다." },
-        { "id": "D", "text": "커밋 오프셋은 다음에 읽을 위치여야 하므로 `last.offset() + 1` 을 넣어야 한다." }
+        {
+          "id": "A",
+          "text": "`commitSync(Map)` 은 비동기로 처리되므로 커밋이 반영되기 전에 루프가 끝난다."
+        },
+        {
+          "id": "B",
+          "text": "커밋 오프셋에는 파티션마다 리더 에포크를 함께 넣어야 하며 빠지면 커밋이 무시된다."
+        },
+        {
+          "id": "C",
+          "text": "`commitSync(Map)` 은 파티션 하나만 커밋할 수 없으므로 전체 할당을 넣어야 한다."
+        },
+        {
+          "id": "D",
+          "text": "커밋 오프셋은 다음에 읽을 위치여야 하므로 `last.offset() + 1` 을 넣어야 한다."
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "커밋 오프셋의 의미는 처리한 마지막 레코드의 위치가 아니라 다음에 읽기를 시작할 위치입니다. 마지막 레코드의 오프셋을 그대로 커밋하면 재시작 시 그 레코드부터 다시 읽어 항상 한 건이 중복 처리됩니다. 인자 없는 `commitSync()` 는 클라이언트가 내부적으로 `+1` 을 계산해 주므로 이 문제가 생기지 않지만, 오프셋을 직접 지정할 때는 명시적으로 더해야 합니다. 4.3에는 커밋할 오프셋을 리더 에포크와 함께 제공하는 `ConsumerRecords#nextOffsets()` 가 추가되어 이런 계산 실수를 줄일 수 있습니다.",
       "distractorNotes": {
         "A": "`commitSync` 는 동기 호출이며 응답을 기다립니다.",
@@ -548,10 +971,20 @@
         "C": "파티션 단위로 부분 커밋이 가능합니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Consumer API", "url": "https://kafka.apache.org/documentation/#consumerapi" },
-        { "title": "Kafka Docs — Message Delivery Semantics", "url": "https://kafka.apache.org/documentation/#semantics" }
+        {
+          "title": "Kafka Docs — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        },
+        {
+          "title": "Kafka Docs — Message Delivery Semantics",
+          "url": "https://kafka.apache.org/documentation/#semantics"
+        }
       ],
-      "tags": ["offset-reset", "consumer", "delivery-semantics"]
+      "tags": [
+        "offset-reset",
+        "consumer",
+        "delivery-semantics"
+      ]
     },
     {
       "id": "ccdak-mock-2-019",
@@ -563,12 +996,26 @@
       "question": "특정 브로커에서만 produce·fetch 응답 지연이 전반적으로 커졌다. 브로커 자체의 포화를 판단하기 위해 우선 볼 지표는?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`UnderReplicatedPartitions` — 값이 0이 아니면 요청 처리가 포화된 것이다." },
-        { "id": "B", "text": "`RequestHandlerAvgIdlePercent` 와 `NetworkProcessorAvgIdlePercent` — 낮아질수록 스레드가 포화 상태다." },
-        { "id": "C", "text": "`ActiveControllerCount` — 이 브로커가 컨트롤러라서 느린 것이므로 값이 1인지 본다." },
-        { "id": "D", "text": "`records-lag-max` — 컨슈머 지표가 브로커 포화를 가장 먼저 반영한다." }
+        {
+          "id": "A",
+          "text": "`UnderReplicatedPartitions` — 값이 0이 아니면 요청 처리가 포화된 것이다."
+        },
+        {
+          "id": "B",
+          "text": "`RequestHandlerAvgIdlePercent` 와 `NetworkProcessorAvgIdlePercent` — 낮아질수록 스레드가 포화 상태다."
+        },
+        {
+          "id": "C",
+          "text": "`ActiveControllerCount` — 이 브로커가 컨트롤러라서 느린 것이므로 값이 1인지 본다."
+        },
+        {
+          "id": "D",
+          "text": "`records-lag-max` — 컨슈머 지표가 브로커 포화를 가장 먼저 반영한다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "브로커는 네트워크 스레드와 요청 처리 스레드 풀로 요청을 처리하므로, 두 풀의 유휴 비율이 낮아지면 더 이상 여유가 없다는 뜻입니다. 이 값이 0에 가까우면 요청이 큐에서 대기해 전반적인 지연이 커지므로 `num.io.threads`·`num.network.threads` 조정이나 부하 분산을 검토해야 합니다. `UnderReplicatedPartitions` 는 복제가 뒤처졌다는 결과 신호일 수 있으나 포화 자체를 알려 주지 않고, 컨트롤러 여부는 요청 처리량과 직접 관계가 없습니다. 클라이언트 지표는 결과로 나타나는 밀림이므로 원인 판단에는 늦습니다.",
       "distractorNotes": {
         "A": "복제 지연은 포화의 결과일 수 있지만 원인 지표가 아닙니다.",
@@ -576,10 +1023,20 @@
         "D": "컨슈머 밀림은 결과 지표이며 브로커 내부 포화를 직접 보여 주지 않습니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Kafka Docs — Broker Configs: num.io.threads", "url": "https://kafka.apache.org/documentation/#brokerconfigs_num.io.threads" }
+        {
+          "title": "Kafka Docs — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Kafka Docs — Broker Configs: num.io.threads",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_num.io.threads"
+        }
       ],
-      "tags": ["monitoring", "jmx", "troubleshooting"]
+      "tags": [
+        "monitoring",
+        "jmx",
+        "troubleshooting"
+      ]
     },
     {
       "id": "ccdak-mock-2-020",
@@ -591,11 +1048,31 @@
       "question": "각 토픽 설정을 그것이 만드는 결과와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`cleanup.policy=delete`", "right": "기간·크기를 넘긴 세그먼트를 삭제해 최근 구간만 남긴다" },
-        { "id": "p2", "left": "`cleanup.policy=compact`", "right": "키별 최신 값을 남겨 상태 저장 용도로 쓸 수 있게 한다" },
-        { "id": "p3", "left": "`cleanup.policy=compact,delete`", "right": "키별 최신 값을 남기면서 오래된 구간은 기간 기준으로도 지운다" },
-        { "id": "p4", "left": "`min.cleanable.dirty.ratio`", "right": "정리되지 않은 비율이 이 값을 넘을 때 로그 클리너가 동작하게 한다" },
-        { "id": "p5", "left": "`delete.retention.ms`", "right": "tombstone이 남아 삭제 사실을 전파하는 기간을 정한다" }
+        {
+          "id": "p1",
+          "left": "`cleanup.policy=delete`",
+          "right": "기간·크기를 넘긴 세그먼트를 삭제해 최근 구간만 남긴다"
+        },
+        {
+          "id": "p2",
+          "left": "`cleanup.policy=compact`",
+          "right": "키별 최신 값을 남겨 상태 저장 용도로 쓸 수 있게 한다"
+        },
+        {
+          "id": "p3",
+          "left": "`cleanup.policy=compact,delete`",
+          "right": "키별 최신 값을 남기면서 오래된 구간은 기간 기준으로도 지운다"
+        },
+        {
+          "id": "p4",
+          "left": "`min.cleanable.dirty.ratio`",
+          "right": "정리되지 않은 비율이 이 값을 넘을 때 로그 클리너가 동작하게 한다"
+        },
+        {
+          "id": "p5",
+          "left": "`delete.retention.ms`",
+          "right": "tombstone이 남아 삭제 사실을 전파하는 기간을 정한다"
+        }
       ],
       "extraRights": [
         "세그먼트 파일을 닫고 새로 만드는 주기를 정한다",
@@ -607,10 +1084,20 @@
         "p5": "`retention.ms` 와 이름이 비슷해 뒤바꾸기 쉽습니다. 대상이 일반 레코드인지 tombstone인지로 구분하세요."
       },
       "refs": [
-        { "title": "Kafka Docs — Topic Configs", "url": "https://kafka.apache.org/documentation/#topicconfigs" },
-        { "title": "Kafka Docs — Log Compaction", "url": "https://kafka.apache.org/documentation/#compaction" }
+        {
+          "title": "Kafka Docs — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        },
+        {
+          "title": "Kafka Docs — Log Compaction",
+          "url": "https://kafka.apache.org/documentation/#compaction"
+        }
       ],
-      "tags": ["compaction", "retention", "cleanup.policy"]
+      "tags": [
+        "compaction",
+        "retention",
+        "cleanup.policy"
+      ]
     },
     {
       "id": "ccdak-mock-2-021",
@@ -619,25 +1106,52 @@
       "chapter": "ch05",
       "difficulty": "medium",
       "type": "ordering",
-      "question": "다른 스레드에서 컨슈머 루프를 안전하게 종료시키는 공식 문서 권장 흐름을 순서대로 배열하세요.",
+      "question": "새로 기동한 컨슈머가 첫 레코드를 처리하기까지의 과정을 순서대로 배열하세요.",
       "code": null,
-      "items": [
-        { "id": "i3", "text": "`catch` 블록에서 종료 중인 경우에는 그 예외를 무시한다" },
-        { "id": "i1", "text": "종료를 지시하는 스레드가 `closed` 플래그를 세우고 `consumer.wakeup()` 을 호출한다" },
-        { "id": "i4", "text": "`finally` 블록에서 `consumer.close()` 로 자원을 정리한다" },
-        { "id": "i2", "text": "`poll()` 에서 대기 중이던 컨슈머 스레드가 `WakeupException` 을 받는다" }
-      ],
-      "answer": ["i1", "i2", "i3", "i4"],
-      "explanation": "컨슈머는 스레드 안전하지 않으므로 외부 스레드에서 호출해도 되는 메서드는 `wakeup()` 뿐입니다. 이 호출은 블로킹 중인 `poll()` 을 즉시 깨워 `WakeupException` 을 던지게 하므로, 루프는 종료 플래그를 확인해 정상 종료 경로인지 판단합니다. 종료 중이면 예외를 무시하고 `finally` 에서 `close()` 를 호출해 오프셋 커밋과 그룹 이탈을 정리합니다. 스레드 인터럽트로 대신하면 정상 종료가 중단될 수 있어 공식 문서는 권장하지 않습니다.",
+      "explanation": "부트스트랩 목록은 최초 연결과 메타데이터 조회에만 쓰이며, 이 단계가 끝나면 클라이언트는 필요한 브로커에 직접 연결합니다. 그다음 그룹 코디네이터를 찾아 합류해야 어떤 파티션을 읽을지 결정되므로, 할당 이전에는 읽을 위치를 정할 수 없습니다. 할당을 받은 뒤 그 파티션의 커밋 오프셋을 조회하고, 커밋이 없거나 범위를 벗어난 경우에만 시작 위치 폴백 설정이 적용됩니다. 이 순서를 알면 `subscribe()` 직후 `seek()` 이 실패하는 이유와 `auto.offset.reset` 이 항상 적용되지 않는 이유가 같은 지점에서 설명됩니다.",
       "distractorNotes": {
-        "i1": "루프 안에서 `close()` 를 먼저 부르는 방식으로 착각하기 쉽습니다. 시작은 외부 스레드의 `wakeup()` 입니다.",
-        "i4": "`close()` 를 예외 처리 밖에 두면 예외 경로에서 자원이 남습니다. `finally` 가 정답입니다."
+        "i2": "메타데이터 조회 없이 코디네이터를 먼저 찾을 수는 없습니다.",
+        "i3": "오프셋 조회가 할당보다 앞선다고 착각하면 `subscribe()` 직후 위치를 지정할 수 있다고 오해합니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Consumer API", "url": "https://kafka.apache.org/documentation/#consumerapi" },
-        { "title": "KafkaConsumer (apache/kafka 4.3)", "url": "https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java" }
+        {
+          "title": "Kafka Docs — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        },
+        {
+          "title": "Kafka Docs — Consumer Configs: bootstrap.servers",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_bootstrap.servers"
+        }
       ],
-      "tags": ["consumer", "shutdown", "assign-vs-subscribe"]
+      "tags": [
+        "bootstrap-servers",
+        "offset-reset",
+        "consumer-group"
+      ],
+      "items": [
+        {
+          "id": "i3",
+          "text": "할당된 파티션의 커밋 오프셋을 조회한다 — 없거나 범위를 벗어나면 `auto.offset.reset` 이 적용된다"
+        },
+        {
+          "id": "i1",
+          "text": "`bootstrap.servers` 의 브로커에 접속해 클러스터 메타데이터를 받는다"
+        },
+        {
+          "id": "i4",
+          "text": "정해진 위치부터 fetch해 `poll()` 이 레코드를 반환한다"
+        },
+        {
+          "id": "i2",
+          "text": "그룹 코디네이터를 찾아 그룹에 합류하고 파티션 할당을 받는다"
+        }
+      ],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
+      ]
     },
     {
       "id": "ccdak-mock-2-022",
@@ -649,10 +1163,26 @@
       "question": "Connect REST API가 반환한 각 상태 코드를 그 상황과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "201 Created", "right": "커넥터가 생성되어 설정이 내부 토픽에 기록되었다" },
-        { "id": "p2", "left": "400 Bad Request", "right": "설정 검증에 실패했다 — 필수 항목 누락이나 값 형식 오류다" },
-        { "id": "p3", "left": "404 Not Found", "right": "요청한 이름의 커넥터가 존재하지 않는다" },
-        { "id": "p4", "left": "409 Conflict", "right": "리밸런스가 진행 중이거나 같은 이름의 커넥터가 이미 있다" }
+        {
+          "id": "p1",
+          "left": "201 Created",
+          "right": "커넥터가 생성되어 설정이 내부 토픽에 기록되었다"
+        },
+        {
+          "id": "p2",
+          "left": "400 Bad Request",
+          "right": "설정 검증에 실패했다 — 필수 항목 누락이나 값 형식 오류다"
+        },
+        {
+          "id": "p3",
+          "left": "404 Not Found",
+          "right": "요청한 이름의 커넥터가 존재하지 않는다"
+        },
+        {
+          "id": "p4",
+          "left": "409 Conflict",
+          "right": "리밸런스가 진행 중이거나 같은 이름의 커넥터가 이미 있다"
+        }
       ],
       "extraRights": [
         "커넥터가 STOPPED 상태가 아니어서 오프셋을 변경할 수 없다",
@@ -664,9 +1194,16 @@
         "p2": "인증·인가 실패는 401·403으로 구분됩니다. 400은 요청 내용의 문제입니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Connect REST API", "url": "https://kafka.apache.org/documentation/#connect_rest" }
+        {
+          "title": "Kafka Docs — Connect REST API",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
       ],
-      "tags": ["connect-409", "connect-rest", "connect"]
+      "tags": [
+        "connect-409",
+        "connect-rest",
+        "connect"
+      ]
     },
     {
       "id": "ccdak-mock-2-023",
@@ -682,12 +1219,26 @@
         "body": "while (true) {\n    ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));\n    queue.addAll(records.records(tp));\n    if (queue.size() > HIGH_WATER) {\n        // (1)\n    }\n}"
       },
       "choices": [
-        { "id": "A", "text": "`consumer.pause(Set.of(tp))` 로 그 파티션의 fetch만 멈추고, 큐가 줄면 `resume()` 한다 — `poll()` 은 계속 호출되므로 이탈하지 않는다." },
-        { "id": "B", "text": "`Thread.sleep()` 으로 대기해 큐가 비워질 때까지 `poll()` 을 호출하지 않는다." },
-        { "id": "C", "text": "`consumer.unsubscribe()` 후 큐가 줄면 다시 `subscribe()` 한다." },
-        { "id": "D", "text": "`max.poll.interval.ms` 를 아주 크게 올려 두면 처리 지연을 모두 흡수할 수 있다." }
+        {
+          "id": "A",
+          "text": "`consumer.pause(Set.of(tp))` 로 그 파티션의 fetch만 멈추고, 큐가 줄면 `resume()` 한다 — `poll()` 은 계속 호출되므로 이탈하지 않는다."
+        },
+        {
+          "id": "B",
+          "text": "`Thread.sleep()` 으로 대기해 큐가 비워질 때까지 `poll()` 을 호출하지 않는다."
+        },
+        {
+          "id": "C",
+          "text": "`consumer.unsubscribe()` 후 큐가 줄면 다시 `subscribe()` 한다."
+        },
+        {
+          "id": "D",
+          "text": "`max.poll.interval.ms` 를 아주 크게 올려 두면 처리 지연을 모두 흡수할 수 있다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "`pause()` 는 지정한 파티션의 fetch만 중단하고 `poll()` 호출 자체는 계속 가능하게 해 주므로, 하트비트와 poll 간격이 모두 유지되어 그룹에서 이탈하지 않습니다. 큐가 여유를 회복하면 `resume()` 으로 다시 가져오기를 시작하면 됩니다. 반대로 `poll()` 을 부르지 않고 잠들면 poll 간격이 초과되어 이탈과 리밸런스가 발생하고, 구독을 해제하면 그룹에서 빠져 리밸런스를 유발합니다. poll 간격 상한을 무한정 키우는 것은 진짜로 죽은 컨슈머의 감지를 늦추는 과잉 조치입니다.",
       "distractorNotes": {
         "B": "`poll()` 을 멈추면 `max.poll.interval.ms` 초과로 그룹에서 제외됩니다.",
@@ -695,10 +1246,20 @@
         "D": "감지 지연이라는 부작용이 크며, 근본 원인인 처리 속도를 해결하지 못합니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Consumer API", "url": "https://kafka.apache.org/documentation/#consumerapi" },
-        { "title": "Kafka Docs — Consumer Configs: max.poll.interval.ms", "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms" }
+        {
+          "title": "Kafka Docs — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        },
+        {
+          "title": "Kafka Docs — Consumer Configs: max.poll.interval.ms",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms"
+        }
       ],
-      "tags": ["max-poll-interval", "consumer", "rebalance-triggers"]
+      "tags": [
+        "max-poll-interval",
+        "consumer",
+        "rebalance-triggers"
+      ]
     },
     {
       "id": "ccdak-mock-2-024",
@@ -710,13 +1271,31 @@
       "question": "프로듀서가 `acks=all` 을 쓰고 있어도 데이터가 유실될 수 있는 조건을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "토픽의 `min.insync.replicas` 가 1이고 ISR이 1로 줄어든 상태에서 그 리더가 소실됨" },
-        { "id": "B", "text": "`unclean.leader.election.enable=true` 로 두어 ISR 밖 레플리카가 리더로 선출됨" },
-        { "id": "C", "text": "`linger.ms` 가 5여서 배치가 잠시 대기함" },
-        { "id": "D", "text": "`enable.idempotence=true` 로 재시도 중복이 제거됨" },
-        { "id": "E", "text": "`retries` 가 기본값(약 21억)이라 재시도가 반복됨" }
+        {
+          "id": "A",
+          "text": "토픽의 `min.insync.replicas` 가 1이고 ISR이 1로 줄어든 상태에서 그 리더가 소실됨"
+        },
+        {
+          "id": "B",
+          "text": "`unclean.leader.election.enable=true` 로 두어 ISR 밖 레플리카가 리더로 선출됨"
+        },
+        {
+          "id": "C",
+          "text": "`linger.ms` 가 5여서 배치가 잠시 대기함"
+        },
+        {
+          "id": "D",
+          "text": "`enable.idempotence=true` 로 재시도 중복이 제거됨"
+        },
+        {
+          "id": "E",
+          "text": "`retries` 가 기본값(약 21억)이라 재시도가 반복됨"
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "`acks=all` 은 현재 ISR 전원의 확인을 받는다는 의미이므로, ISR이 1로 줄어든 상황에서는 사실상 리더 한 대만 확인한 셈이 됩니다. 그 리더가 복구 불가하게 소실되면 확인된 쓰기가 사라지므로, `min.insync.replicas` 를 2 이상으로 두어 최소 두 곳에 기록되도록 해야 합니다. 또 ISR 밖 레플리카의 리더 선출을 허용하면 최신 데이터를 갖지 않은 레플리카가 리더가 되어 그 차이만큼 유실됩니다. 배치 대기, 멱등성, 재시도 횟수는 유실이 아니라 지연과 중복 제거에 관한 설정입니다.",
       "distractorNotes": {
         "C": "전송 지연을 조금 늘려 배치 효율을 높이는 설정이며 확인된 쓰기를 잃게 하지 않습니다.",
@@ -724,10 +1303,20 @@
         "E": "재시도는 일시 오류를 흡수해 오히려 유실을 줄입니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Topic Configs: min.insync.replicas", "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas" },
-        { "title": "Kafka Docs — Broker Configs: unclean.leader.election.enable", "url": "https://kafka.apache.org/documentation/#brokerconfigs_unclean.leader.election.enable" }
+        {
+          "title": "Kafka Docs — Topic Configs: min.insync.replicas",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas"
+        },
+        {
+          "title": "Kafka Docs — Broker Configs: unclean.leader.election.enable",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_unclean.leader.election.enable"
+        }
       ],
-      "tags": ["acks-isr", "unclean.leader.election.enable", "durability"]
+      "tags": [
+        "acks-isr",
+        "unclean.leader.election.enable",
+        "durability"
+      ]
     },
     {
       "id": "ccdak-mock-2-025",
@@ -743,23 +1332,47 @@
         "body": "stream.groupByKey()\n      .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(1)))\n      .count()\n      .toStream()\n      .to(\"counts\");"
       },
       "choices": [
-        { "id": "A", "text": "`ofSizeWithNoGrace` 는 grace period를 0으로 두므로 윈도우 종료 후 도착한 레코드가 버려진다." },
-        { "id": "B", "text": "tumbling 윈도우는 지연 도착을 지원하지 않으므로 hopping 윈도우로 바꿔야 한다." },
-        { "id": "C", "text": "`count()` 는 stateless 연산이라 이전 결과를 갱신할 수 없다." },
-        { "id": "D", "text": "기본 시간 축이 처리 시각이므로 이벤트 시각이 늦어도 무시된다." }
+        {
+          "id": "A",
+          "text": "`count()` 는 stateless 연산이라 이전 결과를 갱신할 수 없다."
+        },
+        {
+          "id": "B",
+          "text": "tumbling 윈도우는 지연 도착을 지원하지 않으므로 hopping 윈도우로 바꿔야 한다."
+        },
+        {
+          "id": "C",
+          "text": "`ofSizeWithNoGrace` 는 grace period를 0으로 두므로 윈도우 종료 후 도착한 레코드가 버려진다."
+        },
+        {
+          "id": "D",
+          "text": "기본 시간 축이 처리 시각이므로 이벤트 시각이 늦어도 무시된다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "C"
+      ],
       "explanation": "윈도우 연산은 윈도우 크기와 별도로 grace period를 두어, 종료된 윈도우가 얼마나 더 늦은 레코드를 받아들일지 정합니다. `ofSizeWithNoGrace` 는 그 여유를 0으로 명시하는 팩토리 메서드이므로 윈도우 종료 이후 도착한 레코드는 집계에 포함되지 않고 버려집니다. 지연 도착을 허용하려면 `ofSizeAndGrace(size, grace)` 로 여유를 주어야 하며, 대신 결과 확정이 그만큼 늦어지고 상태 저장소가 더 오래 유지됩니다. Streams의 기본 시간 축은 처리 시각이 아니라 이벤트 시각이라는 점도 함께 알아야 이 판단이 가능합니다.",
       "distractorNotes": {
         "B": "윈도우 타입과 지연 허용은 별개 축입니다. hopping으로 바꾸어도 grace가 0이면 같은 문제가 생깁니다.",
-        "C": "`count()` 는 상태 저장소를 쓰는 stateful 연산입니다.",
-        "D": "기본 시간 축은 이벤트 시각이며, 타임스탬프 추출기가 이를 결정합니다."
+        "D": "기본 시간 축은 이벤트 시각이며, 타임스탬프 추출기가 이를 결정합니다.",
+        "A": "`count()` 는 상태 저장소를 쓰는 stateful 연산입니다."
       },
       "refs": [
-        { "title": "Kafka Streams — Windowing", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#windowing" },
-        { "title": "Kafka Streams — Core Concepts: Time", "url": "https://kafka.apache.org/documentation/streams/core-concepts#streams_time" }
+        {
+          "title": "Kafka Streams — Windowing",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#windowing"
+        },
+        {
+          "title": "Kafka Streams — Core Concepts: Time",
+          "url": "https://kafka.apache.org/documentation/streams/core-concepts#streams_time"
+        }
       ],
-      "tags": ["windowing", "streams", "stateless-stateful"]
+      "tags": [
+        "windowing",
+        "streams",
+        "stateless-stateful"
+      ]
     },
     {
       "id": "ccdak-mock-2-026",
@@ -771,12 +1384,26 @@
       "question": "실제 브로커를 띄운 Streams 통합 테스트를 두 번째로 실행하면 집계 결과가 첫 실행보다 크게 나온다. 가장 정확한 원인과 조치는?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "테스트 토픽의 `retention.ms` 가 짧아 첫 실행 데이터가 남은 것이므로 보관 기간을 늘린다." },
-        { "id": "B", "text": "이전 실행의 로컬 상태와 입력 오프셋이 남아 있는 것이므로, 리셋 도구를 실행하고 각 인스턴스에서 `cleanUp()` 을 호출하거나 `state.dir` 을 비운다." },
-        { "id": "C", "text": "`application.id` 가 매 실행마다 달라져 changelog가 중복 생성된 것이므로 고정값으로 바꾼다." },
-        { "id": "D", "text": "`processing.guarantee` 가 `at_least_once` 라서 중복 집계된 것이므로 EOS로 바꾼다." }
+        {
+          "id": "A",
+          "text": "테스트 토픽의 `retention.ms` 가 짧아 첫 실행 데이터가 남은 것이므로 보관 기간을 늘린다."
+        },
+        {
+          "id": "B",
+          "text": "이전 실행의 로컬 상태와 입력 오프셋이 남아 있는 것이므로, 리셋 도구를 실행하고 각 인스턴스에서 `cleanUp()` 을 호출하거나 `state.dir` 을 비운다."
+        },
+        {
+          "id": "C",
+          "text": "`application.id` 가 매 실행마다 달라져 changelog가 중복 생성된 것이므로 고정값으로 바꾼다."
+        },
+        {
+          "id": "D",
+          "text": "`processing.guarantee` 가 `at_least_once` 라서 중복 집계된 것이므로 EOS로 바꾼다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "Streams는 상태 저장소를 로컬 디스크에 두고 changelog로 복원하며, 입력 오프셋은 `application.id` 를 그룹 id로 하는 컨슈머 그룹에 커밋됩니다. 따라서 같은 `application.id` 로 다시 실행하면 이전 상태가 복원되고 오프셋도 이어져 집계가 누적됩니다. 재현 가능한 테스트를 만들려면 `kafka-streams-application-reset.sh` 로 오프셋과 내부 토픽을 정리하고, 각 인스턴스에서 `KafkaStreams.cleanUp()` 을 호출하거나 `state.dir` 을 비워야 합니다. 임시 디렉터리를 테스트마다 새로 지정하는 것도 같은 목적을 달성하는 방법입니다.",
       "distractorNotes": {
         "A": "입력 데이터가 남아 있는 것이 문제라면 보관 기간을 늘리면 상황이 더 나빠집니다.",
@@ -784,10 +1411,20 @@
         "D": "EOS는 중복 처리를 막는 장치이며 이전 실행의 누적 상태를 지우지 않습니다."
       },
       "refs": [
-        { "title": "Kafka Streams — Application Reset Tool", "url": "https://kafka.apache.org/documentation/streams/developer-guide/app-reset-tool.html" },
-        { "title": "Kafka Streams — Testing a Streams Application", "url": "https://kafka.apache.org/documentation/streams/developer-guide/testing.html" }
+        {
+          "title": "Kafka Streams — Application Reset Tool",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/app-reset-tool.html"
+        },
+        {
+          "title": "Kafka Streams — Testing a Streams Application",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/testing.html"
+        }
       ],
-      "tags": ["kafka-testing", "integration-test", "state-store"]
+      "tags": [
+        "kafka-testing",
+        "integration-test",
+        "state-store"
+      ]
     },
     {
       "id": "ccdak-mock-2-027",
@@ -803,12 +1440,26 @@
         "body": "consumer.subscribe(List.of(\"orders\"));\nconsumer.seek(new TopicPartition(\"orders\", 0), 5_000L);   // (1)\nwhile (true) {\n    ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));\n}"
       },
       "choices": [
-        { "id": "A", "text": "`seek()` 은 `assign()` 으로 파티션을 지정한 컨슈머에서만 호출할 수 있다." },
-        { "id": "B", "text": "`seek()` 대상 오프셋이 커밋 오프셋보다 작으면 호출이 거부된다." },
-        { "id": "C", "text": "`auto.offset.reset` 이 `latest` 이면 `seek()` 이 무시된다." },
-        { "id": "D", "text": "`subscribe()` 직후에는 아직 할당이 없으므로, `poll()` 을 한 번 호출해 할당을 받은 뒤에 `seek()` 해야 한다." }
+        {
+          "id": "A",
+          "text": "`seek()` 은 `assign()` 으로 파티션을 지정한 컨슈머에서만 호출할 수 있다."
+        },
+        {
+          "id": "B",
+          "text": "`seek()` 대상 오프셋이 커밋 오프셋보다 작으면 호출이 거부된다."
+        },
+        {
+          "id": "C",
+          "text": "`auto.offset.reset` 이 `latest` 이면 `seek()` 이 무시된다."
+        },
+        {
+          "id": "D",
+          "text": "`subscribe()` 직후에는 아직 할당이 없으므로, `poll()` 을 한 번 호출해 할당을 받은 뒤에 `seek()` 해야 한다."
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "`subscribe()` 는 구독 의사만 등록하고 실제 파티션 할당은 그룹 조정이 끝난 뒤에 이루어지므로, 호출 직후의 `assignment()` 는 비어 있습니다. 할당되지 않은 파티션에 `seek()` 을 하면 예외가 발생하므로, `poll()` 을 한 번 호출해 할당을 받은 뒤 위치를 지정하거나 `ConsumerRebalanceListener` 의 `onPartitionsAssigned` 안에서 `seek()` 을 호출해야 합니다. 후자는 리밸런스가 다시 일어나도 시작 위치가 유지되므로 더 견고한 방법입니다. `seek()` 자체는 `assign()` 전용 API가 아니며 두 방식 모두에서 쓸 수 있습니다.",
       "distractorNotes": {
         "A": "`subscribe()` 로 구독한 컨슈머에서도 할당을 받은 뒤에는 `seek()` 을 쓸 수 있습니다.",
@@ -816,10 +1467,20 @@
         "C": "`auto.offset.reset` 은 위치를 정할 수 없을 때만 쓰이며, 명시적 `seek()` 을 무시하지 않습니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Consumer API", "url": "https://kafka.apache.org/documentation/#consumerapi" },
-        { "title": "Kafka Docs — Consumer Configs: auto.offset.reset", "url": "https://kafka.apache.org/documentation/#consumerconfigs_auto.offset.reset" }
+        {
+          "title": "Kafka Docs — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        },
+        {
+          "title": "Kafka Docs — Consumer Configs: auto.offset.reset",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_auto.offset.reset"
+        }
       ],
-      "tags": ["assign-vs-subscribe", "offset-reset", "consumer"]
+      "tags": [
+        "assign-vs-subscribe",
+        "offset-reset",
+        "consumer"
+      ]
     },
     {
       "id": "ccdak-mock-2-028",
@@ -831,12 +1492,26 @@
       "question": "Kafka Streams 애플리케이션에서 어느 단계가 느린지 좁히려 한다. JMX 계층 활용에 대한 설명으로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`kafka.streams` 도메인의 스레드·태스크·프로세서 노드·상태 저장소 MBean으로 단계를 좁힐 수 있다." },
-        { "id": "B", "text": "Streams는 내부 컨슈머·프로듀서 지표만 노출하므로 토폴로지 내부는 애플리케이션 로그로만 파악해야 한다." },
-        { "id": "C", "text": "모든 Streams 지표가 `kafka.consumer` 도메인에 통합되어 있어 전용 MBean은 존재하지 않는다." },
-        { "id": "D", "text": "`stream-state-metrics` 는 브로커가 수집하는 지표이므로 애플리케이션 프로세스에는 노출되지 않는다." }
+        {
+          "id": "A",
+          "text": "`kafka.streams` 도메인의 스레드·태스크·프로세서 노드·상태 저장소 MBean으로 단계를 좁힐 수 있다."
+        },
+        {
+          "id": "B",
+          "text": "Streams는 내부 컨슈머·프로듀서 지표만 노출하므로 토폴로지 내부는 애플리케이션 로그로만 파악해야 한다."
+        },
+        {
+          "id": "C",
+          "text": "모든 Streams 지표가 `kafka.consumer` 도메인에 통합되어 있어 전용 MBean은 존재하지 않는다."
+        },
+        {
+          "id": "D",
+          "text": "`stream-state-metrics` 는 브로커가 수집하는 지표이므로 애플리케이션 프로세스에는 노출되지 않는다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "Streams는 `kafka.streams` 도메인에 계층적인 MBean을 노출하므로, 스레드 단위 처리율에서 시작해 태스크·프로세서 노드·상태 저장소 단위로 병목을 좁힐 수 있습니다. 내부적으로 쓰는 컨슈머와 프로듀서의 지표도 그대로 노출되므로 브로커 왕복 지연과 토폴로지 처리 지연을 분리해 볼 수 있습니다. 프로세서 노드 지표 중 종단 지연을 뜻하는 `record-e2e-latency-*` 는 소스 노드와 말단 노드에서 제공되어 파이프라인 전체 지연을 확인하는 데 유용합니다. 상세 지표 대부분은 기록 수준이 `debug` 이므로 필요할 때 `metrics.recording.level` 을 올려야 보입니다.",
       "distractorNotes": {
         "B": "토폴로지 내부 단위 지표가 별도로 존재합니다.",
@@ -844,10 +1519,20 @@
         "D": "상태 저장소 지표는 애플리케이션 프로세스가 노출합니다. 브로커 지표가 아닙니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Monitoring: Kafka Streams Metrics", "url": "https://kafka.apache.org/documentation/#kafka_streams_monitoring" },
-        { "title": "Kafka Streams — Configs: metrics.recording.level", "url": "https://kafka.apache.org/documentation/#streamsconfigs_metrics.recording.level" }
+        {
+          "title": "Kafka Docs — Monitoring: Kafka Streams Metrics",
+          "url": "https://kafka.apache.org/documentation/#kafka_streams_monitoring"
+        },
+        {
+          "title": "Kafka Streams — Configs: metrics.recording.level",
+          "url": "https://kafka.apache.org/documentation/#streamsconfigs_metrics.recording.level"
+        }
       ],
-      "tags": ["monitoring", "streams", "jmx"]
+      "tags": [
+        "monitoring",
+        "streams",
+        "jmx"
+      ]
     },
     {
       "id": "ccdak-mock-2-029",
@@ -859,12 +1544,26 @@
       "question": "source 커넥터를 띄운 워커가 비정상 종료된 뒤 재시작했더니 일부 레코드가 Kafka에 중복으로 적재되었다. 가장 정확한 설명은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "source 커넥터는 `__consumer_offsets` 를 쓰므로 컨슈머 그룹 오프셋이 초기화된 것이다." },
-        { "id": "B", "text": "`errors.tolerance=all` 이 켜져 있어 실패한 레코드가 다시 전송된 것이다." },
-        { "id": "C", "text": "소스 오프셋은 `offset.flush.interval.ms` 주기로 커밋되므로, 마지막 커밋 이후 진행분이 재시작 시 다시 읽힌 것이다." },
-        { "id": "D", "text": "커넥터 설정이 `config.storage.topic` 에서 사라져 커넥터가 처음부터 다시 수집한 것이다." }
+        {
+          "id": "A",
+          "text": "source 커넥터는 `__consumer_offsets` 를 쓰므로 컨슈머 그룹 오프셋이 초기화된 것이다."
+        },
+        {
+          "id": "B",
+          "text": "`errors.tolerance=all` 이 켜져 있어 실패한 레코드가 다시 전송된 것이다."
+        },
+        {
+          "id": "C",
+          "text": "소스 오프셋은 `offset.flush.interval.ms` 주기로 커밋되므로, 마지막 커밋 이후 진행분이 재시작 시 다시 읽힌 것이다."
+        },
+        {
+          "id": "D",
+          "text": "커넥터 설정이 `config.storage.topic` 에서 사라져 커넥터가 처음부터 다시 수집한 것이다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "source 커넥터는 소스 시스템에서 어디까지 읽었는지를 나타내는 오프셋을 주기적으로 내부 오프셋 토픽에 커밋하며, 기본 주기는 60000ms입니다. 워커가 비정상 종료하면 마지막 커밋 이후 이미 Kafka로 보낸 구간의 진행 정보가 남지 않으므로, 재시작 후 그 구간을 다시 읽어 중복 적재가 발생합니다. 즉 기본 동작은 at-least-once이며, 중복을 없애려면 커넥터가 지원할 때 정확히 한 번 소스 지원(`exactly.once.source.support`)을 켜거나 하위에서 멱등 처리를 해야 합니다. 커밋 주기를 줄이면 중복 구간은 짧아지지만 오프셋 커밋 부하가 늘어납니다.",
       "distractorNotes": {
         "A": "`__consumer_offsets` 를 쓰는 것은 sink 커넥터입니다. source는 Connect 내부 오프셋 토픽을 씁니다.",
@@ -872,10 +1571,20 @@
         "D": "설정은 compact 내부 토픽에 남아 있으므로 재시작으로 사라지지 않습니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Connect Configs: offset.flush.interval.ms", "url": "https://kafka.apache.org/documentation/#connectconfigs_offset.flush.interval.ms" },
-        { "title": "Kafka Docs — Connect: Exactly-once support", "url": "https://kafka.apache.org/documentation/#connect_exactlyonce" }
+        {
+          "title": "Kafka Docs — Connect Configs: offset.flush.interval.ms",
+          "url": "https://kafka.apache.org/documentation/#connectconfigs_offset.flush.interval.ms"
+        },
+        {
+          "title": "Kafka Docs — Connect: Exactly-once support",
+          "url": "https://kafka.apache.org/documentation/#connect_exactlyonce"
+        }
       ],
-      "tags": ["connect-offsets", "connect", "delivery-semantics"]
+      "tags": [
+        "connect-offsets",
+        "connect",
+        "delivery-semantics"
+      ]
     },
     {
       "id": "ccdak-mock-2-030",
@@ -887,13 +1596,31 @@
       "question": "consume-transform-produce를 트랜잭션으로 감쌀 때 컨슈머 쪽에 반드시 적용해야 하는 설정을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`enable.auto.commit=false`" },
-        { "id": "B", "text": "`isolation.level=read_committed`" },
-        { "id": "C", "text": "`transactional.id` 를 컨슈머에도 지정" },
-        { "id": "D", "text": "`auto.offset.reset=earliest`" },
-        { "id": "E", "text": "`max.poll.records=1`" }
+        {
+          "id": "A",
+          "text": "`enable.auto.commit=false`"
+        },
+        {
+          "id": "B",
+          "text": "`isolation.level=read_committed`"
+        },
+        {
+          "id": "C",
+          "text": "`transactional.id` 를 컨슈머에도 지정"
+        },
+        {
+          "id": "D",
+          "text": "`auto.offset.reset=earliest`"
+        },
+        {
+          "id": "E",
+          "text": "`max.poll.records=1`"
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "트랜잭션에서 오프셋 커밋은 프로듀서의 `sendOffsetsToTransaction()` 이 담당하므로, 컨슈머가 별도로 커밋하면 원자성이 깨집니다. 그래서 자동 커밋을 반드시 끄고 커밋 권한을 트랜잭션에 넘겨야 합니다. 그리고 읽는 쪽이 `read_committed` 여야 중단된 트랜잭션의 레코드를 걸러내고 LSO까지만 읽습니다. `transactional.id` 는 프로듀서 전용 설정이고, 시작 위치나 배치 크기는 트랜잭션 성립 조건이 아닙니다.",
       "distractorNotes": {
         "C": "`transactional.id` 는 프로듀서 설정입니다. 컨슈머에는 존재하지 않습니다.",
@@ -901,10 +1628,20 @@
         "E": "배치 크기를 줄이는 것은 처리 시간 조절용이며 원자성과 관계가 없습니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Consumer Configs: isolation.level", "url": "https://kafka.apache.org/documentation/#consumerconfigs_isolation.level" },
-        { "title": "Kafka Docs — Producer API", "url": "https://kafka.apache.org/documentation/#producerapi" }
+        {
+          "title": "Kafka Docs — Consumer Configs: isolation.level",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_isolation.level"
+        },
+        {
+          "title": "Kafka Docs — Producer API",
+          "url": "https://kafka.apache.org/documentation/#producerapi"
+        }
       ],
-      "tags": ["transactions", "isolation-level", "eos"]
+      "tags": [
+        "transactions",
+        "isolation-level",
+        "eos"
+      ]
     },
     {
       "id": "ccdak-mock-2-031",
@@ -920,12 +1657,26 @@
         "body": "변경 1: default 가 없는 필드 promoCode 를 추가한다\n변경 2: default 가 없는 기존 필드 customerId 를 삭제한다"
       },
       "choices": [
-        { "id": "A", "text": "변경 1은 거부, 변경 2는 통과한다." },
-        { "id": "B", "text": "두 변경 모두 통과한다." },
-        { "id": "C", "text": "두 변경 모두 거부된다." },
-        { "id": "D", "text": "변경 1은 통과, 변경 2는 거부된다." }
+        {
+          "id": "A",
+          "text": "변경 1은 거부, 변경 2는 통과한다."
+        },
+        {
+          "id": "B",
+          "text": "두 변경 모두 통과한다."
+        },
+        {
+          "id": "C",
+          "text": "두 변경 모두 거부된다."
+        },
+        {
+          "id": "D",
+          "text": "변경 1은 통과, 변경 2는 거부된다."
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "`FORWARD` 는 옛 스키마로 새 데이터를 읽을 수 있어야 한다는 조건이므로, reader는 옛 스키마입니다. 옛 스키마는 새로 추가된 필드를 모르므로 그냥 무시하면 되어 default 없는 필드 추가도 통과합니다. 반대로 옛 스키마가 요구하는 필드를 삭제하면 reader가 읽을 값을 찾지 못하는데 default도 없으므로 거부됩니다. `BACKWARD` 는 이 두 결과가 정확히 반대이며, 두 방향을 함께 요구하는 `FULL` 에서는 default가 있는 필드의 추가·삭제만 통과합니다.",
       "distractorNotes": {
         "A": "`BACKWARD` 에서의 결과를 `FORWARD` 에 적용한 경우입니다.",
@@ -933,9 +1684,16 @@
         "C": "필드 추가는 `FORWARD` 에서 허용됩니다."
       },
       "refs": [
-        { "title": "Confluent Docs — Schema Evolution and Compatibility", "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html" }
+        {
+          "title": "Confluent Docs — Schema Evolution and Compatibility",
+          "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html"
+        }
       ],
-      "tags": ["schema-compatibility", "schema-registry", "avro"]
+      "tags": [
+        "schema-compatibility",
+        "schema-registry",
+        "avro"
+      ]
     },
     {
       "id": "ccdak-mock-2-032",
@@ -947,11 +1705,31 @@
       "question": "각 추상화를 그것에 적합한 데이터와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`KStream`", "right": "결제·클릭·센서 측정처럼 같은 키가 반복돼도 각각 의미가 있는 이벤트" },
-        { "id": "p2", "left": "`KTable`", "right": "계정 잔액·재고 수량처럼 키별 최신 값만 의미가 있는 상태" },
-        { "id": "p3", "left": "`GlobalKTable`", "right": "국가 코드·환율처럼 작고 변경이 드문 참조 데이터" },
-        { "id": "p4", "left": "리파티션 토픽", "right": "키를 바꾼 뒤 키 기반 연산을 하기 위해 Streams가 자동 생성하는 중간 토픽" },
-        { "id": "p5", "left": "changelog 토픽", "right": "상태 저장소의 변경 이력을 담아 장애 시 복원에 쓰이는 compact 토픽" }
+        {
+          "id": "p1",
+          "left": "`KStream`",
+          "right": "결제·클릭·센서 측정처럼 같은 키가 반복돼도 각각 의미가 있는 이벤트"
+        },
+        {
+          "id": "p2",
+          "left": "`KTable`",
+          "right": "계정 잔액·재고 수량처럼 키별 최신 값만 의미가 있는 상태"
+        },
+        {
+          "id": "p3",
+          "left": "`GlobalKTable`",
+          "right": "국가 코드·환율처럼 작고 변경이 드문 참조 데이터"
+        },
+        {
+          "id": "p4",
+          "left": "리파티션 토픽",
+          "right": "키를 바꾼 뒤 키 기반 연산을 하기 위해 Streams가 자동 생성하는 중간 토픽"
+        },
+        {
+          "id": "p5",
+          "left": "changelog 토픽",
+          "right": "상태 저장소의 변경 이력을 담아 장애 시 복원에 쓰이는 compact 토픽"
+        }
       ],
       "extraRights": [
         "여러 인스턴스가 오프셋을 공유하기 위해 만드는 내부 토픽",
@@ -963,10 +1741,20 @@
         "p5": "리파티션 토픽과 뒤바꾸기 쉽습니다. 상태 복원에 쓰이는 쪽이 changelog입니다."
       },
       "refs": [
-        { "title": "Kafka Streams — Core Concepts", "url": "https://kafka.apache.org/documentation/streams/core-concepts" },
-        { "title": "Kafka Streams — DSL: KStream and KTable", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" }
+        {
+          "title": "Kafka Streams — Core Concepts",
+          "url": "https://kafka.apache.org/documentation/streams/core-concepts"
+        },
+        {
+          "title": "Kafka Streams — DSL: KStream and KTable",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html"
+        }
       ],
-      "tags": ["kstream-vs-ktable", "streams", "state-store"]
+      "tags": [
+        "kstream-vs-ktable",
+        "streams",
+        "state-store"
+      ]
     },
     {
       "id": "ccdak-mock-2-033",
@@ -982,23 +1770,47 @@
         "body": "acks=1\nenable.idempotence=false\nretries=2147483647"
       },
       "choices": [
-        { "id": "A", "text": "리더 응답을 받은 레코드는 모두 팔로워에 복제되어 있으므로 유실되지 않는다." },
-        { "id": "B", "text": "리더가 응답했지만 아직 복제되지 않은 레코드는 새 리더에 없으므로 유실될 수 있다." },
-        { "id": "C", "text": "`retries` 가 크므로 클라이언트가 유실된 레코드를 자동으로 다시 만들어 보낸다." },
-        { "id": "D", "text": "`acks=1` 은 리더가 팔로워 복제까지 확인한 뒤 응답하므로 `acks=all` 과 결과가 같다." }
+        {
+          "id": "A",
+          "text": "리더 응답을 받은 레코드는 모두 팔로워에 복제되어 있으므로 유실되지 않는다."
+        },
+        {
+          "id": "B",
+          "text": "`acks=1` 은 리더가 팔로워 복제까지 확인한 뒤 응답하므로 `acks=all` 과 결과가 같다."
+        },
+        {
+          "id": "C",
+          "text": "`retries` 가 크므로 클라이언트가 유실된 레코드를 자동으로 다시 만들어 보낸다."
+        },
+        {
+          "id": "D",
+          "text": "리더가 응답했지만 아직 복제되지 않은 레코드는 새 리더에 없으므로 유실될 수 있다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "D"
+      ],
       "explanation": "`acks=1` 은 리더가 자기 로그에 기록한 직후 응답하므로, 팔로워가 아직 복제하지 못한 구간이 존재할 수 있습니다. 그 상태에서 리더가 소실되고 팔로워가 새 리더가 되면 복제되지 않은 구간은 사라지며, 프로듀서는 이미 성공 응답을 받았으므로 재전송하지도 않습니다. 이것이 `acks=all` 과 `min.insync.replicas` 조합이 필요한 이유입니다. `acks=0` 은 응답조차 기다리지 않아 유실 범위가 더 넓고, 대신 지연이 가장 짧습니다.",
       "distractorNotes": {
         "A": "리더 응답 시점에는 복제가 보장되지 않습니다. 그 보장은 `acks=all` 의 성질입니다.",
         "C": "성공 응답을 받은 레코드는 재전송 대상이 아닙니다. 클라이언트는 유실을 알지 못합니다.",
-        "D": "`acks=1` 은 리더 기록만 확인합니다. ISR 전원 확인은 `acks=all` 입니다."
+        "B": "`acks=1` 은 리더 기록만 확인합니다. ISR 전원 확인은 `acks=all` 입니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Producer Configs: acks", "url": "https://kafka.apache.org/documentation/#producerconfigs_acks" },
-        { "title": "Kafka Docs — Replication", "url": "https://kafka.apache.org/documentation/#replication" }
+        {
+          "title": "Kafka Docs — Producer Configs: acks",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_acks"
+        },
+        {
+          "title": "Kafka Docs — Replication",
+          "url": "https://kafka.apache.org/documentation/#replication"
+        }
       ],
-      "tags": ["acks-isr", "durability", "producer"]
+      "tags": [
+        "acks-isr",
+        "durability",
+        "producer"
+      ]
     },
     {
       "id": "ccdak-mock-2-034",
@@ -1014,12 +1826,26 @@
         "body": "MockConsumer<String, String> consumer = new MockConsumer<>(\"earliest\");\nconsumer.subscribe(List.of(\"orders\"), listener);\n// (1) 할당 변화를 만들어 리스너 콜백을 호출시킨다"
       },
       "choices": [
-        { "id": "A", "text": "`MockConsumer` 는 그룹 조정을 지원하지 않으므로 실제 브로커가 필요하다." },
-        { "id": "B", "text": "`consumer.poll()` 을 여러 번 호출하면 자동으로 할당이 바뀌어 콜백이 호출된다." },
-        { "id": "C", "text": "`consumer.rebalance(newAssignment)` 로 할당 변화를 시뮬레이션하면 회수·할당 콜백이 호출된다." },
-        { "id": "D", "text": "`consumer.assign()` 을 다시 호출하면 리밸런스 리스너가 호출된다." }
+        {
+          "id": "A",
+          "text": "`MockConsumer` 는 그룹 조정을 지원하지 않으므로 실제 브로커가 필요하다."
+        },
+        {
+          "id": "B",
+          "text": "`consumer.poll()` 을 여러 번 호출하면 자동으로 할당이 바뀌어 콜백이 호출된다."
+        },
+        {
+          "id": "C",
+          "text": "`consumer.rebalance(newAssignment)` 로 할당 변화를 시뮬레이션하면 회수·할당 콜백이 호출된다."
+        },
+        {
+          "id": "D",
+          "text": "`consumer.assign()` 을 다시 호출하면 리밸런스 리스너가 호출된다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "`MockConsumer` 는 실제 그룹 조정을 하지 않지만 `rebalance(Collection<TopicPartition>)` 로 할당 변화를 직접 주입할 수 있고, 이때 이전 할당과 비교해 회수·할당 콜백이 호출됩니다. 그래서 리스너 안에서 커밋을 수행하는지, 상태를 제대로 정리하는지 같은 로직을 브로커 없이 검증할 수 있습니다. 이때 리셋 전략에 맞춰 `updateBeginningOffsets()` 또는 `updateEndOffsets()` 로 시작 위치를 알려 주어야 이후 `poll()` 이 정상 동작합니다. 다만 실제 프로토콜 협상이나 cooperative 증분 회수의 세부 동작까지 재현하지는 않으므로, 그 검증은 통합 테스트로 넘겨야 합니다.",
       "distractorNotes": {
         "A": "할당 변화 시뮬레이션은 지원됩니다. 실제 프로토콜 협상만 재현되지 않습니다.",
@@ -1027,10 +1853,20 @@
         "D": "`assign()` 은 수동 지정이므로 리밸런스 콜백을 호출하지 않습니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Consumer API", "url": "https://kafka.apache.org/documentation/#consumerapi" },
-        { "title": "MockConsumer (apache/kafka 4.3)", "url": "https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/clients/consumer/MockConsumer.java" }
+        {
+          "title": "Kafka Docs — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        },
+        {
+          "title": "MockConsumer (apache/kafka 4.3)",
+          "url": "https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/clients/consumer/MockConsumer.java"
+        }
       ],
-      "tags": ["kafka-testing", "mockconsumer", "rebalance-triggers"]
+      "tags": [
+        "kafka-testing",
+        "mockconsumer",
+        "rebalance-triggers"
+      ]
     },
     {
       "id": "ccdak-mock-2-035",
@@ -1042,11 +1878,31 @@
       "question": "각 오류 처리 설정을 그 역할과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`errors.tolerance`", "right": "실패한 레코드를 건너뛸지 결정한다 — 기본값에서는 태스크가 실패한다" },
-        { "id": "p2", "left": "`errors.retry.timeout`", "right": "재시도 가능한 실패에 쓸 시간 예산을 정한다 — 기본값에서는 재시도하지 않는다" },
-        { "id": "p3", "left": "`errors.deadletterqueue.topic.name`", "right": "건너뛴 레코드를 보낼 토픽을 지정한다 — sink 커넥터 전용이다" },
-        { "id": "p4", "left": "`errors.deadletterqueue.context.headers.enable`", "right": "DLQ 레코드에 실패 원인 헤더를 함께 남긴다" },
-        { "id": "p5", "left": "`errors.log.enable`", "right": "실패한 레코드 정보를 워커 로그에 남긴다" }
+        {
+          "id": "p1",
+          "left": "`errors.tolerance`",
+          "right": "실패한 레코드를 건너뛸지 결정한다 — 기본값에서는 태스크가 실패한다"
+        },
+        {
+          "id": "p2",
+          "left": "`errors.retry.timeout`",
+          "right": "재시도 가능한 실패에 쓸 시간 예산을 정한다 — 기본값에서는 재시도하지 않는다"
+        },
+        {
+          "id": "p3",
+          "left": "`errors.deadletterqueue.topic.name`",
+          "right": "건너뛴 레코드를 보낼 토픽을 지정한다 — sink 커넥터 전용이다"
+        },
+        {
+          "id": "p4",
+          "left": "`errors.deadletterqueue.context.headers.enable`",
+          "right": "DLQ 레코드에 실패 원인 헤더를 함께 남긴다"
+        },
+        {
+          "id": "p5",
+          "left": "`errors.log.enable`",
+          "right": "실패한 레코드 정보를 워커 로그에 남긴다"
+        }
       ],
       "extraRights": [
         "재시도 사이의 최대 백오프 간격을 정한다",
@@ -1058,10 +1914,20 @@
         "p4": "이 값이 기본 `false` 이므로 DLQ만 켜면 원인을 알 수 없는 레코드가 쌓입니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Connect Configs: errors.tolerance", "url": "https://kafka.apache.org/documentation/#connectconfigs_errors.tolerance" },
-        { "title": "Kafka Docs — Connect Sink Configs", "url": "https://kafka.apache.org/documentation/#sinkconnectconfigs" }
+        {
+          "title": "Kafka Docs — Connect Configs: errors.tolerance",
+          "url": "https://kafka.apache.org/documentation/#connectconfigs_errors.tolerance"
+        },
+        {
+          "title": "Kafka Docs — Connect Sink Configs",
+          "url": "https://kafka.apache.org/documentation/#sinkconnectconfigs"
+        }
       ],
-      "tags": ["connect", "dlq", "errors.tolerance"]
+      "tags": [
+        "connect",
+        "dlq",
+        "errors.tolerance"
+      ]
     },
     {
       "id": "ccdak-mock-2-036",
@@ -1073,12 +1939,26 @@
       "question": "배치 파이프라인 점검으로 컨슈머 그룹을 9일간 정지한 뒤 재기동했다. 그룹 설정은 `auto.offset.reset=latest` 다. 결과로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "커밋 오프셋이 만료되어 사라졌다면 정지 기간에 쌓인 레코드를 건너뛰고 최신부터 읽는다." },
-        { "id": "B", "text": "커밋 오프셋은 compact 토픽에 있으므로 만료되지 않고 항상 이어서 읽는다." },
-        { "id": "C", "text": "`auto.offset.reset` 이 `latest` 이므로 커밋 오프셋이 있어도 무조건 최신부터 읽는다." },
-        { "id": "D", "text": "커밋 오프셋이 만료되면 컨슈머가 기동하지 못하고 예외로 종료된다." }
+        {
+          "id": "A",
+          "text": "커밋 오프셋이 만료되어 사라졌다면 정지 기간에 쌓인 레코드를 건너뛰고 최신부터 읽는다."
+        },
+        {
+          "id": "B",
+          "text": "커밋 오프셋은 compact 토픽에 있으므로 만료되지 않고 항상 이어서 읽는다."
+        },
+        {
+          "id": "C",
+          "text": "`auto.offset.reset` 이 `latest` 이므로 커밋 오프셋이 있어도 무조건 최신부터 읽는다."
+        },
+        {
+          "id": "D",
+          "text": "커밋 오프셋이 만료되면 컨슈머가 기동하지 못하고 예외로 종료된다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "그룹에 활성 멤버가 없는 상태로 `offsets.retention.minutes`(기본 10080분, 7일)가 지나면 커밋 오프셋이 삭제됩니다. 그러면 재기동 시 읽을 위치를 알 수 없어 `auto.offset.reset` 이 적용되는데 `latest` 이므로 정지 기간에 쌓인 레코드를 건너뛰고 최신 지점부터 읽습니다. 데이터를 잃지 않으려면 정지 기간이 길어질 때 `earliest` 로 두거나, 재기동 전에 오프셋을 명시적으로 되돌려야 합니다. 이 조용한 건너뜀은 장애로 인식되지 않아 발견이 늦다는 점이 특히 위험합니다.",
       "distractorNotes": {
         "B": "compact 토픽이라도 오프셋 만료 처리가 별도로 수행됩니다.",
@@ -1086,10 +1966,20 @@
         "D": "예외로 종료되는 것은 `auto.offset.reset=none` 인 경우입니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Broker Configs: offsets.retention.minutes", "url": "https://kafka.apache.org/documentation/#brokerconfigs_offsets.retention.minutes" },
-        { "title": "Kafka Docs — Consumer Configs: auto.offset.reset", "url": "https://kafka.apache.org/documentation/#consumerconfigs_auto.offset.reset" }
+        {
+          "title": "Kafka Docs — Broker Configs: offsets.retention.minutes",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_offsets.retention.minutes"
+        },
+        {
+          "title": "Kafka Docs — Consumer Configs: auto.offset.reset",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_auto.offset.reset"
+        }
       ],
-      "tags": ["offset-reset", "consumer-group", "offsets"]
+      "tags": [
+        "offset-reset",
+        "consumer-group",
+        "offsets"
+      ]
     },
     {
       "id": "ccdak-mock-2-037",
@@ -1101,13 +1991,31 @@
       "question": "프로듀서 전송 지연이 커졌을 때 원인을 클라이언트 내부와 브로커 왕복으로 나누어 판단하려 한다. 함께 보아야 하는 지표를 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`record-queue-time-avg` — 레코드가 배치에서 전송 대기한 평균 시간" },
-        { "id": "B", "text": "`request-latency-avg` — 브로커 요청의 평균 왕복 시간" },
-        { "id": "C", "text": "`records-consumed-rate` — 컨슈머의 초당 소비 레코드 수" },
-        { "id": "D", "text": "`assigned-partitions` — 컨슈머에 할당된 파티션 수" },
-        { "id": "E", "text": "`ActiveControllerCount` — 컨트롤러 활성 표시" }
+        {
+          "id": "A",
+          "text": "`record-queue-time-avg` — 레코드가 배치에서 전송 대기한 평균 시간"
+        },
+        {
+          "id": "B",
+          "text": "`request-latency-avg` — 브로커 요청의 평균 왕복 시간"
+        },
+        {
+          "id": "C",
+          "text": "`records-consumed-rate` — 컨슈머의 초당 소비 레코드 수"
+        },
+        {
+          "id": "D",
+          "text": "`assigned-partitions` — 컨슈머에 할당된 파티션 수"
+        },
+        {
+          "id": "E",
+          "text": "`ActiveControllerCount` — 컨트롤러 활성 표시"
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "프로듀서 지연은 배치에서 기다린 시간과 브로커 왕복 시간의 합으로 나눠 볼 수 있습니다. 대기 시간이 크면 버퍼 압박이나 배치·전송 설정 쪽 문제이고, 왕복 시간이 크면 브로커나 네트워크 쪽 문제이므로 조치 방향이 전혀 다릅니다. 두 값을 함께 보면 `linger.ms`·`batch.size` 조정으로 해결될 문제인지, 브로커 포화를 봐야 할 문제인지 구분할 수 있습니다. 컨슈머 지표와 컨트롤러 지표는 프로듀서 전송 경로를 설명하지 않습니다.",
       "distractorNotes": {
         "C": "컨슈머 측 처리량 지표입니다. 프로듀서 지연을 설명하지 못합니다.",
@@ -1115,10 +2023,20 @@
         "E": "컨트롤러 정상 여부 확인용이며 전송 지연의 원인 지표가 아닙니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Monitoring: Producer Metrics", "url": "https://kafka.apache.org/documentation/#producer_monitoring" },
-        { "title": "Kafka Docs — Producer Configs: linger.ms", "url": "https://kafka.apache.org/documentation/#producerconfigs_linger.ms" }
+        {
+          "title": "Kafka Docs — Monitoring: Producer Metrics",
+          "url": "https://kafka.apache.org/documentation/#producer_monitoring"
+        },
+        {
+          "title": "Kafka Docs — Producer Configs: linger.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_linger.ms"
+        }
       ],
-      "tags": ["monitoring", "producer", "jmx"]
+      "tags": [
+        "monitoring",
+        "producer",
+        "jmx"
+      ]
     },
     {
       "id": "ccdak-mock-2-038",
@@ -1130,12 +2048,26 @@
       "question": "프로듀서·컨슈머를 기본 설정으로 두고 컨슈머가 처리 후 커밋하도록만 구현했다. 이때 얻는 전달 보장과 그 이유로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "exactly-once — 4.x 기본값이 멱등성을 켜기 때문이다." },
-        { "id": "B", "text": "at-least-once — 유실은 없지만 커밋 전 크래시로 중복 처리가 생길 수 있다." },
-        { "id": "C", "text": "at-most-once — 처리 후 커밋은 유실 위험이 있는 방식이다." },
-        { "id": "D", "text": "보장 없음 — 트랜잭션을 쓰지 않으면 어떤 보장도 성립하지 않는다." }
+        {
+          "id": "A",
+          "text": "exactly-once — 4.x 기본값이 멱등성을 켜기 때문이다."
+        },
+        {
+          "id": "B",
+          "text": "at-least-once — 유실은 없지만 커밋 전 크래시로 중복 처리가 생길 수 있다."
+        },
+        {
+          "id": "C",
+          "text": "at-most-once — 처리 후 커밋은 유실 위험이 있는 방식이다."
+        },
+        {
+          "id": "D",
+          "text": "보장 없음 — 트랜잭션을 쓰지 않으면 어떤 보장도 성립하지 않는다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "4.x 기본값인 `acks=all` 과 멱등성은 전송 경로에서 유실과 재시도 중복을 막아 주고, 처리 후 커밋은 처리되지 않은 레코드가 커밋되는 일을 막아 줍니다. 그래서 유실은 없지만 처리 완료와 커밋 사이에 크래시하면 같은 레코드를 다시 읽어 중복 처리가 발생합니다. 이것이 기본 구성에서 얻는 at-least-once이며, 대부분의 파이프라인이 이 지점에서 소비 측 멱등 처리를 함께 둡니다. exactly-once는 트랜잭션과 `read_committed` 를 추가해야 성립하고 그마저 Kafka 경계 안에서만 유효합니다.",
       "distractorNotes": {
         "A": "멱등 프로듀서는 한 세션·한 파티션의 재시도 중복만 제거합니다. 오프셋 커밋과의 원자성은 없습니다.",
@@ -1143,10 +2075,20 @@
         "D": "기본 구성에서도 유실 없는 보장이 성립합니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Message Delivery Semantics", "url": "https://kafka.apache.org/documentation/#semantics" },
-        { "title": "Kafka Docs — Producer Configs: acks", "url": "https://kafka.apache.org/documentation/#producerconfigs_acks" }
+        {
+          "title": "Kafka Docs — Message Delivery Semantics",
+          "url": "https://kafka.apache.org/documentation/#semantics"
+        },
+        {
+          "title": "Kafka Docs — Producer Configs: acks",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_acks"
+        }
       ],
-      "tags": ["delivery-semantics", "eos", "acks-isr"]
+      "tags": [
+        "delivery-semantics",
+        "eos",
+        "acks-isr"
+      ]
     },
     {
       "id": "ccdak-mock-2-039",
@@ -1155,30 +2097,54 @@
       "chapter": "ch04",
       "difficulty": "medium",
       "type": "single",
-      "question": "토픽 `max.message.bytes` 를 낮게 잡아 둔 상태에서 여러 레코드를 담은 배치가 브로커 한도를 넘었다. Kafka 4.3 클라이언트의 동작으로 옳은 것은?",
+      "question": "아래 설정으로 프로듀서를 생성했을 때의 결과로 옳은 것은?",
       "code": {
-        "lang": "text",
-        "caption": "상황",
-        "body": "프로듀서 max.request.size = 1048576 (기본값)\n토픽 max.message.bytes = 65536\n전송 배치: 레코드 200건, 압축 후 약 300KB"
+        "lang": "properties",
+        "caption": "producer.properties",
+        "body": "linger.ms=5\nrequest.timeout.ms=30000\ndelivery.timeout.ms=20000"
       },
-      "choices": [
-        { "id": "A", "text": "`RecordTooLargeException` 이 클라이언트에서 즉시 발생하고 재시도하지 않는다." },
-        { "id": "B", "text": "브로커가 배치를 잘라 앞부분만 저장하고 나머지를 버린다." },
-        { "id": "C", "text": "브로커가 `MESSAGE_TOO_LARGE` 를 반환하고 Sender가 배치를 쪼개 다시 보내며, 이 재전송은 재시도 횟수를 소모하지 않는다." },
-        { "id": "D", "text": "`delivery.timeout.ms` 가 즉시 소진되어 전송이 최종 실패한다." }
-      ],
-      "answer": ["C"],
-      "explanation": "요청 크기가 프로듀서 한도 안이므로 클라이언트 검사는 통과하고, 브로커가 토픽 한도를 기준으로 거부하며 `MESSAGE_TOO_LARGE` 를 반환합니다. 이때 배치에 레코드가 두 건 이상이면 클라이언트는 배치를 분할해 다시 보내고, 이 분할 재전송은 재시도 횟수를 소모하지 않습니다. 따라서 겉으로는 멈추지 않고 계속 재전송되지만 요청 수가 늘어 버퍼가 압박을 받으며, 레코드 하나로 이루어진 배치는 더 쪼갤 수 없어 최종 실패합니다. 근본 조치는 토픽 한도와 프로듀서·컨슈머·팔로워 관련 설정을 정합하게 맞추는 것입니다.",
+      "explanation": "전송 전체 예산인 `delivery.timeout.ms` 는 배치가 대기하는 시간과 요청 한 번의 응답 대기를 모두 포함해야 하므로, `linger.ms + request.timeout.ms` 보다 작을 수 없습니다. 사용자가 이 값을 명시했는데 조건을 위반하면 클라이언트가 설정 오류로 판단해 프로듀서 생성을 실패시킵니다. 반대로 이 값을 명시하지 않은 상태에서 다른 두 값의 합이 기본값보다 커지면, 클라이언트가 경고를 남기고 예산을 그 합으로 올려 잡습니다. 즉 같은 상황에서도 명시 여부에 따라 예외와 자동 보정으로 결과가 갈립니다.",
       "distractorNotes": {
-        "A": "이 예외는 요청이 프로듀서 `max.request.size` 를 넘을 때 클라이언트가 던집니다. 지금은 브로커 한도 문제입니다.",
-        "B": "브로커가 배치를 임의로 잘라 저장하는 동작은 없습니다. 요청 전체가 거부됩니다.",
-        "D": "분할 재전송이 성공하면 실패로 끝나지 않습니다. 예산은 여전히 시간 기준으로만 소진됩니다."
+        "A": "관계식을 위반한 조합이므로 그대로 적용되지 않습니다.",
+        "B": "런타임 타임아웃이 아니라 생성 시점의 설정 검증에서 걸립니다.",
+        "D": "요청 타임아웃을 낮추는 보정은 하지 않습니다. 명시된 예산이 작으면 예외입니다."
       },
       "refs": [
-        { "title": "Kafka Docs — Topic Configs: max.message.bytes", "url": "https://kafka.apache.org/documentation/#topicconfigs_max.message.bytes" },
-        { "title": "Kafka Docs — Producer Configs: max.request.size", "url": "https://kafka.apache.org/documentation/#producerconfigs_max.request.size" }
+        {
+          "title": "Kafka Docs — Producer Configs: delivery.timeout.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_delivery.timeout.ms"
+        },
+        {
+          "title": "Kafka Docs — Producer Configs: request.timeout.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_request.timeout.ms"
+        }
       ],
-      "tags": ["message-size", "retriable-errors", "producer"]
+      "tags": [
+        "delivery.timeout.ms",
+        "linger.ms",
+        "producer"
+      ],
+      "choices": [
+        {
+          "id": "A",
+          "text": "정상 기동하며 세 값이 그대로 적용된다."
+        },
+        {
+          "id": "B",
+          "text": "정상 기동하지만 첫 전송에서 `TimeoutException` 이 발생한다."
+        },
+        {
+          "id": "C",
+          "text": "`ConfigException` 이 발생해 프로듀서 생성이 실패한다."
+        },
+        {
+          "id": "D",
+          "text": "`request.timeout.ms` 가 자동으로 낮춰져 정상 기동한다."
+        }
+      ],
+      "answer": [
+        "C"
+      ]
     },
     {
       "id": "ccdak-mock-2-040",
@@ -1190,13 +2156,31 @@
       "question": "Kafka Streams가 자동으로 만드는 내부 토픽에 대해 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "상태 저장소의 changelog 토픽은 compact 정책으로 유지되어 장애 시 상태 복원에 쓰인다." },
-        { "id": "B", "text": "리파티션 토픽은 중간 경로이므로 소비된 구간이 정리되며 상태 복원 용도로 쓰이지 않는다." },
-        { "id": "C", "text": "내부 토픽 이름은 `application.id` 와 무관하게 무작위로 생성된다." },
-        { "id": "D", "text": "changelog 토픽은 stateless 연산에도 항상 생성된다." },
-        { "id": "E", "text": "내부 토픽의 복제 계수는 항상 1로 고정된다." }
+        {
+          "id": "A",
+          "text": "상태 저장소의 changelog 토픽은 compact 정책으로 유지되어 장애 시 상태 복원에 쓰인다."
+        },
+        {
+          "id": "B",
+          "text": "리파티션 토픽은 중간 경로이므로 소비된 구간이 정리되며 상태 복원 용도로 쓰이지 않는다."
+        },
+        {
+          "id": "C",
+          "text": "내부 토픽 이름은 `application.id` 와 무관하게 무작위로 생성된다."
+        },
+        {
+          "id": "D",
+          "text": "changelog 토픽은 stateless 연산에도 항상 생성된다."
+        },
+        {
+          "id": "E",
+          "text": "내부 토픽의 복제 계수는 항상 1로 고정된다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "상태 저장소는 로컬 디스크에 있으므로 인스턴스가 죽으면 사라지고, 그 복원을 위해 변경 이력을 담는 changelog 토픽이 compact 정책으로 유지됩니다. 리파티션 토픽은 키를 다시 분배하기 위한 중간 경로여서 복원 용도가 아니고, 처리된 구간은 정리되어 무한히 쌓이지 않습니다. 두 토픽 모두 이름이 `application.id` 를 접두사로 갖기 때문에 애플리케이션 식별자를 바꾸면 완전히 새 내부 토픽 집합이 만들어집니다. 복제 계수는 Streams의 `replication.factor` 설정으로 정하며 기본값 -1은 브로커 기본값을 따르라는 의미입니다.",
       "distractorNotes": {
         "C": "이름은 `application.id` 를 접두사로 하는 규칙을 따릅니다.",
@@ -1204,10 +2188,1129 @@
         "E": "`replication.factor` 로 조정할 수 있고 기본값은 브로커 기본값을 따릅니다."
       },
       "refs": [
-        { "title": "Kafka Streams — Architecture: State", "url": "https://kafka.apache.org/documentation/streams/architecture#streams_architecture_state" },
-        { "title": "Kafka Streams — Configs: replication.factor", "url": "https://kafka.apache.org/documentation/#streamsconfigs_replication.factor" }
+        {
+          "title": "Kafka Streams — Architecture: State",
+          "url": "https://kafka.apache.org/documentation/streams/architecture#streams_architecture_state"
+        },
+        {
+          "title": "Kafka Streams — Configs: replication.factor",
+          "url": "https://kafka.apache.org/documentation/#streamsconfigs_replication.factor"
+        }
       ],
-      "tags": ["state-store", "streams", "repartition"]
+      "tags": [
+        "state-store",
+        "streams",
+        "repartition"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-041",
+      "exam": "CCDAK",
+      "domain": "Application Testing",
+      "chapter": "ch10",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "장시간 부하를 주며 레코드 유실과 중복이 없는지 정합성을 검증하려 한다. Apache Kafka 배포판에 포함된 도구로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`kafka-producer-perf-test.sh` 와 `kafka-consumer-perf-test.sh` 로 정합성까지 판정한다."
+        },
+        {
+          "id": "B",
+          "text": "`kafka-e2e-latency.sh` 가 전송·수신 레코드를 비교해 유실을 보고한다."
+        },
+        {
+          "id": "C",
+          "text": "`kafka-console-producer.sh` 와 `kafka-console-consumer.sh` 의 출력 건수를 세어 판정한다."
+        },
+        {
+          "id": "D",
+          "text": "`kafka-verifiable-producer.sh` 와 `kafka-verifiable-consumer.sh` 로 전송·수신 레코드를 대조한다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "검증용 도구는 각 레코드에 식별 정보를 붙여 보내고 소비 결과를 기계가 읽을 수 있는 형태로 출력하므로, 유실과 중복을 프로그램으로 대조할 수 있습니다. 성능 측정 도구는 처리량과 지연 통계를 보여 주는 것이 목적이므로 정합성 판정에는 쓰지 않고, 종단 지연 측정 도구도 지연만 다룹니다. 콘솔 도구로 건수를 세는 방식은 순서나 중복을 구분하지 못하고 대량 부하에서 신뢰할 수 없습니다. 어떤 도구가 무엇을 판정하는지 구분하는 문항은 이 도메인의 단골입니다.",
+      "distractorNotes": {
+        "A": "처리량·지연 측정 도구입니다. 유실 판정 기능이 없습니다.",
+        "B": "end-to-end 지연 측정 도구이며 정합성 대조 도구가 아닙니다.",
+        "C": "수동 집계는 중복과 순서를 구분하지 못하고 규모가 커지면 불가능합니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Operations: Basic Kafka Operations",
+          "url": "https://kafka.apache.org/documentation/#basic_ops"
+        },
+        {
+          "title": "Kafka Docs — Design: Message Delivery Semantics",
+          "url": "https://kafka.apache.org/documentation/#semantics"
+        }
+      ],
+      "tags": [
+        "kafka-testing",
+        "cli",
+        "delivery-semantics"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-042",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "distributed 모드 Connect의 내부 토픽 세 개에 대해 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "explanation": "설정·오프셋·상태를 담는 세 내부 토픽은 모두 최신 상태만 필요하므로 컴팩션 정책으로 유지됩니다. 그중 설정 토픽은 변경이 순서대로 적용되어야 하므로 공식 문서가 파티션을 하나로 두라고 명시하고, 대신 복제 계수는 3 이상으로 두어 내구성을 확보합니다. 오프셋 토픽은 source 커넥터의 소스 시스템 위치만 담고 sink 커넥터의 오프셋은 컨슈머 오프셋 토픽에 저장됩니다. 워커는 필요한 내부 토픽을 자동으로 생성할 수 있지만, 운영에서는 파티션 수와 복제 계수를 통제하기 위해 미리 만들어 두는 경우도 많습니다.",
+      "distractorNotes": {
+        "C": "복제 계수는 `config.storage.replication.factor` 같은 설정으로 조정합니다.",
+        "D": "sink 오프셋은 `__consumer_offsets` 에 저장됩니다.",
+        "E": "워커가 자동 생성할 수 있습니다. 수동 생성은 선택입니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Connect: Distributed Mode",
+          "url": "https://kafka.apache.org/documentation/#connect_distributed"
+        },
+        {
+          "title": "Kafka Docs — Connect Configs",
+          "url": "https://kafka.apache.org/documentation/#connectconfigs"
+        }
+      ],
+      "tags": [
+        "connect",
+        "connect-offsets",
+        "internal-topics"
+      ],
+      "choices": [
+        {
+          "id": "A",
+          "text": "세 토픽 모두 `cleanup.policy=compact` 로 만들어 최신 상태만 유지한다."
+        },
+        {
+          "id": "B",
+          "text": "`config.storage.topic` 은 적용 순서가 중요하므로 파티션 하나로 만든다."
+        },
+        {
+          "id": "C",
+          "text": "세 토픽의 복제 계수는 1로 고정되어 있어 조정할 수 없다."
+        },
+        {
+          "id": "D",
+          "text": "`offset.storage.topic` 은 sink 커넥터의 컨슈머 오프셋도 함께 저장한다."
+        },
+        {
+          "id": "E",
+          "text": "내부 토픽은 워커가 자동으로 만들 수 없으므로 항상 수동 생성해야 한다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-043",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 전송 실패 상황을 그때 프로듀서 클라이언트가 실제로 하는 동작과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "code": null,
+      "explanation": "같은 크기 초과 문제라도 어느 쪽 한도를 넘었는지에 따라 클라이언트 동작이 완전히 달라집니다. 클라이언트 한도 초과는 전송 전에 거부되어 재시도 대상이 아니고, 브로커 한도 초과는 배치 분할 재전송으로 이어지며 이 재전송은 재시도 예산을 쓰지 않습니다. 리더 이동과 ISR 부족은 모두 일시적 상태이므로 메타데이터 갱신과 재시도로 흡수되고, 최종 종료 조건은 `delivery.timeout.ms` 예산입니다. 직렬화 실패는 배치에 담기기 전에 발생하므로 콜백이 아니라 호출 지점에서 드러난다는 점이 특히 자주 틀립니다.",
+      "distractorNotes": {
+        "p2": "비재시도 실패로 처리된다고 오해하기 쉽습니다. 다만 단일 레코드 배치는 더 쪼갤 수 없어 최종 실패합니다.",
+        "p4": "콜백으로 전달된다고 착각하면 오류 처리 코드를 잘못된 위치에 두게 됩니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Producer Configs: max.request.size",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_max.request.size"
+        },
+        {
+          "title": "Kafka Docs — Producer API",
+          "url": "https://kafka.apache.org/documentation/#producerapi"
+        }
+      ],
+      "tags": [
+        "retriable-errors",
+        "message-size",
+        "producer"
+      ],
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "요청이 `max.request.size` 를 초과",
+          "right": "브로커에 보내기 전에 클라이언트가 즉시 실패시킨다"
+        },
+        {
+          "id": "p2",
+          "left": "브로커가 `MESSAGE_TOO_LARGE` 응답",
+          "right": "배치를 쪼개 다시 보내며 재시도 횟수를 소모하지 않는다"
+        },
+        {
+          "id": "p3",
+          "left": "리더가 이동 중이라는 응답",
+          "right": "메타데이터를 갱신한 뒤 새 리더로 재시도한다"
+        },
+        {
+          "id": "p4",
+          "left": "값 직렬화기가 예외를 던짐",
+          "right": "`send()` 호출 지점에서 동기로 예외가 던져진다"
+        },
+        {
+          "id": "p5",
+          "left": "ISR이 최소 ISR 미만이라는 응답",
+          "right": "재시도 가능으로 보고 시간 예산이 남는 동안 재시도한다"
+        }
+      ],
+      "extraRights": [
+        "압축 코덱을 더 강한 것으로 바꿔 같은 배치를 다시 보낸다",
+        "브로커 설정을 조회해 클라이언트 한도를 자동으로 낮춘다"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-044",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch07",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "컴팩션 토픽으로 상태를 배포하는데, 며칠간 멈췄던 컨슈머만 삭제된 키를 계속 갖고 있다. 원인으로 가장 정확한 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "tombstone이 `delete.retention.ms` 를 넘겨 이미 제거된 뒤에 그 컨슈머가 읽기 시작했다."
+        },
+        {
+          "id": "B",
+          "text": "컴팩션은 tombstone을 만들지 않으므로 삭제는 애초에 전파되지 않는다."
+        },
+        {
+          "id": "C",
+          "text": "`retention.ms` 가 짧아 tombstone이 일반 레코드와 함께 삭제되었다."
+        },
+        {
+          "id": "D",
+          "text": "그 컨슈머의 `isolation.level` 이 `read_uncommitted` 라서 삭제 마커를 건너뛰었다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "컴팩션 토픽에서 삭제는 값이 `null` 인 tombstone 레코드로 표현되고, 이 마커는 컴팩션 이후에도 `delete.retention.ms`(기본 86400000, 1일) 동안 남아 컨슈머가 삭제 사실을 볼 수 있게 합니다. 그 기간이 지나 마커가 제거된 뒤에 읽기 시작한 컨슈머는 해당 키를 아예 보지 못하므로, 자기 로컬 상태에 남아 있는 옛 값을 지울 계기가 없습니다. 그래서 정지 기간이 길어질 수 있는 소비자가 있다면 이 값을 충분히 크게 잡아야 합니다. 이 현상은 오류 없이 조용히 상태 불일치를 만들기 때문에 발견이 어렵습니다.",
+      "distractorNotes": {
+        "B": "컴팩션 토픽의 삭제는 tombstone으로 표현되며 컨슈머에게 전달됩니다.",
+        "C": "`retention.ms` 는 일반 레코드의 보관 기간이며 tombstone 수명을 정하는 것은 `delete.retention.ms` 입니다.",
+        "D": "`isolation.level` 은 트랜잭션 가시성 설정이며 tombstone과 무관합니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Log Compaction",
+          "url": "https://kafka.apache.org/documentation/#compaction"
+        },
+        {
+          "title": "Kafka Docs — Topic Configs: delete.retention.ms",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_delete.retention.ms"
+        }
+      ],
+      "tags": [
+        "compaction",
+        "tombstone",
+        "retention"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-045",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "chapter": "ch09",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Connect 파이프라인이 조용히 멈추는 상황을 자동으로 감지하려 한다. 알림을 걸 지표로 가장 적절한 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`connector-total-task-count` — 태스크 수가 유지되는지 본다."
+        },
+        {
+          "id": "B",
+          "text": "`sink-record-read-rate` — 읽은 레코드 수가 늘고 있는지 본다."
+        },
+        {
+          "id": "C",
+          "text": "`connector-failed-task-count` — 값이 0보다 크면 즉시 조사한다."
+        },
+        {
+          "id": "D",
+          "text": "`connector-startup-attempts-total` — 기동 시도 횟수를 본다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "Connect는 커넥터 상태가 RUNNING이어도 개별 태스크가 FAILED일 수 있고, 실패한 태스크를 자동으로 되살리지 않습니다. 그래서 실패 태스크 수 지표가 0을 벗어나는 순간이 파이프라인이 부분적으로 멈춘 시점이므로 여기에 알림을 걸어야 합니다. 확인 후에는 `GET /connectors/{name}/status` 로 `trace` 와 `worker_id` 를 보고 원인을 고친 뒤 실패 태스크만 재시작합니다. 태스크 수나 기동 시도 횟수는 상태 변화를 늦게 반영하거나 실패 사실을 직접 알려 주지 않습니다.",
+      "distractorNotes": {
+        "A": "총 태스크 수는 실패해도 그대로 유지될 수 있어 실패를 드러내지 않습니다.",
+        "B": "처리량 감소는 정상적인 트래픽 변화와 구분하기 어렵습니다.",
+        "D": "기동 시도 누적값이며 운영 중 실패를 즉시 알려 주지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Connect Monitoring",
+          "url": "https://kafka.apache.org/documentation/#connect_monitoring"
+        },
+        {
+          "title": "Kafka Docs — Connect REST API",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
+      ],
+      "tags": [
+        "monitoring",
+        "connect",
+        "connect-logging"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-046",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "hard",
+      "type": "ordering",
+      "question": "아래 토폴로지에서 레코드 하나가 지나는 경로를 순서대로 배열하세요.",
+      "code": {
+        "lang": "java",
+        "caption": "토폴로지",
+        "body": "builder.stream(\"orders\")\n       .selectKey((k, v) -> v.customerId())\n       .groupByKey()\n       .count()\n       .toStream()\n       .to(\"orders-per-customer\");"
+      },
+      "explanation": "키를 바꾸는 연산 뒤에 키 기반 집계가 오면 Streams는 리파티션 토픽을 만들어 같은 키가 한 태스크로 모이게 합니다. 그래서 레코드는 새 키로 리파티션 토픽에 한 번 쓰이고 다시 읽히며, 이 지점에서 토폴로지가 두 개의 서브토폴로지로 나뉩니다. 두 번째 서브토폴로지는 상태 저장소에서 카운트를 갱신하고 그 변경을 changelog 토픽에 남긴 뒤 결과를 출력 토픽으로 보냅니다. 이 왕복 때문에 값만 바꿔도 되는 자리에 키를 바꾸는 연산을 쓰면 네트워크와 디스크 비용이 늘어납니다.",
+      "distractorNotes": {
+        "i2": "리파티션 없이 곧바로 집계된다고 착각하면 태스크 수와 지연 계산이 어긋납니다.",
+        "i4": "changelog 기록이 출력 뒤에 온다고 오해하기 쉽습니다. 상태 갱신이 먼저입니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Streams — Architecture",
+          "url": "https://kafka.apache.org/documentation/streams/architecture"
+        },
+        {
+          "title": "Kafka Streams — DSL: Stateless Transformations",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#stateless-transformations"
+        }
+      ],
+      "tags": [
+        "repartition",
+        "state-store",
+        "streams"
+      ],
+      "items": [
+        {
+          "id": "i3",
+          "text": "리파티션 토픽에서 다시 읽어 두 번째 서브토폴로지가 처리한다"
+        },
+        {
+          "id": "i1",
+          "text": "`orders` 토픽에서 읽어 `selectKey` 로 새 키를 부여한다"
+        },
+        {
+          "id": "i5",
+          "text": "집계 결과를 `orders-per-customer` 토픽으로 내보낸다"
+        },
+        {
+          "id": "i2",
+          "text": "새 키로 리파티션 토픽에 기록한다"
+        },
+        {
+          "id": "i4",
+          "text": "상태 저장소에서 카운트를 갱신하고 changelog 토픽에 기록한다"
+        }
+      ],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4",
+        "i5"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-047",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch04",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "같은 주문의 상태 변경 이벤트가 항상 발생 순서대로 소비되도록 보장해야 한다. 가장 직접적인 조치는?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`acks=all` 과 멱등성을 활성화한다."
+        },
+        {
+          "id": "B",
+          "text": "주문 ID를 메시지 키로 지정해 같은 주문이 같은 파티션으로 가게 한다."
+        },
+        {
+          "id": "C",
+          "text": "컨슈머 수를 파티션 수와 같게 맞춘다."
+        },
+        {
+          "id": "D",
+          "text": "토픽의 `cleanup.policy` 를 `compact` 로 바꾼다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "Kafka의 순서 보장 범위는 토픽-파티션 하나이므로, 순서를 지켜야 하는 이벤트들이 같은 파티션에 들어가야 합니다. 키를 지정하면 같은 키가 결정적으로 같은 파티션에 배치되므로 주문 단위 순서가 성립합니다. `acks=all` 과 멱등성은 유실과 재시도 중복을 막는 설정으로 문장 자체는 옳지만 순서 요구사항에 답하지 않으며, 이런 선택지가 시험에서 가장 흔한 함정입니다. 다만 파티션 수를 나중에 늘리면 같은 키의 목적지가 바뀌어 순서가 깨질 수 있다는 점을 함께 고려해야 합니다.",
+      "distractorNotes": {
+        "A": "내구성과 중복에 관한 조치입니다. 파티션 배치를 바꾸지 않으므로 순서를 보장하지 못합니다.",
+        "C": "병렬성 구성이며 파티션 간 순서를 정의해 주지 않습니다.",
+        "D": "보관 정책은 어떤 레코드를 남길지 정하는 것이며 순서와 무관합니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Introduction: Main Concepts",
+          "url": "https://kafka.apache.org/documentation/#intro_concepts_and_terms"
+        },
+        {
+          "title": "Kafka Docs — Producer Configs: partitioner.class",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_partitioner.class"
+        }
+      ],
+      "tags": [
+        "partitioning",
+        "ordering",
+        "producer"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-048",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "hard",
+      "type": "ordering",
+      "question": "distributed 모드에서 커넥터의 오프셋을 초기화해 처음부터 다시 처리시키는 절차를 순서대로 배열하세요.",
+      "code": null,
+      "items": [
+        {
+          "id": "i3",
+          "text": "`DELETE /connectors/{name}/offsets` 로 오프셋을 초기화한다"
+        },
+        {
+          "id": "i1",
+          "text": "`PUT /connectors/{name}/stop` 으로 커넥터를 정지시킨다"
+        },
+        {
+          "id": "i4",
+          "text": "`PUT /connectors/{name}/resume` 으로 커넥터를 다시 시작한다"
+        },
+        {
+          "id": "i2",
+          "text": "`GET /connectors/{name}/status` 로 상태가 STOPPED가 되었는지 확인한다"
+        }
+      ],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
+      ],
+      "explanation": "오프셋 조회·변경·초기화 요청은 커넥터가 STOPPED 상태일 때만 허용되므로 먼저 정지시켜야 합니다. 정지 요청은 비동기로 반영되므로 상태 조회로 STOPPED를 확인한 뒤에 오프셋 요청을 보내는 것이 안전합니다. 초기화가 끝나면 다시 시작하면 되고, 이때 source 커넥터는 소스 시스템을 처음부터 다시 읽고 sink 커넥터는 구독 토픽을 다시 소비합니다. 커넥터를 삭제하고 재생성하는 방법은 설정까지 잃고 이름 충돌로 409를 만들 수 있어 권장되지 않습니다.",
+      "distractorNotes": {
+        "i1": "정지 없이 오프셋 요청을 보내면 상태 조건을 만족하지 못해 거부됩니다.",
+        "i3": "`pause` 상태에서도 가능하다고 오해하기 쉽습니다. 태스크가 해제된 STOPPED 상태가 필요합니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Connect REST API",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
+      ],
+      "tags": [
+        "connect-rest",
+        "connect-offsets",
+        "connect"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-049",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch07",
+      "difficulty": "hard",
+      "type": "multiple",
+      "question": "보관 정책과 디스크 사용에 대해 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`retention.bytes` 는 파티션당 한도이므로 토픽 전체 사용량은 파티션 수를 곱해 계산한다."
+        },
+        {
+          "id": "B",
+          "text": "삭제는 세그먼트 파일 단위로 일어나므로 마감되지 않은 활성 세그먼트는 삭제되지 않는다."
+        },
+        {
+          "id": "C",
+          "text": "`retention.ms` 를 줄이면 그 즉시 초과분이 파일에서 제거된다."
+        },
+        {
+          "id": "D",
+          "text": "`retention.bytes` 를 지정하면 `retention.ms` 는 무시된다."
+        },
+        {
+          "id": "E",
+          "text": "복제본은 보관 정책의 적용 대상이 아니므로 디스크 산정에서 제외한다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
+      ],
+      "explanation": "크기 기준 보관은 파티션 단위로 적용되므로 토픽 전체 사용량을 보려면 파티션 수를 곱해야 하고, 여기에 복제 계수까지 곱해야 클러스터 전체 소요가 나옵니다. 삭제 단위가 세그먼트 파일이기 때문에 활성 세그먼트는 대상이 아니며, 그래서 보관 기간을 줄여도 즉시 회수되지 않고 `segment.ms` 나 `segment.bytes` 를 함께 조정해야 효과가 납니다. 시간 기준과 크기 기준은 독립적으로 동작해 어느 쪽이든 초과하면 삭제 대상이 됩니다. 복제본도 각 브로커의 디스크를 차지하므로 산정에서 빼면 용량이 부족해집니다.",
+      "distractorNotes": {
+        "C": "세그먼트가 마감되어야 삭제 판정이 가능하므로 즉시 회수되지 않습니다.",
+        "D": "두 기준은 독립적으로 적용됩니다. 어느 쪽이든 초과하면 삭제됩니다.",
+        "E": "복제본도 실제 디스크를 사용합니다. 복제 계수를 곱해 산정해야 합니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Topic Configs: retention.bytes",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_retention.bytes"
+        },
+        {
+          "title": "Kafka Docs — Topic Configs: segment.ms",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_segment.ms"
+        }
+      ],
+      "tags": [
+        "retention",
+        "capacity-planning",
+        "segment.ms"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-050",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "chapter": "ch05",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "`ConsumerInterceptor` 를 등록한 컨슈머에서 레코드 한 배치가 처리되는 흐름을 순서대로 배열하세요.",
+      "code": null,
+      "items": [
+        {
+          "id": "i3",
+          "text": "`ConsumerInterceptor.onConsume()` 이 호출되어 레코드를 관찰·변형한다"
+        },
+        {
+          "id": "i1",
+          "text": "브로커가 fetch 응답으로 레코드 배치를 보낸다"
+        },
+        {
+          "id": "i4",
+          "text": "`poll()` 이 레코드를 애플리케이션에 반환한다"
+        },
+        {
+          "id": "i2",
+          "text": "설정된 역직렬화기가 key·value를 객체로 변환한다"
+        },
+        {
+          "id": "i5",
+          "text": "커밋이 완료되면 `ConsumerInterceptor.onCommit()` 이 호출된다"
+        }
+      ],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4",
+        "i5"
+      ],
+      "explanation": "인터셉터의 `onConsume()` 은 `poll()` 이 레코드를 반환하기 직전에 호출되므로, 애플리케이션이 보는 레코드는 이미 인터셉터를 거친 것입니다. 그 앞에 역직렬화가 있으므로 인터셉터는 바이트가 아니라 객체 형태의 레코드를 다루고, 역직렬화 실패는 인터셉터에 도달하지 않고 `poll()` 에서 예외로 드러납니다. 커밋 결과 통지는 별도로 `onCommit()` 이 담당하므로 처리 지표와 커밋 지표를 나눠 수집할 수 있습니다. 프로듀서 쪽 `onSend()` 가 직렬화보다 앞이라는 점과 방향이 대칭이라는 것을 함께 기억하면 헷갈리지 않습니다.",
+      "distractorNotes": {
+        "i3": "`poll()` 반환 후에 호출된다고 착각하기 쉽습니다. 반환 직전입니다.",
+        "i2": "역직렬화가 인터셉터 뒤라고 오해하면 인터셉터에서 바이트를 다룬다고 잘못 이해하게 됩니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Consumer Configs: interceptor.classes",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_interceptor.classes"
+        },
+        {
+          "title": "Kafka Docs — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        }
+      ],
+      "tags": [
+        "monitoring",
+        "interceptor",
+        "consumer"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-051",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch04",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "파티션 6개인 토픽을 소비하는 컨슈머 그룹의 처리량을 늘리려 한다. 실제로 효과가 있는 조치를 모두 고르세요. (2개 선택)",
+      "code": null,
+      "explanation": "그룹의 병렬성 상한은 파티션 수이므로, 파티션을 늘리지 않고 인스턴스만 추가하면 초과분은 유휴 상태로 남습니다. 따라서 파티션 증설과 인스턴스 추가를 함께 해야 실제 처리량이 늘어나며, 이때 키 기반 순서 보장이 깨질 수 있다는 점을 함께 검토해야 합니다. 인스턴스를 늘리지 않고도 처리량을 올리려면 poll 스레드와 처리 스레드를 분리해 병렬로 처리하고, 밀릴 때는 일시 정지로 흐름을 조절해 poll 간격을 지키는 방법이 있습니다. 두 타임아웃을 늘리는 조치는 이탈 판정만 늦추고 처리 능력을 키우지 않습니다.",
+      "distractorNotes": {
+        "C": "파티션이 6개이므로 6개를 넘는 인스턴스는 할당을 받지 못합니다.",
+        "D": "처리 시간 초과 판정을 늦추는 것이며 처리 속도를 높이지 않습니다.",
+        "E": "장애 감지를 늦추는 조치이며 처리량과 무관합니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#intro_consumers"
+        },
+        {
+          "title": "Kafka Docs — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        }
+      ],
+      "tags": [
+        "consumer-group",
+        "partitioning",
+        "max-poll-interval"
+      ],
+      "choices": [
+        {
+          "id": "A",
+          "text": "파티션 수를 늘린 뒤 컨슈머 인스턴스를 그만큼 추가한다."
+        },
+        {
+          "id": "B",
+          "text": "레코드 처리를 별도 스레드풀로 분리하고 `pause()`·`resume()` 으로 흐름을 제어한다."
+        },
+        {
+          "id": "C",
+          "text": "컨슈머 인스턴스를 12개로 늘린다."
+        },
+        {
+          "id": "D",
+          "text": "`max.poll.interval.ms` 를 두 배로 올린다."
+        },
+        {
+          "id": "E",
+          "text": "`session.timeout.ms` 를 두 배로 올린다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-052",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "다섯 대의 워커로 운영하는 Connect 클러스터에서 태스크 하나가 FAILED가 되었다. 로그를 확인하는 방법으로 옳은 것은?",
+      "code": {
+        "lang": "text",
+        "caption": "GET /connectors/es-sink/status 응답 일부",
+        "body": "{\"name\":\"es-sink\",\"connector\":{\"state\":\"RUNNING\",\"worker_id\":\"w3:8083\"},\n \"tasks\":[{\"id\":0,\"state\":\"RUNNING\",\"worker_id\":\"w1:8083\"},\n          {\"id\":1,\"state\":\"FAILED\",\"worker_id\":\"w4:8083\",\"trace\":\"org.apache.kafka.connect.errors.DataException: ...\"}]}"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "커넥터를 담당하는 `w3` 워커의 로그를 본다 — 커넥터 로그가 태스크 로그를 포함한다."
+        },
+        {
+          "id": "B",
+          "text": "실패한 태스크가 실행된 `w4` 워커의 로컬 로그를 본다 — 필요하면 `PUT /admin/loggers/{logger}` 로 레벨을 올린다."
+        },
+        {
+          "id": "C",
+          "text": "리더 워커가 모든 로그를 모으므로 리더의 로그만 확인하면 된다."
+        },
+        {
+          "id": "D",
+          "text": "로그는 `status.storage.topic` 에 적재되므로 그 토픽을 소비해 확인한다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "Connect 워커는 자신이 실행한 태스크의 로그를 각자 로컬 파일에 남기므로, 실패한 태스크의 `worker_id` 를 확인해 그 노드의 로그를 봐야 합니다. 상태 응답의 `trace` 는 예외 요약을 보여 주지만 원인 규명에 필요한 앞뒤 문맥은 로그에만 있습니다. 더 자세한 정보가 필요하면 `PUT /admin/loggers/{logger}` 로 런타임에 레벨을 올리고 조사한 뒤 원래대로 되돌립니다. 커넥터 상태가 RUNNING이어도 태스크가 FAILED일 수 있고 자동 재시작되지 않으므로, 원인 수정 후 실패 태스크만 재시작해야 합니다.",
+      "distractorNotes": {
+        "A": "커넥터 인스턴스와 태스크는 서로 다른 워커에서 실행될 수 있습니다. 로그도 각 노드에 따로 남습니다.",
+        "C": "리더 워커는 설정 관리와 태스크 배분을 담당하며 로그를 중앙 집계하지 않습니다.",
+        "D": "`status.storage.topic` 은 상태 정보를 담는 토픽이며 로그 저장소가 아닙니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Connect REST API",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        },
+        {
+          "title": "Kafka Docs — Connect: Running Kafka Connect",
+          "url": "https://kafka.apache.org/documentation/#connect_running"
+        }
+      ],
+      "tags": [
+        "connect-logging",
+        "connect",
+        "troubleshooting"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-053",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch08",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "v1 시절에 쌓인 데이터를 최신 v3 스키마로 재처리해야 한다. subject 호환성 설정으로 가장 적절한 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`FORWARD` — 옛 데이터를 새 스키마로 읽는 방향을 보장한다."
+        },
+        {
+          "id": "B",
+          "text": "`FULL` — 직전 버전과 양방향이면 모든 이전 버전과도 호환된다."
+        },
+        {
+          "id": "C",
+          "text": "`NONE` — 검사를 끄면 어떤 버전이든 읽을 수 있다."
+        },
+        {
+          "id": "D",
+          "text": "`BACKWARD_TRANSITIVE` — 새 스키마가 등록된 모든 이전 버전의 데이터를 읽을 수 있어야 한다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "새 스키마로 옛 데이터를 읽는 방향은 `BACKWARD` 계열이고, 비-transitive 모드는 직전 버전만 검사합니다. 그래서 v1에서 v2, v2에서 v3로 조금씩 바꾸면 각 단계는 통과했지만 v1과 v3가 호환되지 않는 상태가 만들어질 수 있습니다. 오래된 데이터를 최신 스키마로 재처리해야 한다면 등록된 모든 이전 버전과 대조하는 `BACKWARD_TRANSITIVE` 가 필요합니다. 대신 제약이 강해져 진화 여지가 줄어들므로 재처리 요구가 있는 subject에만 선택적으로 적용하는 것이 일반적입니다.",
+      "distractorNotes": {
+        "A": "`FORWARD` 는 옛 스키마로 새 데이터를 읽는 방향입니다. 필요한 방향이 반대입니다.",
+        "B": "`FULL` 도 비-transitive이므로 직전 버전만 검사합니다.",
+        "C": "검사를 끄면 호환성이 보장되지 않아 재처리 시 역직렬화가 실패합니다."
+      },
+      "refs": [
+        {
+          "title": "Confluent Docs — Schema Evolution and Compatibility",
+          "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html"
+        }
+      ],
+      "tags": [
+        "schema-compatibility",
+        "schema-registry",
+        "avro"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-054",
+      "exam": "CCDAK",
+      "domain": "Application Testing",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "단일 브로커 테스트용으로 쓰던 브로커 설정을 프로덕션에 그대로 복사했다. 이때 생기는 위험을 모두 고르세요. (2개 선택)",
+      "code": {
+        "lang": "properties",
+        "caption": "복사된 브로커 설정",
+        "body": "transaction.state.log.replication.factor=1\ntransaction.state.log.min.isr=1\noffsets.topic.replication.factor=1"
+      },
+      "explanation": "이 세 설정은 내부 토픽의 복제 수준을 정하는 값이며, 테스트에서는 브로커가 하나뿐이라 어쩔 수 없이 1로 낮춥니다. 프로덕션에서 그대로 두면 트랜잭션 상태와 컨슈머 오프셋이 단일 브로커에만 존재하므로 그 브로커를 잃는 순간 진행 중 트랜잭션과 그룹 오프셋을 함께 잃습니다. 커밋 오프셋이 사라지면 재기동 시 `auto.offset.reset` 이 적용되어 전량 재처리 또는 구간 건너뜀이 발생합니다. 일반 토픽의 복제 계수는 별도 설정이며 이 값들에 영향을 받지 않고, 멱등성이나 리밸런스 동작도 달라지지 않습니다.",
+      "distractorNotes": {
+        "C": "멱등성은 프로듀서 설정으로 결정되며 내부 토픽 복제와 무관합니다.",
+        "D": "일반 토픽은 `default.replication.factor` 나 생성 시 지정값을 따릅니다.",
+        "E": "리밸런스 동작은 그대로 유지됩니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Broker Configs: offsets.topic.replication.factor",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_offsets.topic.replication.factor"
+        },
+        {
+          "title": "Kafka Docs — Broker Configs: transaction.state.log.replication.factor",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_transaction.state.log.replication.factor"
+        }
+      ],
+      "tags": [
+        "kafka-testing",
+        "transactions",
+        "integration-test"
+      ],
+      "choices": [
+        {
+          "id": "A",
+          "text": "트랜잭션 상태 토픽에 복제가 없어 그 브로커를 잃으면 진행 중인 트랜잭션 상태가 사라진다."
+        },
+        {
+          "id": "B",
+          "text": "컨슈머 오프셋 토픽에 복제가 없어 그 브로커를 잃으면 그룹의 커밋 오프셋이 유실될 수 있다."
+        },
+        {
+          "id": "C",
+          "text": "프로듀서의 멱등성이 자동으로 비활성화된다."
+        },
+        {
+          "id": "D",
+          "text": "일반 토픽의 복제 계수도 1로 강제된다."
+        },
+        {
+          "id": "E",
+          "text": "리밸런스가 발생하지 않게 되어 확장이 불가능해진다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-055",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "chapter": "ch10",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "태스크가 12개로 계산되는 Streams 애플리케이션을 인스턴스 하나로 실행하고 있다. 처리량을 올리기 위한 조치로 옳은 것은?",
+      "code": null,
+      "explanation": "Streams의 병렬 실행 단위는 태스크이고 태스크 수는 입력 파티션 수로 정해지므로, 스레드나 인스턴스를 늘려 태스크를 나눠 실행하는 것이 처리량을 늘리는 방법입니다. 스레드 기본값이 1이라는 점을 놓치면 인스턴스를 늘려도 각 인스턴스가 태스크 하나만 돌리는 구성이 됩니다. 다만 태스크 수보다 많은 스레드를 두어도 남는 스레드는 할당을 받지 못하므로 이득이 없고, 태스크를 더 늘리려면 입력 파티션 수를 늘려야 합니다. 커밋 주기와 캐시 크기는 지연·방출 빈도에 영향을 주는 설정이며 병렬성을 바꾸지 않습니다.",
+      "distractorNotes": {
+        "A": "태스크는 분할되지 않습니다. 태스크 수보다 많은 스레드는 유휴 상태가 됩니다.",
+        "B": "커밋 주기는 처리 병렬성과 무관하며 너무 줄이면 오버헤드만 늘어납니다.",
+        "D": "캐시를 끄면 하위로 내보내는 레코드 수가 늘어 부하가 커질 수 있습니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Streams — Architecture: Threading Model",
+          "url": "https://kafka.apache.org/documentation/streams/architecture#streams_architecture_threads"
+        },
+        {
+          "title": "Kafka Streams — Configs: num.stream.threads",
+          "url": "https://kafka.apache.org/documentation/#streamsconfigs_num.stream.threads"
+        }
+      ],
+      "tags": [
+        "streams",
+        "num.stream.threads",
+        "partitioning"
+      ],
+      "choices": [
+        {
+          "id": "A",
+          "text": "`num.stream.threads` 를 24로 올리면 태스크가 분할되어 병렬성이 두 배가 된다."
+        },
+        {
+          "id": "B",
+          "text": "`commit.interval.ms` 를 줄이면 태스크가 더 자주 실행되어 처리량이 늘어난다."
+        },
+        {
+          "id": "C",
+          "text": "기본값 1인 `num.stream.threads` 를 늘리거나 인스턴스를 추가해 태스크를 나눠 실행한다."
+        },
+        {
+          "id": "D",
+          "text": "`statestore.cache.max.bytes` 를 0으로 두면 처리 지연이 줄어 처리량이 늘어난다."
+        }
+      ],
+      "answer": [
+        "C"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-056",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch11",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "브로커 두 대를 추가했는데 기존 토픽의 트래픽과 디스크 사용이 전혀 옮겨가지 않는다. 원인과 조치로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "기존 파티션의 레플리카 배치는 자동으로 바뀌지 않으므로 `kafka-reassign-partitions.sh` 로 재배치해야 한다."
+        },
+        {
+          "id": "B",
+          "text": "`auto.leader.rebalance.enable` 이 기본 활성이므로 기다리면 파티션이 새 브로커로 이동한다."
+        },
+        {
+          "id": "C",
+          "text": "파티션 수를 줄여 새 브로커에 다시 분배해야 한다."
+        },
+        {
+          "id": "D",
+          "text": "새 브로커에 같은 이름의 토픽을 만들면 자동으로 병합된다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "브로커를 추가하면 새로 만들어지는 파티션은 새 브로커에도 배치되지만, 기존 파티션의 레플리카 배치는 그대로 유지됩니다. 부하를 옮기려면 이동 대상 토픽을 담은 JSON을 만들어 `--generate` 로 계획을 얻고, `--execute --throttle` 로 재할당한 뒤 `--verify` 로 완료를 확인하며 스로틀을 해제해야 합니다. 이 도구는 레플리카 위치와 리더십만 옮기며 파티션 수는 바꿀 수 없고, 파티션 수는 줄일 수도 없습니다. 자동 리더 리밸런스는 이미 존재하는 레플리카 중에서 선호 리더로 리더십만 되돌리는 기능이라 새 브로커로 데이터를 옮기지 않습니다.",
+      "distractorNotes": {
+        "B": "리더십 균형만 조정하는 기능이며 레플리카를 다른 브로커로 옮기지 않습니다.",
+        "C": "파티션 수는 줄일 수 없습니다.",
+        "D": "같은 이름의 토픽을 별도로 만들 수 없고 병합 기능도 존재하지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Expanding your cluster",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_cluster_expansion"
+        },
+        {
+          "title": "Kafka Docs — Broker Configs: auto.leader.rebalance.enable",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_auto.leader.rebalance.enable"
+        }
+      ],
+      "tags": [
+        "partition-reassign",
+        "replication",
+        "cli"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-057",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "chapter": "ch06",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "각 구성이 실제로 제공하는 보장을 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`acks=0` 으로 전송",
+          "right": "응답을 기다리지 않아 실패를 알 수 없고 조용한 유실이 가능하다"
+        },
+        {
+          "id": "p2",
+          "left": "`acks=1` 로 전송",
+          "right": "리더 기록만 확인하므로 복제 전 리더 소실 시 유실될 수 있다"
+        },
+        {
+          "id": "p3",
+          "left": "`acks=all` + `min.insync.replicas=2` + 처리 후 커밋",
+          "right": "유실은 없고 중복 처리는 발생할 수 있다"
+        },
+        {
+          "id": "p4",
+          "left": "트랜잭션 프로듀서 + `read_committed` 컨슈머",
+          "right": "Kafka 토픽 경계 안에서 정확히 한 번이 성립한다"
+        },
+        {
+          "id": "p5",
+          "left": "처리 전에 오프셋을 커밋",
+          "right": "중복은 없지만 처리 실패 시 레코드가 유실된다"
+        }
+      ],
+      "extraRights": [
+        "외부 데이터베이스 호출까지 원자적으로 묶어 준다",
+        "파티션 간 전역 순서를 함께 보장한다"
+      ],
+      "explanation": "보장은 프로듀서 설정과 커밋 시점의 조합으로 결정되며, 어느 한쪽만 맞추면 원하는 성질이 나오지 않습니다. 응답을 기다리지 않으면 유실을 알 수 없고, 리더만 확인하면 복제 전 소실 구간이 남습니다. 최소 두 곳에 기록하고 처리 후에 커밋하면 유실은 사라지지만 커밋 직전 크래시로 인한 중복은 남으므로 at-least-once가 됩니다. 정확히 한 번은 트랜잭션과 `read_committed` 를 함께 써야 하고, 그 범위는 Kafka 토픽 경계로 한정되어 외부 시스템 호출은 애플리케이션이 멱등하게 만들어야 합니다.",
+      "distractorNotes": {
+        "p4": "설정만으로 외부 시스템 중복까지 막는다고 오해하기 쉽습니다. 보장 경계는 Kafka 안입니다.",
+        "p5": "처리 전 커밋이 안전하다고 착각하기 쉽습니다. 실패 시 재전달이 없으므로 유실됩니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Message Delivery Semantics",
+          "url": "https://kafka.apache.org/documentation/#semantics"
+        },
+        {
+          "title": "Kafka Docs — Producer Configs: acks",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_acks"
+        }
+      ],
+      "tags": [
+        "delivery-semantics",
+        "eos",
+        "acks-isr"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-058",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "chapter": "ch11",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "각 관측 질문을 그 답을 얻을 수 있는 수단과 연결하세요. 정답이 아닌 미끼 수단이 섞여 있습니다.",
+      "code": null,
+      "explanation": "관측은 질문에서 출발해 수단을 고르는 순서로 정리해 두면 장애 시 헤매지 않습니다. 인스턴스 단위 밀림은 클라이언트 지표에 `client.id` 태그가 있어야 구분되고, 멤버가 실제로 붙어 있는지는 그룹 조회로만 확인할 수 있습니다. Connect 장애는 상태 조회에서 실패 태스크와 그 태스크를 실행한 워커를 확인하고 그 노드의 로컬 로그를 봐야 하며, 필요하면 런타임에 로그 레벨을 올립니다. 브로커의 여유는 두 스레드 풀의 유휴 비율로 판단하고, 미끼로 넣은 상태 토픽은 로그 저장소가 아니라 커넥터 상태 정보를 담는 토픽입니다.",
+      "distractorNotes": {
+        "p1": "브로커의 복제 lag 지표로는 인스턴스별 밀림을 알 수 없습니다.",
+        "p3": "커넥터 상태가 RUNNING이어도 태스크는 FAILED일 수 있어 태스크 단위로 확인해야 합니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Kafka Docs — Connect REST API",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
+      ],
+      "tags": [
+        "monitoring",
+        "connect-logging",
+        "jmx"
+      ],
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "어느 컨슈머 인스턴스가 밀리고 있는가",
+          "right": "인스턴스별 `client.id` 태그가 붙은 클라이언트 JMX 지표"
+        },
+        {
+          "id": "p2",
+          "left": "그룹에 활성 멤버가 붙어 있는가",
+          "right": "`kafka-consumer-groups.sh --describe --group` 출력의 멤버 정보"
+        },
+        {
+          "id": "p3",
+          "left": "어느 워커에서 태스크가 실패했는가",
+          "right": "`GET /connectors/{name}/status` 응답의 `worker_id` 와 `trace`"
+        },
+        {
+          "id": "p4",
+          "left": "Connect 로그를 재시작 없이 더 자세히 보려면",
+          "right": "`PUT /admin/loggers/{name}` 으로 런타임 로그 레벨 변경"
+        },
+        {
+          "id": "p5",
+          "left": "브로커가 요청 처리에 여유가 있는가",
+          "right": "`RequestHandlerAvgIdlePercent` 와 `NetworkProcessorAvgIdlePercent`"
+        }
+      ],
+      "extraRights": [
+        "`status.storage.topic` 을 직접 소비해 로그 확인",
+        "`ActiveControllerCount` 값이 1인지 확인"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-059",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "재시작한 브로커의 팔로워 레플리카가 다시 ISR에 들어가기까지의 과정을 순서대로 배열하세요.",
+      "code": null,
+      "items": [
+        {
+          "id": "i3",
+          "text": "리더의 로그 끝까지 따라잡아 `replica.lag.time.max.ms` 안에 fetch를 유지한다"
+        },
+        {
+          "id": "i1",
+          "text": "브로커가 기동해 로그 디렉터리를 복구하고 파티션을 로드한다"
+        },
+        {
+          "id": "i4",
+          "text": "리더가 그 레플리카를 다시 ISR에 추가하고 `UnderReplicatedPartitions` 가 줄어든다"
+        },
+        {
+          "id": "i2",
+          "text": "팔로워가 각 파티션 리더에게 fetch 요청을 보내 복제를 재개한다"
+        }
+      ],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
+      ],
+      "explanation": "브로커가 내려가 있는 동안 그 레플리카는 뒤처지므로 리더가 ISR에서 제외합니다. 다시 기동하면 로그를 복구하고 파티션을 로드한 뒤 팔로워로서 리더에게 fetch를 보내 밀린 구간을 따라잡습니다. 리더는 팔로워가 정해진 시간 안에 계속 따라오고 있는지를 `replica.lag.time.max.ms`(기본 30000)로 판단해 ISR 복귀를 결정합니다. 복귀가 완료되면 under-replicated 상태가 해소되고, `acks=all` 쓰기의 여유도 회복됩니다.",
+      "distractorNotes": {
+        "i2": "리더가 팔로워에게 데이터를 밀어 주는 방식으로 오해하기 쉽습니다. 팔로워가 fetch로 가져갑니다.",
+        "i4": "기동만 하면 곧바로 ISR에 들어간다고 착각하기 쉽습니다. 따라잡은 뒤에야 복귀합니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Replication",
+          "url": "https://kafka.apache.org/documentation/#replication"
+        },
+        {
+          "title": "Kafka Docs — Broker Configs: replica.lag.time.max.ms",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_replica.lag.time.max.ms"
+        }
+      ],
+      "tags": [
+        "isr",
+        "replication",
+        "monitoring"
+      ]
+    },
+    {
+      "id": "ccdak-mock-2-060",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "운영 중 `min.insync.replicas` 를 3으로 올린 직후 브로커 한 대가 재시작에 들어갔다. RF=3, `acks=all` 프로듀서의 관측 결과로 옳은 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "설정 변경은 새로 만든 토픽에만 적용되므로 아무 변화가 없다."
+        },
+        {
+          "id": "B",
+          "text": "프로듀서가 즉시 `RecordTooLargeException` 을 받고 전송을 포기한다."
+        },
+        {
+          "id": "C",
+          "text": "브로커가 `acks=1` 로 강등해 처리하므로 쓰기는 계속 성공한다."
+        },
+        {
+          "id": "D",
+          "text": "쓰기가 `NotEnoughReplicasException` 으로 실패하지만 재시도 가능한 예외이므로 예산이 남는 동안 재시도한다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "최소 ISR을 복제 계수와 같게 두면 여유가 0이 되어 한 대만 빠져도 `acks=all` 쓰기 조건을 채울 수 없습니다. 이때 브로커가 반환하는 예외는 재시도 가능한 계열이므로 프로듀서는 실패로 확정하지 않고 `delivery.timeout.ms` 예산이 남는 동안 계속 재시도하며, 브로커가 복귀해 ISR이 회복되면 전송이 성공합니다. 예산이 먼저 소진되면 최종 실패로 콜백에 예외가 전달됩니다. 그래서 운영에서는 최소 ISR을 복제 계수보다 하나 작게 두어 롤링 재시작 여유를 확보합니다.",
+      "distractorNotes": {
+        "A": "동적으로 변경한 토픽·브로커 설정은 기존 토픽에도 적용됩니다.",
+        "B": "레코드 크기와 무관한 상황이므로 이 예외는 발생하지 않습니다.",
+        "C": "브로커가 프로듀서의 `acks` 를 임의로 낮추는 동작은 없습니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Topic Configs: min.insync.replicas",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas"
+        },
+        {
+          "title": "Kafka Docs — Producer Configs: delivery.timeout.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_delivery.timeout.ms"
+        }
+      ],
+      "tags": [
+        "acks-isr",
+        "retriable-errors",
+        "min.insync.replicas"
+      ]
     }
   ]
 }

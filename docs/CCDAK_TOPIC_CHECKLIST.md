@@ -24,7 +24,7 @@
 
 | # | 토픽 | 반드시 다룰 포인트 | 담당 |
 |:--:|---|---|---|
-| A1 | `onCompletion()` 호출 시점 | 콜백은 **Sender 스레드**에서 실행 / 브로커 응답(또는 최종 실패) 시점에 호출 / `send()`는 비동기 즉시 반환 / 콜백 안에서 블로킹 작업 금지 / 같은 파티션 콜백은 순서 보장 / `(metadata, exception)` 중 하나는 null | ch04, ccdak-app-development |
+| A1 | `onCompletion()` 호출 시점 | 콜백은 **Sender 스레드**에서 실행 / 브로커 응답(또는 최종 실패) 시점에 호출 / `send()`는 비동기 즉시 반환 / 콜백 안에서 블로킹 작업 금지 / 같은 파티션 콜백은 순서 보장 / ⚠️ **정정(B3a 확인)**: `(metadata, exception)` 중 하나가 null이라는 서술은 4.3에서 틀리다. 예외가 있을 때 `metadata`는 **null이 아니라 전 필드가 `-1`인 빈 객체**다 (`Callback` javadoc). 단 소스는 파티션이 결정된 경우 `partition()`에 실제 값을 담을 수 있으므로, 문항은 **`offset()`이 `-1`임만** 묻는다 | ch04, ccdak-app-development |
 | A2 | `enable.idempotence` × `max.in.flight.requests.per.connection` | 멱등성 켜면 in-flight **5 이하**여야 순서+중복제거 보장 / 5 초과 시 설정 오류 / PID+시퀀스 번호로 브로커가 중복 판별 / 3.0부터 기본 활성 | ch04, ch06 |
 | A3 | 재시도 가능한 에러 vs 불가능한 에러 | **retriable**: `LeaderNotAvailableException`, `NotLeaderOrFollowerException`, `NotEnoughReplicasException`, `NetworkException`, `TimeoutException`, `CoordinatorNotAvailableException` / **non-retriable**: `RecordTooLargeException`, `SerializationException`, `AuthorizationException`, `InvalidTopicException` / `RetriableException` 인터페이스 상속 여부가 기준 / `delivery.timeout.ms`가 전체 상한 | ch04, cases/case10 |
 | A4 | 키 없는 메시지의 파티션 분배 | 키 있으면 `murmur2(key) % numPartitions` (결정적) / **키 없으면 기본 파티셔너가 sticky batching으로 분배** — "완전한 라운드로빈"이 아니라 **배치 단위 sticky 후 전환** / 2.4 이전 `DefaultPartitioner`는 라운드로빈 / 시험에서는 "round-robin 방식으로 분산"으로 출제되는 경우가 있으므로 **양쪽 서술을 모두 설명**할 것 | ch04, cases/case04 |

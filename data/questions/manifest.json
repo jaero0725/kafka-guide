@@ -1,0 +1,443 @@
+{
+  "generatedAt": "2026-07-28",
+  "kafkaVersion": "4.3",
+  "totalQuestions": 852,
+  "sets": [
+    {
+      "setId": "ccdak-app-development",
+      "file": "ccdak-app-development.json",
+      "title": "CCDAK — Application Development (28%) 도메인 연습문제",
+      "exam": "CCDAK",
+      "domain": "Application Development",
+      "count": 90,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccdak-fundamentals",
+      "file": "ccdak-fundamentals.json",
+      "title": "CCDAK — Fundamentals (23%) 도메인 연습문제",
+      "exam": "CCDAK",
+      "domain": "Fundamentals",
+      "count": 74,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccdak-connect",
+      "file": "ccdak-connect.json",
+      "title": "CCDAK — Kafka Connect (15%)",
+      "exam": "CCDAK",
+      "domain": "Kafka Connect",
+      "count": 48,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccdak-observability",
+      "file": "ccdak-observability.json",
+      "title": "CCDAK — Application Observability (13%)",
+      "exam": "CCDAK",
+      "domain": "Application Observability",
+      "count": 42,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccdak-streams",
+      "file": "ccdak-streams.json",
+      "title": "CCDAK — Kafka Streams (12%)",
+      "exam": "CCDAK",
+      "domain": "Kafka Streams",
+      "count": 38,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccdak-testing",
+      "file": "ccdak-testing.json",
+      "title": "CCDAK — Application Testing (8%)",
+      "exam": "CCDAK",
+      "domain": "Application Testing",
+      "count": 26,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccdak-mock-1",
+      "file": "ccdak-mock-1.json",
+      "title": "CCDAK 모의고사 1세트 — 표준 (60문항 · 90분)",
+      "exam": "CCDAK",
+      "domain": "Mixed",
+      "count": 60,
+      "mock": true,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccdak-mock-2",
+      "file": "ccdak-mock-2.json",
+      "title": "CCDAK 모의고사 2세트 — 실무 시나리오·코드 판독 (60문항 · 90분)",
+      "exam": "CCDAK",
+      "domain": "Mixed",
+      "count": 60,
+      "mock": true,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccdak-mock-3",
+      "file": "ccdak-mock-3.json",
+      "title": "CCDAK 모의고사 3 — 설정값·API 세부 집중",
+      "exam": "CCDAK",
+      "domain": "Mixed",
+      "count": 60,
+      "mock": true,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccdak-mock-4",
+      "file": "ccdak-mock-4.json",
+      "title": "CCDAK 모의고사 4 — 최종 점검 상급",
+      "exam": "CCDAK",
+      "domain": "Mixed",
+      "count": 60,
+      "mock": true,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccdak-diagnostic",
+      "file": "ccdak-diagnostic.json",
+      "title": "CCDAK 진단 테스트 — 6도메인 × 5문항",
+      "exam": "CCDAK",
+      "domain": "Mixed",
+      "count": 30,
+      "mock": false,
+      "diagnostic": true
+    },
+    {
+      "setId": "ccaak-fundamentals",
+      "file": "ccaak-fundamentals.json",
+      "title": "CCAAK — Kafka Fundamentals",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "count": 12,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccaak-cluster-config",
+      "file": "ccaak-cluster-config.json",
+      "title": "CCAAK — Cluster Configuration",
+      "exam": "CCAAK",
+      "domain": "Cluster Configuration",
+      "count": 12,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccaak-connect",
+      "file": "ccaak-connect.json",
+      "title": "CCAAK — Kafka Connect",
+      "exam": "CCAAK",
+      "domain": "Kafka Connect",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccaak-deployment",
+      "file": "ccaak-deployment.json",
+      "title": "CCAAK — Deployment Architecture",
+      "exam": "CCAAK",
+      "domain": "Deployment Architecture",
+      "count": 12,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccaak-observability",
+      "file": "ccaak-observability.json",
+      "title": "CCAAK — Observability",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "count": 12,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccaak-security",
+      "file": "ccaak-security.json",
+      "title": "CCAAK — Kafka Security",
+      "exam": "CCAAK",
+      "domain": "Kafka Security",
+      "count": 14,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccaak-troubleshooting",
+      "file": "ccaak-troubleshooting.json",
+      "title": "CCAAK — Troubleshooting",
+      "exam": "CCAAK",
+      "domain": "Troubleshooting",
+      "count": 12,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "ccaak-mock-1",
+      "file": "ccaak-mock-1.json",
+      "title": "CCAAK 모의고사 1 — 90분 60문항",
+      "exam": "CCAAK",
+      "domain": "Mixed",
+      "count": 60,
+      "mock": true,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-ch01",
+      "file": "basics-ch01.json",
+      "title": "1장 확인 문제 — Kafka 개요와 이벤트 스트리밍",
+      "exam": "BASICS",
+      "domain": "Kafka 개요와 이벤트 스트리밍",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-ch02",
+      "file": "basics-ch02.json",
+      "title": "2장 확인 문제 — 아키텍처와 핵심 개념",
+      "exam": "BASICS",
+      "domain": "아키텍처와 핵심 개념",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-ch03",
+      "file": "basics-ch03.json",
+      "title": "3장 확인 문제 — KRaft와 클러스터 메타데이터",
+      "exam": "BASICS",
+      "domain": "KRaft와 클러스터 메타데이터",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-ch04",
+      "file": "basics-ch04.json",
+      "title": "4장 확인 문제 — Producer 심화",
+      "exam": "BASICS",
+      "domain": "Producer 심화",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-ch05",
+      "file": "basics-ch05.json",
+      "title": "5장 확인 문제 — Consumer 심화",
+      "exam": "BASICS",
+      "domain": "Consumer 심화",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-ch06",
+      "file": "basics-ch06.json",
+      "title": "6장 확인 문제 — 전달 보장과 트랜잭션",
+      "exam": "BASICS",
+      "domain": "전달 보장과 트랜잭션",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-ch07",
+      "file": "basics-ch07.json",
+      "title": "7장 확인 문제 — 스토리지·리텐션·컴팩션",
+      "exam": "BASICS",
+      "domain": "스토리지·리텐션·컴팩션",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-ch08",
+      "file": "basics-ch08.json",
+      "title": "8장 확인 문제 — 스키마와 직렬화",
+      "exam": "BASICS",
+      "domain": "스키마와 직렬화",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-ch09",
+      "file": "basics-ch09.json",
+      "title": "9장 확인 문제 — Kafka Connect",
+      "exam": "BASICS",
+      "domain": "Kafka Connect",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-ch10",
+      "file": "basics-ch10.json",
+      "title": "10장 확인 문제 — Kafka Streams와 ksqlDB",
+      "exam": "BASICS",
+      "domain": "Kafka Streams와 ksqlDB",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-ch11",
+      "file": "basics-ch11.json",
+      "title": "11장 확인 문제 — 운영 기초",
+      "exam": "BASICS",
+      "domain": "운영 기초",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    },
+    {
+      "setId": "basics-appendix-legacy",
+      "file": "basics-appendix-legacy.json",
+      "title": "부록 확인 문제 — 버전 표기와 레거시",
+      "exam": "BASICS",
+      "domain": "버전 표기와 레거시",
+      "count": 10,
+      "mock": false,
+      "diagnostic": false
+    }
+  ],
+  "exams": {
+    "CCDAK": {
+      "label": "Confluent Certified Developer for Apache Kafka",
+      "durationMin": 90,
+      "mockQuestionCount": 60,
+      "weightNote": "도메인 가중치는 공개 자료 기준 잠정치입니다. Confluent 공식 Exam Guide로 재확인하세요. 고정 문항 수와 합격 점수는 Confluent가 공개하지 않습니다.",
+      "domains": [
+        {
+          "name": "Application Development",
+          "weight": 28
+        },
+        {
+          "name": "Fundamentals",
+          "weight": 23
+        },
+        {
+          "name": "Kafka Connect",
+          "weight": 15
+        },
+        {
+          "name": "Application Observability",
+          "weight": 13
+        },
+        {
+          "name": "Kafka Streams",
+          "weight": 12
+        },
+        {
+          "name": "Application Testing",
+          "weight": 8
+        }
+      ]
+    },
+    "CCAAK": {
+      "label": "Confluent Certified Administrator for Apache Kafka",
+      "durationMin": 90,
+      "mockQuestionCount": 60,
+      "weightNote": "섹션 이름 7개는 확정값이지만 섹션별 가중치는 공식 확인이 불가하므로 표기하지 않습니다(weight=null). 고정 문항 수와 합격 점수도 Confluent가 공개하지 않습니다.",
+      "domains": [
+        {
+          "name": "Kafka Fundamentals",
+          "weight": null
+        },
+        {
+          "name": "Kafka Connect",
+          "weight": null
+        },
+        {
+          "name": "Cluster Configuration",
+          "weight": null
+        },
+        {
+          "name": "Deployment Architecture",
+          "weight": null
+        },
+        {
+          "name": "Observability",
+          "weight": null
+        },
+        {
+          "name": "Kafka Security",
+          "weight": null
+        },
+        {
+          "name": "Troubleshooting",
+          "weight": null
+        }
+      ]
+    },
+    "BASICS": {
+      "label": "기본개념 — 챕터 확인 문제",
+      "durationMin": null,
+      "mockQuestionCount": null,
+      "weightNote": "자격증 도메인이 아니라 기본개념 챕터 확인 문제입니다. 가중치 개념이 없습니다.",
+      "domains": [
+        {
+          "name": "Kafka 개요와 이벤트 스트리밍",
+          "weight": null
+        },
+        {
+          "name": "아키텍처와 핵심 개념",
+          "weight": null
+        },
+        {
+          "name": "KRaft와 클러스터 메타데이터",
+          "weight": null
+        },
+        {
+          "name": "Producer 심화",
+          "weight": null
+        },
+        {
+          "name": "Consumer 심화",
+          "weight": null
+        },
+        {
+          "name": "전달 보장과 트랜잭션",
+          "weight": null
+        },
+        {
+          "name": "스토리지·리텐션·컴팩션",
+          "weight": null
+        },
+        {
+          "name": "스키마와 직렬화",
+          "weight": null
+        },
+        {
+          "name": "Kafka Connect",
+          "weight": null
+        },
+        {
+          "name": "Kafka Streams와 ksqlDB",
+          "weight": null
+        },
+        {
+          "name": "운영 기초",
+          "weight": null
+        },
+        {
+          "name": "버전 표기와 레거시",
+          "weight": null
+        }
+      ]
+    }
+  }
+}

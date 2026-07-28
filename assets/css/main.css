@@ -1182,6 +1182,36 @@ a.card:hover { border-color: var(--c-accent-border); background: var(--c-accent-
 .result__stat { font-size: var(--fs-sm); color: var(--c-text-secondary); }
 .result__stat b { display: block; font-size: var(--fs-md); color: var(--c-text); font-variant-numeric: tabular-nums; }
 
+/* 홈 진도 대시보드 KPI */
+.kpi-grid {
+  list-style: none; margin: var(--space-5) 0; padding: 0;
+  display: grid; gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+}
+.kpi {
+  margin: 0; min-width: 0; display: flex;
+  border: 1px solid var(--c-border); border-radius: var(--radius-3);
+  background: var(--c-surface-raised);
+}
+.kpi__body {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: inherit;
+}
+.kpi__link { text-decoration: none; color: inherit; }
+.kpi__link:hover { background: var(--c-bg-subtle); }
+.kpi__label { font-size: var(--fs-xs); color: var(--c-text-muted); letter-spacing: 0.02em; }
+.kpi__value {
+  font-size: var(--fs-2xl); line-height: 1.1; font-weight: var(--fw-semibold);
+  color: var(--c-text); font-variant-numeric: tabular-nums;
+}
+.kpi__value small { font-size: var(--fs-md); font-weight: var(--fw-normal); color: var(--c-text-muted); }
+.kpi__sub { font-size: var(--fs-xs); color: var(--c-text-secondary); }
+.kpi__link:hover .kpi__label { color: var(--c-link); }
+
+.dash__note { font-size: var(--fs-sm); color: var(--c-text-secondary); }
+
 /* 순수 CSS 바 차트 */
 .bar-chart { list-style: none; margin: var(--space-4) 0; padding: 0; display: grid; gap: var(--space-3); }
 .bar-chart > li { margin: 0; display: grid; gap: var(--space-1); }

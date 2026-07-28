@@ -1486,8 +1486,15 @@
       var sets = manifest.sets || [];
       var exams = [];
       sets.forEach(function (s) { if (s.exam && exams.indexOf(s.exam) < 0) exams.push(s.exam); });
+      /* 도메인 연습은 단일 도메인 세트만 대상입니다.
+         모의고사·진단은 domain:"Mixed" 인 혼합 세트이므로 목록에서 제외합니다
+         (고르면 필터가 비어 전체 세트로 폴백해 "도메인 연습"이 아니게 됩니다). */
       var domains = [];
-      sets.forEach(function (s) { if (s.domain && domains.indexOf(s.domain) < 0) domains.push(s.domain); });
+      sets.forEach(function (s) {
+        if (s.mock || s.diagnostic) return;
+        if (!s.domain || /^(mixed|혼합)$/i.test(s.domain)) return;
+        if (domains.indexOf(s.domain) < 0) domains.push(s.domain);
+      });
 
       if (panel) {
         var h = '';
