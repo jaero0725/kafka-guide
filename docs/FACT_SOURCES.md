@@ -209,8 +209,12 @@ Kafka **4.3** 소스에서 직접 확인했다.
 - 콜백은 Sender 스레드 실행. 실패 시 `metadata` 필드가 **전부 `-1`**.
   같은 파티션 콜백은 순서 보장. **4.3부터 콜백 내 `flush()` 금지**
 - `SerializationException`은 **동기로 던져진다** (콜백으로 오지 않음)
-- 멱등성: `max.in.flight` 6 이상을 **명시**하면 `ConfigException`,
-  다른 설정 충돌 시에는 **조용히 비활성화**. 브로커가 파티션별 최근 배치 5개만 보관
+- 멱등성 충돌 분기 (⚠️ **B3a가 소스로 정밀화** — 이전 서술이 부정확했다):
+  · **`max.in.flight` > 5 는 명시 여부와 무관하게 항상 `ConfigException`**
+  · `acks`/`retries` 충돌은 **`enable.idempotence`를 명시했을 때만** 예외,
+    명시하지 않으면 **조용히 비활성화**
+  · 근거: `ProducerConfig.postProcessAndValidateIdempotenceConfigs`
+  · 브로커가 파티션별 최근 배치 5개만 보관하는 것이 in-flight 5 상한의 이유
 - `Partitioner` 인터페이스에 **`onNewBatch`는 없다** (구버전 자료 오류)
 - **4.0에서 제거된 클래스**: `DefaultPartitioner`, `UniformStickyPartitioner`,
   `NotLeaderForPartitionException`
@@ -353,6 +357,25 @@ max.partition.fetch.bytes:
 - `connect.protocol` 기본값 — `cfg.json`(생성 설정표)은 `sessioned`, 산문 문서는 `compatible`.
   `ccaak/domain-connect.html`이 `sessioned`로 단정하고 있으나 문서 내부 불일치가
   해소되지 않았다. **정답 근거로 쓰지 말 것.**
+
+### B3a가 소스로 새로 확정한 사실 (출제 가치 높음)
+
+| 사실 | 근거 |
+|---|---|
+| 콜백 안에서 `flush()` → **`KafkaException`** ("invocation inside a callback is not permitted") | `KafkaProducer.java:1216` |
+| **컴팩션 토픽은 키 없는 레코드를 브로커가 거부** — `INVALID_RECORD`, "Compacted topic cannot accept message without key" | `LogValidator.java:540` |
+| `ProducerInterceptor.onSend()` 는 **직렬화·파티션 할당 전**, `onAcknowledgement()` 는 **사용자 콜백 직전** | 소스 확인 |
+| `MockConsumer`: `earliest`면 `updateBeginningOffsets()` 없이 `poll()` 시 `IllegalStateException`. `rebalance()`가 리밸런스 리스너 콜백을 호출 | 소스 확인 |
+| `MockProducer(autoComplete=false)` + `completeNext()` / `errorNext(e)` 로 실패 경로 테스트 | 소스 확인 |
+| `GroupState` = Stable / PreparingRebalance / CompletingRebalance / Empty / Dead / … | 소스 확인 |
+| 토픽 `message.timestamp.type` 기본 **`CreateTime`** | `topic_config` |
+| 컨슈머 `allow.auto.create.topics` · 브로커 `auto.create.topics.enable` 둘 다 기본 **`true`** | 설정표 |
+| **`delivery.timeout.ms` 제약**: `request.timeout.ms` + `linger.ms` 이상이어야 한다. 단 **`delivery.timeout.ms`를 명시했을 때만 `ConfigException`**, 명시하지 않으면 경고와 함께 자동 상향 | 소스 확인 |
+
+### classic 프로토콜의 JoinGroup/SyncGroup 단계는 출제하지 말 것
+site-docs에 단계 서술이 없다. ordering 문항 소재로 쓰지 말고,
+문서화된 흐름(컨슈머 기동 순서, wakeup 종료, ISR 복귀, 컴팩션 단계,
+co-partitioning 맞추기 절차)만 쓴다.
 
 ### ⚠️ 공식 문서에 없어서 쓰면 안 되는 것
 - **압축 코덱별 압축률·CPU·지연의 구체적 수치.** 공식 문서에 없다.

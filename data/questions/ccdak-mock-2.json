@@ -229,38 +229,17 @@
       "chapter": "ch06",
       "difficulty": "hard",
       "type": "single",
-      "question": "트랜잭션 프로듀서를 운영 중 아래 예외가 발생했다. 올바른 처리는?",
+      "question": "아래 코드를 실행하면 어떤 일이 일어나는가?",
       "code": {
         "lang": "java",
-        "caption": "트랜잭션 루프의 예외 처리",
-        "body": "try {\n    producer.beginTransaction();\n    producer.send(out);\n    producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());\n    producer.commitTransaction();\n} catch (ProducerFencedException e) {\n    // (1) 여기서 무엇을 해야 하는가\n}"
+        "caption": "트랜잭션 프로듀서 사용",
+        "body": "Properties p = new Properties();\np.put(\"transactional.id\", \"enrich-1\");\nKafkaProducer<String, String> producer = new KafkaProducer<>(p, ser, ser);\n\nproducer.beginTransaction();          // (1)\nproducer.send(record);\nproducer.commitTransaction();"
       },
-      "choices": [
-        {
-          "id": "A",
-          "text": "`initTransactions()` 를 다시 호출해 세션을 갱신한 뒤 계속 사용한다."
-        },
-        {
-          "id": "B",
-          "text": "`abortTransaction()` 후 같은 프로듀서로 트랜잭션을 다시 열어 재처리하면 된다."
-        },
-        {
-          "id": "C",
-          "text": "`producer.close()` 로 프로듀서를 닫고 이 인스턴스의 처리를 종료해야 한다 — 같은 `transactional.id` 의 새 세션이 이미 존재한다."
-        },
-        {
-          "id": "D",
-          "text": "재시도 가능한 예외이므로 잠시 대기한 뒤 같은 트랜잭션을 다시 커밋한다."
-        }
-      ],
-      "answer": [
-        "C"
-      ],
-      "explanation": "`ProducerFencedException` 은 같은 `transactional.id` 로 더 새로운 프로듀서 세션이 `initTransactions()` 를 수행해 이 인스턴스가 차단되었음을 알리는 예외입니다. 차단된 프로듀서는 어떤 트랜잭션도 더 진행할 수 없으므로 복구가 아니라 종료가 정답이며, 애플리케이션은 프로듀서를 닫고 물러나야 합니다. 같은 성질의 치명적 예외로 `OutOfOrderSequenceException` 과 인가 관련 예외가 있으며, 모두 재시도 대상이 아닙니다. 반대로 `abortTransaction()` 으로 되돌린 뒤 재시도할 수 있는 것은 전송 중 발생한 일시적 오류입니다.",
+      "explanation": "`initTransactions()` 는 트랜잭션 코디네이터를 찾고 프로듀서 id와 에포크를 확보하며 같은 `transactional.id` 의 이전 세션을 차단하는 필수 초기화 단계입니다. 이 단계를 건너뛰면 트랜잭션 상태가 초기화되지 않은 상태이므로 `beginTransaction()` 이 잘못된 상태 전이로 판단해 예외를 던집니다. 초기화는 프로듀서 생애에 한 번만 수행하고, 그 뒤 각 처리 단위마다 열고 커밋하는 순서를 반복합니다. `transactional.id` 설정만으로 자동 초기화되지 않는다는 점이 이 주제의 대표적인 함정입니다.",
       "distractorNotes": {
-        "B": "차단된 프로듀서는 `abortTransaction()` 조차 정상 수행할 수 없습니다. 이 인스턴스는 더 쓸 수 없습니다.",
-        "D": "재시도 가능한 예외가 아닙니다. 기다려도 상태가 되돌아오지 않습니다.",
-        "A": "같은 id의 새 세션이 이미 소유권을 가져갔으므로 재초기화로 되찾는 흐름은 정상 운영 방식이 아닙니다."
+        "A": "설정만으로 초기화가 대체되지 않습니다. 명시적 호출이 필요합니다.",
+        "B": "이 예외는 같은 id의 더 새로운 세션이 등장했을 때 발생합니다.",
+        "D": "트랜잭션 프로듀서로 구성된 뒤에는 일반 전송으로 조용히 처리되지 않습니다."
       },
       "refs": [
         {
@@ -274,8 +253,29 @@
       ],
       "tags": [
         "transactions",
-        "retriable-errors",
-        "eos"
+        "eos",
+        "producer"
+      ],
+      "choices": [
+        {
+          "id": "A",
+          "text": "정상 동작한다 — `transactional.id` 가 있으면 첫 `beginTransaction()` 이 초기화를 대신한다."
+        },
+        {
+          "id": "B",
+          "text": "`commitTransaction()` 에서 `ProducerFencedException` 이 발생한다."
+        },
+        {
+          "id": "C",
+          "text": "(1)에서 `IllegalStateException` 이 발생한다 — `initTransactions()` 를 먼저 호출해야 한다."
+        },
+        {
+          "id": "D",
+          "text": "`send()` 가 트랜잭션 없이 일반 전송으로 처리된다."
+        }
+      ],
+      "answer": [
+        "C"
       ]
     },
     {
@@ -385,53 +385,53 @@
       "chapter": "ch04",
       "difficulty": "medium",
       "type": "single",
-      "question": "아래 설정으로 프로듀서를 기동했다. 실제로 적용되는 동작은?",
+      "question": "아래처럼 토픽과 프로듀서의 압축 설정이 다를 때 브로커에 저장되는 형태로 옳은 것은?",
       "code": {
         "lang": "properties",
-        "caption": "producer.properties (enable.idempotence 은 명시하지 않음)",
-        "body": "acks=1\nretries=2147483647\nmax.in.flight.requests.per.connection=5\n# enable.idempotence 는 설정하지 않았다 (4.x 기본값 true)"
+        "caption": "설정",
+        "body": "# 프로듀서\ncompression.type=zstd\n\n# 토픽 events\ncompression.type=producer   # 토픽 기본값"
       },
+      "explanation": "토픽의 압축 설정 기본값은 프로듀서가 사용한 코덱을 그대로 유지하라는 의미이므로, 이 구성에서는 프로듀서가 압축한 배치가 재압축 없이 저장됩니다. 반대로 토픽에 특정 코덱을 지정하면 프로듀서가 다른 코덱을 썼을 때 브로커가 압축을 풀고 다시 압축하므로 CPU 비용이 브로커로 옮겨 갑니다. 프로듀서 쪽 기본값은 압축을 하지 않는 것이므로 처리량 개선을 원하면 명시적으로 코덱을 지정해야 합니다. 그리고 브로커의 크기 한도는 압축 후 배치 크기로 판정된다는 점을 함께 기억해야 합니다.",
+      "distractorNotes": {
+        "A": "값이 `producer` 인 경우에는 압축을 풀지 않고 그대로 보관합니다.",
+        "C": "압축 비활성을 뜻하는 값은 `uncompressed` 이며 `producer` 는 프로듀서 코덱을 따르라는 의미입니다.",
+        "D": "브로커가 항상 재압축하는 것이 아니라 토픽 설정이 다를 때만 재압축합니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Topic Configs: compression.type",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_compression.type"
+        },
+        {
+          "title": "Kafka Docs — Producer Configs: compression.type",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_compression.type"
+        }
+      ],
+      "tags": [
+        "compression.type",
+        "message-size",
+        "producer"
+      ],
       "choices": [
         {
           "id": "A",
-          "text": "`acks` 가 자동으로 `all` 로 올라가고 멱등성이 유지된다."
+          "text": "브로커가 압축을 풀어 원본으로 저장하므로 디스크 이득이 사라진다."
         },
         {
           "id": "B",
-          "text": "멱등성이 조용히 비활성화된 상태로 정상 기동한다."
+          "text": "프로듀서가 압축한 배치가 그대로 저장되어 브로커의 재압축이 일어나지 않는다."
         },
         {
           "id": "C",
-          "text": "`ConfigException` 이 발생해 기동하지 못한다."
+          "text": "토픽 값이 `producer` 이므로 압축이 비활성화되고 원본으로 저장된다."
         },
         {
           "id": "D",
-          "text": "기동은 되지만 첫 전송에서 `OutOfOrderSequenceException` 이 발생한다."
+          "text": "브로커가 항상 기본 코덱으로 다시 압축하므로 프로듀서 설정은 무시된다."
         }
       ],
       "answer": [
         "B"
-      ],
-      "explanation": "멱등성은 `acks=all` 과 `retries>0` 을 전제로 하므로 `acks=1` 과는 함께 성립할 수 없습니다. 이때 동작이 갈리는 기준은 사용자가 `enable.idempotence` 를 직접 적었는지 여부인데, 명시하지 않았다면 클라이언트가 멱등성을 조용히 끄고 로그만 남긴 뒤 정상 기동합니다. 반대로 `enable.idempotence=true` 를 명시한 상태에서 `acks=1` 을 주면 `ConfigException` 으로 기동이 막힙니다. 이 조용한 비활성화 때문에 중복 제거가 되고 있다고 착각하기 쉬우므로, 기동 로그를 확인하거나 두 설정을 함께 명시하는 것이 안전합니다.",
-      "distractorNotes": {
-        "A": "클라이언트가 `acks` 값을 사용자 의도와 반대로 올리는 보정은 하지 않습니다.",
-        "C": "예외는 `enable.idempotence=true` 를 명시했을 때 발생합니다. 단, in-flight가 5를 넘는 경우는 명시 여부와 무관하게 예외입니다.",
-        "D": "멱등성이 꺼졌으므로 시퀀스 검증 자체가 수행되지 않습니다."
-      },
-      "refs": [
-        {
-          "title": "Kafka Docs — Producer Configs: enable.idempotence",
-          "url": "https://kafka.apache.org/documentation/#producerconfigs_enable.idempotence"
-        },
-        {
-          "title": "Kafka Docs — Producer Configs: acks",
-          "url": "https://kafka.apache.org/documentation/#producerconfigs_acks"
-        }
-      ],
-      "tags": [
-        "idempotence-inflight",
-        "acks-isr",
-        "producer"
       ]
     },
     {
@@ -655,53 +655,58 @@
       "chapter": "ch11",
       "difficulty": "medium",
       "type": "matching",
-      "question": "lag을 확인하는 각 수단을 그 성질·함정과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "question": "`kafka-consumer-groups.sh --describe --state` 가 보고하는 각 그룹 상태를 그 의미와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
-      "pairs": [
-        {
-          "id": "p1",
-          "left": "`kafka-consumer-groups.sh --describe`",
-          "right": "커밋 오프셋 기준이므로 커밋 주기가 길면 실제보다 크게 보인다"
-        },
-        {
-          "id": "p2",
-          "left": "클라이언트 JMX `records-lag-max`",
-          "right": "현재 fetch 위치 기준이며 컨슈머가 죽으면 지표 자체가 사라진다"
-        },
-        {
-          "id": "p3",
-          "left": "브로커 JMX `FetcherLagMetrics,name=ConsumerLag`",
-          "right": "팔로워 복제 lag이므로 애플리케이션 밀림과는 다른 축이다"
-        },
-        {
-          "id": "p4",
-          "left": "Connect `sink-record-lag-max`",
-          "right": "sink 커넥터 태스크에만 존재하는 커넥터 단위 지표다"
-        }
-      ],
-      "extraRights": [
-        "`__consumer_offsets` 에 브로커가 계산해 저장해 두는 값이다",
-        "컨트롤러가 파티션별로 집계해 그룹 전체 lag을 제공한다"
-      ],
-      "explanation": "같은 단어가 붙어 있어도 계산 주체와 기준이 다르므로 수단을 섞으면 오진이 발생합니다. CLI는 커밋 오프셋을 기준으로 하므로 처리는 정상이어도 커밋 주기가 길면 lag이 과대 표시되고, 클라이언트 지표는 현재 위치 기준이라 값은 정확하지만 프로세스가 죽으면 결측이 됩니다. 브로커의 `ConsumerLag` 은 이름과 달리 팔로워 복제 지연이므로 컨슈머 문제로 해석하면 안 됩니다. Connect의 sink 전용 지표는 커넥터 단위로 밀림을 보여 주므로 커넥터 운영에는 이 값을 씁니다.",
+      "explanation": "그룹 상태는 리밸런스가 진행 중인지, 아무도 붙어 있지 않은지를 한눈에 알려 주므로 장애 조사에서 먼저 확인할 값입니다. 준비와 완료 두 단계가 오래 머문다면 멤버가 합류를 못 하거나 할당 배포가 지연되는 것이므로 poll 간격과 세션 타임아웃 축을 확인해야 합니다. 활성 멤버가 없는 상태는 커밋 오프셋이 남아 있는 상태이므로, 이 상태로 `offsets.retention.minutes` 를 넘기면 오프셋이 삭제되어 다음 기동에서 시작 위치 폴백이 적용됩니다. 그룹이 완전히 사라진 상태는 조회 자체가 비어 보이므로 커밋 오프셋도 기대할 수 없습니다.",
       "distractorNotes": {
-        "p1": "lag이 커 보인다고 곧바로 처리 지연이라고 결론 내리면 안 됩니다. 커밋 주기를 먼저 확인해야 합니다.",
-        "p3": "이름에 `ConsumerLag` 이 들어 있어 컨슈머 지표로 오해하기 가장 쉬운 항목입니다."
+        "p4": "그룹이 삭제된 상태와 혼동하기 쉽습니다. 오프셋이 남아 있는지가 갈림길입니다.",
+        "p2": "완료 단계와 순서를 뒤바꾸기 쉽습니다. 준비가 먼저이고 배포가 나중입니다."
       },
       "refs": [
         {
-          "title": "Kafka Docs — Monitoring",
-          "url": "https://kafka.apache.org/documentation/#monitoring"
+          "title": "Kafka Docs — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
         },
         {
-          "title": "Kafka Docs — Checking consumer position",
-          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_lag"
+          "title": "Kafka Docs — Consumer Rebalance Protocol",
+          "url": "https://kafka.apache.org/documentation/#consumer_rebalance_protocol"
         }
       ],
       "tags": [
-        "consumer-lag",
         "monitoring",
-        "jmx"
+        "consumer-group",
+        "rebalance-triggers"
+      ],
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "Stable",
+          "right": "할당이 완료되어 멤버들이 정상적으로 소비하고 있다"
+        },
+        {
+          "id": "p2",
+          "left": "PreparingRebalance",
+          "right": "멤버 변경이 감지되어 리밸런스를 준비하며 멤버 합류를 기다린다"
+        },
+        {
+          "id": "p3",
+          "left": "CompletingRebalance",
+          "right": "할당 계산이 끝나 멤버들에게 배포되는 중이다"
+        },
+        {
+          "id": "p4",
+          "left": "Empty",
+          "right": "활성 멤버가 없지만 커밋 오프셋은 남아 있다"
+        },
+        {
+          "id": "p5",
+          "left": "Dead",
+          "right": "그룹 메타데이터가 사라져 더 이상 존재하지 않는다"
+        }
+      ],
+      "extraRights": [
+        "멤버 수가 파티션 수를 초과해 일부가 유휴 상태다",
+        "커밋 오프셋이 만료되어 다음 기동 시 폴백이 적용된다"
       ]
     },
     {
@@ -1101,36 +1106,12 @@
       "chapter": "ch05",
       "difficulty": "medium",
       "type": "ordering",
-      "question": "다른 스레드에서 컨슈머 루프를 안전하게 종료시키는 공식 문서 권장 흐름을 순서대로 배열하세요.",
+      "question": "새로 기동한 컨슈머가 첫 레코드를 처리하기까지의 과정을 순서대로 배열하세요.",
       "code": null,
-      "items": [
-        {
-          "id": "i3",
-          "text": "`catch` 블록에서 종료 중인 경우에는 그 예외를 무시한다"
-        },
-        {
-          "id": "i1",
-          "text": "종료를 지시하는 스레드가 `closed` 플래그를 세우고 `consumer.wakeup()` 을 호출한다"
-        },
-        {
-          "id": "i4",
-          "text": "`finally` 블록에서 `consumer.close()` 로 자원을 정리한다"
-        },
-        {
-          "id": "i2",
-          "text": "`poll()` 에서 대기 중이던 컨슈머 스레드가 `WakeupException` 을 받는다"
-        }
-      ],
-      "answer": [
-        "i1",
-        "i2",
-        "i3",
-        "i4"
-      ],
-      "explanation": "컨슈머는 스레드 안전하지 않으므로 외부 스레드에서 호출해도 되는 메서드는 `wakeup()` 뿐입니다. 이 호출은 블로킹 중인 `poll()` 을 즉시 깨워 `WakeupException` 을 던지게 하므로, 루프는 종료 플래그를 확인해 정상 종료 경로인지 판단합니다. 종료 중이면 예외를 무시하고 `finally` 에서 `close()` 를 호출해 오프셋 커밋과 그룹 이탈을 정리합니다. 스레드 인터럽트로 대신하면 정상 종료가 중단될 수 있어 공식 문서는 권장하지 않습니다.",
+      "explanation": "부트스트랩 목록은 최초 연결과 메타데이터 조회에만 쓰이며, 이 단계가 끝나면 클라이언트는 필요한 브로커에 직접 연결합니다. 그다음 그룹 코디네이터를 찾아 합류해야 어떤 파티션을 읽을지 결정되므로, 할당 이전에는 읽을 위치를 정할 수 없습니다. 할당을 받은 뒤 그 파티션의 커밋 오프셋을 조회하고, 커밋이 없거나 범위를 벗어난 경우에만 시작 위치 폴백 설정이 적용됩니다. 이 순서를 알면 `subscribe()` 직후 `seek()` 이 실패하는 이유와 `auto.offset.reset` 이 항상 적용되지 않는 이유가 같은 지점에서 설명됩니다.",
       "distractorNotes": {
-        "i1": "루프 안에서 `close()` 를 먼저 부르는 방식으로 착각하기 쉽습니다. 시작은 외부 스레드의 `wakeup()` 입니다.",
-        "i4": "`close()` 를 예외 처리 밖에 두면 예외 경로에서 자원이 남습니다. `finally` 가 정답입니다."
+        "i2": "메타데이터 조회 없이 코디네이터를 먼저 찾을 수는 없습니다.",
+        "i3": "오프셋 조회가 할당보다 앞선다고 착각하면 `subscribe()` 직후 위치를 지정할 수 있다고 오해합니다."
       },
       "refs": [
         {
@@ -1138,14 +1119,38 @@
           "url": "https://kafka.apache.org/documentation/#consumerapi"
         },
         {
-          "title": "KafkaConsumer (apache/kafka 4.3)",
-          "url": "https://github.com/apache/kafka/blob/4.3/clients/src/main/java/org/apache/kafka/clients/consumer/KafkaConsumer.java"
+          "title": "Kafka Docs — Consumer Configs: bootstrap.servers",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_bootstrap.servers"
         }
       ],
       "tags": [
-        "consumer",
-        "shutdown",
-        "assign-vs-subscribe"
+        "bootstrap-servers",
+        "offset-reset",
+        "consumer-group"
+      ],
+      "items": [
+        {
+          "id": "i3",
+          "text": "할당된 파티션의 커밋 오프셋을 조회한다 — 없거나 범위를 벗어나면 `auto.offset.reset` 이 적용된다"
+        },
+        {
+          "id": "i1",
+          "text": "`bootstrap.servers` 의 브로커에 접속해 클러스터 메타데이터를 받는다"
+        },
+        {
+          "id": "i4",
+          "text": "정해진 위치부터 fetch해 `poll()` 이 레코드를 반환한다"
+        },
+        {
+          "id": "i2",
+          "text": "그룹 코디네이터를 찾아 그룹에 합류하고 파티션 할당을 받는다"
+        }
+      ],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
       ]
     },
     {
@@ -2092,53 +2097,53 @@
       "chapter": "ch04",
       "difficulty": "medium",
       "type": "single",
-      "question": "토픽 `max.message.bytes` 를 낮게 잡아 둔 상태에서 여러 레코드를 담은 배치가 브로커 한도를 넘었다. Kafka 4.3 클라이언트의 동작으로 옳은 것은?",
+      "question": "아래 설정으로 프로듀서를 생성했을 때의 결과로 옳은 것은?",
       "code": {
-        "lang": "text",
-        "caption": "상황",
-        "body": "프로듀서 max.request.size = 1048576 (기본값)\n토픽 max.message.bytes = 65536\n전송 배치: 레코드 200건, 압축 후 약 300KB"
+        "lang": "properties",
+        "caption": "producer.properties",
+        "body": "linger.ms=5\nrequest.timeout.ms=30000\ndelivery.timeout.ms=20000"
       },
+      "explanation": "전송 전체 예산인 `delivery.timeout.ms` 는 배치가 대기하는 시간과 요청 한 번의 응답 대기를 모두 포함해야 하므로, `linger.ms + request.timeout.ms` 보다 작을 수 없습니다. 사용자가 이 값을 명시했는데 조건을 위반하면 클라이언트가 설정 오류로 판단해 프로듀서 생성을 실패시킵니다. 반대로 이 값을 명시하지 않은 상태에서 다른 두 값의 합이 기본값보다 커지면, 클라이언트가 경고를 남기고 예산을 그 합으로 올려 잡습니다. 즉 같은 상황에서도 명시 여부에 따라 예외와 자동 보정으로 결과가 갈립니다.",
+      "distractorNotes": {
+        "A": "관계식을 위반한 조합이므로 그대로 적용되지 않습니다.",
+        "B": "런타임 타임아웃이 아니라 생성 시점의 설정 검증에서 걸립니다.",
+        "D": "요청 타임아웃을 낮추는 보정은 하지 않습니다. 명시된 예산이 작으면 예외입니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Producer Configs: delivery.timeout.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_delivery.timeout.ms"
+        },
+        {
+          "title": "Kafka Docs — Producer Configs: request.timeout.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_request.timeout.ms"
+        }
+      ],
+      "tags": [
+        "delivery.timeout.ms",
+        "linger.ms",
+        "producer"
+      ],
       "choices": [
         {
           "id": "A",
-          "text": "`RecordTooLargeException` 이 클라이언트에서 즉시 발생하고 재시도하지 않는다."
+          "text": "정상 기동하며 세 값이 그대로 적용된다."
         },
         {
           "id": "B",
-          "text": "브로커가 배치를 잘라 앞부분만 저장하고 나머지를 버린다."
+          "text": "정상 기동하지만 첫 전송에서 `TimeoutException` 이 발생한다."
         },
         {
           "id": "C",
-          "text": "브로커가 `MESSAGE_TOO_LARGE` 를 반환하고 Sender가 배치를 쪼개 다시 보내며, 이 재전송은 재시도 횟수를 소모하지 않는다."
+          "text": "`ConfigException` 이 발생해 프로듀서 생성이 실패한다."
         },
         {
           "id": "D",
-          "text": "`delivery.timeout.ms` 가 즉시 소진되어 전송이 최종 실패한다."
+          "text": "`request.timeout.ms` 가 자동으로 낮춰져 정상 기동한다."
         }
       ],
       "answer": [
         "C"
-      ],
-      "explanation": "요청 크기가 프로듀서 한도 안이므로 클라이언트 검사는 통과하고, 브로커가 토픽 한도를 기준으로 거부하며 `MESSAGE_TOO_LARGE` 를 반환합니다. 이때 배치에 레코드가 두 건 이상이면 클라이언트는 배치를 분할해 다시 보내고, 이 분할 재전송은 재시도 횟수를 소모하지 않습니다. 따라서 겉으로는 멈추지 않고 계속 재전송되지만 요청 수가 늘어 버퍼가 압박을 받으며, 레코드 하나로 이루어진 배치는 더 쪼갤 수 없어 최종 실패합니다. 근본 조치는 토픽 한도와 프로듀서·컨슈머·팔로워 관련 설정을 정합하게 맞추는 것입니다.",
-      "distractorNotes": {
-        "A": "이 예외는 요청이 프로듀서 `max.request.size` 를 넘을 때 클라이언트가 던집니다. 지금은 브로커 한도 문제입니다.",
-        "B": "브로커가 배치를 임의로 잘라 저장하는 동작은 없습니다. 요청 전체가 거부됩니다.",
-        "D": "분할 재전송이 성공하면 실패로 끝나지 않습니다. 예산은 여전히 시간 기준으로만 소진됩니다."
-      },
-      "refs": [
-        {
-          "title": "Kafka Docs — Topic Configs: max.message.bytes",
-          "url": "https://kafka.apache.org/documentation/#topicconfigs_max.message.bytes"
-        },
-        {
-          "title": "Kafka Docs — Producer Configs: max.request.size",
-          "url": "https://kafka.apache.org/documentation/#producerconfigs_max.request.size"
-        }
-      ],
-      "tags": [
-        "message-size",
-        "retriable-errors",
-        "producer"
       ]
     },
     {
@@ -2257,39 +2262,13 @@
       "chapter": "ch09",
       "difficulty": "medium",
       "type": "multiple",
-      "question": "source 커넥터와 sink 커넥터의 비대칭에 대해 옳은 것을 모두 고르세요. (2개 선택)",
+      "question": "distributed 모드 Connect의 내부 토픽 세 개에 대해 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
-      "choices": [
-        {
-          "id": "A",
-          "text": "sink 커넥터의 진행 상황은 `kafka-consumer-groups.sh --describe --group connect-{커넥터 이름}` 으로 조회할 수 있다."
-        },
-        {
-          "id": "B",
-          "text": "DLQ 관련 `errors.deadletterqueue.*` 설정은 sink 커넥터에만 존재한다."
-        },
-        {
-          "id": "C",
-          "text": "source 커넥터의 진행 상황도 같은 명령으로 조회할 수 있다."
-        },
-        {
-          "id": "D",
-          "text": "source 커넥터는 컨슈머 그룹을 만들지 않으므로 SMT를 사용할 수 없다."
-        },
-        {
-          "id": "E",
-          "text": "sink 커넥터의 오프셋은 `offset.storage.topic` 에 저장된다."
-        }
-      ],
-      "answer": [
-        "A",
-        "B"
-      ],
-      "explanation": "sink 커넥터는 Kafka를 읽는 컨슈머이므로 `connect-{커넥터 이름}` 규칙의 컨슈머 그룹을 만들고, 그래서 표준 CLI로 파티션별 밀림을 볼 수 있습니다. 반면 source 커넥터는 외부 시스템의 진행 위치를 Connect 내부 오프셋 토픽에 기록하므로 컨슈머 그룹이 없고 같은 방식으로 조회할 수 없습니다. 오류 처리에서도 비대칭이 있어 DLQ 설정은 싱크 전용이며 source에는 해당 설정이 존재하지 않습니다. SMT는 양쪽 모두 쓸 수 있고 적용 위치만 converter 앞뒤로 달라집니다.",
+      "explanation": "설정·오프셋·상태를 담는 세 내부 토픽은 모두 최신 상태만 필요하므로 컴팩션 정책으로 유지됩니다. 그중 설정 토픽은 변경이 순서대로 적용되어야 하므로 공식 문서가 파티션을 하나로 두라고 명시하고, 대신 복제 계수는 3 이상으로 두어 내구성을 확보합니다. 오프셋 토픽은 source 커넥터의 소스 시스템 위치만 담고 sink 커넥터의 오프셋은 컨슈머 오프셋 토픽에 저장됩니다. 워커는 필요한 내부 토픽을 자동으로 생성할 수 있지만, 운영에서는 파티션 수와 복제 계수를 통제하기 위해 미리 만들어 두는 경우도 많습니다.",
       "distractorNotes": {
-        "C": "source 커넥터는 컨슈머 그룹을 만들지 않으므로 이 명령으로 조회되지 않습니다.",
-        "D": "SMT는 source와 sink 모두 사용할 수 있습니다.",
-        "E": "sink 오프셋은 `__consumer_offsets` 에 저장됩니다."
+        "C": "복제 계수는 `config.storage.replication.factor` 같은 설정으로 조정합니다.",
+        "D": "sink 오프셋은 `__consumer_offsets` 에 저장됩니다.",
+        "E": "워커가 자동 생성할 수 있습니다. 수동 생성은 선택입니다."
       },
       "refs": [
         {
@@ -2297,14 +2276,40 @@
           "url": "https://kafka.apache.org/documentation/#connect_distributed"
         },
         {
-          "title": "Kafka Docs — Connect Sink Configs",
-          "url": "https://kafka.apache.org/documentation/#sinkconnectconfigs"
+          "title": "Kafka Docs — Connect Configs",
+          "url": "https://kafka.apache.org/documentation/#connectconfigs"
         }
       ],
       "tags": [
+        "connect",
         "connect-offsets",
-        "dlq",
-        "connect"
+        "internal-topics"
+      ],
+      "choices": [
+        {
+          "id": "A",
+          "text": "세 토픽 모두 `cleanup.policy=compact` 로 만들어 최신 상태만 유지한다."
+        },
+        {
+          "id": "B",
+          "text": "`config.storage.topic` 은 적용 순서가 중요하므로 파티션 하나로 만든다."
+        },
+        {
+          "id": "C",
+          "text": "세 토픽의 복제 계수는 1로 고정되어 있어 조정할 수 없다."
+        },
+        {
+          "id": "D",
+          "text": "`offset.storage.topic` 은 sink 커넥터의 컨슈머 오프셋도 함께 저장한다."
+        },
+        {
+          "id": "E",
+          "text": "내부 토픽은 워커가 자동으로 만들 수 없으므로 항상 수동 생성해야 한다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
       ]
     },
     {
@@ -2314,58 +2319,58 @@
       "chapter": "ch05",
       "difficulty": "medium",
       "type": "matching",
-      "question": "각 컨슈머 API 호출을 그 효과와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "question": "각 전송 실패 상황을 그때 프로듀서 클라이언트가 실제로 하는 동작과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
-      "pairs": [
-        {
-          "id": "p1",
-          "left": "`subscribe(topics)`",
-          "right": "그룹 관리에 참여해 코디네이터로부터 파티션을 할당받는다"
-        },
-        {
-          "id": "p2",
-          "left": "`assign(partitions)`",
-          "right": "파티션을 직접 고정하며 그룹 조정과 리밸런스가 없다"
-        },
-        {
-          "id": "p3",
-          "left": "`seek(partition, offset)`",
-          "right": "이미 할당된 파티션의 다음 읽기 위치를 지정한다"
-        },
-        {
-          "id": "p4",
-          "left": "`pause(partitions)`",
-          "right": "`poll()` 호출은 유지한 채 해당 파티션의 fetch만 중단한다"
-        },
-        {
-          "id": "p5",
-          "left": "`wakeup()`",
-          "right": "다른 스레드에서 호출해 블로킹 중인 `poll()` 을 깨운다"
-        }
-      ],
-      "extraRights": [
-        "커밋된 오프셋을 삭제해 그룹을 초기 상태로 되돌린다",
-        "구독을 유지한 채 그룹에서만 잠시 빠진다"
-      ],
-      "explanation": "두 가지 구독 방식과 위치 제어, 흐름 제어, 종료 제어가 각각 다른 축입니다. 그룹 관리가 필요하면 `subscribe()`, 파티션을 고정해야 하면 `assign()` 을 쓰고 둘을 섞으면 예외가 발생합니다. 위치를 옮기는 `seek()` 은 할당이 있어야 동작하고, 처리 속도를 늦춰야 할 때는 `pause()` 로 fetch만 멈춰 poll 간격을 지켜야 합니다. 컨슈머는 스레드 안전하지 않으므로 외부 스레드에서 호출해도 되는 것은 `wakeup()` 뿐입니다.",
+      "explanation": "같은 크기 초과 문제라도 어느 쪽 한도를 넘었는지에 따라 클라이언트 동작이 완전히 달라집니다. 클라이언트 한도 초과는 전송 전에 거부되어 재시도 대상이 아니고, 브로커 한도 초과는 배치 분할 재전송으로 이어지며 이 재전송은 재시도 예산을 쓰지 않습니다. 리더 이동과 ISR 부족은 모두 일시적 상태이므로 메타데이터 갱신과 재시도로 흡수되고, 최종 종료 조건은 `delivery.timeout.ms` 예산입니다. 직렬화 실패는 배치에 담기기 전에 발생하므로 콜백이 아니라 호출 지점에서 드러난다는 점이 특히 자주 틀립니다.",
       "distractorNotes": {
-        "p3": "`assign()` 전용 API로 오해하기 쉽습니다. 할당만 있으면 두 방식 모두에서 사용할 수 있습니다.",
-        "p4": "구독 해제와 혼동하면 리밸런스를 유발하게 됩니다. `pause()` 는 멤버십을 건드리지 않습니다."
+        "p2": "비재시도 실패로 처리된다고 오해하기 쉽습니다. 다만 단일 레코드 배치는 더 쪼갤 수 없어 최종 실패합니다.",
+        "p4": "콜백으로 전달된다고 착각하면 오류 처리 코드를 잘못된 위치에 두게 됩니다."
       },
       "refs": [
         {
-          "title": "Kafka Docs — Consumer API",
-          "url": "https://kafka.apache.org/documentation/#consumerapi"
+          "title": "Kafka Docs — Producer Configs: max.request.size",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_max.request.size"
         },
         {
-          "title": "Kafka Docs — Consumer Configs",
-          "url": "https://kafka.apache.org/documentation/#consumerconfigs"
+          "title": "Kafka Docs — Producer API",
+          "url": "https://kafka.apache.org/documentation/#producerapi"
         }
       ],
       "tags": [
-        "assign-vs-subscribe",
-        "consumer",
-        "offset-reset"
+        "retriable-errors",
+        "message-size",
+        "producer"
+      ],
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "요청이 `max.request.size` 를 초과",
+          "right": "브로커에 보내기 전에 클라이언트가 즉시 실패시킨다"
+        },
+        {
+          "id": "p2",
+          "left": "브로커가 `MESSAGE_TOO_LARGE` 응답",
+          "right": "배치를 쪼개 다시 보내며 재시도 횟수를 소모하지 않는다"
+        },
+        {
+          "id": "p3",
+          "left": "리더가 이동 중이라는 응답",
+          "right": "메타데이터를 갱신한 뒤 새 리더로 재시도한다"
+        },
+        {
+          "id": "p4",
+          "left": "값 직렬화기가 예외를 던짐",
+          "right": "`send()` 호출 지점에서 동기로 예외가 던져진다"
+        },
+        {
+          "id": "p5",
+          "left": "ISR이 최소 ISR 미만이라는 응답",
+          "right": "재시도 가능으로 보고 시간 예산이 남는 동안 재시도한다"
+        }
+      ],
+      "extraRights": [
+        "압축 코덱을 더 강한 것으로 바꿔 같은 배치를 다시 보낸다",
+        "브로커 설정을 조회해 클라이언트 한도를 자동으로 낮춘다"
       ]
     },
     {
@@ -2479,51 +2484,60 @@
       "chapter": "ch10",
       "difficulty": "hard",
       "type": "ordering",
-      "question": "인스턴스 장애로 stateful 태스크가 다른 인스턴스로 옮겨질 때 일어나는 일을 순서대로 배열하세요.",
-      "code": null,
+      "question": "아래 토폴로지에서 레코드 하나가 지나는 경로를 순서대로 배열하세요.",
+      "code": {
+        "lang": "java",
+        "caption": "토폴로지",
+        "body": "builder.stream(\"orders\")\n       .selectKey((k, v) -> v.customerId())\n       .groupByKey()\n       .count()\n       .toStream()\n       .to(\"orders-per-customer\");"
+      },
+      "explanation": "키를 바꾸는 연산 뒤에 키 기반 집계가 오면 Streams는 리파티션 토픽을 만들어 같은 키가 한 태스크로 모이게 합니다. 그래서 레코드는 새 키로 리파티션 토픽에 한 번 쓰이고 다시 읽히며, 이 지점에서 토폴로지가 두 개의 서브토폴로지로 나뉩니다. 두 번째 서브토폴로지는 상태 저장소에서 카운트를 갱신하고 그 변경을 changelog 토픽에 남긴 뒤 결과를 출력 토픽으로 보냅니다. 이 왕복 때문에 값만 바꿔도 되는 자리에 키를 바꾸는 연산을 쓰면 네트워크와 디스크 비용이 늘어납니다.",
+      "distractorNotes": {
+        "i2": "리파티션 없이 곧바로 집계된다고 착각하면 태스크 수와 지연 계산이 어긋납니다.",
+        "i4": "changelog 기록이 출력 뒤에 온다고 오해하기 쉽습니다. 상태 갱신이 먼저입니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Streams — Architecture",
+          "url": "https://kafka.apache.org/documentation/streams/architecture"
+        },
+        {
+          "title": "Kafka Streams — DSL: Stateless Transformations",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#stateless-transformations"
+        }
+      ],
+      "tags": [
+        "repartition",
+        "state-store",
+        "streams"
+      ],
       "items": [
         {
           "id": "i3",
-          "text": "부족한 구간을 changelog 토픽에서 재생해 상태 저장소를 복원한다"
+          "text": "리파티션 토픽에서 다시 읽어 두 번째 서브토폴로지가 처리한다"
         },
         {
           "id": "i1",
-          "text": "리밸런스가 일어나 그 태스크가 살아 있는 인스턴스로 재배정된다"
+          "text": "`orders` 토픽에서 읽어 `selectKey` 로 새 키를 부여한다"
         },
         {
-          "id": "i4",
-          "text": "복원이 끝난 뒤 그 태스크가 처리를 재개한다"
+          "id": "i5",
+          "text": "집계 결과를 `orders-per-customer` 토픽으로 내보낸다"
         },
         {
           "id": "i2",
-          "text": "가능하면 완전히 따라잡은 standby 복제본을 가진 인스턴스가 선택된다"
+          "text": "새 키로 리파티션 토픽에 기록한다"
+        },
+        {
+          "id": "i4",
+          "text": "상태 저장소에서 카운트를 갱신하고 changelog 토픽에 기록한다"
         }
       ],
       "answer": [
         "i1",
         "i2",
         "i3",
-        "i4"
-      ],
-      "explanation": "stateful 태스크의 상태는 로컬 디스크에 있으므로 인스턴스가 죽으면 새 인스턴스에서 다시 만들어야 합니다. Streams는 재배정 시 이미 따라잡은 상태 사본을 가진 인스턴스를 우선 선택해 복원 비용을 줄이며, 이를 위해 `num.standby.replicas` 를 1 이상으로 두는 것이 권장됩니다. 선택된 인스턴스는 로컬에 없는 구간만 changelog 토픽에서 재생해 상태를 맞추고, 복원이 끝난 뒤에야 처리를 재개합니다. 그래서 태스크 재초기화 시간은 대체로 changelog 재생 시간이 지배하며 기본값 0인 standby 설정이 복구 시간을 늘리는 원인이 됩니다.",
-      "distractorNotes": {
-        "i3": "복원보다 처리를 먼저 시작하면 상태가 빠진 결과가 나오므로 순서가 뒤바뀔 수 없습니다.",
-        "i2": "standby가 없으면 이 단계가 생략되고 전체 changelog를 재생해야 하므로 복구가 느려집니다."
-      },
-      "refs": [
-        {
-          "title": "Kafka Streams — Architecture: State",
-          "url": "https://kafka.apache.org/documentation/streams/architecture#streams_architecture_state"
-        },
-        {
-          "title": "Kafka Streams — Configs: num.standby.replicas",
-          "url": "https://kafka.apache.org/documentation/#streamsconfigs_num.standby.replicas"
-        }
-      ],
-      "tags": [
-        "state-store",
-        "streams",
-        "stateless-stateful"
+        "i4",
+        "i5"
       ]
     },
     {
@@ -2751,54 +2765,54 @@
       "chapter": "ch04",
       "difficulty": "medium",
       "type": "multiple",
-      "question": "내구성을 낮추지 않으면서 프로듀서 처리량을 높이려 한다. 방향이 올바른 조치를 모두 고르세요. (2개 선택)",
+      "question": "파티션 6개인 토픽을 소비하는 컨슈머 그룹의 처리량을 늘리려 한다. 실제로 효과가 있는 조치를 모두 고르세요. (2개 선택)",
       "code": null,
+      "explanation": "그룹의 병렬성 상한은 파티션 수이므로, 파티션을 늘리지 않고 인스턴스만 추가하면 초과분은 유휴 상태로 남습니다. 따라서 파티션 증설과 인스턴스 추가를 함께 해야 실제 처리량이 늘어나며, 이때 키 기반 순서 보장이 깨질 수 있다는 점을 함께 검토해야 합니다. 인스턴스를 늘리지 않고도 처리량을 올리려면 poll 스레드와 처리 스레드를 분리해 병렬로 처리하고, 밀릴 때는 일시 정지로 흐름을 조절해 poll 간격을 지키는 방법이 있습니다. 두 타임아웃을 늘리는 조치는 이탈 판정만 늦추고 처리 능력을 키우지 않습니다.",
+      "distractorNotes": {
+        "C": "파티션이 6개이므로 6개를 넘는 인스턴스는 할당을 받지 못합니다.",
+        "D": "처리 시간 초과 판정을 늦추는 것이며 처리 속도를 높이지 않습니다.",
+        "E": "장애 감지를 늦추는 조치이며 처리량과 무관합니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Docs — Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#intro_consumers"
+        },
+        {
+          "title": "Kafka Docs — Consumer API",
+          "url": "https://kafka.apache.org/documentation/#consumerapi"
+        }
+      ],
+      "tags": [
+        "consumer-group",
+        "partitioning",
+        "max-poll-interval"
+      ],
       "choices": [
         {
           "id": "A",
-          "text": "`batch.size` 를 기본값보다 키워 배치에 더 많은 레코드가 모이게 한다."
+          "text": "파티션 수를 늘린 뒤 컨슈머 인스턴스를 그만큼 추가한다."
         },
         {
           "id": "B",
-          "text": "`compression.type` 을 지정해 배치를 압축해 전송량을 줄인다."
+          "text": "레코드 처리를 별도 스레드풀로 분리하고 `pause()`·`resume()` 으로 흐름을 제어한다."
         },
         {
           "id": "C",
-          "text": "`acks=0` 으로 바꿔 응답을 기다리지 않게 한다."
+          "text": "컨슈머 인스턴스를 12개로 늘린다."
         },
         {
           "id": "D",
-          "text": "`enable.idempotence=false` 로 바꿔 시퀀스 검증 비용을 없앤다."
+          "text": "`max.poll.interval.ms` 를 두 배로 올린다."
         },
         {
           "id": "E",
-          "text": "`max.in.flight.requests.per.connection` 을 1로 낮춘다."
+          "text": "`session.timeout.ms` 를 두 배로 올린다."
         }
       ],
       "answer": [
         "A",
         "B"
-      ],
-      "explanation": "처리량은 요청 하나에 실리는 데이터를 늘려 요청 수를 줄이는 방향으로 개선됩니다. 배치 크기를 키우면 한 번에 더 많은 레코드가 묶이고, 압축을 켜면 같은 데이터를 더 적은 바이트로 보내므로 네트워크와 브로커 디스크 모두 이득입니다. `linger.ms` 를 함께 조정하면 배치가 더 잘 차지만 지연이 늘어나므로 트레이드오프를 확인해야 합니다. 반대로 `acks=0` 은 유실을 감수하는 조치이고, 멱등성을 끄거나 in-flight를 1로 낮추는 것은 각각 중복 위험과 처리량 저하를 만듭니다.",
-      "distractorNotes": {
-        "C": "응답을 기다리지 않으므로 실패를 알 수 없고 유실이 발생합니다. 내구성을 낮추는 조치입니다.",
-        "D": "멱등성의 비용은 작고, 끄면 재시도 중복과 순서 뒤바뀜 위험이 생깁니다.",
-        "E": "동시 요청 수를 줄이면 처리량이 오히려 떨어집니다."
-      },
-      "refs": [
-        {
-          "title": "Kafka Docs — Producer Configs: batch.size",
-          "url": "https://kafka.apache.org/documentation/#producerconfigs_batch.size"
-        },
-        {
-          "title": "Kafka Docs — Producer Configs: compression.type",
-          "url": "https://kafka.apache.org/documentation/#producerconfigs_compression.type"
-        }
-      ],
-      "tags": [
-        "producer",
-        "batch.size",
-        "linger.ms"
       ]
     },
     {
@@ -2912,54 +2926,58 @@
       "chapter": "ch10",
       "difficulty": "medium",
       "type": "multiple",
-      "question": "브로커 한 대로 띄운 테스트 클러스터에서 트랜잭션을 쓰는 테스트를 통과시키려 한다. 낮춰야 하는 브로커 설정을 모두 고르세요. (2개 선택)",
-      "code": null,
-      "choices": [
-        {
-          "id": "A",
-          "text": "`transaction.state.log.replication.factor` 를 1로"
-        },
-        {
-          "id": "B",
-          "text": "`transaction.state.log.min.isr` 를 1로"
-        },
-        {
-          "id": "C",
-          "text": "`transaction.max.timeout.ms` 를 1000으로"
-        },
-        {
-          "id": "D",
-          "text": "`min.insync.replicas` 를 3으로"
-        },
-        {
-          "id": "E",
-          "text": "`unclean.leader.election.enable` 을 true로"
-        }
-      ],
-      "answer": [
-        "A",
-        "B"
-      ],
-      "explanation": "트랜잭션 상태는 내부 토픽 `__transaction_state` 에 저장되며 기본 복제 계수는 3, 최소 ISR은 2입니다. 브로커가 한 대인 환경에서는 이 조건을 만족할 수 없어 트랜잭션 초기화나 커밋이 복제 부족으로 실패하므로 두 값을 1로 낮춰야 합니다. 같은 이유로 컨슈머 오프셋 토픽을 쓰는 테스트라면 `offsets.topic.replication.factor` 도 1로 낮춥니다. 이 완화는 테스트 전용이며 프로덕션에 적용하면 트랜잭션 상태가 단일 장애점이 됩니다.",
+      "question": "단일 브로커 테스트용으로 쓰던 브로커 설정을 프로덕션에 그대로 복사했다. 이때 생기는 위험을 모두 고르세요. (2개 선택)",
+      "code": {
+        "lang": "properties",
+        "caption": "복사된 브로커 설정",
+        "body": "transaction.state.log.replication.factor=1\ntransaction.state.log.min.isr=1\noffsets.topic.replication.factor=1"
+      },
+      "explanation": "이 세 설정은 내부 토픽의 복제 수준을 정하는 값이며, 테스트에서는 브로커가 하나뿐이라 어쩔 수 없이 1로 낮춥니다. 프로덕션에서 그대로 두면 트랜잭션 상태와 컨슈머 오프셋이 단일 브로커에만 존재하므로 그 브로커를 잃는 순간 진행 중 트랜잭션과 그룹 오프셋을 함께 잃습니다. 커밋 오프셋이 사라지면 재기동 시 `auto.offset.reset` 이 적용되어 전량 재처리 또는 구간 건너뜀이 발생합니다. 일반 토픽의 복제 계수는 별도 설정이며 이 값들에 영향을 받지 않고, 멱등성이나 리밸런스 동작도 달라지지 않습니다.",
       "distractorNotes": {
-        "C": "트랜잭션 타임아웃 상한이며 복제 부족 문제와 무관합니다. 너무 줄이면 정상 트랜잭션이 중단됩니다.",
-        "D": "최소 ISR을 올리면 단일 브로커 환경에서 상황이 더 나빠집니다.",
-        "E": "리더 선출 정책이며 복제 계수 조건을 바꾸지 않습니다."
+        "C": "멱등성은 프로듀서 설정으로 결정되며 내부 토픽 복제와 무관합니다.",
+        "D": "일반 토픽은 `default.replication.factor` 나 생성 시 지정값을 따릅니다.",
+        "E": "리밸런스 동작은 그대로 유지됩니다."
       },
       "refs": [
         {
-          "title": "Kafka Docs — Broker Configs: transaction.state.log.min.isr",
-          "url": "https://kafka.apache.org/documentation/#brokerconfigs_transaction.state.log.min.isr"
+          "title": "Kafka Docs — Broker Configs: offsets.topic.replication.factor",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_offsets.topic.replication.factor"
         },
         {
-          "title": "Kafka Docs — Message Delivery Semantics",
-          "url": "https://kafka.apache.org/documentation/#semantics"
+          "title": "Kafka Docs — Broker Configs: transaction.state.log.replication.factor",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_transaction.state.log.replication.factor"
         }
       ],
       "tags": [
         "kafka-testing",
         "transactions",
         "integration-test"
+      ],
+      "choices": [
+        {
+          "id": "A",
+          "text": "트랜잭션 상태 토픽에 복제가 없어 그 브로커를 잃으면 진행 중인 트랜잭션 상태가 사라진다."
+        },
+        {
+          "id": "B",
+          "text": "컨슈머 오프셋 토픽에 복제가 없어 그 브로커를 잃으면 그룹의 커밋 오프셋이 유실될 수 있다."
+        },
+        {
+          "id": "C",
+          "text": "프로듀서의 멱등성이 자동으로 비활성화된다."
+        },
+        {
+          "id": "D",
+          "text": "일반 토픽의 복제 계수도 1로 강제된다."
+        },
+        {
+          "id": "E",
+          "text": "리밸런스가 발생하지 않게 되어 확장이 불가능해진다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
       ]
     },
     {
@@ -2969,49 +2987,49 @@
       "chapter": "ch10",
       "difficulty": "medium",
       "type": "single",
-      "question": "컨테이너로 배포한 Streams 애플리케이션이 재시작할 때마다 기동이 오래 걸린다. 설정 점검에서 우선 확인할 것은?",
+      "question": "태스크가 12개로 계산되는 Streams 애플리케이션을 인스턴스 하나로 실행하고 있다. 처리량을 올리기 위한 조치로 옳은 것은?",
       "code": null,
+      "explanation": "Streams의 병렬 실행 단위는 태스크이고 태스크 수는 입력 파티션 수로 정해지므로, 스레드나 인스턴스를 늘려 태스크를 나눠 실행하는 것이 처리량을 늘리는 방법입니다. 스레드 기본값이 1이라는 점을 놓치면 인스턴스를 늘려도 각 인스턴스가 태스크 하나만 돌리는 구성이 됩니다. 다만 태스크 수보다 많은 스레드를 두어도 남는 스레드는 할당을 받지 못하므로 이득이 없고, 태스크를 더 늘리려면 입력 파티션 수를 늘려야 합니다. 커밋 주기와 캐시 크기는 지연·방출 빈도에 영향을 주는 설정이며 병렬성을 바꾸지 않습니다.",
+      "distractorNotes": {
+        "A": "태스크는 분할되지 않습니다. 태스크 수보다 많은 스레드는 유휴 상태가 됩니다.",
+        "B": "커밋 주기는 처리 병렬성과 무관하며 너무 줄이면 오버헤드만 늘어납니다.",
+        "D": "캐시를 끄면 하위로 내보내는 레코드 수가 늘어 부하가 커질 수 있습니다."
+      },
+      "refs": [
+        {
+          "title": "Kafka Streams — Architecture: Threading Model",
+          "url": "https://kafka.apache.org/documentation/streams/architecture#streams_architecture_threads"
+        },
+        {
+          "title": "Kafka Streams — Configs: num.stream.threads",
+          "url": "https://kafka.apache.org/documentation/#streamsconfigs_num.stream.threads"
+        }
+      ],
+      "tags": [
+        "streams",
+        "num.stream.threads",
+        "partitioning"
+      ],
       "choices": [
         {
           "id": "A",
-          "text": "`commit.interval.ms` 가 너무 작아 커밋이 잦은지 확인한다."
+          "text": "`num.stream.threads` 를 24로 올리면 태스크가 분할되어 병렬성이 두 배가 된다."
         },
         {
           "id": "B",
-          "text": "`num.stream.threads` 가 1이어서 병렬성이 부족한지 확인한다."
+          "text": "`commit.interval.ms` 를 줄이면 태스크가 더 자주 실행되어 처리량이 늘어난다."
         },
         {
           "id": "C",
-          "text": "`state.dir` 가 컨테이너 재시작 시 사라지는 임시 경로인지 확인한다."
+          "text": "기본값 1인 `num.stream.threads` 를 늘리거나 인스턴스를 추가해 태스크를 나눠 실행한다."
         },
         {
           "id": "D",
-          "text": "`topology.optimization` 이 꺼져 있어 리파티션 토픽이 많은지 확인한다."
+          "text": "`statestore.cache.max.bytes` 를 0으로 두면 처리 지연이 줄어 처리량이 늘어난다."
         }
       ],
       "answer": [
         "C"
-      ],
-      "explanation": "상태 저장소는 `state.dir` 아래 로컬 디스크에 유지되고, 이 디렉터리가 남아 있으면 재기동 시 부족한 구간만 changelog에서 복원합니다. 기본값이 임시 디렉터리이므로 컨테이너가 교체될 때마다 상태가 사라지면 매번 changelog 전체를 재생해야 하고, 상태가 클수록 기동 시간이 급격히 늘어납니다. 따라서 영속 볼륨을 `state.dir` 로 지정하는 것이 1차 점검이며, 추가로 `num.standby.replicas` 를 1 이상으로 두면 인스턴스 교체 시 복원 비용이 줄어듭니다. 스레드 수나 커밋 간격은 기동 시간이 아니라 처리량과 지연에 영향을 줍니다.",
-      "distractorNotes": {
-        "A": "커밋 주기는 처리량과 지연에 영향을 주며 복원 시간과는 관계가 없습니다.",
-        "B": "스레드 수는 처리 병렬성이며 상태 복원량을 줄이지 못합니다.",
-        "D": "최적화는 토폴로지 구조를 줄여 주지만, 상태가 매번 사라지는 문제를 해결하지는 않습니다."
-      },
-      "refs": [
-        {
-          "title": "Kafka Streams — Configs: state.dir",
-          "url": "https://kafka.apache.org/documentation/#streamsconfigs_state.dir"
-        },
-        {
-          "title": "Kafka Streams — Architecture: State",
-          "url": "https://kafka.apache.org/documentation/streams/architecture#streams_architecture_state"
-        }
-      ],
-      "tags": [
-        "state-store",
-        "streams",
-        "stateless-stateful"
       ]
     },
     {
@@ -3134,58 +3152,58 @@
       "chapter": "ch11",
       "difficulty": "hard",
       "type": "matching",
-      "question": "Connect와 Streams의 각 지표를 그 의미와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "question": "각 관측 질문을 그 답을 얻을 수 있는 수단과 연결하세요. 정답이 아닌 미끼 수단이 섞여 있습니다.",
       "code": null,
-      "pairs": [
-        {
-          "id": "p1",
-          "left": "`connector-failed-task-count` (Connect)",
-          "right": "실패 상태로 남아 있는 태스크 수 — 자동 복구되지 않으므로 즉시 조사 대상이다"
-        },
-        {
-          "id": "p2",
-          "left": "`total-records-skipped` (Connect)",
-          "right": "오류 허용 설정 때문에 건너뛴 레코드 수 — 조용한 유실의 크기다"
-        },
-        {
-          "id": "p3",
-          "left": "`deadletterqueue-produce-requests` (Connect)",
-          "right": "DLQ 토픽으로 보낸 요청 수 — 격리된 레코드의 발생 추이를 보여 준다"
-        },
-        {
-          "id": "p4",
-          "left": "`sink-record-lag-max` (Connect)",
-          "right": "sink 태스크에만 존재하는 커넥터 단위 최대 밀림"
-        },
-        {
-          "id": "p5",
-          "left": "`record-e2e-latency-max` (Streams)",
-          "right": "소스·말단 노드에서 측정하는 종단 처리 지연의 최대값"
-        }
-      ],
-      "extraRights": [
-        "커넥터가 기동을 시도한 누적 횟수",
-        "상태 저장소에 열려 있는 이터레이터 수"
-      ],
-      "explanation": "Connect 지표는 크게 실패·유실·밀림 세 축으로 나뉩니다. 실패 태스크 수는 파이프라인이 부분적으로 멈춘 시점을 알려 주고, 건너뛴 레코드 수와 DLQ 전송 요청 수는 오류 허용 설정을 켠 상태에서 데이터가 어디로 사라졌는지 추적하게 해 줍니다. sink 전용 밀림 지표는 커넥터 단위 지연을 보여 주므로 컨슈머 그룹 조회와 함께 쓰면 좋습니다. Streams의 종단 지연 지표는 소스 노드와 말단 노드에서 제공되어 토폴로지 전체의 지연을 확인할 수 있습니다.",
+      "explanation": "관측은 질문에서 출발해 수단을 고르는 순서로 정리해 두면 장애 시 헤매지 않습니다. 인스턴스 단위 밀림은 클라이언트 지표에 `client.id` 태그가 있어야 구분되고, 멤버가 실제로 붙어 있는지는 그룹 조회로만 확인할 수 있습니다. Connect 장애는 상태 조회에서 실패 태스크와 그 태스크를 실행한 워커를 확인하고 그 노드의 로컬 로그를 봐야 하며, 필요하면 런타임에 로그 레벨을 올립니다. 브로커의 여유는 두 스레드 풀의 유휴 비율로 판단하고, 미끼로 넣은 상태 토픽은 로그 저장소가 아니라 커넥터 상태 정보를 담는 토픽입니다.",
       "distractorNotes": {
-        "p2": "`total-record-errors` 와 혼동하기 쉽습니다. 오류 발생 수와 실제로 건너뛴 수는 다릅니다.",
-        "p4": "source 커넥터에도 있다고 오해하기 쉽습니다. 이 지표는 sink 태스크 전용입니다."
+        "p1": "브로커의 복제 lag 지표로는 인스턴스별 밀림을 알 수 없습니다.",
+        "p3": "커넥터 상태가 RUNNING이어도 태스크는 FAILED일 수 있어 태스크 단위로 확인해야 합니다."
       },
       "refs": [
         {
-          "title": "Kafka Docs — Connect Monitoring",
-          "url": "https://kafka.apache.org/documentation/#connect_monitoring"
+          "title": "Kafka Docs — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
         },
         {
-          "title": "Kafka Docs — Kafka Streams Monitoring",
-          "url": "https://kafka.apache.org/documentation/#kafka_streams_monitoring"
+          "title": "Kafka Docs — Connect REST API",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
         }
       ],
       "tags": [
         "monitoring",
-        "connect",
-        "streams"
+        "connect-logging",
+        "jmx"
+      ],
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "어느 컨슈머 인스턴스가 밀리고 있는가",
+          "right": "인스턴스별 `client.id` 태그가 붙은 클라이언트 JMX 지표"
+        },
+        {
+          "id": "p2",
+          "left": "그룹에 활성 멤버가 붙어 있는가",
+          "right": "`kafka-consumer-groups.sh --describe --group` 출력의 멤버 정보"
+        },
+        {
+          "id": "p3",
+          "left": "어느 워커에서 태스크가 실패했는가",
+          "right": "`GET /connectors/{name}/status` 응답의 `worker_id` 와 `trace`"
+        },
+        {
+          "id": "p4",
+          "left": "Connect 로그를 재시작 없이 더 자세히 보려면",
+          "right": "`PUT /admin/loggers/{name}` 으로 런타임 로그 레벨 변경"
+        },
+        {
+          "id": "p5",
+          "left": "브로커가 요청 처리에 여유가 있는가",
+          "right": "`RequestHandlerAvgIdlePercent` 와 `NetworkProcessorAvgIdlePercent`"
+        }
+      ],
+      "extraRights": [
+        "`status.storage.topic` 을 직접 소비해 로그 확인",
+        "`ActiveControllerCount` 값이 1인지 확인"
       ]
     },
     {
