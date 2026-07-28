@@ -58,10 +58,24 @@
           ccdak/*.html, ccaak/*.html
 
 ### 1. 설정값 전수 대조 (최우선)
-사이트 전체에서 **설정명과 기본값이 나오는 모든 지점**을 추출한 뒤,
-https://kafka.apache.org/documentation/ 의 다음 섹션과 하나씩 대조하세요:
-- #brokerconfigs #topicconfigs #producerconfigs #consumerconfigs
-- #connectconfigs #streamsconfigs #adminclientconfigs
+사이트 전체에서 **설정명과 기본값이 나오는 모든 지점**을 추출한 뒤 하나씩 대조하세요.
+
+> ⚠️ **이 환경의 네트워크 정책이 `kafka.apache.org` · `docs.confluent.io` ·
+> `cwiki.apache.org` · `www.confluent.io` · `developer.confluent.io` 를 차단합니다.**
+> 403/407 이 나오면 **재시도하지 말고** 아래 1차 출처를 쓰세요. 우회 시도 금지.
+>
+> `docs/FACT_SOURCES.md` 에 파일·라인 단위 경로가 정리되어 있습니다. 요약하면:
+> - **소스 코드** — `raw.githubusercontent.com/apache/kafka/<tag>/...`
+>   기본값의 정본은 각 `*Config.java` 의 `define(...)` 호출입니다.
+>   `ProducerConfig`·`ConsumerConfig`·`KafkaConfig`·`TopicConfig`·`LogConfig`·
+>   `ConnectorConfig`·`StreamsConfig`·`AdminClientConfig`
+> - **공식 문서 원본** — `archive.apache.org` 의 `kafka_2.13-4.3.1-site-docs.tgz`
+>   (배포본에 동봉된 documentation.html 전문. 웹사이트와 같은 내용입니다)
+>
+> 소스가 문서보다 **강한** 근거입니다. 둘이 다르면 소스를 따르고 그 사실을 보고하세요.
+
+대조할 섹션: brokerconfigs · topicconfigs · producerconfigs · consumerconfigs ·
+connectconfigs · streamsconfigs · adminclientconfigs
 
 특히 다음은 **틀리기 쉬우므로 반드시 확인**:
 - message.max.bytes (1MB인가? 정확한 바이트 값은?)
@@ -83,8 +97,9 @@ https://kafka.apache.org/documentation/ 의 다음 섹션과 하나씩 대조하
   안에 있는지 확인. 그 밖이면 CRITICAL.
 
 ### 3. 버전 정보 검증 (docs/VERSION_POLICY.md 기준)
-- §2의 "버전 병기 필요 항목" 표 10개 행이 **실제로 정확한지** 릴리스 노트로 검증
-  (https://kafka.apache.org/blog/releases/ 및 각 릴리스 노트)
+- §2의 "버전 병기 필요 항목" 표 10개 행이 **실제로 정확한지** 검증
+  (릴리스 노트는 `archive.apache.org/dist/kafka/<ver>/RELEASE_NOTES.html`,
+   KIP 본문은 차단되므로 해당 KIP 을 구현한 커밋·소스 주석으로 대신 확인)
 - `basics/appendix-legacy.html`의 버전 타임라인이 정확한지 (2.4/2.8/3.0/3.3/3.6/3.9/4.0/4.1/4.2)
 - "kafka_2.13-x.y.z의 2.13은 Scala 버전"이 ch01·appendix·cli 치트시트에
   실제로 서술되어 있는지 (없으면 MAJOR)
@@ -129,7 +144,7 @@ docs/CCDAK_TOPIC_CHECKLIST.md 의 A1~I1 **전 항목**에 대해:
 ## C2 — 문제 정답·해설 검증
 
 ```
-검사 대상: data/questions/*.json 전체 (약 620문항)
+검사 대상: data/questions/*.json 전체 (31세트 852문항 — 정확한 수는 manifest.json 기준)
 
 ### 방법
 문항 수가 많으므로 **전수 + 표본 심층**의 2단계로 진행하세요.
@@ -197,9 +212,12 @@ node tools/validate.mjs --all
 ### 2. 링크 무결성 (스크립트가 놓치는 것)
 - 모든 상대 경로 링크의 대상 파일 존재 확인
 - 앵커 링크(#id)의 대상 id가 실제 그 페이지에 있는지
-- **외부 URL 생존 확인**: refs와 "공식 문서 출처" 섹션의 URL을
-  WebFetch로 표본 확인 (404, 리다이렉트, 앵커 소실)
+- **외부 URL 생존 확인**: refs와 "공식 문서 출처" 섹션의 URL을 표본 확인
   → 앵커가 사라진 경우가 흔합니다 (Kafka 문서가 개편되면서)
+  → ⚠️ 이 환경은 `kafka.apache.org`·`docs.confluent.io` 등을 **정책으로 차단**합니다.
+     403/407 은 **링크가 죽은 것이 아니라 이 환경의 제약**이므로 결함으로 보고하지 마세요.
+     차단된 호스트는 "확인 불가"로 분류하고, 형식(스킴·호스트 화이트리스트·앵커 표기)만 검사하세요.
+     차단 호스트 목록은 `docs/FACT_SOURCES.md` 상단에 있습니다.
 - 상호 링크 최소 3개 규칙(CONTENT_STYLE_GUIDE §4) 위반 페이지 목록
 
 ### 3. 자산 무결성
@@ -292,7 +310,7 @@ ccaak/index, ccaak/domain-security, quiz/index
 ## C5 — 시각화 검증 (신규)
 
 ```
-검사 대상: assets/diagrams/*.svg (87개), 그리고 이를 참조하는 HTML 플레이스홀더
+검사 대상: assets/diagrams/*.svg (85개), 그리고 이를 참조하는 HTML 플레이스홀더
 
 다이어그램은 **틀리면 글보다 강하게 오학습을 만듭니다.** 텍스트보다 엄격하게 보세요.
 
@@ -337,7 +355,11 @@ ccaak/index, ccaak/domain-security, quiz/index
 - **D-081**: source는 Connect offset 토픽, sink는 `__consumer_offsets`.
   뒤바뀌었으면 CRITICAL
 - **D-082**: source와 sink의 SMT/converter 순서가 서로 반대인가?
-- **D-093**: co-partitioning 3요건이 맞는가? GlobalKTable 예외가 표현되었는가?
+- **D-093**: co-partitioning 요건은 **2개**입니다 — ① 파티션 수 동일 ② 파티셔너 동일.
+  "같은 키로 파티셔닝"은 equi-join 의 **전제**이지 세 번째 요건이 아니며,
+  Streams 런타임이 실제로 검증하는 것은 파티션 수뿐입니다
+  (불일치 시 `TopologyBuilderException`, `TopologyException` 아님).
+  **3요건으로 그려져 있으면 그게 오류입니다.** GlobalKTable·FK 조인 예외가 표현되었는가?
 - **D-094**: map은 리파티션 유발, mapValues는 미유발. 뒤바뀌었으면 CRITICAL
 - **D-101**: listeners / advertised.listeners / protocol.map 관계가 정확한가?
 - **D-106**: 버전 타임라인의 각 항목이 실제 릴리스와 맞는가? (릴리스 노트로 대조)
@@ -347,7 +369,7 @@ ccaak/index, ccaak/domain-security, quiz/index
      틀리면 피해가 큽니다
 
 ### 3. 일관성 검증 (V1/V2/V3 세 에이전트의 편차)
-Playwright로 87개를 전부 렌더링해 비교하세요.
+Playwright로 85개를 전부 렌더링해 비교하세요.
 - 선 굵기가 파일마다 다른가 (--dg-sw-1/2 외 값 사용)
 - 텍스트 크기가 파일마다 다른가
 - 노드 모양·모서리 반경이 다른가
@@ -360,7 +382,7 @@ Playwright로 87개를 전부 렌더링해 비교하세요.
 편차를 발견하면 어느 파일을 어떻게 맞춰야 하는지 명시하세요.
 
 ### 4. 다크모드 검증 (최다 발생 결함)
-- 87개 전부 라이트/다크 스크린샷
+- 85개 전부 라이트/다크 스크린샷
 - **다크에서 선이나 텍스트가 안 보이는 파일 목록** — 토큰을 잘못 쓴 것
 - 대비비 3:1 미달 요소
 - 반투명(`opacity`, `fill-opacity`) 사용 시 다크에서 뭉개지는지
