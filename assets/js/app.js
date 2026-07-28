@@ -779,6 +779,81 @@
   /* ======================================================================
      읽음 처리
      ====================================================================== */
+  /* ---------- 치트시트 표 필터 -----------------------------------------------
+     <input class="cheat-filter" data-target="#t-broker"> 가 가리키는 표의
+     tbody 행을 입력어로 걸러낸다. 시험 직전·장애 대응 중에 쓰는 기능이라
+     즉시 반응해야 하므로 디바운스를 두지 않는다 (행 수가 최대 수백 개다).
+
+     - 공백으로 나눈 토큰 전부를 포함하는 행만 남긴다 (AND)
+     - 대소문자 무시. 설정명은 소문자·점 표기이므로 그대로 매칭된다
+     - rowspan 이 걸린 그룹 헤더 행은 숨기지 않는다 (표가 깨진다)
+     - 결과 수를 aria-live 로 안내한다 (스크린리더에서도 몇 건인지 알 수 있게)
+  --------------------------------------------------------------------------- */
+  function initCheatFilters(root) {
+    var inputs = Array.prototype.slice.call(root.querySelectorAll('input.cheat-filter'));
+    if (!inputs.length) return;
+
+    inputs.forEach(function (input) {
+      var sel = input.getAttribute('data-target');
+      var table = sel ? root.querySelector(sel) : null;
+      if (!table) return;
+
+      var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
+      if (!rows.length) return;
+
+      /* 검색 대상 텍스트를 미리 만들어 둔다 (입력마다 재계산하지 않는다) */
+      var haystacks = rows.map(function (tr) {
+        return (tr.textContent || '').toLowerCase().replace(/\s+/g, ' ');
+      });
+      /* rowspan 그룹 헤더는 숨기면 표 구조가 어긋나므로 항상 유지한다 */
+      var keepAlways = rows.map(function (tr) {
+        return !!tr.querySelector('[rowspan]');
+      });
+
+      var status = doc.createElement('p');
+      status.className = 'gal-none cheat-filter__status';
+      status.setAttribute('aria-live', 'polite');
+      status.hidden = true;
+      if (table.parentNode) table.parentNode.insertBefore(status, table.nextSibling);
+
+      function apply() {
+        var q = (input.value || '').trim().toLowerCase();
+        var tokens = q ? q.split(/\s+/) : [];
+        var shown = 0;
+
+        for (var i = 0; i < rows.length; i++) {
+          var hit = true;
+          for (var t = 0; t < tokens.length; t++) {
+            if (haystacks[i].indexOf(tokens[t]) === -1) { hit = false; break; }
+          }
+          if (hit) shown++;
+          rows[i].hidden = keepAlways[i] ? false : !hit;
+        }
+
+        if (!tokens.length) {
+          status.hidden = true;
+          status.textContent = '';
+        } else {
+          status.hidden = false;
+          status.textContent = shown
+            ? shown + '개 항목이 일치합니다.'
+            : '일치하는 항목이 없습니다. 설정명의 일부만 입력해 보세요.';
+        }
+      }
+
+      input.addEventListener('input', apply);
+      /* Esc 로 초기화 — 장애 대응 중 손이 키보드에 있을 때 유용하다 */
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && input.value) {
+          e.preventDefault();
+          input.value = '';
+          apply();
+        }
+      });
+      apply();
+    });
+  }
+
   function initReadTracking() {
     var p = pr();
     if (!p || !state.pageId) return;
@@ -870,6 +945,7 @@
     if (state.main) {
       addCopyButtons(state.main);
       buildPageToc(state.main);
+      initCheatFilters(state.main);
     }
 
     // 검색 인덱스가 있으면 검색 UI 노출

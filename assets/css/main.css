@@ -1457,3 +1457,10 @@ a.card:hover { border-color: var(--c-accent-border); background: var(--c-accent-
     transition-duration: 0.001ms !important;
   }
 }
+
+/* 치트시트 표 필터 결과 안내 (app.js initCheatFilters 가 삽입) */
+.cheat-filter__status {
+  margin: var(--space-2) 0 var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--c-text-secondary);
+}
