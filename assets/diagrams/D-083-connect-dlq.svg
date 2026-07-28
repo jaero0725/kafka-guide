@@ -83,7 +83,7 @@
 
   <!-- DLQ 토픽 -->
   <rect class="dg-node dg-node--accent" x="12" y="238" width="696" height="90" rx="4"/>
-  <text class="dg-fs-sm dg-bold" x="22" y="256">DLQ 토픽 — 원본 레코드 그대로 + 실패 원인 헤더 (<tspan class="dg-mono">errors.deadletterqueue.context.headers.enable=true</tspan>)</text>
+  <text class="dg-fs-sm dg-bold" x="22" y="256">DLQ 토픽 — 원본 레코드 + 실패 원인 헤더 (<tspan class="dg-mono">…context.headers.enable=true</tspan>)</text>
   <text class="dg-fs-sm dg-mono" x="22" y="276">__connect.errors.topic</text>
   <text class="dg-fs-sm dg-mono" x="192" y="276">.partition</text>
   <text class="dg-fs-sm dg-mono" x="362" y="276">.offset</text>
@@ -94,9 +94,9 @@
   <text class="dg-fs-sm dg-mono" x="532" y="293">.exception.class.name</text>
   <text class="dg-fs-sm dg-mono" x="22" y="310">.exception.message</text>
   <text class="dg-fs-sm dg-mono" x="192" y="310">.exception.stacktrace</text>
-  <text class="dg-fs-sm dg-muted" x="362" y="310">DLQ 토픽은 자동 생성됩니다 (<tspan class="dg-mono">replication.factor</tspan> 기본 3)</text>
+  <text class="dg-fs-sm dg-muted" x="362" y="310">DLQ 토픽은 자동 생성됩니다 (RF 기본 3)</text>
 
   <!-- 각주 -->
   <line class="dg-grid" x1="12" y1="338" x2="708" y2="338"/>
-  <text class="dg-fs-sm dg-bold" x="12" y="356">DLQ 설정은 <tspan class="dg-bold">싱크 커넥터에만</tspan> 있습니다. 소스 커넥터에는 <tspan class="dg-mono">errors.deadletterqueue.*</tspan> 가 없고 로그 기록만 가능합니다.</text>
+  <text class="dg-fs-sm dg-bold" x="12" y="356">DLQ 설정은 <tspan class="dg-bold">싱크 커넥터에만</tspan> 있습니다. 소스 커넥터에는 <tspan class="dg-mono">errors.deadletterqueue.*</tspan> 가 없습니다.</text>
 </svg>

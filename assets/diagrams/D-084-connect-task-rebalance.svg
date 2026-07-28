@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 318" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 322" role="img" class="kg-diagram"
      aria-labelledby="d084-title d084-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d084-title">Connect 태스크 재분배 — 워커 이탈과 지연 리밸런스</title>
   <desc id="d084-desc">워커 세 대에 태스크 여섯 개가 나뉘어 있던 Connect 클러스터에서

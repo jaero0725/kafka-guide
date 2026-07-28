@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 458" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 478" role="img" class="kg-diagram"
      aria-labelledby="d072-title d072-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d072-title">스키마 호환성 모드 매트릭스 — 변경 유형별 허용·거부</title>
   <desc id="d072-desc">가로는 스키마 변경 유형 일곱 가지, 세로는 호환성 모드 일곱 가지인 표입니다.
@@ -313,6 +313,7 @@
   <text class="dg-fs-sm" x="202" y="418">거부 — 등록이 실패합니다</text>
   <rect class="dg-node dg-node--warn" x="392" y="408" width="16" height="12" rx="2"/>
   <text class="dg-fs-sm" x="414" y="418">NONE — 검사 없이 통과 (보장도 없음)</text>
-  <text class="dg-fs-sm dg-muted" x="12" y="438">기준: Avro 스키마 해석 규칙 — 필드 대응은 이름(또는 reader 별칭)으로 찾고, 못 찾으면 reader 쪽 default 가 있어야 합니다.</text>
-  <text class="dg-fs-sm dg-muted" x="12" y="456">타입 승격은 int→long→float→double 과 bytes↔string 만 허용됩니다. 이름 변경은 별칭(alias)이나 default 가 있으면 결과가 달라집니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="438">기준: Avro 해석 규칙 — 필드는 이름(또는 reader 별칭)으로 대응하고, 못 찾으면 reader 쪽 default 가 있어야 합니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="456">타입 승격은 int→long→float→double 과 bytes↔string 만 허용됩니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="474">이름 변경은 별칭(alias)이나 default 가 있으면 결과가 달라집니다.</text>
 </svg>

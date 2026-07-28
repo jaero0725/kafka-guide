@@ -45,14 +45,14 @@
 
   <rect class="dg-node dg-node--accent" x="238" y="58" width="122" height="28" rx="4"/>
   <text x="246" y="77" class="dg-fs-sm dg-bold dg-mono">zstd</text>
-  <text x="300" y="77" class="dg-fs-sm">수준 조절</text>
-  <line class="dg-edge dg-edge--accent dg-edge--dashed" x1="360" y1="72" x2="392" y2="72"/>
+  <text x="292" y="77" class="dg-fs-sm">수준 조절</text>
+  <line class="dg-edge dg-edge--accent dg-edge--dashed" x1="360" y1="72" x2="378" y2="72"/>
 
-  <rect class="dg-node dg-node--warn" x="368" y="52" width="82" height="28" rx="4"/>
-  <text x="376" y="71" class="dg-fs-sm dg-mono">gzip</text>
+  <rect class="dg-node dg-node--warn" x="382" y="52" width="82" height="28" rx="4"/>
+  <text x="390" y="71" class="dg-fs-sm dg-mono">gzip</text>
 
   <text x="126" y="196" class="dg-fs-sm dg-muted">CPU 는 안 쓰지만</text>
-  <text x="126" y="256" class="dg-fs-sm dg-muted">네트워크·디스크를 가장 많이 씁니다</text>
+  <text x="214" y="226" class="dg-fs-sm dg-muted">네트워크·디스크 사용은 최대</text>
 
   <!-- 선택 가이드 -->
   <rect class="dg-panel" x="486" y="40" width="226" height="204" rx="4"/>

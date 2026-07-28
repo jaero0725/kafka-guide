@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 302" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 324" role="img" class="kg-diagram"
      aria-labelledby="d070-title d070-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d070-title">Schema Registry 아키텍처 — 스키마는 레지스트리에, 메시지에는 id 만</title>
   <desc id="d070-desc">프로듀서, Schema Registry, Kafka 토픽, 컨슈머의 관계를 6단계로 그린 그림입니다.
@@ -22,7 +22,7 @@
   <line class="dg-edge dg-edge--accent" x1="100" y1="148" x2="100" y2="64"/>
   <line class="dg-edge dg-edge--accent" x1="100" y1="64" x2="243" y2="64"/>
   <path class="dg-marker--accent" d="M242,59 L250,64 L242,69 Z"/>
-  <text class="dg-fs-sm dg-bold" x="108" y="58">① 스키마 등록 <tspan class="dg-mono">POST /subjects/…/versions</tspan></text>
+  <text class="dg-fs-sm dg-bold" x="108" y="58">① 스키마 등록</text>
 
   <!-- ② id 반환 -->
   <line class="dg-edge" x1="250" y1="88" x2="124" y2="88"/>
@@ -34,7 +34,7 @@
   <line class="dg-edge dg-edge--accent" x1="620" y1="148" x2="620" y2="64"/>
   <line class="dg-edge dg-edge--accent" x1="620" y1="64" x2="477" y2="64"/>
   <path class="dg-marker--accent" d="M478,59 L470,64 L478,69 Z"/>
-  <text class="dg-fs-sm dg-bold" x="612" y="58" text-anchor="end">⑤ id 로 조회 <tspan class="dg-mono">GET /schemas/ids/{id}</tspan></text>
+  <text class="dg-fs-sm dg-bold" x="612" y="58" text-anchor="end">⑤ id 로 조회</text>
 
   <!-- ⑥ 스키마 반환 -->
   <line class="dg-edge" x1="470" y1="88" x2="596" y2="88"/>
@@ -77,5 +77,6 @@
   <line class="dg-grid" x1="12" y1="246" x2="708" y2="246"/>
   <text class="dg-fs-sm" x="12" y="264">메시지마다 REST 호출이 일어나지 않습니다. <tspan class="dg-bold">처음 보는 스키마·id 일 때만</tspan> 왕복하고 이후에는 캐시를 씁니다.</text>
   <text class="dg-fs-sm" x="12" y="282">그래서 Schema Registry 가 잠시 죽어도 <tspan class="dg-bold">이미 캐시된 스키마로는 계속 처리</tspan>됩니다 — 새 스키마 등록·조회만 막힙니다.</text>
-  <text class="dg-fs-sm dg-muted" x="12" y="300">Schema Registry 는 Confluent 컴포넌트입니다. Apache Kafka 배포판에는 포함되지 않습니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="300">REST: 등록은 <tspan class="dg-mono">POST /subjects/{subject}/versions</tspan> · 조회는 <tspan class="dg-mono">GET /schemas/ids/{id}</tspan></text>
+  <text class="dg-fs-sm dg-muted" x="12" y="318">Schema Registry 는 Confluent 컴포넌트입니다. Apache Kafka 배포판에는 포함되지 않습니다.</text>
 </svg>

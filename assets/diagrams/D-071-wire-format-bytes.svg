@@ -71,12 +71,12 @@
   <text class="dg-fs-sm" x="12" y="220">id 4바이트</text>
   <rect class="dg-node--empty" x="160" y="204" width="480" height="22" rx="3"/>
   <rect class="dg-node dg-node--accent" x="160" y="204" width="6" height="22" rx="2"/>
-  <text class="dg-fs-sm dg-bold dg-num" x="648" y="220">4 B</text>
+  <text class="dg-fs-sm dg-bold dg-num" x="706" y="220" text-anchor="end">4 B</text>
 
   <text class="dg-fs-sm" x="12" y="250">스키마 JSON 전문</text>
   <rect class="dg-node--empty" x="160" y="234" width="480" height="22" rx="3"/>
   <rect class="dg-node dg-node--danger" x="160" y="234" width="480" height="22" rx="3"/>
-  <text class="dg-fs-sm dg-bold dg-num" x="648" y="250">수백 ~ 수천 B</text>
+  <text class="dg-fs-sm dg-bold dg-num" x="706" y="250" text-anchor="end">수백 ~ 수천 B</text>
 
   <!-- 각주 -->
   <line class="dg-grid" x1="12" y1="268" x2="708" y2="268"/>

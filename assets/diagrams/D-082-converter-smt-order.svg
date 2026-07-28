@@ -73,5 +73,5 @@
 
   <!-- 각주 -->
   <line class="dg-grid" x1="12" y1="282" x2="708" y2="282"/>
-  <text class="dg-fs-sm dg-muted" x="12" y="300">실패 단계는 <tspan class="dg-mono">KEY_CONVERTER</tspan> · <tspan class="dg-mono">VALUE_CONVERTER</tspan> · <tspan class="dg-mono">TRANSFORMATION</tspan> 처럼 DLQ 헤더의 <tspan class="dg-mono">stage</tspan> 값으로 남습니다 (D-083).</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="300">실패 단계는 <tspan class="dg-mono">KEY_CONVERTER</tspan> · <tspan class="dg-mono">VALUE_CONVERTER</tspan> · <tspan class="dg-mono">TRANSFORMATION</tspan> 처럼 DLQ 헤더에 남습니다 (D-083).</text>
 </svg>

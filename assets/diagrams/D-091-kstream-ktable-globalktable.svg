@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 328" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 354" role="img" class="kg-diagram"
      aria-labelledby="d091-title d091-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d091-title">KStream · KTable · GlobalKTable — 같은 입력을 다르게 해석합니다</title>
   <desc id="d091-desc">같은 입력 레코드 다섯 건을 세 가지 추상화가 어떻게 해석하는지 비교한 그림입니다.
@@ -89,7 +89,8 @@
 
   <!-- 각주 -->
   <line class="dg-grid" x1="12" y1="276" x2="708" y2="276"/>
-  <text class="dg-fs-sm" x="12" y="294">GlobalKTable 은 전체 복제라서 조인 시 <tspan class="dg-bold">co-partitioning 이 필요하지 않고</tspan> 키가 아닌 값으로도 조회할 수 있습니다 (D-093).</text>
+  <text class="dg-fs-sm" x="12" y="294">GlobalKTable 은 전체 복제라서 조인 시 <tspan class="dg-bold">co-partitioning 이 필요 없고</tspan> 값으로도 조회할 수 있습니다 (D-093).</text>
   <text class="dg-fs-sm dg-muted" x="12" y="312">대신 인스턴스마다 전체 데이터를 들고 있어야 하므로 <tspan class="dg-bold">작은 참조 데이터</tspan>에만 씁니다.</text>
-  <text class="dg-fs-sm dg-muted" x="12" y="326">같은 토픽을 <tspan class="dg-mono">builder.stream()</tspan> 으로 읽으면 KStream, <tspan class="dg-mono">builder.table()</tspan> 로 읽으면 KTable 이 됩니다 — 데이터가 아니라 해석의 차이입니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="328">같은 토픽을 <tspan class="dg-mono">builder.stream()</tspan> 으로 읽으면 KStream, <tspan class="dg-mono">builder.table()</tspan> 로 읽으면 KTable 입니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="346">데이터가 다른 것이 아니라 <tspan class="dg-bold">해석이 다른 것</tspan>입니다.</text>
 </svg>

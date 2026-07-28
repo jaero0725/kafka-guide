@@ -78,5 +78,5 @@
   <!-- 각주 -->
   <line class="dg-grid" x1="12" y1="376" x2="708" y2="376"/>
   <text class="dg-fs-sm dg-muted" x="12" y="394">공식 문서: 외부 시스템에 쓸 때의 한계는 컨슈머의 위치와 실제 저장된 출력을 함께 맞춰야 한다는 점입니다.</text>
-  <text class="dg-fs-sm dg-muted" x="12" y="412">다른 목적지 시스템의 exactly-once 는 그 시스템의 협조가 필요합니다. Kafka 는 그것을 가능하게 하는 재료만 제공합니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="412">다른 목적지 시스템의 exactly-once 는 그 시스템의 협조가 필요합니다.</text>
 </svg>

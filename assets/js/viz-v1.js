@@ -465,7 +465,7 @@
       }
     }
 
-    function rebalance(v, why) {
+    function rebalance(v, why, initial) {
       if (st.timer) { global.clearTimeout(st.timer); st.timer = null; }
       var consumers = names(st.active);
       var res = runAssignor(v.strategy, consumers, parts, st.prev);
@@ -473,22 +473,25 @@
 
       var cooperative = res.meta.protocol === 'cooperative';
       var moving = Object.keys(res.transferring);
+      // 첫 화면은 '이미 이렇게 담당하고 있는 상태' 이므로 전부 유지로 그립니다
+      // (SVG 파일의 정적 초기 상태와 같은 그림이 되도록).
+      var prevBefore = initial ? res.owner : st.prev;
 
       if (cooperative && moving.length) {
         // 1차 리밸런스: 옮겨 갈 파티션은 이전 소유자에게서 회수하고 아직 할당하지 않습니다.
         var hold = {};
         moving.forEach(function (k) { hold[k] = 1; });
-        paint(res, consumers, st.prev, hold);
+        paint(res, consumers, prevBefore, hold);
         ctx.text('round-label', '1차 리밸런스 — 이동 대상 ' + moving.length + '개만 회수 (나머지는 계속 처리)');
         ctrl.announce(why + '. cooperative 프로토콜이라 1차 리밸런스에서 이동 대상 ' + moving.length +
           '개만 회수하고 나머지 파티션은 처리를 계속합니다.');
-        summarize(v, res, consumers, moving.length, 1);
+        summarize(v, res, consumers, moving.length, 1, prevBefore, initial);
         var finish = function () {
           st.timer = null;
-          paint(res, consumers, st.prev, null);
+          paint(res, consumers, prevBefore, null);
           ctx.text('round-label', '2차 리밸런스 완료 — 회수된 ' + moving.length + '개를 새 소유자에게 할당');
+          summarize(v, res, consumers, moving.length, 2, prevBefore, initial);
           st.prev = res.owner;
-          summarize(v, res, consumers, moving.length, 2);
           ctrl.announce('2차 리밸런스가 끝나 회수된 파티션이 새 소유자에게 할당되었습니다.');
         };
         if (ctx.reducedMotion) finish();
@@ -497,12 +500,14 @@
       }
 
       // eager: 전원이 전체 반납한 뒤 재할당 (한 번에 끝납니다)
-      paint(res, consumers, st.prev, null);
-      ctx.text('round-label', cooperative
-        ? '리밸런스 완료 — 옮겨 갈 파티션이 없어 회수도 없었습니다'
-        : 'eager 리밸런스 — 전원이 전체 반납 후 재할당 (그 사이 모든 처리가 멈춥니다)');
+      paint(res, consumers, prevBefore, null);
+      ctx.text('round-label', initial
+        ? '초기 상태 — 컨슈머 ' + consumers.length + '명이 파티션 ' + D040_PARTS + '개를 나눠 담당하고 있습니다'
+        : (cooperative
+          ? '리밸런스 완료 — 옮겨 갈 파티션이 없어 회수도 없었습니다'
+          : 'eager 리밸런스 — 전원이 전체 반납 후 재할당 (그 사이 모든 처리가 멈춥니다)'));
+      summarize(v, res, consumers, 0, 1, prevBefore, initial);
       st.prev = res.owner;
-      summarize(v, res, consumers, 0, 1);
       ctrl.announce(why + '. ' + res.meta.label + ' 로 재할당했습니다.');
     }
 
@@ -511,8 +516,8 @@
         var alive = r < consumers.length;
         var c = 'C' + (r + 1);
         ctx.setState('row-' + r, alive ? null : 'off');
-        ctx.text('rowstate-' + r, alive ? (res.assign[c] ? res.assign[c].length + '개 담당' : '') : '없음');
 
+        var shown = 0;
         for (var p = 0; p < D040_PARTS; p++) {
           var key = 't0p' + p;
           var state = 'off', label = '';
@@ -526,9 +531,12 @@
               else { state = 'active'; label = '신규'; }
             }
           }
+          if (state === 'done' || state === 'active') shown++;
           ctx.setState('cell-' + r + '-' + p, state);
           ctx.text('cellt-' + r + '-' + p, label);
         }
+        // 1차 리밸런스 중에는 보류된 파티션이 빠진 '지금 담당 중' 개수를 보여 줍니다
+        ctx.text('rowstate-' + r, alive ? shown + '개 담당' : '없음');
       }
       // 보류 중인 파티션은 컬럼 머리글에 표시
       for (var q = 0; q < D040_PARTS; q++) {
@@ -537,10 +545,10 @@
       }
     }
 
-    function summarize(v, res, consumers, moving, round) {
+    function summarize(v, res, consumers, moving, round, prevBefore, initial) {
       var kept = 0, added = 0;
       Object.keys(res.owner).forEach(function (k) {
-        if (st.prev[k] === res.owner[k]) kept++; else added++;
+        if (prevBefore[k] === res.owner[k]) kept++; else added++;
       });
       ctx.text('strategy-label', res.meta.label + ' · ' +
         (res.meta.protocol === 'cooperative' ? 'cooperative 프로토콜 (증분 재할당)' : 'eager 프로토콜 (전체 회수)'));
@@ -550,11 +558,11 @@
         { label: '소유자 유지', value: kept + '개' },
         { label: '소유자 변경', value: added + '개' },
         { label: '리밸런스 단계', value: round + '차' },
-        { label: '중단된 파티션', value: (res.meta.protocol === 'cooperative' ? moving : D040_PARTS) + '개' }
+        { label: '중단된 파티션', value: initial ? '없음' : (res.meta.protocol === 'cooperative' ? moving : D040_PARTS) + '개' }
       ]);
     }
 
-    rebalance(ctrl.values(), '초기 상태');
+    rebalance(ctrl.values(), '초기 상태', true);
   });
 
   /* ======================================================================
@@ -657,11 +665,11 @@
 
       var note;
       if (v.afterLeave) {
-        note = '컨슈머 1명 이탈 후 재할당 — Sticky 계열만 이전 할당을 최대한 유지합니다. Range·RoundRobin 은 이전 할당을 보지 않습니다.';
+        note = '이탈 후 재할당 — Sticky 계열만 이전 할당을 유지합니다. Range·RoundRobin 은 이전 할당을 보지 않습니다.';
       } else if (sameAsRR) {
-        note = '이전 할당이 없는 첫 배정에서는 Sticky 결과가 RoundRobin 과 같습니다 — 차이는 재할당 때 드러납니다. 토글을 켜 보세요.';
+        note = '첫 배정에서는 Sticky 결과가 RoundRobin 과 같습니다 — 차이는 재할당 때 드러납니다. 토글을 켜 보세요.';
       } else {
-        note = '구독이 같고 파티션 수가 나뉘는 조건에서는 Sticky 가 RoundRobin 과 같은 균형 배분을 만듭니다.';
+        note = '구독이 같은 조건에서 Sticky 는 RoundRobin 과 같은 균형 배분을 만듭니다.';
       }
       ctx.text('note', note);
       ctx.text('cond', '조건: 컨슈머 ' + v.consumers + '명 · 토픽 ' + v.topics + '개 × 파티션 ' + v.parts +

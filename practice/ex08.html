@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>예제 8 · Kafka Connect CDC 파이프라인 — Kafka Guide</title>
+  <meta name="description" content="Kafka 4.3의 Connect distributed 모드에 Debezium MySQL 소스 커넥터를 올려 CDC 파이프라인을 만듭니다. 내부 토픽 3개, DLQ(errors.*), SMT, 오프셋 관리 REST API까지 다룹니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="practice" data-page="ex08"></div>
+
+  <main id="main" class="page" data-page-id="practice/ex08">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="ex01.html">실무 예제</a></li>
+        <li><span aria-current="page">예제 8 · Connect CDC 파이프라인</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실무 예제 · 8</p>
+      <h1>Kafka Connect CDC 파이프라인</h1>
+      <p class="page__lead">
+        MySQL의 binlog를 Debezium이 읽어 Kafka 토픽으로 흘리고,
+        sink 커넥터가 그것을 외부 저장소로 내립니다.
+        코드를 한 줄도 쓰지 않고 <strong>JSON 설정만으로</strong> 파이프라인이 만들어지는 대신,
+        <strong>내부 토픽 3개·오프셋 저장 위치의 비대칭·에러 처리</strong>를 모르면
+        장애 때 손을 쓸 수 없습니다. 그 부분을 중심으로 다룹니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>Connect distributed 모드의 내부 토픽 3개가 무엇을 저장하고 왜 <code>compact</code>여야 하는지 설명할 수 있습니다.</li>
+        <li>source 커넥터와 sink 커넥터의 <strong>오프셋 저장 위치가 다르다</strong>는 것을 확인할 수 있습니다.</li>
+        <li><code>errors.*</code> 설정으로 DLQ를 구성하고 실패 원인 헤더를 읽을 수 있습니다.</li>
+        <li>REST API로 커넥터를 배포·상태 확인·재시작·오프셋 조회할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="scenario">
+      <h2 id="scenario">시나리오</h2>
+
+      <p>
+        주문 서비스의 MySQL <code>orders</code> 테이블을 분석 시스템과 검색 인덱스가 함께 필요로 합니다.
+        기존에는 두 팀이 각각 <strong>야간 배치로 전체를 덤프</strong>해 가져갔습니다.
+        데이터가 최대 24시간 낡고, 배치가 돌 때마다 DB에 부하가 걸렸습니다.
+      </p>
+      <p>
+        CDC(Change Data Capture)로 바꿉니다.
+        Debezium이 MySQL binlog를 읽어 <strong>INSERT/UPDATE/DELETE를 이벤트로</strong> 발행하면,
+        하류는 그 스트림만 소비합니다. DB에 추가 쿼리가 발생하지 않고 지연은 초 단위가 됩니다.
+      </p>
+      <p>
+        애플리케이션 코드를 고칠 수 없다는 제약이 있어
+        <strong>outbox 패턴 대신 테이블 직접 캡처</strong>를 선택했습니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="architecture">
+      <h2 id="architecture">아키텍처</h2>
+
+      <figure class="diagram" data-diagram="D-080">
+        <figcaption>
+          Connect 아키텍처 — worker / connector / task 분산과 리더 워커의 역할
+        </figcaption>
+      </figure>
+
+      <figure class="diagram" data-diagram="D-081">
+        <figcaption>
+          source와 sink의 오프셋 저장 위치 비대칭 — source는 Connect의 <code>offset.storage.topic</code>,
+          sink는 <code>__consumer_offsets</code>
+        </figcaption>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>distributed 모드의 내부 토픽 3개</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">저장하는 것</th>
+              <th scope="col">권장 파티션</th>
+              <th scope="col"><code>cleanup.policy</code></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>config.storage.topic</code></th>
+              <td>커넥터·태스크 설정</td>
+              <td><strong>반드시 1</strong> (순서가 의미를 갖습니다)</td>
+              <td><code>compact</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.storage.topic</code></th>
+              <td><strong>source 커넥터의</strong> 진행 위치 (binlog 파일·포지션 등)</td>
+              <td>기본 <code>25</code></td>
+              <td><code>compact</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>status.storage.topic</code></th>
+              <td>커넥터·태스크 상태, 사용 중인 토픽 목록</td>
+              <td>기본 <code>5</code></td>
+              <td><code>compact</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="내부 토픽이 delete 정책이면">
+        <p>
+          이 세 토픽이 <code>cleanup.policy=delete</code>로 만들어지면
+          <strong>리텐션이 지난 뒤 커넥터 설정과 진행 위치가 사라집니다.</strong>
+          워커를 재시작하는 순간 커넥터가 사라지거나 source가 처음부터 다시 읽습니다.
+          Connect가 자동 생성할 때는 <code>compact</code>로 만들지만,
+          <strong>운영자가 미리 만들어 둘 때 실수하기 쉬운 지점</strong>입니다.
+          변경은 소급 적용되지 않으므로 이미 <code>delete</code>로 만들었다면
+          토픽을 다시 만들어야 합니다(<a href="../cases/case08.html">케이스 8</a>).
+        </p>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCDAK Kafka Connect">
+        <p>
+          <strong>오프셋 저장 위치가 비대칭입니다.</strong>
+        </p>
+        <ul>
+          <li><strong>source 커넥터</strong> — 외부 시스템에서 어디까지 읽었는지를 Connect가 관리합니다. <code>offset.storage.topic</code>에 저장됩니다. 컨슈머 그룹이 아닙니다.</li>
+          <li><strong>sink 커넥터</strong> — 내부적으로 <strong>컨슈머 그룹</strong>(<code>connect-{connector-name}</code>)을 씁니다. 오프셋은 <code>__consumer_offsets</code>에 저장되고 <code>kafka-consumer-groups.sh</code>로 조회·리셋할 수 있습니다.</li>
+        </ul>
+        <p>
+          그래서 "sink 커넥터를 처음부터 다시 읽게 하려면?"의 답은
+          <code>kafka-consumer-groups.sh --reset-offsets</code>이고,
+          "source 커넥터를 처음부터 다시 읽게 하려면?"의 답은
+          <strong>커넥터를 <code>stop</code>한 뒤 <code>DELETE /connectors/{name}/offsets</code></strong>입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prerequisites">
+      <h2 id="prerequisites">사전 요구사항</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>검증 환경</caption>
+          <thead><tr><th scope="col">항목</th><th scope="col">버전</th><th scope="col">비고</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Apache Kafka</th><td>4.3.1</td><td><a href="ex01.html">예제 1</a>의 클러스터. Connect도 같은 <code>apache/kafka:4.3.1</code> 이미지로 띄웁니다</td></tr>
+            <tr><th scope="row">Debezium MySQL 커넥터</th><td><strong>3.6.0.Final</strong></td><td>Maven Central의 <code>io.debezium:debezium-connector-mysql</code> 플러그인 tarball을 이미지 빌드 시 내려받습니다</td></tr>
+            <tr><th scope="row">MySQL</th><td><code>mysql:8.4</code></td><td>binlog를 <code>ROW</code> 포맷으로 켭니다</td></tr>
+            <tr><th scope="row">Docker Compose</th><td>v2</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="플러그인을 이미지에 넣는 이유">
+        <p>
+          Debezium은 자체 Connect 이미지도 제공하지만,
+          <strong>Apache Kafka 4.3.1 워커에 플러그인만 얹는 방식</strong>이
+          브로커와 Connect 버전을 일치시키기 쉽습니다.
+          플러그인 tarball은 Maven Central에 있으므로
+          별도 레지스트리 접근이 필요하지 않습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="full-code">
+      <h2 id="full-code">전체 코드</h2>
+
+      <figure class="code">
+        <figcaption>디렉터리 구조</figcaption>
+        <pre><code class="lang-text">connect-cdc/
+├── docker-compose.connect.yml   # MySQL + Connect 워커 2대
+├── Dockerfile.connect           # apache/kafka 4.3.1 + Debezium 플러그인
+├── mysql/
+│   ├── my.cnf                   # binlog 설정
+│   └── init.sql                 # 스키마 + 사용자 + 샘플 데이터
+└── connectors/
+    ├── mysql-source.json        # Debezium MySQL 소스
+    ├── file-sink.json           # FileStreamSink (Apache Kafka 내장, 바로 동작)
+    └── s3-sink.json             # S3 Sink 참고 설정 (플러그인 별도 설치 필요)</code></pre>
+      </figure>
+
+      <h3 id="dockerfile">Connect 이미지</h3>
+
+      <figure class="code">
+        <figcaption>connect-cdc/Dockerfile.connect</figcaption>
+        <pre><code class="lang-text"># Apache Kafka 4.3.1 이미지에 Debezium MySQL 플러그인을 얹습니다.
+# 브로커와 Connect 워커의 버전을 일치시키기 위해 같은 베이스를 씁니다.
+FROM apache/kafka:4.3.1
+
+USER root
+
+# 플러그인은 반드시 "커넥터별 하위 디렉터리" 로 격리해야 합니다.
+# 한 디렉터리에 여러 커넥터의 jar 를 섞으면 클래스로더 충돌이 발생합니다.
+ARG DEBEZIUM_VERSION=3.6.0.Final
+ARG PLUGIN_DIR=/opt/connect-plugins
+
+RUN mkdir -p ${PLUGIN_DIR}/debezium-connector-mysql \
+ && curl -fsSL \
+      "https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/${DEBEZIUM_VERSION}/debezium-connector-mysql-${DEBEZIUM_VERSION}-plugin.tar.gz" \
+      -o /tmp/dbz.tar.gz \
+ && tar -xzf /tmp/dbz.tar.gz -C ${PLUGIN_DIR}/debezium-connector-mysql --strip-components=1 \
+ && rm /tmp/dbz.tar.gz \
+ && chown -R appuser:appuser ${PLUGIN_DIR}
+
+USER appuser</code></pre>
+      </figure>
+
+      <h3 id="mysql-config">MySQL 설정</h3>
+
+      <figure class="code">
+        <figcaption>connect-cdc/mysql/my.cnf</figcaption>
+        <pre><code class="lang-properties">[mysqld]
+# Debezium 은 binlog 를 읽습니다. ROW 포맷이어야 변경된 행의 값 전체를 얻습니다.
+# STATEMENT 나 MIXED 로는 CDC 가 성립하지 않습니다.
+binlog_format = ROW
+# 변경 전/후 이미지를 모두 기록합니다. UPDATE 이벤트의 before 를 얻기 위해 필요합니다.
+binlog_row_image = FULL
+# 복제 소스로 동작하기 위한 서버 ID. Debezium 의 database.server.id 와는 다른 값입니다.
+server_id = 1
+log_bin = mysql-bin
+# binlog 보관 기간. 이 기간보다 오래 Debezium 이 멈춰 있으면
+# 필요한 binlog 가 사라져 스냅샷을 다시 떠야 합니다(운영 중 가장 위험한 지점).
+binlog_expire_logs_seconds = 604800
+# GTID 를 켜면 소스 전환 시 위치 추적이 쉬워집니다.
+gtid_mode = ON
+enforce_gtid_consistency = ON</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>connect-cdc/mysql/init.sql</figcaption>
+        <pre><code class="lang-sql">-- CDC 전용 사용자. 애플리케이션 계정을 재사용하지 마세요.
+CREATE USER 'debezium'@'%' IDENTIFIED BY 'dbz-secret';
+
+-- Debezium 이 필요한 최소 권한입니다.
+--   SELECT              : 초기 스냅샷
+--   RELOAD              : 스냅샷 시 글로벌 읽기 잠금
+--   SHOW DATABASES      : 대상 탐색
+--   REPLICATION SLAVE   : binlog 스트림 읽기
+--   REPLICATION CLIENT  : binlog 위치 조회
+GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT
+  ON *.* TO 'debezium'@'%';
+FLUSH PRIVILEGES;
+
+CREATE DATABASE IF NOT EXISTS shop;
+USE shop;
+
+CREATE TABLE orders (
+  id          BIGINT       NOT NULL AUTO_INCREMENT,
+  order_no    VARCHAR(40)  NOT NULL,
+  customer_id BIGINT       NOT NULL,
+  amount      DECIMAL(12,2) NOT NULL,
+  status      VARCHAR(20)  NOT NULL,
+  created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+                            ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_order_no (order_no)
+);
+
+-- 초기 스냅샷 대상이 될 데이터
+INSERT INTO orders (order_no, customer_id, amount, status) VALUES
+  ('ORD-1001', 501, 32000.00, 'CREATED'),
+  ('ORD-1002', 502, 15500.00, 'PAID'),
+  ('ORD-1003', 501,  9800.00, 'CREATED');</code></pre>
+      </figure>
+
+      <h3 id="compose">Compose — Connect 워커 2대</h3>
+
+      <figure class="code">
+        <figcaption>connect-cdc/docker-compose.connect.yml</figcaption>
+        <pre><code class="lang-yaml"># 예제 1의 kafka-lab 네트워크에 MySQL 과 Connect 워커 2대를 붙입니다.
+# 워커를 2대로 두는 이유: 태스크 재분배와 워커 이탈 복구를 실습하기 위해서입니다.
+---
+name: kafka-lab-connect
+
+x-connect-common: &connect-common
+  build:
+    context: .
+    dockerfile: Dockerfile.connect
+  restart: unless-stopped
+  # 워커를 "connect-distributed.sh" 로 띄웁니다.
+  # 설정은 환경변수가 아니라 프로퍼티 파일이 필요하므로
+  # 셸에서 파일을 생성해 넘깁니다(이미지가 Connect 용 변환을 하지 않습니다).
+  command:
+    - /bin/bash
+    - -c
+    - |
+      cat &gt; /tmp/connect.properties &lt;&lt;'EOF'
+      bootstrap.servers=kafka-1:19092,kafka-2:19092,kafka-3:19092
+
+      # 이 값이 같은 워커들이 하나의 Connect 클러스터를 이룹니다.
+      # 컨슈머 그룹 ID 와 같은 이름공간을 쓰므로 다른 애플리케이션과 겹치면 안 됩니다.
+      group.id=cdc-connect-cluster
+
+      # REST 리스너. 4.x 에서는 rest.port 가 없고 listeners 를 씁니다(기본 http://:8083).
+      listeners=http://0.0.0.0:8083
+      # 워커끼리 서로를 찾을 때 쓰는 주소. 컨테이너 이름을 광고합니다.
+      rest.advertised.host.name=${CONNECT_HOSTNAME}
+
+      # --- 컨버터 ---------------------------------------------------------
+      # 이 예제는 스키마 레지스트리 없이 JSON 을 씁니다.
+      # schemas.enable=true 면 메시지에 스키마가 함께 들어가 크기가 커집니다.
+      # 운영에서는 Avro + Schema Registry 를 권장합니다(예제 7).
+      key.converter=org.apache.kafka.connect.json.JsonConverter
+      value.converter=org.apache.kafka.connect.json.JsonConverter
+      key.converter.schemas.enable=false
+      value.converter.schemas.enable=false
+
+      # --- 내부 토픽 3개 ---------------------------------------------------
+      # config 는 파티션이 반드시 1이어야 합니다(설정 변경 순서가 의미를 가집니다).
+      config.storage.topic=connect-cdc-configs
+      config.storage.replication.factor=3
+      # source 커넥터의 진행 위치가 여기 저장됩니다. 기본 파티션 25.
+      offset.storage.topic=connect-cdc-offsets
+      offset.storage.replication.factor=3
+      offset.storage.partitions=25
+      # 커넥터/태스크 상태. 기본 파티션 5.
+      status.storage.topic=connect-cdc-status
+      status.storage.replication.factor=3
+      status.storage.partitions=5
+
+      # source 오프셋을 커밋하는 주기. 기본값 60000(1분).
+      # 짧게 두면 재시작 시 재처리 구간이 줄지만 쓰기가 늘어납니다.
+      offset.flush.interval.ms=10000
+      # 오프셋 커밋 타임아웃. 기본값 5000.
+      offset.flush.timeout.ms=5000
+
+      # --- 플러그인 -------------------------------------------------------
+      # 커넥터별 하위 디렉터리로 격리해 두었습니다.
+      plugin.path=/opt/connect-plugins
+      # 기본값 hybrid_warn. 서비스 로더 방식으로 마이그레이션되지 않은 플러그인에
+      # 경고를 남깁니다. service_load 로 올리면 기동이 빨라집니다.
+      plugin.discovery=hybrid_warn
+      EOF
+      exec /opt/kafka/bin/connect-distributed.sh /tmp/connect.properties
+  networks:
+    - kafka-lab_default
+  healthcheck:
+    test: ['CMD-SHELL', 'curl -sf http://localhost:8083/ || exit 1']
+    interval: 10s
+    timeout: 5s
+    retries: 18
+    start_period: 40s
+
+services:
+  mysql:
+    image: mysql:8.4
+    hostname: mysql
+    container_name: mysql
+    ports:
+      - '3306:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: root-secret
+    volumes:
+      - ./mysql/my.cnf:/etc/mysql/conf.d/binlog.cnf:ro
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mysql-data:/var/lib/mysql
+    networks:
+      - kafka-lab_default
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uroot -proot-secret || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  connect-1:
+    <<: *connect-common
+    hostname: connect-1
+    container_name: connect-1
+    ports:
+      - '8083:8083'
+    environment:
+      CONNECT_HOSTNAME: connect-1
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  connect-2:
+    <<: *connect-common
+    hostname: connect-2
+    container_name: connect-2
+    ports:
+      - '8084:8083'
+    environment:
+      CONNECT_HOSTNAME: connect-2
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
+
+networks:
+  kafka-lab_default:
+    external: true</code></pre>
+      </figure>
+
+      <h3 id="source-connector">Debezium MySQL 소스 커넥터</h3>
+
+      <figure class="code">
+        <figcaption>connect-cdc/connectors/mysql-source.json</figcaption>
+        <pre><code class="lang-json">{
+  "name": "shop-orders-source",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+
+    "//": "MySQL binlog 는 단일 스트림이므로 소스 태스크는 항상 1개입니다.",
+    "//": "tasks.max 를 올려도 태스크가 늘지 않습니다 — 흔한 오해입니다.",
+    "tasks.max": "1",
+
+    "database.hostname": "mysql",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "dbz-secret",
+
+    "//": "MySQL 복제 클러스터 안에서 유일해야 하는 값입니다.",
+    "//": "MySQL 서버의 server_id 와 겹치면 기존 복제가 끊어집니다.",
+    "database.server.id": "184054",
+
+    "//": "생성되는 모든 토픽 이름의 접두어입니다. 토픽명은 {prefix}.{db}.{table} 이 됩니다.",
+    "//": "이 값을 나중에 바꾸면 토픽이 전부 새로 생기고 하류가 끊깁니다. 처음에 잘 정하세요.",
+    "topic.prefix": "shopdb",
+
+    "database.include.list": "shop",
+    "table.include.list": "shop.orders",
+
+    "//": "DDL 이력을 저장하는 내부 토픽. 커넥터마다 별도 토픽이어야 합니다.",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka-1:19092,kafka-2:19092,kafka-3:19092",
+    "schema.history.internal.kafka.topic": "schema-changes.shop",
+
+    "//": "initial: 최초 1회 전체 스냅샷 후 binlog 스트리밍. 기본 동작입니다.",
+    "//": "never 로 두면 스냅샷 없이 지금부터의 변경만 받습니다.",
+    "snapshot.mode": "initial",
+
+    "//": "Debezium 이벤트는 before/after/source/op 를 감싼 봉투(envelope) 구조입니다.",
+    "//": "하류가 '변경 후의 행' 만 원하면 ExtractNewRecordState SMT 로 펼칩니다.",
+    "transforms": "unwrap,route",
+
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "//": "DELETE 는 tombstone(null value)이 됩니다. 컴팩션 토픽에서는 이것이 삭제 마커입니다.",
+    "transforms.unwrap.delete.handling.mode": "rewrite",
+    "//": "op(c/u/d/r) 와 타임스탬프를 헤더가 아닌 필드로 남깁니다. 하류 디버깅에 유용합니다.",
+    "transforms.unwrap.add.fields": "op,source.ts_ms,source.db,source.table",
+
+    "//": "토픽 이름을 shopdb.shop.orders → cdc.orders 로 단순화합니다.",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": "shopdb\\.shop\\.(.*)",
+    "transforms.route.replacement": "cdc.$1",
+
+    "//": "--- 에러 처리 / DLQ (Connect 가 설정으로 제공합니다) ---",
+    "//": "errors.tolerance 기본값은 none 이며, 첫 실패에서 태스크가 FAILED 로 죽습니다.",
+    "errors.tolerance": "all",
+    "//": "errors.log.enable 기본값 false. 켜지 않으면 무엇이 실패했는지 알 수 없습니다.",
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true",
+    "//": "errors.retry.timeout 기본값 0 = 재시도 없음. -1 은 무제한입니다.",
+    "errors.retry.timeout": "60000",
+    "//": "errors.retry.delay.max.ms 기본값 60000.",
+    "errors.retry.delay.max.ms": "30000",
+
+    "//": "source 커넥터는 DLQ 를 지원하지 않습니다 — DLQ 는 sink 전용 기능입니다.",
+    "//": "위 errors.* 중 deadletterqueue.* 는 sink 커넥터에만 유효합니다.",
+
+    "//": "생성되는 토픽의 기본 스펙. 미리 만들어 두는 편이 더 안전합니다.",
+    "topic.creation.default.replication.factor": "3",
+    "topic.creation.default.partitions": "3",
+    "topic.creation.default.cleanup.policy": "compact",
+    "topic.creation.groups": ""
+  }
+}</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="JSON 주석">
+        <p>
+          위 설정의 <code>"//"</code> 키는 <strong>설명을 위해 넣은 것</strong>입니다.
+          JSON에는 주석 문법이 없고, 같은 키를 반복하면
+          <strong>마지막 값만 남습니다</strong>(파싱 오류는 아닙니다).
+          Connect는 알 수 없는 키를 무시하므로 동작에는 영향이 없지만,
+          <strong>실제 배포 파일에서는 제거하고 별도 문서에 남기세요.</strong>
+          아래 <code>file-sink.json</code>은 주석 없는 배포용 형태로 작성했습니다.
+        </p>
+      </aside>
+
+      <h3 id="sink-connector">Sink 커넥터 — 바로 동작하는 버전</h3>
+
+      <figure class="code">
+        <figcaption>connect-cdc/connectors/file-sink.json — Apache Kafka 내장 커넥터</figcaption>
+        <pre><code class="lang-json">{
+  "name": "orders-file-sink",
+  "config": {
+    "connector.class": "org.apache.kafka.connect.file.FileStreamSinkConnector",
+    "tasks.max": "1",
+    "topics": "cdc.orders",
+    "file": "/tmp/cdc-orders.out",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "errors.tolerance": "all",
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true",
+    "errors.deadletterqueue.topic.name": "cdc.orders.DLQ",
+    "errors.deadletterqueue.topic.replication.factor": "3",
+    "errors.deadletterqueue.context.headers.enable": "true",
+    "errors.retry.timeout": "60000",
+    "errors.retry.delay.max.ms": "30000"
+  }
+}</code></pre>
+      </figure>
+
+      <aside class="note" data-label="DLQ 설정 4개의 기본값">
+        <div class="table-scroll">
+          <table class="config-table">
+            <caption>Kafka 4.3 sink 커넥터 DLQ 설정</caption>
+            <thead><tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">의미</th></tr></thead>
+            <tbody>
+              <tr><th scope="row"><code>errors.deadletterqueue.topic.name</code></th><td>빈 문자열</td><td><strong>비어 있으면 DLQ가 동작하지 않습니다.</strong> 이름을 지정해야 켜집니다</td></tr>
+              <tr><th scope="row"><code>errors.deadletterqueue.topic.replication.factor</code></th><td><code>3</code></td><td>DLQ 토픽을 자동 생성할 때의 RF. 브로커가 3대 미만이면 생성이 실패하므로 내려야 합니다</td></tr>
+              <tr><th scope="row"><code>errors.deadletterqueue.context.headers.enable</code></th><td><strong><code>false</code></strong></td><td><code>true</code>로 켜야 실패 원인 헤더가 붙습니다. 끈 상태의 DLQ는 원인을 알 수 없는 레코드 더미입니다</td></tr>
+              <tr><th scope="row"><code>errors.tolerance</code></th><td><strong><code>none</code></strong></td><td><code>none</code>이면 첫 실패에서 태스크가 <code>FAILED</code>가 됩니다. DLQ를 쓰려면 <code>all</code>로 바꿔야 합니다</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-083">
+        <figcaption>
+          Connect DLQ 흐름 — <code>errors.tolerance</code>와 DLQ 토픽, 헤더에 담기는 실패 원인
+        </figcaption>
+      </figure>
+
+      <h3 id="s3-sink">S3 Sink — 참고 설정</h3>
+
+      <aside class="note note--warn" data-label="이 설정은 플러그인 설치가 필요합니다">
+        <p>
+          S3 Sink 커넥터는 <strong>Apache Kafka에 포함되지 않습니다.</strong>
+          Confluent Hub 또는 벤더가 배포하는 플러그인을 <code>plugin.path</code> 하위에
+          별도 디렉터리로 설치해야 합니다.
+          아래 설정은 <strong>형태를 보여 주는 참고용</strong>이며,
+          이 문서를 작성한 빌드 환경에서는 해당 플러그인의 최신 버전을 확인할 수 없었습니다.
+          <strong>버전과 설정 키는 설치할 플러그인의 문서로 반드시 재확인하세요.</strong>
+          위의 <code>file-sink.json</code>은 내장 커넥터라 바로 동작합니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>connect-cdc/connectors/s3-sink.json (참고)</figcaption>
+        <pre><code class="lang-json">{
+  "name": "orders-s3-sink",
+  "config": {
+    "connector.class": "io.confluent.connect.s3.S3SinkConnector",
+    "tasks.max": "3",
+    "topics": "cdc.orders",
+
+    "s3.bucket.name": "analytics-raw",
+    "s3.region": "ap-northeast-2",
+    "storage.class": "io.confluent.connect.s3.storage.S3Storage",
+    "format.class": "io.confluent.connect.s3.format.parquet.ParquetFormat",
+
+    "flush.size": "10000",
+    "rotate.interval.ms": "300000",
+    "partitioner.class": "io.confluent.connect.storage.partitioner.TimeBasedPartitioner",
+    "path.format": "'dt'=yyyy-MM-dd/'hour'=HH",
+    "partition.duration.ms": "3600000",
+    "locale": "ko-KR",
+    "timezone": "Asia/Seoul",
+
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "errors.tolerance": "all",
+    "errors.log.enable": "true",
+    "errors.deadletterqueue.topic.name": "cdc.orders.DLQ",
+    "errors.deadletterqueue.topic.replication.factor": "3",
+    "errors.deadletterqueue.context.headers.enable": "true"
+  }
+}</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="how-to-run">
+      <h2 id="how-to-run">실행 방법</h2>
+
+      <figure class="code">
+        <figcaption>순서대로 실행</figcaption>
+        <pre><code class="lang-bash"># 0. 예제 1의 클러스터
+cd kafka-lab &amp;&amp; docker compose ps
+
+# 1. config 내부 토픽은 파티션이 1이어야 하므로 미리 만듭니다.
+#    Connect 가 자동 생성하게 두어도 되지만, 명시하는 편이 안전합니다.
+./kcli kafka-topics.sh --create --if-not-exists --topic connect-cdc-configs \
+  --partitions 1 --replication-factor 3 --config cleanup.policy=compact
+./kcli kafka-topics.sh --create --if-not-exists --topic connect-cdc-offsets \
+  --partitions 25 --replication-factor 3 --config cleanup.policy=compact
+./kcli kafka-topics.sh --create --if-not-exists --topic connect-cdc-status \
+  --partitions 5 --replication-factor 3 --config cleanup.policy=compact
+
+# 2. MySQL + Connect 워커 2대 기동 (이미지 빌드 포함)
+cd ../connect-cdc
+docker compose -f docker-compose.connect.yml up -d --build
+
+# 3. 워커가 준비되고 플러그인이 로드되었는지 확인
+curl -s http://localhost:8083/ | jq
+curl -s http://localhost:8083/connector-plugins | jq -r '.[].class' | grep -i mysql
+# → io.debezium.connector.mysql.MySqlConnector
+
+# 4. 소스 커넥터 배포
+curl -s -X POST http://localhost:8083/connectors \
+  -H 'Content-Type: application/json' \
+  -d @connectors/mysql-source.json | jq
+
+# 5. sink 커넥터 배포
+curl -s -X POST http://localhost:8083/connectors \
+  -H 'Content-Type: application/json' \
+  -d @connectors/file-sink.json | jq
+
+# 6. 상태 확인 — 둘 다 RUNNING 이어야 합니다.
+curl -s http://localhost:8083/connectors/shop-orders-source/status | jq
+curl -s http://localhost:8083/connectors/orders-file-sink/status | jq</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>MySQL에 변경을 만들어 CDC를 트리거</figcaption>
+        <pre><code class="lang-bash">docker exec -i mysql mysql -uroot -proot-secret shop &lt;&lt;'SQL'
+INSERT INTO orders (order_no, customer_id, amount, status)
+VALUES ('ORD-2001', 503, 47000.00, 'CREATED');
+
+UPDATE orders SET status = 'PAID', amount = 47000.00 WHERE order_no = 'ORD-2001';
+
+DELETE FROM orders WHERE order_no = 'ORD-1003';
+SQL</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="verification">
+      <h2 id="verification">검증 방법</h2>
+
+      <h3 id="verify-topics">1. CDC 토픽이 만들어지고 이벤트가 들어왔는가</h3>
+
+      <figure class="code">
+        <figcaption>토픽 확인</figcaption>
+        <pre><code class="lang-bash">cd ../kafka-lab
+./kcli kafka-topics.sh --list | grep -E 'cdc\.|schema-changes'
+# → cdc.orders
+#   schema-changes.shop
+
+./kcli kafka-console-consumer.sh --topic cdc.orders --from-beginning \
+  --timeout-ms 10000 --property print.key=true 2&gt;/dev/null | head -10</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 출력 — <code>op</code> 필드로 변경 종류를 구분합니다</figcaption>
+        <pre><code class="lang-json">{"id":1}	{"id":1,"order_no":"ORD-1001","customer_id":501,"amount":"...","status":"CREATED","__op":"r","__source_ts_ms":...}
+{"id":4}	{"id":4,"order_no":"ORD-2001","customer_id":503,"amount":"...","status":"CREATED","__op":"c","__source_ts_ms":...}
+{"id":4}	{"id":4,"order_no":"ORD-2001","customer_id":503,"amount":"...","status":"PAID","__op":"u","__source_ts_ms":...}
+{"id":3}	{"id":3,"order_no":"ORD-1003","__deleted":"true","__op":"d","__source_ts_ms":...}</code></pre>
+      </figure>
+
+      <p>
+        <code>__op</code> 값이 핵심입니다.
+        <strong><code>r</code>은 초기 스냅샷(read), <code>c</code>는 INSERT, <code>u</code>는 UPDATE,
+        <code>d</code>는 DELETE</strong>입니다.
+        키가 <strong>테이블의 프라이머리 키</strong>(<code>{"id":4}</code>)로 설정되므로
+        같은 행의 변경이 항상 같은 파티션으로 가 <strong>순서가 보장됩니다.</strong>
+        이것이 CDC에서 키 설계가 자동으로 해결되는 이유입니다.
+      </p>
+
+      <h3 id="verify-offsets">2. source와 sink의 오프셋이 <strong>다른 곳</strong>에 있는지 확인</h3>
+
+      <figure class="code">
+        <figcaption>source 커넥터 — Connect REST로 조회</figcaption>
+        <pre><code class="lang-bash">curl -s http://localhost:8083/connectors/shop-orders-source/offsets | jq</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 출력 — binlog 파일과 포지션이 보입니다</figcaption>
+        <pre><code class="lang-json">{
+  "offsets": [
+    {
+      "partition": { "server": "shopdb" },
+      "offset": {
+        "file": "mysql-bin.000003",
+        "pos": 4127,
+        "ts_sec": 1785000000,
+        "snapshot_completed": true
+      }
+    }
+  ]
+}</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>sink 커넥터 — 컨슈머 그룹으로 조회됩니다</figcaption>
+        <pre><code class="lang-bash">cd ../kafka-lab
+
+# sink 커넥터는 connect-{커넥터명} 이라는 컨슈머 그룹을 씁니다.
+./kcli kafka-consumer-groups.sh --list | grep connect-
+# → connect-orders-file-sink
+
+./kcli kafka-consumer-groups.sh --describe --group connect-orders-file-sink</code></pre>
+      </figure>
+
+      <p>
+        <strong>source는 REST로만 보이고 sink는 컨슈머 그룹으로 보입니다.</strong>
+        이 비대칭이 실무에서 가장 자주 헷갈리는 지점이고 시험에도 나옵니다.
+      </p>
+
+      <h3 id="verify-sink-output">3. sink 파일에 실제로 적재되었는가</h3>
+
+      <figure class="code">
+        <figcaption>파일 확인</figcaption>
+        <pre><code class="lang-bash"># 태스크가 어느 워커에 배정됐는지 먼저 확인합니다.
+curl -s http://localhost:8083/connectors/orders-file-sink/status \
+  | jq -r '.tasks[] | "task \(.id) → \(.worker_id) (\(.state))"'
+# → task 0 → connect-2:8083 (RUNNING)
+
+# 그 워커의 컨테이너에서 파일을 봅니다.
+docker exec connect-2 tail -5 /tmp/cdc-orders.out</code></pre>
+      </figure>
+
+      <h3 id="verify-task-rebalance">4. 워커 이탈 시 태스크가 재분배되는가</h3>
+
+      <figure class="code">
+        <figcaption>워커 1대를 정지</figcaption>
+        <pre><code class="lang-bash"># 태스크가 있는 워커를 죽입니다.
+docker compose -f ../connect-cdc/docker-compose.connect.yml stop connect-2
+
+# 잠시 뒤 남은 워커로 태스크가 옮겨갑니다.
+sleep 20
+curl -s http://localhost:8083/connectors/orders-file-sink/status \
+  | jq -r '.tasks[] | "task \(.id) → \(.worker_id) (\(.state))"'
+# → task 0 → connect-1:8083 (RUNNING)
+
+docker compose -f ../connect-cdc/docker-compose.connect.yml start connect-2</code></pre>
+      </figure>
+
+      <figure class="diagram" data-diagram="D-084">
+        <figcaption>
+          task 재분배 — 워커 이탈 시 남은 워커로 태스크가 옮겨가는 과정
+        </figcaption>
+      </figure>
+
+      <h3 id="verify-dlq">5. DLQ가 동작하는가</h3>
+
+      <figure class="code">
+        <figcaption>sink가 처리할 수 없는 레코드를 직접 넣습니다</figcaption>
+        <pre><code class="lang-bash"># value.converter 가 JsonConverter 인 토픽에 JSON 이 아닌 값을 넣습니다.
+echo 'not-a-json' | ./kcli kafka-console-producer.sh --topic cdc.orders
+
+# DLQ 토픽에 헤더와 함께 나타나야 합니다.
+./kcli kafka-console-consumer.sh --topic cdc.orders.DLQ --from-beginning \
+  --timeout-ms 10000 --property print.headers=true 2&gt;/dev/null</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 헤더 — <code>errors.deadletterqueue.context.headers.enable=true</code>일 때만 붙습니다</figcaption>
+        <pre><code class="lang-text">__connect.errors.topic:cdc.orders,__connect.errors.partition:0,__connect.errors.offset:5,
+__connect.errors.connector.name:orders-file-sink,__connect.errors.task.id:0,
+__connect.errors.stage:VALUE_CONVERTER,__connect.errors.class.name:org.apache.kafka.connect.json.JsonConverter,
+__connect.errors.exception.class.name:org.apache.kafka.connect.errors.DataException,...</code></pre>
+      </figure>
+
+      <p>
+        <code>__connect.errors.stage</code>가 <strong>어느 단계에서 실패했는지</strong>를 알려 줍니다 —
+        <code>VALUE_CONVERTER</code>(역직렬화), <code>TRANSFORMATION</code>(SMT),
+        <code>TASK_PUT</code>(sink 쓰기) 등입니다.
+        이 헤더가 없으면 DLQ는 원인을 알 수 없는 레코드 더미가 됩니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="rest-api">
+      <h2 id="rest-api">운영에 필요한 REST API</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Kafka 4.3 Connect REST API — 목적별</caption>
+          <thead>
+            <tr><th scope="col">하고 싶은 것</th><th scope="col">요청</th><th scope="col">비고</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">커넥터 목록</th><td><code>GET /connectors</code></td><td></td></tr>
+            <tr><th scope="row">배포</th><td><code>POST /connectors</code></td><td>본문에 <code>name</code>과 <code>config</code>. <code>initial_state</code>로 <code>STOPPED</code>/<code>PAUSED</code>/<code>RUNNING</code>(기본)을 지정할 수 있습니다</td></tr>
+            <tr><th scope="row">설정 변경</th><td><code>PUT /connectors/{name}/config</code></td><td>본문은 <code>config</code> 객체만. 없으면 생성됩니다</td></tr>
+            <tr><th scope="row">상태 확인</th><td><code>GET /connectors/{name}/status</code></td><td>커넥터·태스크 상태, 배정된 워커, 실패 시 스택트레이스</td></tr>
+            <tr><th scope="row">실패한 태스크만 재시작</th><td><code>POST /connectors/{name}/restart?includeTasks=true&amp;onlyFailed=true</code></td><td>가장 자주 쓰는 복구 명령입니다</td></tr>
+            <tr><th scope="row">개별 태스크 재시작</th><td><code>POST /connectors/{name}/tasks/{taskId}/restart</code></td><td></td></tr>
+            <tr><th scope="row">일시 정지</th><td><code>PUT /connectors/{name}/pause</code></td><td>자원은 유지. 재개가 빠릅니다</td></tr>
+            <tr><th scope="row">정지(자원 해제)</th><td><code>PUT /connectors/{name}/stop</code></td><td><strong>오프셋을 수정하려면 이 상태여야 합니다</strong></td></tr>
+            <tr><th scope="row">재개</th><td><code>PUT /connectors/{name}/resume</code></td><td></td></tr>
+            <tr><th scope="row">오프셋 조회</th><td><code>GET /connectors/{name}/offsets</code></td><td>source·sink 모두 조회 가능</td></tr>
+            <tr><th scope="row">오프셋 리셋</th><td><code>DELETE /connectors/{name}/offsets</code></td><td><strong><code>stop</code> 상태여야 합니다.</strong> source 커넥터를 처음부터 다시 읽히는 방법</td></tr>
+            <tr><th scope="row">오프셋 특정 위치로</th><td><code>PATCH /connectors/{name}/offsets</code></td><td><code>stop</code> 상태 필요. 본문은 <code>offsets</code> 배열</td></tr>
+            <tr><th scope="row">사용 중인 토픽</th><td><code>GET /connectors/{name}/topics</code></td><td><code>status.storage.topic</code>에 기록된 추적 정보</td></tr>
+            <tr><th scope="row">삭제</th><td><code>DELETE /connectors/{name}</code></td><td>태스크를 멈추고 설정을 지웁니다. <strong>오프셋은 지워지지 않습니다</strong></td></tr>
+            <tr><th scope="row">설치된 플러그인</th><td><code>GET /connector-plugins</code></td><td><code>plugin.path</code> 문제를 진단할 때 첫 번째로 봅니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="code">
+        <figcaption>source 커넥터를 처음부터 다시 읽히기 — 순서가 중요합니다</figcaption>
+        <pre><code class="lang-bash"># 1) 정지 (pause 가 아니라 stop 이어야 합니다)
+curl -s -X PUT http://localhost:8083/connectors/shop-orders-source/stop
+
+# 2) 상태가 STOPPED 가 되었는지 확인
+curl -s http://localhost:8083/connectors/shop-orders-source/status | jq '.connector.state'
+
+# 3) 오프셋 리셋
+curl -s -X DELETE http://localhost:8083/connectors/shop-orders-source/offsets | jq
+
+# 4) 재개 → snapshot.mode=initial 이므로 스냅샷부터 다시 시작합니다
+curl -s -X PUT http://localhost:8083/connectors/shop-orders-source/resume</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="production">
+      <h2 id="production">프로덕션 고려사항</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>로컬 예제와 프로덕션의 차이</caption>
+          <thead><tr><th scope="col">항목</th><th scope="col">이 예제</th><th scope="col">프로덕션</th></tr></thead>
+          <tbody>
+            <tr>
+              <th scope="row">컨버터</th>
+              <td>JSON, <code>schemas.enable=false</code></td>
+              <td><strong>Avro + Schema Registry</strong>. 스키마 없는 JSON은 DDL 변경 시 하류가 조용히 깨집니다(<a href="ex07.html">예제 7</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">binlog 보관</th>
+              <td>7일</td>
+              <td>Debezium이 멈춘 채로 이 기간을 넘기면 <strong>필요한 binlog가 사라져 전체 스냅샷을 다시 떠야</strong> 합니다. lag 알림이 필수입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">초기 스냅샷</th>
+              <td>테이블 3행</td>
+              <td>수천만 행이면 스냅샷이 수 시간 걸리고 <strong>DB에 큰 부하</strong>가 갑니다. 읽기 전용 복제본을 캡처 대상으로 두거나 incremental snapshot을 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row">자격증명</th>
+              <td>설정 파일에 평문</td>
+              <td><code>config.providers</code>로 외부 시크릿에서 주입합니다. Connect REST는 <strong><code>GET /connectors/{name}/config</code>로 설정을 그대로 반환</strong>하므로 평문 비밀번호가 노출됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row">REST 보안</th>
+              <td>인증 없음</td>
+              <td>Connect REST는 인증이 없으면 <strong>누구나 커넥터를 삭제할 수 있습니다.</strong> 리버스 프록시로 인증을 걸고 네트워크를 제한합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">워커 수와 <code>tasks.max</code></th>
+              <td>워커 2, task 1</td>
+              <td>MySQL binlog는 <strong>단일 스트림이라 소스 태스크가 1개를 넘지 못합니다.</strong> 워커를 늘려도 소스 처리량은 늘지 않습니다. sink는 파티션 수까지 늘릴 수 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">내부 토픽</th>
+              <td>미리 생성</td>
+              <td>RF 3 + <code>compact</code> + config는 파티션 1. 여러 Connect 클러스터가 <strong>같은 내부 토픽을 공유하면 서로를 망칩니다</strong> — <code>group.id</code>와 토픽 이름을 함께 분리하세요</td>
+            </tr>
+            <tr>
+              <th scope="row">모니터링</th>
+              <td>REST 수동 확인</td>
+              <td>커넥터·태스크 상태를 주기적으로 폴링해 <code>FAILED</code>에 알림. sink lag은 <code>connect-{name}</code> 컨슈머 그룹으로 측정합니다(<a href="ex10.html">예제 10</a>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">자주 하는 실수</h2>
+
+      <aside class="note note--warn" data-label="실수 1 · errors.tolerance 를 그대로 두고 DLQ 를 기대한다">
+        <p>
+          <code>errors.tolerance</code>의 기본값은 <strong><code>none</code></strong>입니다.
+          <code>errors.deadletterqueue.topic.name</code>만 설정하고
+          <code>errors.tolerance</code>를 바꾸지 않으면
+          <strong>첫 실패에서 태스크가 <code>FAILED</code>로 죽습니다.</strong>
+          그리고 <code>errors.deadletterqueue.context.headers.enable</code>의 기본값도
+          <strong><code>false</code></strong>이므로, 켜지 않으면 원인을 알 수 없습니다.
+          <strong>세 개를 함께 설정해야 DLQ가 의미를 갖습니다.</strong>
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 2 · tasks.max 를 늘려 소스를 빠르게 만들려 한다">
+        <p>
+          <code>tasks.max</code>는 <strong>상한</strong>일 뿐이고,
+          실제 태스크 수는 <strong>커넥터가 결정</strong>합니다.
+          MySQL binlog는 단일 순서 스트림이므로 Debezium MySQL 소스는
+          <strong>항상 태스크 1개</strong>입니다. 10으로 올려도 1개입니다.
+          sink 커넥터는 <strong>구독 파티션 수</strong>가 상한입니다.
+          "커넥터를 늘리면 무조건 빨라진다"는 오해가 여기서 나옵니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 3 · topic.prefix 를 나중에 바꾼다">
+        <p>
+          <code>topic.prefix</code>는 <strong>토픽 이름과 오프셋 저장 키에 모두 들어갑니다.</strong>
+          운영 중에 바꾸면 Connect가 <strong>완전히 새로운 커넥터로 인식</strong>해
+          초기 스냅샷을 다시 뜨고, 하류는 새 토픽을 구독해야 합니다.
+          <strong>처음에 정하고 바꾸지 마세요.</strong>
+          토픽 이름만 바꾸고 싶으면 <code>RegexRouter</code> SMT를 쓰세요
+          (이 예제가 그렇게 했습니다).
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 4 · 여러 Connect 클러스터가 내부 토픽을 공유한다">
+        <p>
+          <code>group.id</code>는 달라도 <code>config.storage.topic</code> 등을 같게 두면
+          <strong>서로의 커넥터 설정을 덮어씁니다.</strong>
+          Connect 클러스터를 나눌 때는 <code>group.id</code>와
+          <strong>내부 토픽 3개 이름을 모두</strong> 분리하세요.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 5 · 플러그인을 한 디렉터리에 몰아넣는다">
+        <p>
+          <code>plugin.path</code> 하위에 여러 커넥터의 jar를 섞어 두면
+          의존성 버전이 충돌해 <strong>기동은 되지만 런타임에 <code>NoSuchMethodError</code></strong>가 납니다.
+          <strong>커넥터마다 별도 하위 디렉터리</strong>로 격리하세요.
+          플러그인이 실제로 로드되었는지는 <code>GET /connector-plugins</code>로 확인합니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 6 · 커넥터를 삭제하면 오프셋도 지워진다고 생각한다">
+        <p>
+          <code>DELETE /connectors/{name}</code>는 <strong>설정만 지웁니다.</strong>
+          같은 이름으로 다시 만들면 <strong>이전 오프셋을 이어받습니다.</strong>
+          이것은 대개 원하는 동작이지만, "처음부터 다시 읽으려고 지웠다 다시 만들었는데
+          아무 데이터도 안 온다"는 혼란의 원인이기도 합니다.
+          오프셋을 지우려면 <code>stop</code> → <code>DELETE .../offsets</code> 순서를 밟으세요.
+        </p>
+      </aside>
+
+      <h3 id="related-cases">관련 케이스 스터디</h3>
+      <ul>
+        <li><a href="../cases/case08.html">케이스 8</a> — <code>cleanup.policy</code> 변경이 기존 데이터에 소급 적용되지 않아 상태 토픽이 사라진 사고. Connect 내부 토픽에 그대로 적용됩니다.</li>
+        <li><a href="../cases/case09.html">케이스 9</a> — 스키마 변경으로 하류가 전부 깨진 사고. CDC는 DDL 변경이 곧 스키마 변경입니다.</li>
+        <li><a href="../cases/case10.html">케이스 10</a> — 메시지 크기 초과. BLOB 컬럼을 캡처하면 바로 부딪칩니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="next">
+      <h2 id="next">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch09.html">
+          <span class="card__title">9장 · Kafka Connect</span>
+          <span class="card__desc">worker/connector/task, converter, SMT, 에러 처리를 원리부터.</span>
+          <span class="card__meta">CCDAK Connect</span>
+        </a></li>
+        <li><a class="card" href="ex07.html">
+          <span class="card__title">예제 7 · Avro 스키마 진화</span>
+          <span class="card__desc">CDC 토픽에 스키마를 붙이는 방법.</span>
+          <span class="card__meta">실무</span>
+        </a></li>
+        <li><a class="card" href="ex11.html">
+          <span class="card__title">예제 11 · MirrorMaker 2 복제</span>
+          <span class="card__desc">MirrorMaker 2도 Connect 프레임워크 위에서 돕니다.</span>
+          <span class="card__meta">실무</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/connect.html">
+          <span class="card__title">Connect 치트시트</span>
+          <span class="card__desc">REST 엔드포인트 전체 표와 SMT 목록.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#connect" rel="noopener noreferrer">Kafka Connect</a> — distributed 모드, 내부 토픽 3개, worker/connector/task 모델</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_rest" rel="noopener noreferrer">Connect REST Interface</a> — 엔드포인트 목록, <code>initial_state</code>, <code>restart?includeTasks&amp;onlyFailed</code>, <code>pause</code>/<code>stop</code>/<code>resume</code>, 오프셋 관리 엔드포인트가 <code>stop</code> 상태를 요구한다는 서술</li>
+        <li><a href="https://kafka.apache.org/documentation/#connectconfigs" rel="noopener noreferrer">Connect Worker Configs</a> — <code>listeners</code>=<code>http://:8083</code>, <code>plugin.path</code>=<code>null</code>, <code>plugin.discovery</code>=<code>hybrid_warn</code>, <code>offset.flush.interval.ms</code>, <code>offset.flush.timeout.ms</code>=<code>5000</code>, <code>offset.storage.partitions</code>=<code>25</code>, <code>status.storage.partitions</code>=<code>5</code>, <code>*.storage.replication.factor</code>=<code>3</code>, <code>header.converter</code>=<code>SimpleHeaderConverter</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_errorreporting" rel="noopener noreferrer">Connect Error Reporting and DLQ</a> — <code>errors.tolerance</code>=<code>none</code>, <code>errors.log.enable</code>=<code>false</code>, <code>errors.log.include.messages</code>=<code>false</code>, <code>errors.retry.timeout</code>=<code>0</code>, <code>errors.retry.delay.max.ms</code>=<code>60000</code>, <code>errors.deadletterqueue.topic.name</code>=빈 문자열, <code>errors.deadletterqueue.topic.replication.factor</code>=<code>3</code>, <code>errors.deadletterqueue.context.headers.enable</code>=<code>false</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_administration" rel="noopener noreferrer">Connect Administration</a> — <code>GET /connectors/{name}/status</code> 출력 형식, 토픽 추적(<code>topic.tracking.enable</code>), pause/resume 의미</li>
+        <li><a href="https://debezium.io/documentation/reference/stable/connectors/mysql.html" rel="noopener noreferrer">Debezium MySQL Connector</a> — <code>io.debezium.connector.mysql.MySqlConnector</code>, <code>topic.prefix</code>, <code>database.server.id</code>, <code>database.include.list</code>, <code>table.include.list</code>, <code>schema.history.internal.kafka.*</code>, <code>snapshot.mode</code>, binlog <code>ROW</code> 포맷 요구, 필요한 MySQL 권한</li>
+        <li><a href="https://github.com/apache/kafka/blob/4.3/connect/file/src/main/java/org/apache/kafka/connect/file/FileStreamSinkConnector.java" rel="noopener noreferrer">FileStreamSinkConnector (Apache Kafka 4.3)</a> — <code>file</code> 설정 하나로 동작하는 내장 sink 커넥터</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 492" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 498" role="img" class="kg-diagram"
      aria-labelledby="d046-title d046-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d046-title">파티션 할당 전략 4종 비교 — 같은 조건에서 결과가 어떻게 갈리는가</title>
   <desc id="d046-desc">같은 컨슈머 수, 토픽 수, 파티션 수에 대해 네 가지 할당 전략의 결과를 2행 2열로 나란히 보여 주는 인터랙티브 그림입니다.
@@ -110,8 +110,8 @@
     <text data-dg="p3-assign-4" x="408" y="401" class="dg-fs-sm dg-mono"></text>
   </g>
   <text data-dg="p3-summary" x="374" y="424" class="dg-fs-sm dg-muted">컨슈머별 담당: 3 / 3 / 2 (총 8개)</text>
-  <text data-dg="note" x="8" y="450" class="dg-fs-sm">이전 할당이 없는 첫 배정에서는 Sticky 결과가 RoundRobin 과 같습니다 — 차이는 재할당 때 드러납니다. 토글을 켜 보세요.</text>
+  <text data-dg="note" x="8" y="450" class="dg-fs-sm">첫 배정에서는 Sticky 결과가 RoundRobin 과 같습니다 — 차이는 재할당 때 드러납니다. 토글을 켜 보세요.</text>
   <line class="dg-grid" x1="8" y1="460" x2="712" y2="460"/>
   <text x="8" y="478" class="dg-fs-sm"><tspan class="dg-bold">Cooperative 와 Sticky 의 최종 할당은 같습니다.</tspan> 차이는 회수 방식(전체 vs 이동 대상만)입니다.</text>
-  <text x="8" y="490" class="dg-fs-sm dg-muted">4.x 기본값은 <tspan class="dg-mono">[RangeAssignor, CooperativeStickyAssignor]</tspan> 목록입니다.</text>
+  <text x="8" y="494" class="dg-fs-sm dg-muted">4.x 기본값은 <tspan class="dg-mono">[RangeAssignor, CooperativeStickyAssignor]</tspan> 목록입니다.</text>
 </svg>

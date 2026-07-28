@@ -166,5 +166,5 @@
   <line class="dg-grid" x1="8" y1="390" x2="712" y2="390"/>
   <text x="8" y="408" class="dg-fs-sm">키가 있으면 <tspan class="dg-mono">toPositive(murmur2(key)) % 파티션수</tspan> 로 결정됩니다 — 총 전송 <tspan data-dg="total" class="dg-bold dg-num">8</tspan>건</text>
   <text x="8" y="426" class="dg-fs-sm"><tspan class="dg-bold">파티션 수를 바꾸면 같은 키가 다른 파티션으로 갑니다.</tspan> 파티션을 늘리면 그 키의 순서 보장이 끊깁니다.</text>
-  <text x="8" y="444" class="dg-fs-sm dg-muted">Kafka 4.0 에서 <tspan class="dg-mono">DefaultPartitioner</tspan>·<tspan class="dg-mono">UniformStickyPartitioner</tspan> 는 제거되었습니다. 내장 파티셔너가 이 동작을 합니다.</text>
+  <text x="8" y="444" class="dg-fs-sm dg-muted">Kafka 4.0 에서 <tspan class="dg-mono">DefaultPartitioner</tspan>·<tspan class="dg-mono">UniformStickyPartitioner</tspan> 는 제거되었습니다.</text>
 </svg>

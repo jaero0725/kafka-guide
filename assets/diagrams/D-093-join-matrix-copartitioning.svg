@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 396" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 430" role="img" class="kg-diagram"
      aria-labelledby="d093-title d093-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d093-title">조인 매트릭스와 co-partitioning 요건</title>
   <desc id="d093-desc">Kafka Streams 의 조인 조합별로 윈도우 필요 여부, INNER · LEFT · OUTER 지원 여부,
@@ -111,9 +111,11 @@
   <text class="dg-fs-sm" x="50" y="303"><tspan class="dg-bold">파티셔너 동일</tspan> — 쓰는 쪽 파티셔너가 같아야 합니다. <tspan class="dg-bold">Streams 는 이것을 검증할 수 없습니다.</tspan></text>
 
   <!-- 예외 -->
-  <rect class="dg-node dg-node--ok" x="12" y="314" width="696" height="52" rx="4"/>
+  <rect class="dg-node dg-node--ok" x="12" y="314" width="696" height="70" rx="4"/>
   <text class="dg-fs-sm dg-bold" x="22" y="332">co-partitioning 이 면제되는 두 경우</text>
-  <text class="dg-fs-sm" x="22" y="350">GlobalKTable 조인 — 모든 인스턴스가 <tspan class="dg-bold">전체 파티션을 다 가지고</tspan> 있습니다 · 외래키 조인 — Streams 가 내부에서 맞춰 줍니다.</text>
+  <text class="dg-fs-sm" x="22" y="350">GlobalKTable 조인 — 모든 인스턴스가 <tspan class="dg-bold">전체 파티션을 다 가지고</tspan> 있습니다.</text>
+  <text class="dg-fs-sm" x="22" y="368">KTable 외래키 조인 — Streams 가 내부에서 co-partitioning 을 맞춰 줍니다.</text>
 
-  <text class="dg-fs-sm dg-muted" x="12" y="388">파티션 수가 다르면 <tspan class="dg-bold">작은 쪽을 큰 쪽에 맞춰 리파티션</tspan>하는 것이 권장됩니다. 스트림-테이블 조인이면 KStream 쪽을 리파티션하세요.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="404">파티션 수가 다르면 <tspan class="dg-bold">작은 쪽을 큰 쪽에 맞춰 리파티션</tspan>하는 것이 권장됩니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="422">스트림-테이블 조인이면 KStream 쪽을, 테이블-테이블이면 작은 KTable 쪽을 리파티션하세요.</text>
 </svg>

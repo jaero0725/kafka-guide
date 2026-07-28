@@ -550,28 +550,65 @@ SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5));</code></pre>
         </table>
       </div>
 
+      <h3 id="co-partitioning">co-partitioning 요건은 2개입니다</h3>
+
+      <p>
+        공식 문서가 명시하는 요건은 <strong>둘</strong>입니다.
+        "키가 같아야 한다"는 요건이 아니라 <strong>equi-join의 정의 그 자체</strong>(<code>leftRecord.key == rightRecord.key</code>)이므로
+        요건 목록에 넣지 않습니다.
+      </p>
+
       <div class="table-scroll">
-        <table class="config-table">
-          <caption>co-partitioning 요구사항 (공식 문서)</caption>
+        <table class="config-table" id="t-copartition">
+          <caption>
+            co-partitioning 요건 2개 — <strong>Streams가 검증하는 것과 하지 않는 것을 구분</strong>하는 것이 실무의 핵심입니다
+          </caption>
           <thead>
-            <tr><th scope="col">조건</th><th scope="col">내용</th></tr>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">요건</th>
+              <th scope="col">Streams가 검증하는가</th>
+              <th scope="col">위반 시 무슨 일이 일어나는가</th>
+            </tr>
           </thead>
           <tbody>
             <tr>
-              <th scope="row">파티션 수</th>
-              <td>조인 양쪽 입력 토픽의 <strong>파티션 수가 같아야</strong> 합니다. 다르면 파티션 할당 시점에 <code>TopologyBuilderException</code>이 발생합니다</td>
+              <th scope="row">①</th>
+              <td><strong>파티션 수가 같아야</strong> 합니다 (조인 양쪽 입력 토픽)</td>
+              <td><span class="mark-ok">검증합니다</span><br>파티션 할당 단계, 즉 <strong>런타임</strong>에</td>
+              <td><code>TopologyBuilderException</code>(런타임 예외)이 발생해 <strong>즉시 실패</strong>합니다. 알아차리기 쉽습니다</td>
             </tr>
             <tr>
-              <th scope="row">파티셔닝 전략</th>
-              <td>입력 토픽에 <strong>쓰는 모든 애플리케이션</strong>이 같은 파티셔너를 써야 합니다. Producer API는 <code>partitioner.class</code>, Streams는 <code>StreamPartitioner</code>. <strong>Streams는 이것을 검증할 수 없습니다</strong> — 사용자 책임입니다</td>
-            </tr>
-            <tr>
-              <th scope="row">예외 2가지</th>
-              <td>KStream-GlobalKTable 조인과 KTable-KTable <strong>foreign-key</strong> 조인만 co-partitioning이 불필요합니다</td>
+              <th scope="row">②</th>
+              <td>입력 토픽에 <strong>쓰는 모든 애플리케이션</strong>이 같은 파티셔너를 써야 합니다. Producer API는 <code>partitioner.class</code>, Streams는 <code>StreamPartitioner</code>(예: <code>KStream#to()</code>)</td>
+              <td><strong class="mark-no">검증하지 못합니다</strong><br>공식 문서가 "사용자 책임"이라고 명시</td>
+              <td><strong>예외 없이 조용히 잘못된 결과</strong>가 나옵니다. 같은 키가 다른 파티션에 들어가 조인이 매칭되지 않습니다 — <strong>가장 찾기 어려운 버그</strong></td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <aside class="note note--danger" data-label="②가 위험한 이유">
+        <p>
+          ①은 예외로 알려 주지만 <strong>②는 알려 주지 않습니다.</strong>
+          조인 결과가 "일부만 매칭되는" 형태로 나오기 때문에
+          <strong>데이터가 원래 그런 줄로 오해하기 쉽습니다.</strong>
+        </p>
+        <p>
+          다행히 모든 애플리케이션이 <strong>파티셔너 관련 설정을 기본값으로</strong> 두고 있다면
+          이 문제는 생기지 않습니다(공식 문서 명시). 커스텀 파티셔너를 쓰는 프로듀서가
+          하나라도 있으면 그때부터 확인 대상이 됩니다.
+        </p>
+      </aside>
+
+      <aside class="note" data-label="요건이 면제되는 조인 2종">
+        <p>
+          <strong>KStream-GlobalKTable 조인</strong>과
+          <strong>KTable-KTable foreign-key 조인</strong>만 co-partitioning이 불필요합니다.
+          앞은 모든 인스턴스가 전체 사본을 갖기 때문이고,
+          뒤는 <strong>Streams가 내부적으로 co-partitioning을 보장</strong>하기 때문입니다.
+        </p>
+      </aside>
 
       <figure class="code">
         <figcaption>co-partitioning을 맞추는 절차 — 공식 문서 권고 순서</figcaption>
@@ -726,7 +763,7 @@ KTable&lt;String, Customer&gt; repartitionedTable =
             <tr><th scope="row"><code>rocksdb.config.setter</code></th><td><code>null</code></td><td>블록 캐시·write buffer 튜닝 지점. <strong>메모리 폭주의 흔한 원인</strong>이기도 합니다</td></tr>
             <tr><th scope="row"><code>rack.aware.assignment.strategy</code></th><td><code>none</code></td><td>멀티 AZ에서 크로스 AZ 트래픽 비용을 줄입니다. <code>rack.aware.assignment.tags</code>와 함께 씁니다</td></tr>
             <tr><th scope="row"><code>application.server</code></th><td><code>""</code></td><td>인터랙티브 쿼리용 <code>host:port</code>. 설정하면 다른 인스턴스로 쿼리를 라우팅할 수 있습니다</td></tr>
-            <tr><th scope="row"><code>group.protocol</code></th><td><code>classic</code></td><td>Streams Rebalance Protocol 관련. <strong>기본값은 <code>classic</code></strong>입니다</td></tr>
+            <tr><th scope="row"><code>group.protocol</code></th><td><code>classic</code></td><td>Streams Rebalance Protocol을 쓰려면 <code>streams</code>로 설정합니다. <strong>클라이언트 기본값은 <code>classic</code></strong>입니다 — <a href="#streams-rebalance-protocol">아래 버전 노트</a> 참조</td></tr>
             <tr><th scope="row"><code>upgrade.from</code></th><td><code>null</code></td><td>메이저 업그레이드 시 2단계 롤링에 필요합니다</td></tr>
             <tr><th scope="row"><code>windowstore.changelog.additional.retention.ms</code></th><td><code>86400000</code> (1일)</td><td>윈도 스토어 changelog에 더할 추가 보관 시간. 내부 토픽 표의 "24시간"이 이 값입니다</td></tr>
             <tr><th scope="row"><code>repartition.purge.interval.ms</code></th><td><code>30000</code> (30초)</td><td>repartition 토픽의 처리 완료 구간을 삭제 요청하는 주기</td></tr>
@@ -758,6 +795,49 @@ admin.request.timeout.ms=60000
 # (프로듀서·컨슈머 양쪽에 같은 이름의 설정이 있으면 둘 다 바뀝니다)
 request.timeout.ms=60000</code></pre>
         </figure>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="streams-rebalance-protocol">
+      <h2 id="streams-rebalance-protocol">Streams Rebalance Protocol</h2>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          Streams 전용 리밸런스 프로토콜은
+          <strong>Apache Kafka 4.2부터 새 클러스터에서 기본 활성화</strong>됩니다.
+          쓰려면 <strong>브로커와 클라이언트가 모두 4.2 이상</strong>이어야 합니다.
+        </p>
+        <p>
+          단 <strong>클라이언트 쪽 <code>group.protocol</code>의 기본값은 여전히 <code>classic</code></strong>이며,
+          이 프로토콜을 쓰려면 <code>streams</code>로 명시해야 합니다.
+          기존 클러스터를 4.2로 올린 경우에는 기능을 별도로 활성화해야 합니다.
+        </p>
+      </aside>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-srp">
+          <caption>Streams 그룹 관련 브로커 설정 — 클라이언트 값이 아니라 <strong>브로커가 관리</strong>합니다</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">역할</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>group.streams.session.timeout.ms</code></th><td><code>45000</code></td><td>Streams 그룹 멤버의 세션 타임아웃</td></tr>
+            <tr><th scope="row"><code>group.streams.heartbeat.interval.ms</code></th><td><code>5000</code></td><td>멤버에게 부여되는 하트비트 간격</td></tr>
+            <tr><th scope="row"><code>group.streams.num.standby.replicas</code></th><td><code>0</code></td><td>태스크별 standby 수의 브로커 측 기본값</td></tr>
+            <tr><th scope="row"><code>group.streams.max.standby.replicas</code></th><td><code>2</code></td><td>허용 상한</td></tr>
+            <tr><th scope="row"><code>group.streams.initial.rebalance.delay.ms</code></th><td><code>3000</code></td><td>첫 리밸런스 지연</td></tr>
+            <tr><th scope="row"><code>group.streams.assignment.interval.ms</code></th><td><code>1000</code></td><td>브로커가 할당을 재계산하는 주기</td></tr>
+            <tr><th scope="row"><code>group.coordinator.rebalance.protocols</code></th><td><code>classic,consumer,streams</code></td><td><code>streams</code>가 이 목록에 있어야 프로토콜이 동작합니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="그룹 단위 오버라이드">
+        <p>
+          위 설정은 <code>GROUP</code> 리소스 타입으로
+          <code>kafka-configs.sh</code>를 통해 <strong>특정 그룹만 동적으로 오버라이드</strong>할 수 있습니다.
+        </p>
       </aside>
     </section>
 
@@ -857,7 +937,9 @@ rm -rf /var/lib/kafka-streams/my-streams-app</code></pre>
       <aside class="note note--exam" data-label="시험 포인트 · Kafka Streams">
         <ul>
           <li><strong>리파티션 유발</strong>: <code>map</code> · <code>flatMap</code> · <code>selectKey</code>는 마킹, <code>groupBy</code>와 <code>repartition()</code>은 항상 유발, <code>groupByKey</code>는 마킹된 경우에만.</li>
+          <li><strong>co-partitioning 요건은 2개</strong>: ① 파티션 수 동일 ② 파티셔너 동일. <strong>Streams가 런타임에 검증하는 것은 ①뿐</strong>이고 ② 위반은 예외 없이 잘못된 결과를 냅니다. ① 위반 시 예외는 <code>TopologyBuilderException</code>.</li>
           <li><strong>co-partitioning 예외</strong>: KStream-GlobalKTable, KTable-KTable foreign-key 조인 <strong>2개뿐</strong>.</li>
+          <li><strong>Streams Rebalance Protocol</strong>은 <strong>4.2부터 새 클러스터에서 기본 활성</strong>이지만 클라이언트 <code>group.protocol</code> 기본값은 <code>classic</code>입니다.</li>
           <li><strong>OUTER 조인</strong>: KStream-KStream과 KTable-KTable(equi)에만 존재.</li>
           <li><strong>KStream-KStream 조인은 항상 윈도 조인</strong>입니다. 비윈도 버전이 없습니다.</li>
           <li><strong>Tumbling은 epoch에 정렬</strong>됩니다. 5000ms면 <code>[0,5000)</code>부터 시작합니다.</li>
@@ -923,6 +1005,7 @@ rm -rf /var/lib/kafka-streams/my-streams-app</code></pre>
         <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/manage-topics.html" rel="noopener noreferrer">Managing Streams Application Topics</a> — 내부 토픽 명명 규칙과 기본 설정</li>
         <li><a href="https://kafka.apache.org/documentation/streams/core-concepts.html" rel="noopener noreferrer">Streams Core Concepts</a> — 태스크·병렬성·시간 개념</li>
         <li><a href="https://kafka.apache.org/documentation/streams/architecture.html" rel="noopener noreferrer">Streams Architecture</a> — 스레드·태스크 모델</li>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/streams-rebalance-protocol.html" rel="noopener noreferrer">Streams Rebalance Protocol</a> — 4.2부터 새 클러스터 기본 활성, <code>group.protocol=streams</code>, <code>group.streams.*</code> 브로커 설정</li>
         <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/app-reset-tool.html" rel="noopener noreferrer">Application Reset Tool</a> — 리셋 절차와 로컬 상태 삭제</li>
       </ul>
     </section>

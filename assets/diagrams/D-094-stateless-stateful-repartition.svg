@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 378" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 396" role="img" class="kg-diagram"
      aria-labelledby="d094-title d094-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d094-title">stateless · stateful · 리파티션 유발 연산 — map 과 mapValues 의 차이</title>
   <desc id="d094-desc">Kafka Streams DSL 연산을 세 갈래로 분류한 그림입니다.
@@ -88,5 +88,6 @@
   <text class="dg-fs-sm" x="378" y="326">키가 그대로이므로 <tspan class="dg-bold">로컬에서 끝납니다</tspan>.</text>
   <text class="dg-fs-sm" x="378" y="344">값만 바꿀 때는 항상 mapValues 를 쓰세요.</text>
 
-  <text class="dg-fs-sm dg-muted" x="12" y="372">Streams 는 키가 실제로 바뀌었는지 보지 않고 <tspan class="dg-bold">키를 바꿀 수 있는 연산인지</tspan>로 판단합니다 — 키를 그대로 반환하는 map 도 표시가 붙습니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="370">Streams 는 키가 실제로 바뀌었는지 보지 않고 <tspan class="dg-bold">키를 바꿀 수 있는 연산인지</tspan>로 판단합니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="388">그래서 키를 그대로 반환하는 <tspan class="dg-mono">map</tspan> 에도 리파티션 표시가 붙습니다.</text>
 </svg>
