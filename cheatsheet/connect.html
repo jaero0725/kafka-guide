@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Connect 치트시트 — Kafka Guide</title>
-  <meta name="description" content="Kafka Connect 4.3 치트시트. REST API 엔드포인트 28개 전체와 curl 예시, 내장 SMT 16종과 Predicate 3종, 커넥터 상태 코드 6종과 대응, 409 Conflict 원인, 내부 토픽 필수 설정, DLQ 설정.">
+  <meta name="description" content="Kafka Connect 4.3 치트시트. REST API 엔드포인트 전체 목록과 curl 예시, 내장 SMT와 Predicate 목록, 커넥터 상태 코드와 대응, 409 Conflict 원인, 내부 토픽 필수 설정, DLQ 설정.">
   <link rel="stylesheet" href="../assets/css/tokens.css">
   <link rel="stylesheet" href="../assets/css/main.css">
   <link rel="stylesheet" href="../assets/css/code.css">
@@ -28,8 +28,8 @@
       <h1>Connect 치트시트</h1>
       <p class="page__lead">
         Connect 운영은 대부분 REST API로 합니다.
-        엔드포인트 28개 전체와 <code>curl</code> 예시, 내장 SMT 16종,
-        커넥터 상태 코드 6종의 의미와 대응을 정리했습니다.
+        엔드포인트 전체 목록과 <code>curl</code> 예시, 내장 SMT 목록,
+        커넥터 상태 코드의 의미와 대응을 정리했습니다.
         엔드포인트 목록은 Apache Kafka 4.3.1 배포판의 OpenAPI 정의에서 추출했습니다.
       </p>
     </header>
@@ -62,7 +62,7 @@
 
       <div class="table-scroll">
         <table class="config-table" id="t-rest">
-          <caption>Kafka Connect REST API — Apache Kafka 4.3.1 OpenAPI 정의 기준 (28개)</caption>
+          <caption>Kafka Connect REST API — Apache Kafka 4.3.1 배포판의 OpenAPI 정의(<code>connect_rest.yaml</code>)에서 추출</caption>
           <thead>
             <tr>
               <th scope="col">메서드</th>
@@ -353,11 +353,11 @@ curl -s -X PUT "$CW/admin/loggers/org.apache.kafka.connect.runtime.WorkerSinkTas
 
     <!-- ============================================================== -->
     <section aria-labelledby="states">
-      <h2 id="states">커넥터 상태 6종과 대응</h2>
+      <h2 id="states">커넥터 상태와 대응</h2>
 
       <div class="table-scroll">
         <table class="config-table" id="t-states">
-          <caption>상태 정의는 Apache Kafka 4.3.1 Connect Administration 문서 기준</caption>
+          <caption>커넥터·태스크 상태 — 정의는 Apache Kafka 4.3.1 Connect Administration 문서 기준</caption>
           <thead>
             <tr>
               <th scope="col">상태</th>
@@ -534,7 +534,7 @@ curl -s "$CW/connectors/$CONNECTOR/status" | jq '{connector: .connector.state, t
       <h2 id="smt">SMT (Single Message Transform)</h2>
 
       <p>
-        Apache Kafka에 내장된 SMT는 <strong>16종</strong>입니다.
+        Apache Kafka에 내장된 SMT 목록입니다.
         대부분 <code>$Key</code>와 <code>$Value</code> 두 변형을 가지며,
         레코드의 키에 적용할지 값에 적용할지를 클래스명으로 구분합니다
         (예: <code>org.apache.kafka.connect.transforms.Cast$Value</code>).
@@ -550,7 +550,7 @@ curl -s "$CW/connectors/$CONNECTOR/status" | jq '{connector: .connector.state, t
 
       <div class="table-scroll">
         <table class="config-table" id="t-smt">
-          <caption>내장 SMT 16종 — Apache Kafka 4.3.1 <code>connect_transforms</code> 문서 기준</caption>
+          <caption>내장 SMT — Apache Kafka 4.3.1 생성 문서(<code>connect_transforms</code>) 기준</caption>
           <thead>
             <tr>
               <th scope="col">이름</th>
@@ -660,7 +660,7 @@ curl -s "$CW/connectors/$CONNECTOR/status" | jq '{connector: .connector.state, t
         </table>
       </div>
 
-      <h3 id="predicates">Predicate 3종</h3>
+      <h3 id="predicates">Predicate</h3>
 
       <p>
         SMT를 <strong>조건부로</strong> 적용하려면 Predicate를 씁니다.
@@ -669,7 +669,7 @@ curl -s "$CW/connectors/$CONNECTOR/status" | jq '{connector: .connector.state, t
 
       <div class="table-scroll">
         <table class="config-table" id="t-predicates">
-          <caption>내장 Predicate 3종</caption>
+          <caption>내장 Predicate — Apache Kafka 4.3.1 생성 문서 기준</caption>
           <thead>
             <tr><th scope="col">이름</th><th scope="col">참이 되는 조건</th><th scope="col">파라미터</th></tr>
           </thead>
@@ -1235,22 +1235,22 @@ curl -s "$CW/connectors/mysql-source/offsets" | jq</code></pre>
     <section aria-labelledby="sources">
       <h2 id="sources">공식 문서 출처</h2>
       <p>
-        REST 엔드포인트 28개는 Apache Kafka 4.3.1 배포판에 포함된
+        REST 엔드포인트 목록은 Apache Kafka 4.3.1 배포판에 포함된
         Connect OpenAPI 정의(<code>connect_rest.yaml</code>)에서 추출했습니다.
-        SMT 16종·Predicate 3종의 이름과 파라미터는 생성된 변환 문서에서,
-        상태 6종의 정의와 409 동작은 Connect Administration 문서에서,
+        SMT·Predicate의 이름과 파라미터는 생성된 변환 문서에서,
+        상태 정의와 409 동작은 Connect Administration 문서에서,
         설정 기본값은 Connect 설정 문서에서 확인했습니다.
         <code>curl</code> 예시와 재시작 스크립트는 이 가이드의 구성입니다.
       </p>
       <ul>
         <li><a href="https://kafka.apache.org/documentation/#connect" rel="noopener noreferrer">Kafka Connect</a> — 전체 개요</li>
         <li><a href="https://kafka.apache.org/documentation/#connect_rest" rel="noopener noreferrer">Connect REST Interface</a> — 엔드포인트 목록, <code>initial_state</code>, <code>onlyFailed</code> 파라미터</li>
-        <li><a href="https://kafka.apache.org/documentation/#connect_administration" rel="noopener noreferrer">Connect Administration</a> — 상태 6종 정의, 409 (Conflict) 동작, pause/stop 차이, 토픽 추적</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_administration" rel="noopener noreferrer">Connect Administration</a> — 상태 정의, 409 (Conflict) 동작, pause/stop 차이, 토픽 추적</li>
         <li><a href="https://kafka.apache.org/documentation/#connectconfigs" rel="noopener noreferrer">Connect Worker Configs</a> — 내부 토픽 설정 기본값, <code>plugin.path</code>, <code>scheduled.rebalance.max.delay.ms</code></li>
         <li><a href="https://kafka.apache.org/documentation/#sinkconnectconfigs" rel="noopener noreferrer">Sink Connector Configs</a> — <code>errors.*</code> 전체와 DLQ 기본값</li>
         <li><a href="https://kafka.apache.org/documentation/#sourceconnectconfigs" rel="noopener noreferrer">Source Connector Configs</a> — <code>exactly.once.support</code>, <code>transaction.boundary</code></li>
-        <li><a href="https://kafka.apache.org/documentation/#connect_transforms" rel="noopener noreferrer">Connect Transformations</a> — 내장 SMT 16종과 파라미터</li>
-        <li><a href="https://kafka.apache.org/documentation/#connect_predicates" rel="noopener noreferrer">Connect Predicates</a> — Predicate 3종</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_transforms" rel="noopener noreferrer">Connect Transformations</a> — 내장 SMT와 파라미터</li>
+        <li><a href="https://kafka.apache.org/documentation/#connect_predicates" rel="noopener noreferrer">Connect Predicates</a> — Predicate 목록</li>
         <li><a href="https://archive.apache.org/dist/kafka/4.3.1/" rel="noopener noreferrer">Apache Kafka 4.3.1 배포 아카이브</a> — <code>kafka_2.13-4.3.1-site-docs.tgz</code> 내 <code>generated/connect_rest.yaml</code></li>
       </ul>
     </section>

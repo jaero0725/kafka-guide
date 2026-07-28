@@ -1006,7 +1006,7 @@ public class VipIsolatingPartitioner implements Partitioner {
 
       <figure class="diagram" data-diagram="D-035">
         <figcaption>
-          압축 코덱 트레이드오프 — gzip · snappy · lz4 · zstd의 압축률, CPU 비용, 지연 특성 비교
+          압축 코덱 트레이드오프 — gzip · snappy · lz4 · zstd의 압축률과 CPU 비용의 상대 경향. 공식 문서에 구체적 수치가 없으므로 실제 값은 워크로드로 실측해야 합니다
         </figcaption>
       </figure>
 
@@ -1360,6 +1360,35 @@ retry.backoff.max.ms=1000
 
     <!-- ================================================================= -->
     <section aria-labelledby="configs">
+      <h2 id="observability">전송 파이프라인 관측 — 어느 메트릭이 어디를 보는가</h2>
+
+      <p>앞의 파이프라인 각 단계는 서로 다른 메트릭으로 관측됩니다. 어떤 메트릭이 어느 구간을
+      덮는지 알아야 &ldquo;느리다&rdquo;는 증상을 단계로 좁힐 수 있습니다. CCDAK의
+      Application Observability 도메인이 이 구분을 묻습니다.</p>
+
+      <figure class="diagram" data-diagram="D-038">
+        <figcaption>
+          프로듀서 핵심 메트릭 지도 — <code>record-send-rate</code> ·
+          <code>record-error-rate</code> · <code>request-latency-avg</code> ·
+          <code>buffer-available-bytes</code>가 전송 파이프라인의 어느 단계를 관측하는지
+        </figcaption>
+      </figure>
+
+      <figure class="diagram" data-diagram="D-039">
+        <figcaption>
+          프로듀서 지연 분해 — 배치 대기 · 전송 · 브로커 처리 · 응답 구간과
+          각 구간을 덮는 메트릭
+        </figcaption>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Observability">
+        <code>record-send-rate</code>가 정상인데 end-to-end 지연이 크다면 전송이 아니라
+        <strong>배치 대기</strong>(<code>linger.ms</code>)나 브로커 처리 구간을 봐야 합니다.
+        <code>buffer-available-bytes</code>가 0에 가까우면 <code>send()</code>가
+        <code>max.block.ms</code>까지 블로킹되다가 <code>TimeoutException</code>을 던집니다.
+      </aside>
+
+
       <h2 id="configs">Producer 설정 정리</h2>
 
       <p>
@@ -1867,6 +1896,7 @@ props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 10);</code></pre
   <script src="../assets/js/progress.js" defer></script>
   <script src="../assets/js/highlight.js" defer></script>
   <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/viz-v1.js" defer></script>
   <script src="../assets/js/app.js" defer></script>
   <script src="../assets/js/quiz.js" defer></script>
 </body>

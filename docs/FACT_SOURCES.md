@@ -83,6 +83,48 @@ https://raw.githubusercontent.com/apache/kafka/4.3/{경로}
   토픽 설정 기본값을 확인할 때는 두 파일을 함께 봐야 한다.
 - 소스 주석에 **버전별 변경 이력**이 적혀 있는 경우가 많다. 매우 유용하다.
 
+### Confluent Schema Registry · Avro 소스도 열려 있다 (V2 확인)
+
+`docs.confluent.io`는 차단되지만 **`raw.githubusercontent.com`은 apache/kafka 외
+저장소에도 열려 있다.** Schema Registry 사실 확인은 이 경로를 쓴다.
+
+```
+raw.githubusercontent.com/confluentinc/schema-registry/master/client/src/main/java/
+  io/confluent/kafka/schemaregistry/{CompatibilityLevel,CompatibilityChecker,SchemaValidatorBuilder}.java
+raw.githubusercontent.com/confluentinc/schema-registry/master/schema-serializer/src/main/java/
+  io/confluent/kafka/serializers/{AbstractKafkaSchemaSerDeConfig.java,schema/id/SchemaId.java,subject/*.java}
+raw.githubusercontent.com/apache/avro/main/lang/java/avro/src/main/java/org/apache/avro/SchemaCompatibility.java
+```
+
+- `api.github.com`은 **403**이지만 raw 파일 직접 접근은 **200**이다.
+- `avro.apache.org`는 차단(000).
+
+**호환성 매트릭스를 이 소스로 계산하는 방법** (A2·V2가 독립적으로 같은 결론에 도달):
+1. `CompatibilityChecker.java` → 모드별 전략
+   (`BACKWARD`=`canReadStrategy`, `FORWARD`=`canBeReadStrategy`, `FULL`=`mutualReadStrategy`,
+   `*_TRANSITIVE`=`validateAll`, `NONE`=no-op)
+2. `AvroSchema.isBackwardCompatible()` → `SchemaCompatibility.checkReaderWriterCompatibility()` 위임.
+   **BACKWARD면 reader=새 스키마, FORWARD면 reader=옛 스키마**
+3. `SchemaCompatibility.java` → 판정 규칙
+   - reader 필드에 대응하는 writer 필드가 없으면 **reader 쪽 `default` 필수**,
+     없으면 `READER_FIELD_MISSING_DEFAULT_VALUE`
+   - **writer에만 있는 필드는 무시** (검사 대상 아님)
+   - 대응은 이름 또는 **reader 별칭(alias)**
+   - 타입 승격만 허용: `LONG←INT`, `FLOAT←INT|LONG`, `DOUBLE←INT|LONG|FLOAT`, `BYTES↔STRING`
+
+### Schema Registry 관련 확인·미확인 정리 (V2)
+| 항목 | 상태 |
+|---|---|
+| wire format 오버헤드 | **정확히 5바이트** (magic 1 + id 4). magic `0x01`은 id 대신 16B GUID. Protobuf만 message index 추가 |
+| `delete.retention.ms` | `86400000` (1일) |
+| `errors.tolerance` | `none`. **DLQ 설정은 싱크 커넥터 전용** — source에는 `errors.deadletterqueue.*`가 없다 |
+| DLQ 토픽 RF 기본 | `3` |
+| sink 컨슈머 그룹 id | **`connect-{커넥터 이름}`** → `kafka-consumer-groups.sh`로 lag 조회 가능 |
+| `num.stream.threads` / `num.standby.replicas` / `commit.interval.ms` | `1` / `0` / `30000` (EOS 시 `100`) |
+| **기본 subject 전략 클래스명** | ⚠️ **쓰지 말 것.** master 소스는 `AssociatedNameStrategy`(레지스트리 조회 후 `TopicNameStrategy` 폴백)인데 `_DOC` 문자열은 여전히 `TopicNameStrategy`라고 말한다. **동작(`{topic}-value`)만 서술하고 클래스명은 단정하지 않는다** |
+| **`connect.protocol` 기본값** | ⚠️ **쓰지 말 것.** 문서 서술은 `compatible`, 생성 설정표는 `sessioned`로 **불일치**. "증분 협력 리밸런싱이 기본"으로만 서술 |
+| **`min.cleanable.dirty.ratio` 트리거 조건** | ⚠️ dirty ratio 계산에 활성 세그먼트가 포함되는지 미확정. 기본값 `0.5`만 쓰고 트리거 조건은 서술하지 않는다 |
+
 ### `docs/` 디렉터리는 없다
 `apache/kafka/4.3/docs/configuration.html` 은 **404**다. 문서 HTML을 이 경로에서 찾지 말 것.
 

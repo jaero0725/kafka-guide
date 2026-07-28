@@ -222,7 +222,7 @@ HTTP 409</code></pre>
       </p>
 
       <figure class="code">
-        <figcaption>프로듀서 쪽에서 보이는 형태 (<code>auto.register.schemas=true</code>인 경우)</figcaption>
+        <figcaption>프로듀서 쪽에서 보이는 형태 — 자동 등록을 켠 경우</figcaption>
         <pre><code class="lang-bash">org.apache.kafka.common.errors.SerializationException: Error registering Avro schema
 Caused by: io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException: Schema being registered is incompatible with an earlier schema for subject "orders-value", details: [...]; error code: 40901</code></pre>
       </figure>

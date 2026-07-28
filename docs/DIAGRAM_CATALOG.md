@@ -140,7 +140,7 @@ Wave 0이 `assets/css/viz.css`에 다이어그램 디자인 토큰을 정의한�
 | D-045 | 커밋 시점별 유실/중복 | ★★★ | 처리 전 커밋(유실) vs 처리 후 커밋(중복) |
 | D-046 🖱 | 파티션 할당 전략 4종 비교 | ★★★ | 같은 조건에서 4개 전략의 할당 결과를 나란히. 컨슈머/파티션 수 조절 |
 | D-047 | static membership | ★★ | `group.instance.id`로 재시작 시 리밸런스 회피 |
-| D-048 | 컨슈머 lag의 정확한 정의 | ★★ | LEO − committed offset. 어디를 재는지 (CCDAK Observability 13%) |
+| D-048 | 컨슈머 lag의 정확한 정의 | ★★ | ⚠️ **정정(V1 확인)**: `LEO − committed offset`이 아니라 **`high watermark − CURRENT-OFFSET`**. `KafkaConsumer.endOffsets()` javadoc 기준 `LOG-END-OFFSET`은 리더 LEO가 아니라 **high watermark**(`read_committed`면 LSO)다. 복제가 끝나지 않은 구간은 lag에 포함되지 않는다 (CCDAK Observability 13%) |
 | D-049 | lag 측정 3가지 방법 비교 | ★★ | CLI / 클라이언트 메트릭 / 브로커 메트릭 — 각각 무엇을 측정하고 어떤 함정이 있는지 |
 
 ### ch06 — 전달 보장·트랜잭션 (CCDAK)

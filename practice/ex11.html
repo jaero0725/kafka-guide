@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>예제 11 · MirrorMaker 2 클러스터 간 복제 — Kafka Guide</title>
+  <meta name="description" content="Kafka 4.3의 MirrorMaker 2로 두 KRaft 클러스터 사이를 복제합니다. 복제 흐름 정의, DefaultReplicationPolicy와 접두어, 컨슈머 그룹 오프셋 동기화, active/active 순환 방지까지 다룹니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="practice" data-page="ex11"></div>
+
+  <main id="main" class="page" data-page-id="practice/ex11">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="ex01.html">실무 예제</a></li>
+        <li><span aria-current="page">예제 11 · MirrorMaker 2 복제</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실무 예제 · 11</p>
+      <h1>MirrorMaker 2 클러스터 간 복제</h1>
+      <p class="page__lead">
+        MirrorMaker 2는 Kafka Connect 프레임워크 위에서 도는
+        <strong>클러스터 간(inter-cluster) 복제 도구</strong>입니다.
+        클러스터 <em>안</em>의 복제(replication factor)와는 완전히 다른 것입니다.
+        토픽·설정·ACL·<strong>컨슈머 그룹 오프셋</strong>까지 옮길 수 있는 대신,
+        <strong>토픽 이름이 바뀌고 오프셋이 그대로 일치하지 않는다</strong>는 성질을
+        이해하지 않으면 재해 복구 시점에 당황합니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>복제 흐름(<code>{source}-&gt;{target}</code>) 문법으로 active/passive와 active/active를 구성할 수 있습니다.</li>
+        <li><code>DefaultReplicationPolicy</code>가 붙이는 <strong>소스 별칭 접두어</strong>가 순환 복제를 어떻게 막는지 설명할 수 있습니다.</li>
+        <li>컨슈머 그룹 오프셋 동기화(<code>sync.group.offsets.enabled</code>)의 기본값과 한계를 알 수 있습니다.</li>
+        <li>MirrorMaker 2가 만드는 내부 토픽들과 각각의 역할을 구분할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="scenario">
+      <h2 id="scenario">시나리오</h2>
+
+      <p>
+        서울 리전(<code>primary</code>)에 운영 Kafka 클러스터가 있습니다.
+        규제 요건으로 <strong>다른 리전(<code>secondary</code>)에 재해 복구용 사본</strong>을
+        유지해야 합니다. RPO는 5분, RTO는 30분입니다.
+      </p>
+      <p>
+        추가 요구사항이 있습니다. 분석 팀이 운영 클러스터에 직접 붙는 것을 막고 싶어서,
+        <strong>분석용 컨슈머는 <code>secondary</code>에서만 읽게</strong> 하려 합니다.
+        그리고 장애 시 운영 컨슈머를 <code>secondary</code>로 전환할 때
+        <strong>처음부터 다시 읽지 않아야</strong> 합니다.
+      </p>
+      <p>
+        MirrorMaker 2로 active/passive 구성을 만들고,
+        오프셋 동기화까지 켭니다.
+      </p>
+
+      <aside class="note note--warn" data-label="클러스터 내부 복제와 혼동하지 마세요">
+        <p>
+          <code>replication.factor</code>는 <strong>같은 클러스터 안에서</strong>
+          파티션 사본을 몇 개 둘지입니다.
+          MirrorMaker 2는 <strong>서로 다른 클러스터 사이에서</strong> 데이터를 옮깁니다.
+          공식 문서도 이 둘이 다른 개념임을 명시합니다.
+          RF=3인 클러스터도 리전이 통째로 죽으면 데이터를 못 읽으므로
+          두 가지가 모두 필요합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="architecture">
+      <h2 id="architecture">아키텍처</h2>
+
+      <p>
+        MirrorMaker 2는 <strong>세 종류의 커넥터</strong>로 구성됩니다.
+        전용 클러스터 모드(<code>connect-mirror-maker.sh</code>)로 띄우면 이들이 자동으로 생성됩니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>MirrorMaker 2의 커넥터 3종</caption>
+          <thead>
+            <tr><th scope="col">커넥터</th><th scope="col">옮기는 것</th><th scope="col">주요 설정</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">MirrorSourceConnector</th>
+              <td>토픽 데이터, 토픽 설정, ACL, 파티션 구조</td>
+              <td><code>topics</code>(기본 <code>.*</code>), <code>topics.exclude</code>, <code>sync.topic.configs.enabled</code>(기본 <code>true</code>), <code>sync.topic.acls.enabled</code>(기본 <code>true</code>), <code>replication.factor</code>(기본 <strong><code>2</code></strong>)</td>
+            </tr>
+            <tr>
+              <th scope="row">MirrorCheckpointConnector</th>
+              <td>컨슈머 그룹 오프셋 매핑(체크포인트)</td>
+              <td><code>groups</code>(기본 <code>.*</code>), <code>emit.checkpoints.enabled</code>(기본 <code>true</code>), <code>sync.group.offsets.enabled</code>(기본 <strong><code>false</code></strong>)</td>
+            </tr>
+            <tr>
+              <th scope="row">MirrorHeartbeatConnector</th>
+              <td>하트비트 레코드 (복제 지연 측정용)</td>
+              <td><code>heartbeats.replication.enabled</code>(기본 <code>true</code>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="topic-renaming">토픽 이름이 바뀝니다</h3>
+
+      <p>
+        기본 정책인 <code>DefaultReplicationPolicy</code>는
+        복제된 토픽 이름에 <strong>소스 클러스터 별칭을 접두어로</strong> 붙입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>토픽 이름 변환</figcaption>
+        <pre><code class="lang-text">primary 클러스터의   orders
+        ↓  primary->secondary 복제
+secondary 클러스터의  primary.orders</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="접두어는 버그가 아니라 순환 방지 장치입니다">
+        <p>
+          active/active 구성(<code>A-&gt;B</code>, <code>B-&gt;A</code>)에서 접두어가 없다면
+          <code>A</code>의 <code>orders</code> → <code>B</code>의 <code>orders</code> →
+          다시 <code>A</code>의 <code>orders</code>로 <strong>무한히 순환</strong>합니다.
+        </p>
+        <p>
+          접두어가 붙으면 <code>B</code>에는 <code>A.orders</code>가 생기고,
+          <code>B-&gt;A</code> 흐름은 <code>topics.exclude</code>의 기본값
+          <code>mm2.*\.internal,.*\.replica,__.*</code>과
+          <strong>정책의 순환 감지 로직</strong>에 의해 되돌려 보내지 않습니다.
+        </p>
+        <p>
+          접두어를 없애려면 <code>IdentityReplicationPolicy</code>를 쓸 수 있지만,
+          <strong>active/active에서는 순환이 발생하므로 단방향(active/passive)에서만</strong>
+          안전합니다. 그리고 원본과 복제본을 이름으로 구분할 수 없게 됩니다.
+        </p>
+      </aside>
+
+      <h3 id="offset-translation">오프셋은 그대로 일치하지 않습니다</h3>
+
+      <p>
+        같은 레코드가 <code>primary</code>에서 오프셋 1000이었다고
+        <code>secondary</code>에서도 1000인 것은 <strong>보장되지 않습니다.</strong>
+        복제가 시작된 시점, 리텐션으로 삭제된 구간, 트랜잭션 마커 때문에 어긋납니다.
+      </p>
+      <p>
+        그래서 MirrorCheckpointConnector가
+        <strong><code>{source}.checkpoints.internal</code></strong> 토픽에
+        "소스 오프셋 X ↔ 타깃 오프셋 Y" 매핑을 기록합니다.
+        <code>sync.group.offsets.enabled=true</code>로 켜면
+        이 매핑을 이용해 <strong>타깃 클러스터의 <code>__consumer_offsets</code>에
+        변환된 오프셋을 직접 커밋</strong>해 줍니다.
+      </p>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Deployment Architecture">
+        <ul>
+          <li><code>sync.group.offsets.enabled</code>의 기본값은 <strong><code>false</code></strong>입니다. 켜지 않으면 체크포인트 토픽만 쌓이고 타깃의 컨슈머 그룹 오프셋은 갱신되지 않습니다.</li>
+          <li><code>emit.checkpoints.enabled</code>의 기본값은 <strong><code>true</code></strong>이며, 기본 주기는 <code>emit.checkpoints.interval.seconds=60</code>입니다.</li>
+          <li><code>MirrorSourceConnector</code>의 <code>replication.factor</code> 기본값은 <strong><code>2</code></strong>입니다. 이것은 <strong>타깃에 만들어질 토픽의 RF</strong>이며, 브로커가 3대면 3으로 올려야 합니다.</li>
+          <li>MirrorMaker 2의 EOS는 <strong>3.5.0부터</strong> 지원되며, 타깃 클러스터마다 <code>{target}.exactly.once.source.support=enabled</code>와 <code>dedicated.mode.enable.internal.rest=true</code>가 함께 필요합니다.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prerequisites">
+      <h2 id="prerequisites">사전 요구사항</h2>
+
+      <ul>
+        <li><a href="ex01.html">예제 1</a>의 클러스터를 <code>primary</code>로 씁니다.</li>
+        <li>두 번째 클러스터(<code>secondary</code>)가 필요합니다. 아래 compose가 단일 노드로 띄웁니다 — 복제 대상만 확인하는 목적이므로 3노드가 아니어도 됩니다.</li>
+        <li>Apache Kafka <strong>4.3.1</strong> (MirrorMaker 2는 배포판에 포함됩니다)</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="full-code">
+      <h2 id="full-code">전체 코드</h2>
+
+      <figure class="code">
+        <figcaption>디렉터리 구조</figcaption>
+        <pre><code class="lang-text">mm2-replication/
+├── docker-compose.secondary.yml   # 목적지 클러스터 (단일 노드 KRaft)
+├── docker-compose.mm2.yml         # MirrorMaker 2 전용 클러스터
+└── mm2.properties                 # 복제 흐름 정의 (핵심)</code></pre>
+      </figure>
+
+      <h3 id="secondary">목적지 클러스터</h3>
+
+      <figure class="code">
+        <figcaption>mm2-replication/docker-compose.secondary.yml</figcaption>
+        <pre><code class="lang-yaml"># 복제 목적지 클러스터. 단일 노드 combined 모드입니다.
+# 내부 토픽 RF 를 1로 내려야 단일 노드에서 뜹니다(기본값은 3).
+---
+name: kafka-secondary
+
+services:
+  kafka-secondary:
+    image: apache/kafka:4.3.1
+    hostname: kafka-secondary
+    container_name: kafka-secondary
+    ports:
+      # primary(29092/39092/49092)와 겹치지 않는 포트를 씁니다.
+      - '19092:9092'
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-secondary:9093'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_LISTENERS: 'PLAINTEXT://:29092,CONTROLLER://:9093,PLAINTEXT_HOST://:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-secondary:29092,PLAINTEXT_HOST://localhost:19092'
+      # primary 와 다른 클러스터이므로 클러스터 ID 도 달라야 합니다.
+      CLUSTER_ID: 'Zt9m2QeTSySn0-hK1p4vLg'
+      # 단일 노드이므로 내부 토픽 RF 를 1로 내립니다.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: '/var/lib/kafka/data'
+      KAFKA_HEAP_OPTS: '-Xmx512m -Xms512m'
+    volumes:
+      - secondary-data:/var/lib/kafka/data
+    networks:
+      # primary 와 같은 네트워크에 두어 MirrorMaker 가 양쪽에 붙을 수 있게 합니다.
+      - kafka-lab_default
+    healthcheck:
+      test: ['CMD-SHELL', '/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1']
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  secondary-data:
+
+networks:
+  kafka-lab_default:
+    external: true</code></pre>
+      </figure>
+
+      <h3 id="mm2-properties">복제 흐름 정의 — 이 예제의 핵심</h3>
+
+      <figure class="code">
+        <figcaption>mm2-replication/mm2.properties</figcaption>
+        <pre><code class="lang-properties"># =============================================================================
+# MirrorMaker 2 — primary → secondary (active/passive)
+# 실행: connect-mirror-maker.sh mm2.properties
+# =============================================================================
+
+# --- 클러스터 별칭 정의 -------------------------------------------------------
+# 이 별칭이 복제된 토픽 이름의 접두어가 되고, 내부 토픽 이름에도 들어갑니다.
+# 한번 정하면 바꾸기 어렵습니다(토픽이 전부 새로 생깁니다).
+clusters = primary, secondary
+
+# 각 별칭의 bootstrap.servers. 컨테이너 네트워크 주소를 씁니다.
+primary.bootstrap.servers = kafka-1:19092,kafka-2:19092,kafka-3:19092
+secondary.bootstrap.servers = kafka-secondary:29092
+
+# --- 복제 흐름 ---------------------------------------------------------------
+# {source}->{target}.enabled 로 방향을 켭니다.
+# active/active 를 원하면 secondary->primary.enabled = true 를 함께 켭니다.
+primary->secondary.enabled = true
+# 반대 방향은 끕니다(active/passive).
+secondary->primary.enabled = false
+
+# 복제 대상 토픽. 기본값은 .* (전부)입니다.
+# 정규식이므로 필요한 것만 명시하는 편이 안전합니다.
+primary->secondary.topics = orders, orders\..*, payments, users\..*
+
+# 제외할 토픽. 기본값은 mm2.*\.internal,.*\.replica,__.*
+# 기본값을 덮어쓸 때 __.* (내부 토픽) 제외를 빼먹으면
+# __consumer_offsets 까지 복제하려 해 문제가 생깁니다.
+primary->secondary.topics.exclude = mm2.*\.internal, .*\.replica, __.*, .*\.DLT, .*\.DLQ
+
+# 복제 대상 컨슈머 그룹. 기본값 .*
+# 기본 제외는 console-consumer-.*,connect-.*,__.*
+primary->secondary.groups = orders-.*, payment-.*
+primary->secondary.groups.exclude = console-consumer-.*, connect-.*, __.*
+
+# --- Connect 워커 설정 (MirrorMaker 는 Connect 위에서 돕니다) ------------------
+# 기본값 1 이지만 공식 문서는 최소 2 이상(가능하면 더 높게)을 권장합니다.
+# 태스크가 여러 프로세스로 분산되어야 처리량이 나옵니다.
+tasks.max = 4
+
+# --- 타깃에 만들어질 토픽의 복제 계수 -----------------------------------------
+# MirrorSourceConnector 의 replication.factor 기본값은 2 입니다.
+# 이 예제의 secondary 는 단일 노드이므로 1로 내려야 토픽 생성이 성공합니다.
+# 실제 DR 클러스터라면 3으로 두세요.
+primary->secondary.replication.factor = 1
+
+# MirrorMaker 내부 토픽들의 복제 계수. 단일 노드 secondary 기준으로 1입니다.
+# 기본값은 모두 3 입니다.
+primary->secondary.checkpoints.topic.replication.factor = 1
+primary->secondary.heartbeats.topic.replication.factor = 1
+primary->secondary.offset-syncs.topic.replication.factor = 1
+# Connect 자체의 내부 토픽 RF (전용 모드에서도 필요합니다)
+secondary.offset.storage.replication.factor = 1
+secondary.config.storage.replication.factor = 1
+secondary.status.storage.replication.factor = 1
+primary.offset.storage.replication.factor = 3
+primary.config.storage.replication.factor = 3
+primary.status.storage.replication.factor = 3
+
+# --- 토픽/ACL 설정 동기화 ------------------------------------------------------
+# 기본값 true. 소스 토픽의 설정(retention 등)을 타깃에도 반영합니다.
+primary->secondary.sync.topic.configs.enabled = true
+primary->secondary.sync.topic.configs.interval.seconds = 600
+# 기본값 true. ACL 도 함께 옮깁니다. 보안 모델이 다르면 끄세요.
+primary->secondary.sync.topic.acls.enabled = false
+
+# 새 토픽·파티션 자동 감지. 기본값 true, 주기 600초.
+primary->secondary.refresh.topics.enabled = true
+primary->secondary.refresh.topics.interval.seconds = 60
+
+# --- 컨슈머 그룹 오프셋 --------------------------------------------------------
+# 체크포인트 발행. 기본값 true, 주기 60초.
+# 이것만으로는 타깃의 __consumer_offsets 가 갱신되지 않습니다.
+primary->secondary.emit.checkpoints.enabled = true
+primary->secondary.emit.checkpoints.interval.seconds = 30
+
+# ★ 기본값이 false 입니다. 켜야 타깃의 컨슈머 그룹 오프셋이 실제로 갱신됩니다.
+#   장애 시 컨슈머를 secondary 로 전환할 때 "처음부터 다시 읽기" 를 막는 설정입니다.
+#   주의: 타깃에서 같은 그룹 ID 의 컨슈머가 활성 상태이면 충돌합니다.
+#         active/passive 에서만 켜세요.
+primary->secondary.sync.group.offsets.enabled = true
+primary->secondary.sync.group.offsets.interval.seconds = 30
+
+# 오프셋 싱크 레코드를 발행하는 최소 간격(레코드 수). 기본값 100.
+# 작게 하면 오프셋 변환이 정밀해지지만 내부 토픽 쓰기가 늘어납니다.
+primary->secondary.offset.lag.max = 100
+
+# --- 클라이언트 세부 설정 -----------------------------------------------------
+# {source}.consumer.* / {target}.producer.* / {cluster}.admin.* 형식으로 넘깁니다.
+# 소스에 트랜잭션 프로듀서가 있다면 read_committed 로 읽어야
+# abort 된 레코드를 복제하지 않습니다.
+primary.consumer.isolation.level = read_committed
+primary.consumer.auto.offset.reset = earliest
+# 타깃 쓰기의 내구성. 복제본이 유실되면 DR 의 의미가 없습니다.
+secondary.producer.acks = all
+secondary.producer.enable.idempotence = true
+secondary.producer.compression.type = lz4
+secondary.producer.linger.ms = 50
+
+# --- 복제 정책 ---------------------------------------------------------------
+# 기본값은 DefaultReplicationPolicy 이며 "{source}." 접두어를 붙입니다.
+# IdentityReplicationPolicy 는 접두어를 붙이지 않지만
+# active/active 에서는 순환 복제가 발생하므로 단방향에서만 안전합니다.
+replication.policy.class = org.apache.kafka.connect.mirror.DefaultReplicationPolicy
+# 접두어와 토픽명 사이의 구분자. 기본값은 "." 입니다.
+replication.policy.separator = .
+
+# --- EOS (선택) ---------------------------------------------------------------
+# MirrorMaker 전용 클러스터의 exactly-once 는 3.5.0부터 지원됩니다.
+# 켜려면 두 설정이 함께 필요하고, 기존 클러스터는 preparing → enabled 2단계
+# 롤링이 필요합니다.
+# secondary.exactly.once.source.support = enabled
+# dedicated.mode.enable.internal.rest = true
+# listeners = http://0.0.0.0:8080</code></pre>
+      </figure>
+
+      <h3 id="mm2-compose">MirrorMaker 실행 컨테이너</h3>
+
+      <figure class="code">
+        <figcaption>mm2-replication/docker-compose.mm2.yml</figcaption>
+        <pre><code class="lang-yaml">---
+name: kafka-mm2
+
+services:
+  mirrormaker:
+    image: apache/kafka:4.3.1
+    hostname: mirrormaker
+    container_name: mirrormaker
+    restart: unless-stopped
+    # 전용 클러스터 모드로 실행합니다.
+    # 이 스크립트가 MirrorSource/Checkpoint/Heartbeat 커넥터를 자동으로 만듭니다.
+    command:
+      - /opt/kafka/bin/connect-mirror-maker.sh
+      - /etc/mm2/mm2.properties
+    volumes:
+      - ./mm2.properties:/etc/mm2/mm2.properties:ro
+    environment:
+      KAFKA_HEAP_OPTS: '-Xmx512m -Xms512m'
+    networks:
+      - kafka-lab_default
+
+networks:
+  kafka-lab_default:
+    external: true</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="how-to-run">
+      <h2 id="how-to-run">실행 방법</h2>
+
+      <figure class="code">
+        <figcaption>순서대로 실행</figcaption>
+        <pre><code class="lang-bash"># 0. primary 클러스터(예제 1)가 떠 있어야 합니다.
+cd kafka-lab &amp;&amp; docker compose ps
+
+# 1. secondary 클러스터 기동
+cd ../mm2-replication
+docker compose -f docker-compose.secondary.yml up -d
+
+# 2. secondary 가 준비되었는지 확인
+docker exec kafka-secondary /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:29092 --list
+
+# 3. primary 에 데이터를 넣습니다(복제 대상이 있어야 확인이 됩니다).
+cd ../kafka-lab
+for i in $(seq 1 100); do
+  echo "ORD-$i:{\"orderId\":\"ORD-$i\",\"amount\":$((1000 * i))}"
+done | ./kcli kafka-console-producer.sh --topic orders \
+        --property parse.key=true --property key.separator=:
+
+# 4. primary 에서 컨슈머 그룹을 하나 만들어 오프셋을 남깁니다.
+#    (오프셋 동기화를 확인하기 위해)
+./kcli kafka-console-consumer.sh --topic orders --from-beginning \
+  --group orders-dr-test --timeout-ms 8000 --max-messages 50 &gt;/dev/null 2&gt;&amp;1 || true
+./kcli kafka-consumer-groups.sh --describe --group orders-dr-test
+
+# 5. MirrorMaker 2 기동
+cd ../mm2-replication
+docker compose -f docker-compose.mm2.yml up -d
+docker logs -f mirrormaker | head -50</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="verification">
+      <h2 id="verification">검증 방법</h2>
+
+      <h3 id="verify-topics">1. 복제된 토픽 이름과 내부 토픽</h3>
+
+      <figure class="code">
+        <figcaption>secondary의 토픽 목록</figcaption>
+        <pre><code class="lang-bash">docker exec kafka-secondary /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:29092 --list</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 출력</figcaption>
+        <pre><code class="lang-text">heartbeats
+mm2-configs.primary.internal
+mm2-offset-syncs.secondary.internal
+mm2-offsets.primary.internal
+mm2-status.primary.internal
+primary.checkpoints.internal
+primary.heartbeats
+primary.orders
+</code></pre>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>MirrorMaker 2가 만드는 토픽</caption>
+          <thead><tr><th scope="col">토픽</th><th scope="col">역할</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>primary.orders</code></th><td>복제된 데이터 토픽. <code>DefaultReplicationPolicy</code>가 <code>primary.</code> 접두어를 붙였습니다</td></tr>
+            <tr><th scope="row"><code>primary.checkpoints.internal</code></th><td><strong>컨슈머 그룹 오프셋 매핑</strong>(소스 오프셋 ↔ 타깃 오프셋)</td></tr>
+            <tr><th scope="row"><code>mm2-offset-syncs.secondary.internal</code></th><td>오프셋 변환의 기준점이 되는 싱크 레코드</td></tr>
+            <tr><th scope="row"><code>primary.heartbeats</code> / <code>heartbeats</code></th><td>복제 지연 측정용 하트비트</td></tr>
+            <tr><th scope="row"><code>mm2-configs / mm2-offsets / mm2-status .*.internal</code></th><td>Connect 프레임워크의 내부 토픽 3개(설정·오프셋·상태)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="verify-data">2. 데이터가 실제로 복제되었는가</h3>
+
+      <figure class="code">
+        <figcaption>건수 비교</figcaption>
+        <pre><code class="lang-bash">echo -n 'primary   orders        : '
+docker exec kafka-1 /opt/kafka/bin/kafka-get-offsets.sh \
+  --bootstrap-server kafka-1:19092 --topic orders --time -1 \
+  | awk -F: '{s+=$3} END {print s}'
+
+echo -n 'secondary primary.orders: '
+docker exec kafka-secondary /opt/kafka/bin/kafka-get-offsets.sh \
+  --bootstrap-server localhost:29092 --topic primary.orders --time -1 \
+  | awk -F: '{s+=$3} END {print s}'</code></pre>
+      </figure>
+
+      <p>
+        두 값이 <strong>정확히 같지 않을 수 있습니다.</strong>
+        복제가 진행 중이면 secondary가 작고,
+        primary의 리텐션으로 삭제된 구간이 있으면
+        <strong>오프셋 번호 자체가 어긋납니다.</strong>
+        중요한 것은 <strong>레코드 내용이 같은지</strong>입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>내용 비교</figcaption>
+        <pre><code class="lang-bash">docker exec kafka-secondary /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:29092 --topic primary.orders \
+  --from-beginning --timeout-ms 10000 --property print.key=true 2&gt;/dev/null | head -5</code></pre>
+      </figure>
+
+      <h3 id="verify-offset-sync">3. 컨슈머 그룹 오프셋이 동기화되었는가</h3>
+
+      <p>이것이 이 예제의 핵심 검증입니다. 재해 복구 시 재처리량을 결정합니다.</p>
+
+      <figure class="code">
+        <figcaption>secondary에서 같은 그룹 ID를 조회</figcaption>
+        <pre><code class="lang-bash">docker exec kafka-secondary /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server localhost:29092 --describe --group orders-dr-test</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 출력 — 토픽 이름이 <code>primary.orders</code>이고 오프셋이 변환되어 있습니다</figcaption>
+        <pre><code class="lang-text">GROUP           TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+orders-dr-test  primary.orders  0          8               17              9
+orders-dr-test  primary.orders  1          9               16              7
+orders-dr-test  primary.orders  2          7               17              10
+</code></pre>
+      </figure>
+
+      <p>
+        <strong><code>CURRENT-OFFSET</code>이 0이 아니면 동기화가 동작한 것입니다.</strong>
+        <code>sync.group.offsets.enabled</code>를 <code>false</code>(기본값)로 두면
+        이 그룹이 secondary에 <strong>아예 존재하지 않습니다</strong> —
+        장애 시 전환하면 <code>auto.offset.reset</code>에 따라
+        <strong>처음부터 전부 재처리하거나 전부 건너뜁니다.</strong>
+      </p>
+
+      <figure class="code">
+        <figcaption>체크포인트 토픽을 직접 들여다보기</figcaption>
+        <pre><code class="lang-bash">docker exec kafka-secondary /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:29092 --topic primary.checkpoints.internal \
+  --from-beginning --timeout-ms 8000 \
+  --formatter org.apache.kafka.connect.mirror.formatters.CheckpointFormatter \
+  2&gt;/dev/null | head -5</code></pre>
+      </figure>
+
+      <h3 id="verify-lag">4. 복제 지연(replication lag)을 측정</h3>
+
+      <figure class="code">
+        <figcaption>MirrorMaker의 소스 측 컨슈머 그룹으로 확인</figcaption>
+        <pre><code class="lang-bash"># MirrorSourceConnector 는 primary 에서 Connect 컨슈머 그룹으로 읽습니다.
+docker exec kafka-1 /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server kafka-1:19092 --list | grep -i mirror
+
+# 그 그룹의 lag 이 곧 복제 지연입니다.
+docker exec kafka-1 /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server kafka-1:19092 --describe \
+  --group connect-MirrorSourceConnector 2&gt;/dev/null || true</code></pre>
+      </figure>
+
+      <p>
+        더 정확한 방법은 <strong>하트비트 토픽</strong>을 쓰는 것입니다.
+        MirrorHeartbeatConnector가 일정 주기로 하트비트를 발행하므로,
+        <strong>secondary의 <code>primary.heartbeats</code>에 도착한
+        마지막 하트비트의 타임스탬프와 현재 시각의 차이</strong>가
+        end-to-end 복제 지연입니다.
+        이 값을 <a href="ex10.html">예제 10</a>의 Prometheus에 넣고
+        RPO(5분)를 넘으면 알림을 걸면 됩니다.
+      </p>
+
+      <h3 id="verify-failover">5. 페일오버 시뮬레이션</h3>
+
+      <figure class="code">
+        <figcaption>secondary에서 소비를 이어받습니다</figcaption>
+        <pre><code class="lang-bash"># 1) MirrorMaker 를 멈춥니다(primary 가 죽은 상황을 흉내냅니다).
+docker compose -f docker-compose.mm2.yml stop mirrormaker
+
+# 2) 같은 그룹 ID 로 secondary 에서 소비를 시작합니다.
+#    동기화된 오프셋부터 이어서 읽습니다.
+docker exec -i kafka-secondary /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:29092 \
+  --topic primary.orders --group orders-dr-test \
+  --timeout-ms 10000 --property print.key=true 2&gt;/dev/null | head -10</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="페일오버는 자동이 아닙니다">
+        <p>
+          MirrorMaker 2는 <strong>데이터와 오프셋을 옮겨 주기만 합니다.</strong>
+          다음은 사람 또는 운영 자동화가 해야 합니다.
+        </p>
+        <ul>
+          <li>애플리케이션의 <code>bootstrap.servers</code>를 secondary로 전환</li>
+          <li>구독 토픽 이름을 <code>orders</code> → <code>primary.orders</code>로 변경 <strong>(접두어 때문에 코드나 설정을 고쳐야 합니다)</strong></li>
+          <li>프로듀서를 secondary로 전환 (이 시점부터 secondary가 원본이 됩니다)</li>
+          <li>복구 후 되돌리기(failback) 계획 — <strong>양쪽에 서로 다른 데이터가 생긴 상태를 어떻게 합칠지</strong>가 가장 어려운 문제입니다</li>
+        </ul>
+        <p>
+          토픽 이름 변경을 피하려면 <code>IdentityReplicationPolicy</code>를 쓰지만,
+          그러면 <strong>failback 시 순환 복제 위험</strong>이 생깁니다.
+          정답이 없는 트레이드오프이므로 <strong>DR 훈련을 실제로 해 보는 것</strong>이 중요합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="production">
+      <h2 id="production">프로덕션 고려사항</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>로컬 예제와 프로덕션의 차이</caption>
+          <thead><tr><th scope="col">항목</th><th scope="col">이 예제</th><th scope="col">프로덕션</th></tr></thead>
+          <tbody>
+            <tr>
+              <th scope="row">MirrorMaker 프로세스 수</th>
+              <td>1개</td>
+              <td><strong>2개 이상.</strong> 단일 프로세스는 그 자체가 단일 장애점이고, <code>tasks.max</code>를 올려도 한 프로세스에서만 돕니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>tasks.max</code></th>
+              <td>4</td>
+              <td>복제할 토픽-파티션 수와 하드웨어에 맞춰 조정합니다. 공식 문서는 최소 2 이상, 가능하면 더 높게 권장합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">타깃 토픽 RF</th>
+              <td>1 (단일 노드)</td>
+              <td><strong>3.</strong> <code>replication.factor</code> 기본값이 <strong>2</strong>이므로 명시하지 않으면 2가 됩니다 — DR 클러스터로는 부족합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">네트워크</th>
+              <td>같은 Docker 네트워크</td>
+              <td>리전 간이면 <strong>대역폭과 지연이 병목</strong>입니다. <code>compression.type</code>을 반드시 켜고, 쿼터로 복제 트래픽을 제한합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">보안</th>
+              <td><code>PLAINTEXT</code></td>
+              <td>양쪽 클러스터에 <code>{cluster}.security.protocol</code>·<code>sasl.*</code>·<code>ssl.*</code>을 각각 설정합니다. 리전 간 평문 전송은 허용되지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">EOS</th>
+              <td>끔</td>
+              <td>3.5.0+에서 <code>{target}.exactly.once.source.support=enabled</code> + <code>dedicated.mode.enable.internal.rest=true</code>. 기존 클러스터는 <code>preparing</code> → <code>enabled</code> 2단계 롤링이 필요합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">모니터링</th>
+              <td>수동 확인</td>
+              <td>하트비트 기반 end-to-end 지연을 RPO와 비교해 알림. MirrorMaker의 Connect 태스크 상태도 함께 봐야 합니다(<a href="ex10.html">예제 10</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">오프셋 동기화</th>
+              <td>켬</td>
+              <td>active/passive에서만 켜세요. <strong>타깃에 같은 그룹 ID의 활성 컨슈머가 있으면 충돌</strong>합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">DR 훈련</th>
+              <td>없음</td>
+              <td>정기적으로 페일오버를 실제로 수행하세요. 접두어 때문에 <strong>애플리케이션 설정 변경이 필요하다는 사실</strong>을 장애 당일에 알면 RTO를 못 지킵니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">자주 하는 실수</h2>
+
+      <aside class="note note--warn" data-label="실수 1 · sync.group.offsets.enabled 를 켜지 않는다">
+        <p>
+          기본값이 <strong><code>false</code></strong>입니다.
+          <code>emit.checkpoints.enabled</code>(기본 <code>true</code>)만으로는
+          체크포인트 토픽에 매핑이 쌓이기만 하고
+          <strong>타깃의 <code>__consumer_offsets</code>는 갱신되지 않습니다.</strong>
+          장애가 나서 전환했을 때
+          "컨슈머 그룹이 secondary에 없다"는 것을 발견하게 됩니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 2 · 오프셋 번호가 같을 것이라고 가정한다">
+        <p>
+          <strong>같은 레코드의 오프셋이 두 클러스터에서 다릅니다.</strong>
+          복제 시작 시점, 리텐션 삭제, 트랜잭션 마커 때문입니다.
+          외부 시스템에 <code>(topic, partition, offset)</code>을 멱등 키로 저장했다면
+          <strong>페일오버 후 그 키가 전혀 맞지 않습니다.</strong>
+          멱등 키는 <strong>비즈니스 식별자</strong>(주문 ID 등)로 두세요.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 3 · IdentityReplicationPolicy 를 active/active 에 쓴다">
+        <p>
+          접두어가 붙지 않으면 <code>A.orders</code> 대신 <code>orders</code>가 만들어지고,
+          반대 방향 흐름이 그것을 다시 <code>A</code>로 보냅니다.
+          <strong>무한 순환</strong>이 되어 두 클러스터의 디스크가 함께 찹니다.
+          <code>IdentityReplicationPolicy</code>는 <strong>단방향에서만</strong> 쓰세요.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 4 · topics.exclude 기본값을 덮어쓰며 __.* 를 빼먹는다">
+        <p>
+          <code>topics.exclude</code>의 기본값은
+          <code>mm2.*\.internal,.*\.replica,__.*</code>입니다.
+          이 값을 커스터마이즈할 때 <code>__.*</code>를 빼면
+          <strong><code>__consumer_offsets</code>와 <code>__transaction_state</code>를
+          복제하려 시도</strong>합니다.
+          내부 토픽은 그대로 옮겨도 의미가 없고(오프셋 번호가 다르므로)
+          오히려 타깃의 상태를 망칠 수 있습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 5 · replication.factor 기본값 2 를 모른다">
+        <p>
+          <code>MirrorSourceConnector</code>의 <code>replication.factor</code> 기본값은
+          <strong><code>2</code></strong>입니다(브로커의 <code>default.replication.factor</code>=1과 다릅니다).
+          명시하지 않으면 DR 클러스터의 토픽이 <strong>RF 2</strong>로 만들어져,
+          브로커 한 대 손실에는 견디지만 <code>min.insync.replicas=2</code> 조합에서
+          쓰기가 곧바로 실패하는 상태가 됩니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 6 · MirrorMaker 1 자료를 참고한다">
+        <p>
+          MirrorMaker 1(<code>kafka-mirror-maker.sh</code>)은
+          단순 consumer→producer 프록시였고
+          <strong>토픽 설정·ACL·오프셋을 옮기지 못했습니다.</strong>
+          설정 문법(<code>--consumer.config</code>, <code>--producer.config</code>)도 완전히 다릅니다.
+          MirrorMaker 2는 Connect 기반이며 <code>connect-mirror-maker.sh</code>를 씁니다.
+          <strong>MM1 자료의 설정을 MM2에 넣으면 동작하지 않습니다.</strong>
+        </p>
+      </aside>
+
+      <h3 id="related-cases">관련 케이스 스터디</h3>
+      <ul>
+        <li><a href="../cases/case01.html">케이스 1</a> — <code>auto.offset.reset</code>으로 전체 재처리가 일어난 사고. 오프셋 동기화를 켜지 않은 페일오버가 정확히 이 상황을 만듭니다.</li>
+        <li><a href="../cases/case03.html">케이스 3</a> — 복제 관련 유실. 클러스터 내부 복제와 클러스터 간 복제가 각각 막는 위험이 다릅니다.</li>
+        <li><a href="../cases/case08.html">케이스 8</a> — 토픽 설정이 의도와 달랐던 사고. <code>sync.topic.configs.enabled</code>가 옮기는 것과 옮기지 않는 것을 확인해야 합니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="next">
+      <h2 id="next">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="ex08.html">
+          <span class="card__title">예제 8 · Connect CDC 파이프라인</span>
+          <span class="card__desc">MirrorMaker 2가 올라타는 Connect 프레임워크 자체.</span>
+          <span class="card__meta">실무</span>
+        </a></li>
+        <li><a class="card" href="ex10.html">
+          <span class="card__title">예제 10 · 컨슈머 Lag 모니터링</span>
+          <span class="card__desc">복제 지연을 RPO와 비교해 알림을 거는 방법.</span>
+          <span class="card__meta">실무</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch11.html">
+          <span class="card__title">11장 · 운영 기초</span>
+          <span class="card__desc">멀티 DC 구성과 랙 인식, 보안.</span>
+          <span class="card__meta">CCAAK</span>
+        </a></li>
+        <li><a class="card" href="../ccaak/index.html">
+          <span class="card__title">CCAAK 개요</span>
+          <span class="card__desc">Deployment Architecture 도메인에서 MirrorMaker 2가 다뤄집니다.</span>
+          <span class="card__meta">자격증</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#georeplication" rel="noopener noreferrer">Geo-Replication (Cross-Cluster Data Mirroring)</a> — MirrorMaker 2가 Connect 기반이라는 점, 복제 흐름 문법 <code>{source}-&gt;{target}</code>, active/active·active/passive·aggregation·fan-out 패턴, <code>clusters</code>와 <code>{cluster}.bootstrap.servers</code>, <code>{cluster}.{config_name}</code> / <code>{source}.consumer.*</code> / <code>{target}.producer.*</code> / <code>{cluster}.admin.*</code> 형식, <code>tasks.max</code>를 최소 2 이상으로 권장, 클러스터 간 복제와 클러스터 내 복제가 다르다는 명시, EOS는 3.5.0부터이며 <code>exactly.once.source.support</code>와 <code>dedicated.mode.enable.internal.rest</code>가 필요하다는 서술</li>
+        <li><a href="https://kafka.apache.org/documentation/#mirrormakerconfigs" rel="noopener noreferrer">MirrorMaker Configs</a> — <code>topics</code>=<code>.*</code>, <code>topics.exclude</code>=<code>mm2.*\.internal,.*\.replica,__.*</code>, <code>replication.factor</code>=<strong><code>2</code></strong>, <code>sync.topic.configs.enabled</code>=<code>true</code>, <code>sync.topic.acls.enabled</code>=<code>true</code>, <code>refresh.topics.interval.seconds</code>=<code>600</code>, <code>offset.lag.max</code>=<code>100</code>, <code>offset-syncs.topic.replication.factor</code>=<code>3</code>, <code>groups</code>=<code>.*</code>, <code>groups.exclude</code>=<code>console-consumer-.*,connect-.*,__.*</code>, <code>emit.checkpoints.enabled</code>=<code>true</code>, <code>emit.checkpoints.interval.seconds</code>=<code>60</code>, <code>sync.group.offsets.enabled</code>=<strong><code>false</code></strong>, <code>sync.group.offsets.interval.seconds</code>=<code>60</code>, <code>checkpoints.topic.replication.factor</code>=<code>3</code></li>
+        <li><a href="https://github.com/apache/kafka/blob/4.3/connect/mirror-client/src/main/java/org/apache/kafka/connect/mirror/MirrorClientConfig.java" rel="noopener noreferrer">MirrorClientConfig (Apache Kafka 4.3)</a> — <code>replication.policy.class</code>의 기본값이 <code>DefaultReplicationPolicy</code>라는 것</li>
+        <li><a href="https://kafka.apache.org/documentation/#connectconfigs" rel="noopener noreferrer">Connect Worker Configs</a> — <code>offset.storage.replication.factor</code> 등 내부 토픽 설정(MirrorMaker 전용 모드에서도 적용됩니다)</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

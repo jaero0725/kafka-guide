@@ -1015,7 +1015,8 @@ bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
       <figure class="diagram" data-diagram="D-046">
         <figcaption>
           파티션 할당 전략 4종 비교 — 같은 컨슈머·파티션 구성에서 Range · RoundRobin · Sticky · CooperativeSticky의
-          할당 결과를 나란히 놓고, 컨슈머 수를 바꿔 가며 재할당 이동량의 차이를 관찰합니다.
+          할당 결과를 나란히 놓고 비교합니다. <strong>이동량 차이는 &quot;직전에 컨슈머 1명이 이탈한 상황&quot; 토글을
+          켜야 나타납니다</strong> — 첫 배정만 보면 Sticky와 RoundRobin의 결과가 같습니다.
         </figcaption>
       </figure>
 
@@ -1259,6 +1260,33 @@ consumer.seek(tp, 1_000_000L);   // assign/subscribe 이후에만 호출할 수 
 
     <!-- ================================================================= -->
     <section aria-labelledby="config-summary">
+      <h2 id="consumer-lag">컨슈머 lag — 무엇을 재는가</h2>
+
+      <p>lag은 &ldquo;컨슈머가 얼마나 뒤처졌는가&rdquo;를 나타내지만, <strong>무엇을 기준으로 재는지가
+      측정 방법마다 다릅니다.</strong> 같은 상황에서 CLI와 클라이언트 메트릭이 다른 숫자를
+      내놓는 이유가 여기 있습니다.</p>
+
+      <figure class="diagram" data-diagram="D-048">
+        <figcaption>
+          컨슈머 lag의 정확한 정의 — <code>LOG-END-OFFSET</code>은 리더의 LEO가 아니라
+          <strong>high watermark</strong>입니다. 복제가 끝나지 않은 구간은 lag에 포함되지 않습니다
+        </figcaption>
+      </figure>
+
+      <figure class="diagram" data-diagram="D-049">
+        <figcaption>
+          lag 측정 3가지 방법 — CLI(<code>kafka-consumer-groups --describe</code>) ·
+          클라이언트 메트릭(<code>records-lag</code>) · 브로커 메트릭이 각각 무엇을 재는지와 함정
+        </figcaption>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Observability">
+        브로커의 <code>FetcherLagMetrics name=ConsumerLag</code>는 이름과 달리
+        <strong>컨슈머 lag이 아니라 팔로워 복제 lag</strong>입니다. 컨슈머 lag을 이 메트릭으로
+        모니터링하면 아무 의미 없는 값을 보게 됩니다.
+      </aside>
+
+
       <h2 id="config-summary">이 장에서 나온 설정 정리</h2>
 
       <div class="table-scroll">
@@ -1568,6 +1596,7 @@ consumer.seek(tp, 1_000_000L);   // assign/subscribe 이후에만 호출할 수 
   <script src="../assets/js/progress.js" defer></script>
   <script src="../assets/js/highlight.js" defer></script>
   <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/viz-v1.js" defer></script>
   <script src="../assets/js/app.js" defer></script>
   <script src="../assets/js/quiz.js" defer></script>
 </body>
