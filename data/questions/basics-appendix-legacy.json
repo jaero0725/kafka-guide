@@ -1,0 +1,292 @@
+{
+  "setId": "basics-appendix-legacy",
+  "title": "부록 확인 문제 — 버전 표기와 레거시",
+  "exam": "BASICS",
+  "domain": "버전 표기와 레거시",
+  "kafkaVersion": "4.3",
+  "questions": [
+    {
+      "id": "basics-legacy-001",
+      "exam": "BASICS",
+      "domain": "버전 표기와 레거시",
+      "chapter": "appendix-legacy",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Apache 아카이브에 있는 `kafka_2.13-4.3.1.tgz` 와 Maven의 `kafka-clients` 아티팩트에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`2.13` 은 Kafka 마이너 버전이므로 `kafka-clients` 도 2.13 계열을 써야 한다." },
+        { "id": "B", "text": "`_2.13` 은 배포판이 컴파일된 Scala 버전이고, Java 클라이언트 `kafka-clients` 에는 Scala 접두어가 붙지 않는다." },
+        { "id": "C", "text": "`_2.13` 은 지원되는 Java 버전이므로 Java 13 이상에서만 동작한다." },
+        { "id": "D", "text": "`_2.13` 은 클라이언트-브로커 프로토콜 버전이므로 클라이언트도 같은 값을 맞춰야 한다." }
+      ],
+      "answer": ["B"],
+      "explanation": "배포 파일명은 `kafka_{Scala버전}-{Kafka버전}.tgz` 구조이므로 앞의 `_2.13` 은 Scala 컴파일러 버전이고 Kafka 버전은 `4.3.1` 입니다. Kafka 브로커의 상당 부분이 Scala로 작성되어 있고 Scala는 마이너 버전 간 바이너리 호환이 보장되지 않아서 Scala 버전별 빌드를 배포해 왔습니다. Java 애플리케이션이 쓰는 `kafka-clients` 는 Scala 접두어가 없으므로 이 값을 신경 쓸 필요가 없고, 접두어가 필요한 것은 `kafka-streams-scala_2.13` 처럼 Scala API를 직접 참조할 때뿐입니다. 소스 배포판은 `kafka-4.3.1-src.tgz` 처럼 접두어가 없어서 바이너리와 구분됩니다.",
+      "distractorNotes": {
+        "A": "Kafka 2.13이라는 버전은 존재하지 않습니다. Kafka는 2.8 다음이 3.0입니다.",
+        "C": "Java 요구사항은 파일명에 표기되지 않습니다. 4.3에서 브로커·Connect·tools는 Java 17 이상이 필요합니다.",
+        "D": "프로토콜 버전은 파일명에 들어가지 않으며 4.x에서는 `metadata.version` feature로 관리됩니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Archive Distribution", "url": "https://archive.apache.org/dist/kafka/" },
+        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" }
+      ],
+      "tags": ["scala-version", "versioning", "kafka-clients"]
+    },
+    {
+      "id": "basics-legacy-002",
+      "exam": "BASICS",
+      "domain": "버전 표기와 레거시",
+      "chapter": "appendix-legacy",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Kafka 3.0에서 프로듀서 기본값이 어떻게 바뀌었는가?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`acks` 가 1에서 all로, `enable.idempotence` 가 false에서 true로 바뀌었다." },
+        { "id": "B", "text": "`acks` 가 all에서 1로 완화되고 `enable.idempotence` 는 그대로 유지되었다." },
+        { "id": "C", "text": "`linger.ms` 가 0에서 5로, `acks` 가 1에서 all로 바뀌었다." },
+        { "id": "D", "text": "`max.in.flight.requests.per.connection` 이 1에서 5로 바뀌었다." }
+      ],
+      "answer": ["A"],
+      "explanation": "KIP-679가 \"프로듀서가 기본적으로 가장 강한 전달 보장을 켜도록\" 기본값을 바꾼 것이 3.0입니다. 그 결과 `acks` 는 `all`, `enable.idempotence` 는 `true` 가 되어 별도 설정 없이도 중복 없는 전송과 ISR 전원 확인이 기본 동작이 되었습니다. 같은 버전에서 컨슈머 `partition.assignment.strategy` 기본값도 `[RangeAssignor, CooperativeStickyAssignor]` 로 바뀌었습니다(KIP-726). `linger.ms` 의 0에서 5로의 변경은 3.0이 아니라 4.0의 일이므로 두 버전을 섞지 않아야 합니다.",
+      "distractorNotes": {
+        "B": "방향이 반대입니다. 3.0은 기본값을 더 안전한 쪽으로 옮긴 릴리스입니다.",
+        "C": "`acks` 는 맞지만 `linger.ms` 변경은 4.0입니다.",
+        "D": "이 값의 기본값은 예전부터 5였습니다. 멱등성이 켜진 상태의 상한이 5라는 점과 혼동한 것입니다."
+      },
+      "refs": [
+        { "title": "KIP-679 — Producer will enable the strongest delivery guarantee by default", "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default" },
+        { "title": "Apache Kafka — Producer Configs", "url": "https://kafka.apache.org/documentation/#producerconfigs" }
+      ],
+      "tags": ["versioning", "acks", "enable.idempotence", "defaults"]
+    },
+    {
+      "id": "basics-legacy-003",
+      "exam": "BASICS",
+      "domain": "버전 표기와 레거시",
+      "chapter": "appendix-legacy",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "ZooKeeper 모드와 KRaft의 버전별 상태로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "KRaft는 2.8에서 production-ready가 되었고 ZooKeeper 모드는 3.0에서 제거되었다." },
+        { "id": "B", "text": "ZooKeeper 모드는 4.0에서도 선택 가능하며 4.3에서 제거될 예정이다." },
+        { "id": "C", "text": "KRaft는 2.8 early access, 3.3에서 production-ready가 되었고 ZooKeeper 모드는 3.9가 마지막 지원 릴리스다." },
+        { "id": "D", "text": "KRaft는 3.9에서 처음 도입되었고 ZooKeeper 모드는 4.1에서 제거되었다." }
+      ],
+      "answer": ["C"],
+      "explanation": "KRaft는 2.8에서 early access로 처음 등장했지만 구현이 미완이라 프로덕션 사용이 금지되어 있었고, 3.3에서 신규 클러스터에 대해 production-ready로 선언되었습니다(KIP-833). 4.3 업그레이드 문서가 3.3.x를 \"KRaft 모드가 production ready로 판정된 첫 버전\"으로 지목하며 이것이 4.x 업그레이드의 메타데이터 하한선이 됩니다. ZooKeeper 모드는 3.5에서 deprecated로 표시되고 3.9가 마지막 지원 릴리스이며, 4.0에서 완전히 제거되었습니다. 그래서 3.9는 모든 레거시 클러스터가 반드시 거쳐야 하는 경유지입니다.",
+      "distractorNotes": {
+        "A": "2.8은 early access였고 ZooKeeper 모드는 3.0에서 제거되지 않았습니다.",
+        "B": "4.0부터 KRaft 전용입니다. 4.0 이후에는 선택 자체가 없습니다.",
+        "D": "KRaft의 도입 버전은 2.8입니다. 3.9는 ZooKeeper 지원의 마지막 버전입니다."
+      },
+      "refs": [
+        { "title": "KIP-833 — Mark KRaft as Production Ready", "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-833%3A+Mark+KRaft+as+Production+Ready" },
+        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" }
+      ],
+      "tags": ["versioning", "kraft", "zookeeper-removal"]
+    },
+    {
+      "id": "basics-legacy-004",
+      "exam": "BASICS",
+      "domain": "버전 표기와 레거시",
+      "chapter": "appendix-legacy",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "ZooKeeper 모드로 운영 중인 Kafka 2.6 클러스터를 4.3으로 올리려 한다. 올바른 계획은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "2.6에서 4.3으로 롤링 업그레이드한 뒤 4.3에서 KRaft 마이그레이션을 수행한다." },
+        { "id": "B", "text": "2.6에서 3.3으로 올린 뒤 3.3에서 마이그레이션하고 4.3으로 올린다." },
+        { "id": "C", "text": "ZooKeeper 앙상블만 먼저 제거하면 2.6 브로커가 자동으로 KRaft로 전환된다." },
+        { "id": "D", "text": "2.6 → 3.9로 올려 ZooKeeper 모드를 유지한 채 안정화한 뒤, 3.9에서 KRaft 마이그레이션을 완료하고 4.3으로 롤링한다." }
+      ],
+      "answer": ["D"],
+      "explanation": "4.x는 KRaft만 지원하므로 ZooKeeper 모드 클러스터는 업그레이드 전에 반드시 마이그레이션을 끝내야 합니다. 그런데 ZooKeeper에서 KRaft로 가는 마이그레이션 기능을 가진 마지막 릴리스가 3.9이므로, 4.0 이후 버전에는 그 경로 자체가 없습니다. 그래서 순서는 3.9로 먼저 올려 ZooKeeper 모드에서 안정화하고, 3.9의 마이그레이션 절차로 KRaft로 전환한 뒤 4.3으로 롤링하는 것입니다. 4.x 브로커는 소프트웨어·메타데이터 버전이 최소 3.3.x여야 하며, 3.3.x보다 오래된 KRaft 클러스터도 3.9.x를 경유하는 것이 권장 경로입니다.",
+      "distractorNotes": {
+        "A": "순서를 뒤집으면 4.3 브로커가 ZooKeeper 모드로 기동하지 못합니다. 4.x에는 마이그레이션 경로가 없습니다.",
+        "B": "3.3에서도 마이그레이션이 가능하지만 공식 문서가 지목하는 브리지 릴리스는 3.9입니다. 마이그레이션 절차 문서도 3.9 기준으로 유지됩니다.",
+        "C": "자동 전환 기능은 존재하지 않습니다. 마이그레이션은 명시적인 운영 절차입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" },
+        { "title": "KIP-500 — Replace ZooKeeper with a Self-Managed Metadata Quorum", "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum" }
+      ],
+      "tags": ["upgrade", "zookeeper-removal", "kraft", "versioning"]
+    },
+    {
+      "id": "basics-legacy-005",
+      "exam": "BASICS",
+      "domain": "버전 표기와 레거시",
+      "chapter": "appendix-legacy",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "3.x 시절 프로듀서 코드를 4.x로 그대로 옮겼을 때 마주치는 변화로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`linger.ms` 기본값이 0에서 5로 바뀌었고 `DefaultPartitioner`·`UniformStickyPartitioner` 클래스가 제거되었다." },
+        { "id": "B", "text": "`linger.ms` 기본값은 그대로이고 파티셔너 클래스 이름만 바뀌었다." },
+        { "id": "C", "text": "`acks` 기본값이 all에서 1로 바뀌어 내구성이 낮아졌다." },
+        { "id": "D", "text": "`Partitioner` 인터페이스에 `onNewBatch` 메서드가 추가되어 구현을 보강해야 한다." }
+      ],
+      "answer": ["A"],
+      "explanation": "4.0은 `linger.ms` 기본값을 0에서 5로 올렸습니다 — 더 큰 배치의 효율 이득이 대기 증가를 상쇄한다는 근거였습니다. 그래서 지연에 극도로 민감한 경로는 명시적으로 `linger.ms=0` 을 지정해야 예전 동작이 됩니다. 같은 버전에서 `DefaultPartitioner` 와 `UniformStickyPartitioner` 클래스가 제거되었으므로 3.x 설정을 그대로 옮기면 프로듀서 생성이 실패하며, sticky 배치 동작은 이미 프로듀서 내부에 내장되어 있어 `partitioner.class` 를 지정하지 않는 것이 정답입니다. `NotLeaderForPartitionException` 도 제거되어 `NotLeaderOrFollowerException` 으로 대체되었습니다.",
+      "distractorNotes": {
+        "B": "기본값이 실제로 바뀌었습니다. 시중 자료 대부분이 3.x 기준이라 0으로 적혀 있어 오해가 잦습니다.",
+        "C": "`acks` 기본값은 3.0부터 `all` 이며 4.x에서도 그대로입니다.",
+        "D": "`onNewBatch` 는 추가된 것이 아니라 제거되었습니다. 4.x의 `Partitioner` 는 `partition()` 과 `close()` 만 가집니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" },
+        { "title": "Apache Kafka — Producer Configs", "url": "https://kafka.apache.org/documentation/#producerconfigs" }
+      ],
+      "tags": ["versioning", "linger.ms", "partitioning", "upgrade"]
+    },
+    {
+      "id": "basics-legacy-006",
+      "exam": "BASICS",
+      "domain": "버전 표기와 레거시",
+      "chapter": "appendix-legacy",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "Kafka 3.0.0에서 프로듀서를 실행하고 있으며 `enable.idempotence` 를 설정하지 않았다. \"3.0부터 기본 멱등성\"이라는 서술을 근거로 멱등성이 켜져 있다고 판단해도 되는가?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "그렇다. KIP-679가 3.0부터 적용되었으므로 설정 없이도 켜져 있다." },
+        { "id": "B", "text": "아니다. 3.0.0과 3.1.0에는 이 기본값이 실제로 적용되지 않는 버그가 있어 명시하지 않으면 비활성이었다." },
+        { "id": "C", "text": "아니다. 멱등성은 `transactional.id` 를 설정할 때만 켜진다." },
+        { "id": "D", "text": "그렇다. 다만 `acks` 를 명시적으로 all로 설정해야 함께 켜진다." }
+      ],
+      "answer": ["B"],
+      "explanation": "KIP-679가 기본값을 바꾸었지만 3.0.0과 3.1.0에는 그 기본값이 실제로 적용되지 않는 버그가 있었고, 사용자가 명시적으로 `true` 를 지정하지 않으면 멱등성이 여전히 꺼진 상태로 동작했습니다. `acks` 의 `all` 변경은 이 버그의 영향을 받지 않았습니다. 수정은 3.0.1·3.1.1·3.2.0에서 이루어졌으므로, 그 사이 버전을 쓰면서 기본값을 믿고 있으면 중복 제거가 되지 않습니다. 그래서 멱등성에 의존한다면 버전과 무관하게 `enable.idempotence=true` 를 명시하는 편이 안전합니다.",
+      "distractorNotes": {
+        "A": "기본값 선언과 실제 적용이 어긋난 구간이 있었습니다. 버전 번호까지 확인해야 합니다.",
+        "C": "`transactional.id` 를 설정하면 멱등성이 강제로 켜지지만, 그것이 유일한 활성 경로는 아닙니다.",
+        "D": "`acks=all` 은 멱등성의 요구 조건이며 4.x 기본값입니다. 명시 여부가 이 버그를 해소하지는 않습니다."
+      },
+      "refs": [
+        { "title": "KIP-679 — Producer will enable the strongest delivery guarantee by default", "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default" },
+        { "title": "Apache Kafka — Producer Configs", "url": "https://kafka.apache.org/documentation/#producerconfigs" }
+      ],
+      "tags": ["versioning", "enable.idempotence", "defaults"]
+    },
+    {
+      "id": "basics-legacy-007",
+      "exam": "BASICS",
+      "domain": "버전 표기와 레거시",
+      "chapter": "appendix-legacy",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "Kafka 4.0에서 일어난 변화를 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "Scala 2.12 배포판 지원이 제거되어 `_2.13` 빌드만 남았다." },
+        { "id": "B", "text": "Java 8 지원이 제거되어 브로커·Connect·tools는 Java 17 이상이 필요해졌다." },
+        { "id": "C", "text": "KIP-848 새 컨슈머 프로토콜이 클라이언트 기본값이 되었다." },
+        { "id": "D", "text": "Tiered Storage가 이 버전에서 처음 early access로 도입되었다." },
+        { "id": "E", "text": "`inter.broker.protocol.version` 이 KRaft 전용 설정으로 재정의되었다." }
+      ],
+      "answer": ["A", "B"],
+      "explanation": "4.0은 정리 성격이 강한 릴리스입니다. Scala 2.12 지원이 제거되어(KIP-751) 배포판이 `_2.13` 하나만 남았고, Java 8이 제거되어 clients·streams는 Java 11 이상, 브로커·Connect·tools는 Java 17 이상이 필요합니다. 같은 버전에서 ZooKeeper 모드와 `DefaultPartitioner` 계열 클래스가 제거되고 Log4j2로 전환되었으며 `linger.ms` 기본값이 5로 바뀌었습니다. KIP-848은 4.0에서 GA가 되었지만 클라이언트 `group.protocol` 기본값은 여전히 `classic` 이라는 점이 시험 단골입니다.",
+      "distractorNotes": {
+        "C": "GA와 기본값은 다릅니다. 서버 쪽은 자동 활성이지만 컨슈머는 `group.protocol=consumer` 를 명시해야 합니다.",
+        "D": "Tiered Storage의 early access는 3.6이고 production-ready는 3.9입니다.",
+        "E": "이 설정은 제거되었습니다. 4.x에서는 `metadata.version` feature로 관리합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" },
+        { "title": "Apache Kafka — Java Version", "url": "https://kafka.apache.org/documentation/#java" }
+      ],
+      "tags": ["versioning", "upgrade", "scala-version", "zookeeper-removal"]
+    },
+    {
+      "id": "basics-legacy-008",
+      "exam": "BASICS",
+      "domain": "버전 표기와 레거시",
+      "chapter": "appendix-legacy",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "레거시 클러스터를 4.3으로 올릴 때의 제약으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "4.0으로 올리기 전에 모든 클라이언트를 최소 2.1 이상으로 올려야 한다. 오래된 프로토콜 API 버전이 제거되었기 때문이다." },
+        { "id": "B", "text": "4.3은 클러스터 메타데이터 다운그레이드를 지원하지 않으므로 `upgrade --release-version 4.3` 은 되돌릴 수 없다." },
+        { "id": "C", "text": "4.x에서도 `inter.broker.protocol.version` 을 단계적으로 올려야 업그레이드가 확정된다." },
+        { "id": "D", "text": "Connect와 Kafka Streams는 내부적으로 클라이언트를 쓰지 않으므로 버전 요건과 무관하다." },
+        { "id": "E", "text": "메타데이터 버전이 3.0 이상이면 4.3으로 바로 올릴 수 있다." }
+      ],
+      "answer": ["A", "B"],
+      "explanation": "KIP-896으로 오래된 프로토콜 API 버전이 제거되었기 때문에 클라이언트는 4.0 이전에 최소 2.1 이상이어야 하며, Connect와 Streams도 내부적으로 클라이언트를 쓰므로 같은 요건에 해당합니다. 업그레이드 확정 단계는 `kafka-features.sh upgrade --release-version 4.3` 이고, 4.3은 메타데이터 변경을 포함해 다운그레이드를 지원하지 않으므로 이 명령은 되돌릴 수 없습니다. 따라서 브로커 교체를 모두 마친 뒤 동작과 성능을 충분히 검증한 다음 확정해야 합니다. 4.x에서는 `inter.broker.protocol.version` 대신 `metadata.version` feature로 관리하고, 업그레이드의 메타데이터 하한선은 3.3.x입니다.",
+      "distractorNotes": {
+        "C": "이 설정은 ZooKeeper 시대의 절차입니다. 4.x에서는 제거되었습니다.",
+        "D": "둘 다 내부적으로 Kafka 클라이언트를 사용하므로 함께 올려야 합니다.",
+        "E": "하한선은 3.0이 아니라 3.3.x입니다. KRaft가 production-ready로 선언된 첫 버전이 기준입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" },
+        { "title": "Apache Kafka — Archive Distribution", "url": "https://archive.apache.org/dist/kafka/" }
+      ],
+      "tags": ["upgrade", "versioning", "kraft"]
+    },
+    {
+      "id": "basics-legacy-009",
+      "exam": "BASICS",
+      "domain": "버전 표기와 레거시",
+      "chapter": "appendix-legacy",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "각 Kafka 버전을 그 버전에서 일어난 대표적인 변화와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        { "id": "p1", "left": "2.8", "right": "KRaft가 early access로 처음 등장 (프로덕션 금지)" },
+        { "id": "p2", "left": "3.0", "right": "프로듀서 기본값이 `acks=all`·`enable.idempotence=true` 로 강화" },
+        { "id": "p3", "left": "3.3", "right": "KRaft가 신규 클러스터에 대해 production-ready로 선언" },
+        { "id": "p4", "left": "3.9", "right": "ZooKeeper 모드를 지원하는 마지막 릴리스" },
+        { "id": "p5", "left": "4.0", "right": "ZooKeeper 모드 완전 제거와 `linger.ms` 기본값 5" }
+      ],
+      "extraRights": ["Tiered Storage가 early access로 도입", "Share Groups가 production-ready가 됨", "증분 협력적 리밸런스와 sticky 파티셔너 도입"],
+      "explanation": "KRaft는 2.8 early access → 3.3 production-ready → 4.0 유일 모드라는 세 단계를 거쳤고, 그 사이 3.9가 ZooKeeper 모드를 지원하는 마지막 릴리스로 남아 모든 레거시 클러스터의 경유지가 되었습니다. 3.0은 프로듀서 기본값을 가장 강한 보장으로 옮긴 릴리스이며 컨슈머 할당 전략 기본값도 함께 바뀌었습니다. 4.0은 제거와 기본값 변경이 몰린 릴리스로 `linger.ms` 가 5가 되고 Scala 2.12·Java 8·`DefaultPartitioner` 가 사라졌습니다. 미끼로 쓰인 항목은 각각 3.6, 4.2, 2.4의 변화입니다.",
+      "distractorNotes": {
+        "p1": "2.8을 production-ready로 착각하는 것이 흔한 오류입니다. 그 판정은 3.3입니다.",
+        "p4": "3.9를 \"ZooKeeper가 제거된 버전\"으로 오해하기 쉽습니다. 제거는 4.0입니다.",
+        "p5": "`linger.ms` 변경을 3.0으로 착각하기 쉽습니다. 3.0은 `acks` 와 멱등성입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" },
+        { "title": "KIP-833 — Mark KRaft as Production Ready", "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-833%3A+Mark+KRaft+as+Production+Ready" }
+      ],
+      "tags": ["versioning", "kraft", "defaults", "linger.ms"]
+    },
+    {
+      "id": "basics-legacy-010",
+      "exam": "BASICS",
+      "domain": "버전 표기와 레거시",
+      "chapter": "appendix-legacy",
+      "difficulty": "hard",
+      "type": "ordering",
+      "question": "ZooKeeper 모드 레거시 클러스터를 4.3으로 올리는 단계를 순서대로 배열하세요.",
+      "code": null,
+      "items": [
+        { "id": "i3", "text": "3.9에서 ZooKeeper → KRaft 마이그레이션을 수행한다" },
+        { "id": "i1", "text": "모든 프로듀서·컨슈머·Connect·Streams 클라이언트를 최소 2.1 이상으로 올린다" },
+        { "id": "i5", "text": "`kafka-features.sh upgrade --release-version 4.3` 으로 업그레이드를 확정한다" },
+        { "id": "i2", "text": "브로커를 하나씩 3.9로 교체한다 (아직 ZooKeeper 모드)" },
+        { "id": "i4", "text": "브로커를 하나씩 4.3으로 교체한다 (이미 KRaft 모드)" }
+      ],
+      "answer": ["i1", "i2", "i3", "i4", "i5"],
+      "explanation": "클라이언트를 먼저 올리는 이유는 4.0에서 오래된 프로토콜 API 버전이 제거되어 낡은 클라이언트가 붙지 못하기 때문입니다. 그다음 브로커를 3.9로 롤링해 ZooKeeper 모드에서 안정화하고, 마이그레이션 기능이 있는 마지막 버전인 3.9에서 KRaft로 전환합니다. KRaft 모드가 된 뒤에야 4.3 바이너리로 하나씩 교체할 수 있고, 이때 다음 브로커로 넘어가기 전에 `UnderReplicatedPartitions` 가 0으로 돌아왔는지 확인합니다. 마지막 확정 단계는 되돌릴 수 없으므로 클러스터 동작과 성능을 충분히 검증한 뒤 실행합니다.",
+      "distractorNotes": {
+        "i3": "4.x로 올린 뒤 마이그레이션하는 것으로 착각하기 쉽습니다. 4.x에는 그 경로가 없습니다.",
+        "i5": "브로커 교체와 동시에 확정해도 된다고 생각하기 쉽지만, 되돌릴 수 없으므로 검증 후 마지막에 실행합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" },
+        { "title": "KIP-500 — Replace ZooKeeper with a Self-Managed Metadata Quorum", "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum" }
+      ],
+      "tags": ["upgrade", "zookeeper-removal", "kraft", "versioning"]
+    }
+  ]
+}

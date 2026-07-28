@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>10장 · Kafka Streams와 ksqlDB — Kafka Guide</title>
-  <meta name="description" content="Apache Kafka 4.3 기준 Kafka Streams 정리. 토폴로지와 태스크 병렬성, KStream·KTable·GlobalKTable 의미론, stateless와 stateful 연산의 리파티션 유발 여부, 윈도우 4종, 조인 매트릭스와 co-partitioning 3요건, exactly_once_v2, TopologyTestDriver 테스팅, ksqlDB를 다룹니다.">
+  <meta name="description" content="Apache Kafka 4.3 기준 Kafka Streams 정리. 토폴로지와 태스크 병렬성, KStream·KTable·GlobalKTable 의미론, stateless와 stateful 연산의 리파티션 유발 여부, 윈도우 4종, 조인 매트릭스와 co-partitioning 요건 — 공식 요건은 2개입니다, exactly_once_v2, TopologyTestDriver 테스팅, ksqlDB를 다룹니다.">
   <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../assets/css/tokens.css">
   <link rel="stylesheet" href="../assets/css/main.css">
@@ -741,11 +741,11 @@ public final class WordCount {
       <figure class="diagram" data-diagram="D-093">
         <figcaption>
           조인 매트릭스와 co-partitioning — 4가지 조인 조합의 윈도우 필요 여부와,
-          키 동일 · 파티션 수 동일 · 파티셔너 동일이라는 co-partitioning 3요건
+          파티션 수 동일 · 파티셔너 동일이라는 co-partitioning 2요건(키 동일은 equi-join의 전제)
         </figcaption>
       </figure>
 
-      <h3 id="co-partitioning">co-partitioning 3요건</h3>
+      <h3 id="co-partitioning">co-partitioning 요건 — 공식 요건은 2개입니다</h3>
 
       <p>
         공식 문서는 <strong>"조인 시 입력 데이터가 co-partition되어 있어야 하며, 그것을 보장하는 것은 사용자의 책임이다"</strong>라고
@@ -758,17 +758,17 @@ public final class WordCount {
           <thead><tr><th scope="col">요건</th><th scope="col">내용</th><th scope="col">Streams가 검증하는가</th></tr></thead>
           <tbody>
             <tr>
-              <th scope="row">① 같은 키</th>
+              <th scope="row">전제 · 같은 키</th>
               <td>equi-join은 <strong>레코드의 키를 기준으로</strong> 수행됩니다(<code>leftRecord.key == rightRecord.key</code>). 양쪽 입력이 <strong>키로 파티션되어</strong> 있어야 합니다</td>
               <td>조인 조건 자체이므로 키가 맞지 않으면 결과가 비어 있습니다</td>
             </tr>
             <tr>
-              <th scope="row">② 같은 파티션 수</th>
+              <th scope="row">요건 ① 같은 파티션 수</th>
               <td>조인의 좌·우 입력 토픽은 <strong>파티션 수가 같아야</strong> 합니다</td>
               <td><strong>검증합니다.</strong> 파티션 배정 단계(런타임)에 다르면 <code>TopologyBuilderException</code>이 발생합니다</td>
             </tr>
             <tr>
-              <th scope="row">③ 같은 파티셔닝 전략</th>
+              <th scope="row">요건 ② 같은 파티셔닝 전략</th>
               <td>입력 토픽에 <strong>쓰는 모든 애플리케이션</strong>이 같은 파티셔너를 써야 합니다. Java Producer면 같은 <code>partitioner.class</code>, Streams면 <code>KStream#to()</code>에 같은 <code>StreamPartitioner</code></td>
               <td><strong>검증할 수 없습니다.</strong> 공식 문서가 "사용자가 보장해야 한다"고 명시합니다</td>
             </tr>
@@ -1451,7 +1451,7 @@ CREATE STREAM high_value_orders WITH (
         <ul>
           <li><strong><code>map</code>·<code>flatMap</code>·<code>selectKey</code>는 리파티션을 유발(표시)하고, <code>mapValues</code>·<code>flatMapValues</code>·<code>filter</code>는 유발하지 않습니다.</strong></li>
           <li><code>groupBy</code>는 <strong>항상</strong>, <code>groupByKey</code>는 <strong>표시됐을 때만</strong> 리파티션합니다.</li>
-          <li>co-partitioning 3요건: <strong>같은 키 · 같은 파티션 수 · 같은 파티셔너.</strong> Streams는 <strong>파티션 수만 검증</strong>하고 파티셔너는 검증하지 못합니다.</li>
+          <li>co-partitioning 요건 — 공식 요건은 2개입니다: <strong>같은 키 · 같은 파티션 수 · 같은 파티셔너.</strong> Streams는 <strong>파티션 수만 검증</strong>하고 파티셔너는 검증하지 못합니다.</li>
           <li><strong>KStream-GlobalKTable</strong> 조인과 <strong>KTable-KTable foreign-key</strong> 조인은 co-partitioning이 <strong>불필요</strong>합니다.</li>
           <li><strong>KStream-KStream 조인은 반드시 윈도우</strong>가 필요합니다 (상태 저장소가 무한히 커지므로).</li>
           <li>KStream은 INSERT, KTable은 UPSERT이고 <strong>KTable의 <code>null</code>은 DELETE(tombstone)</strong>입니다.</li>

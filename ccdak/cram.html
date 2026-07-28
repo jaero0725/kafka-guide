@@ -517,7 +517,7 @@
         </table>
       </div>
       <ul>
-        <li>co-partitioning 3조건: <strong>키 동일 · 파티션 수 동일 · 파티셔너 동일</strong></li>
+        <li>co-partitioning <strong>요건은 2개</strong>: <strong>파티션 수 동일 · 파티셔너 동일</strong>. &ldquo;키 동일&rdquo;은 요건이 아니라 <strong>equi-join의 전제</strong>입니다</li>
         <li>파티션 수 불일치 → <strong><code>TopologyBuilderException</code></strong></li>
         <li><strong>파티셔너 불일치는 감지되지 않아 조인이 조용히 누락</strong></li>
         <li>맞출 때는 <strong>적은 쪽을 많은 쪽에</strong>. KStream-KTable이면 KStream을 리파티션</li>
@@ -556,7 +556,7 @@
             <tr><th scope="row"><code>MockProducer</code></th><td>불필요</td><td><code>history()</code>로 전송 레코드 검사</td></tr>
             <tr><th scope="row"><code>MockConsumer</code></th><td>불필요</td><td><code>addRecord()</code>로 레코드 주입</td></tr>
             <tr><th scope="row">Testcontainers</th><td>필요</td><td>실제 브로커 통합 테스트</td></tr>
-            <tr><th scope="row"><code>EmbeddedKafkaCluster</code></th><td>필요(JVM)</td><td>Docker 없는 통합 테스트</td></tr>
+            <tr><th scope="row"><code>EmbeddedKafkaCluster</code></th><td>필요(JVM)</td><td>Docker 없는 통합 테스트. <strong>Apache 공개 배포 아티팩트가 아닙니다</strong> (<code>streams/integration-tests</code> 내부 유틸) — &ldquo;Apache 제공 도구&rdquo;로 분류하면 틀립니다</td></tr>
             <tr><th scope="row"><code>@EmbeddedKafka</code></th><td>필요(JVM)</td><td>Spring 통합 테스트</td></tr>
             <tr><th scope="row"><code>kafka-producer-perf-test.sh</code></th><td>필요</td><td>쓰기 처리량·지연</td></tr>
             <tr><th scope="row"><code>kafka-consumer-perf-test.sh</code></th><td>필요</td><td>읽기 처리량</td></tr>

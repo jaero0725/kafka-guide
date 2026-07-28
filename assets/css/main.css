@@ -1300,6 +1300,9 @@ a.card:hover { border-color: var(--c-accent-border); background: var(--c-accent-
   text-transform: uppercase;
   color: var(--c-text-muted);
 }
+/* display:block 이 없으면 앞/뒷면 본문과 태그가 한 줄로 이어져 렌더된다
+   (.fc__label 에만 있었다. B4 가 브라우저에서 검증해 보고한 결함) */
+.fc__front, .fc__back, .fc__tags { display: block; }
 .fc__front { font-size: var(--fs-xl); font-weight: var(--fw-semibold); line-height: 1.4; }
 .fc__front code { font-size: 0.95em; }
 .fc__back { font-size: var(--fs-md); line-height: 1.6; }

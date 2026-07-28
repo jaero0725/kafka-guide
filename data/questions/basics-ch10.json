@@ -68,26 +68,26 @@
       "chapter": "ch10",
       "difficulty": "easy",
       "type": "single",
-      "question": "Kafka Streams의 윈도우 종류에 대한 설명으로 옳은 것은?",
+      "question": "Kafka Streams 토폴로지를 브로커 없이 단위 테스트하려면 무엇을 쓰는가?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "tumbling window는 크기와 advance 간격을 따로 지정해 서로 겹치게 만든다." },
-        { "id": "B", "text": "session window는 고정 크기이며 epoch 기준으로 정렬된다." },
-        { "id": "C", "text": "tumbling window는 겹치지 않아 레코드가 정확히 하나의 윈도우에 속하며, hopping window는 겹칠 수 있다." },
-        { "id": "D", "text": "다른 스트림 처리 도구의 sliding window는 Kafka Streams의 tumbling window와 같은 개념이다." }
+        { "id": "A", "text": "`MockProducer` 와 `MockConsumer` 를 조합해 토폴로지 입출력을 대신한다." },
+        { "id": "B", "text": "`EmbeddedKafkaCluster` 가 Apache Kafka의 공개 테스트 아티팩트이므로 이것을 쓴다." },
+        { "id": "C", "text": "`kafka-streams-test-utils` 의 `TopologyTestDriver` 와 `TestInputTopic`/`TestOutputTopic` 을 쓴다." },
+        { "id": "D", "text": "Testcontainers로 실제 브로커를 띄우는 것이 유일한 방법이다." }
       ],
       "answer": ["C"],
-      "explanation": "tumbling window는 크기만으로 정의되고 epoch에 정렬되므로 서로 겹치지 않으며, 레코드는 정확히 하나의 윈도우에 속합니다. hopping window는 크기와 advance를 따로 지정하므로 구간이 겹쳐 한 레코드가 여러 윈도우에 들어갈 수 있고, 크기와 advance가 같으면 tumbling이 됩니다. session window는 비활성 간격으로 정의되어 키마다 독립적으로 추적되고 크기가 가변이며 세션이 병합·확장됩니다. 다른 도구가 sliding window라고 부르는 것이 Kafka Streams의 hopping window에 해당한다는 점도 공식 문서가 직접 지적합니다.",
+      "explanation": "`TopologyTestDriver` 는 Streams 런타임을 시뮬레이션해 입력 레코드를 토폴로지에 흘리고 결과 레코드를 캡처하며 내장 상태 저장소까지 조회할 수 있게 해 줍니다. 브로커가 필요하지 않으므로 `bootstrap.servers` 에 더미 값을 넣어도 되고, 테스트가 끝나면 `close()` 로 자원을 정리해야 합니다. 입출력은 `TestInputTopic`·`TestOutputTopic` 으로 다루고 커스텀 Processor 검증에는 `MockProcessorContext` 를 씁니다. `MockProducer`·`MockConsumer` 는 프로듀서·컨슈머 로직용이고, Testcontainers는 실제 브로커가 필요한 통합 테스트용이라 목적이 다릅니다.",
       "distractorNotes": {
-        "A": "크기와 advance를 따로 지정하는 것은 hopping window입니다.",
-        "B": "session window는 크기가 가변이며 epoch에 정렬되지 않습니다.",
-        "D": "대응 관계가 다릅니다. 다른 도구의 sliding window는 hopping window에 해당합니다."
+        "A": "이 두 목 객체는 클라이언트 API 로직을 검증하는 도구입니다. 토폴로지를 실행해 주지 않습니다.",
+        "B": "`EmbeddedKafkaCluster` 는 Apache Kafka의 공개 배포 아티팩트가 아닙니다. 내부 통합 테스트용 유틸리티입니다.",
+        "D": "브로커 없이 검증하는 것이 이 도구의 목적입니다. Testcontainers는 통합 테스트 단계에서 병행합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api" },
-        { "title": "Apache Kafka — Streams Core Concepts", "url": "https://kafka.apache.org/documentation/streams/core-concepts" }
+        { "title": "Apache Kafka — Testing Streams Code", "url": "https://kafka.apache.org/documentation/streams/developer-guide/testing" },
+        { "title": "Apache Kafka — Streams Architecture", "url": "https://kafka.apache.org/documentation/streams/architecture" }
       ],
-      "tags": ["windowing", "kafka-streams", "dsl"]
+      "tags": ["kafka-testing", "topology-test-driver", "kafka-streams"]
     },
     {
       "id": "basics-ch10-004",

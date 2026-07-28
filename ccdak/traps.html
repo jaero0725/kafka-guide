@@ -769,7 +769,7 @@
             <tr><th scope="col">축</th><th scope="col">co-partitioning</th><th scope="col"><code>repartition()</code></th></tr>
           </thead>
           <tbody>
-            <tr><th scope="row">무엇인가</th><td>조인의 <strong>전제 조건</strong> — ① 키 동일 ② <strong>파티션 수 동일</strong> ③ 파티셔너 동일</td><td>키 기준으로 <strong>다시 분배하는 연산</strong> (리파티션 토픽 생성)</td></tr>
+            <tr><th scope="row">무엇인가</th><td>조인의 <strong>전제 조건</strong> — 공식 요건은 <strong>① 파티션 수 동일 ② 파티셔너 동일</strong> 두 개입니다. &ldquo;키 동일&rdquo;은 요건이 아니라 equi-join 자체의 전제</td><td>키 기준으로 <strong>다시 분배하는 연산</strong> (리파티션 토픽 생성)</td></tr>
             <tr><th scope="row">어디 설정인가</th><td>토픽 설계 · 프로듀서 <code>partitioner.class</code> · <code>StreamPartitioner</code></td><td>토폴로지 코드</td></tr>
             <tr><th scope="row">언제 발동하는가</th><td>런타임 파티션 할당 단계에서 <strong>파티션 수만 검증</strong></td><td>호출 즉시</td></tr>
             <tr><th scope="row">혼동 시 결과</th><td colspan="2">파티션 수가 다르면 <strong><code>TopologyBuilderException</code></strong>이 나지만, <strong>파티셔너가 다른 것은 감지되지 않아 조인이 조용히 누락</strong>됩니다. KStream-GlobalKTable 조인과 KTable-KTable <strong>외래키 조인</strong>은 co-partitioning이 필요하지 않습니다</td></tr>
