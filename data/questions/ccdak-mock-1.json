@@ -787,54 +787,58 @@
       "chapter": "ch06",
       "difficulty": "medium",
       "type": "multiple",
-      "question": "Kafka 토픽에서 읽어 가공한 뒤 다른 Kafka 토픽으로 쓰는 파이프라인에 exactly-once를 적용하려 한다. 반드시 필요한 것을 모두 고르세요. (2개 선택)",
-      "code": null,
+      "question": "아래 consume-transform-produce 루프에는 exactly-once 를 깨뜨리는 결함이 있다. 옳은 지적을 모두 고르세요. (2개 선택)",
+      "code": {
+        "lang": "java",
+        "caption": "EtlLoop.java — producer: transactional.id=orders-etl-1 / consumer: enable.auto.commit=true",
+        "body": "producer.initTransactions();\nwhile (running) {\n    var records = consumer.poll(Duration.ofMillis(500));\n    producer.beginTransaction();\n    for (var r : records) producer.send(transform(r));\n    producer.commitTransaction();\n    consumer.commitSync();          // (1)\n}"
+      },
       "choices": [
         {
           "id": "A",
-          "text": "프로듀서 `enable.idempotence=true` 만 켜면 컨슈머 설정 없이도 성립한다."
+          "text": "`initTransactions()` 를 루프 밖이 아니라 `beginTransaction()` 앞에서 매번 호출해야 한다."
         },
         {
           "id": "B",
-          "text": "프로듀서에 `transactional.id` 를 지정하고 트랜잭션 API로 쓰기와 오프셋 커밋을 묶는다."
+          "text": "(1) 오프셋이 트랜잭션 밖에서 커밋된다. `sendOffsetsToTransaction()` 으로 트랜잭션 안에 포함시켜야 한다."
         },
         {
           "id": "C",
-          "text": "컨슈머 `enable.auto.commit=true` 를 유지해 커밋 누락을 방지한다."
+          "text": "`transactional.id` 만 지정하고 `enable.idempotence=true` 를 명시하지 않아 멱등성이 꺼져 있다."
         },
         {
           "id": "D",
-          "text": "컨슈머 `isolation.level=read_committed` 로 중단된 트랜잭션의 레코드를 걸러낸다."
+          "text": "컨슈머 `enable.auto.commit` 이 `true` 다. 자동 커밋이 트랜잭션과 무관하게 오프셋을 기록하므로 `false` 여야 한다."
         },
         {
           "id": "E",
-          "text": "프로듀서 `retries=0` 으로 재시도 자체를 없애 중복을 막는다."
+          "text": "`commitTransaction()` 앞에 `producer.flush()` 를 호출해 버퍼를 비워야 한다."
         }
       ],
       "answer": [
         "B",
         "D"
       ],
-      "explanation": "멱등성은 한 프로듀서 세션 안에서 한 파티션에 대한 재시도 중복만 제거하므로, 읽은 오프셋과 쓴 결과를 하나의 원자 단위로 묶어 주지 못합니다. 그 원자성은 `transactional.id` 를 가진 프로듀서가 `sendOffsetsToTransaction()` 으로 오프셋 커밋까지 트랜잭션에 포함시킬 때 성립합니다. 여기에 읽는 쪽이 `read_committed` 여야 중단된 트랜잭션의 레코드가 하위로 새지 않습니다. 트랜잭션을 쓰는 컨슈머는 자동 커밋을 반드시 꺼야 하며, `retries=0` 은 중복을 막는 장치가 아니라 유실 위험만 키웁니다.",
+      "explanation": "트랜잭션이 보장하는 원자 단위에는 \"무엇을 썼는가\"와 \"어디까지 읽었는가\"가 함께 들어가야 합니다. 오프셋을 별도 API로 커밋하면 쓰기는 커밋됐지만 오프셋은 안 된 창(또는 그 반대)이 생겨 재시작 시 중복이나 누락이 남습니다. 자동 커밋도 같은 이유로 반드시 꺼야 하며, 트랜잭션 컨슈머의 표준 구성은 `enable.auto.commit=false` + `isolation.level=read_committed` 입니다. 반대로 초기화는 프로듀서 생애에 한 번이고, 커밋 호출이 전송 완료를 기다리므로 별도 flush 는 필요하지 않습니다.",
       "distractorNotes": {
-        "A": "멱등성만으로는 오프셋 커밋과 쓰기의 원자성이 없어 재처리 시 중복 결과가 남습니다.",
-        "C": "자동 커밋은 처리 완료와 무관한 시점에 커밋하므로 트랜잭션의 원자성을 깨뜨립니다. `false` 로 두어야 합니다.",
-        "E": "중복 제거는 멱등성이 담당하고 `retries=0` 은 일시 오류를 그대로 실패로 만듭니다. 멱등성을 명시하면 `retries>0` 이 강제됩니다."
+        "A": "`initTransactions()` 는 프로듀서 인스턴스마다 한 번만 호출합니다. 매 트랜잭션마다 호출하면 예외가 발생합니다.",
+        "C": "`transactional.id` 를 지정하면 멱등성이 자동으로 활성화됩니다. 별도로 명시하지 않아도 꺼지지 않습니다.",
+        "E": "`commitTransaction()` 은 트랜잭션에 속한 전송이 모두 완료될 때까지 기다립니다. 앞에 flush 를 넣을 필요가 없습니다."
       },
       "refs": [
         {
-          "title": "Kafka Docs — Message Delivery Semantics",
-          "url": "https://kafka.apache.org/documentation/#semantics"
+          "title": "Apache Kafka — Transactions (Using Transactions)",
+          "url": "https://kafka.apache.org/documentation/#usingtransactions"
         },
         {
-          "title": "Kafka Docs — Consumer Configs: isolation.level",
-          "url": "https://kafka.apache.org/documentation/#consumerconfigs_isolation.level"
+          "title": "Apache Kafka 4.3 Javadoc — KafkaProducer",
+          "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html"
         }
       ],
       "tags": [
-        "eos",
         "transactions",
-        "isolation-level"
+        "eos",
+        "sendoffsetstotransaction"
       ]
     },
     {
@@ -2097,49 +2101,53 @@
       "chapter": "ch04",
       "difficulty": "medium",
       "type": "single",
-      "question": "Kafka 4.x 프로듀서에서 재시도 동작의 실질적인 상한을 결정하는 설정은?",
-      "code": null,
+      "question": "프로듀서 로그에 아래 예외가 반복해서 남는다. 판단과 대응으로 옳은 것은?",
+      "code": {
+        "lang": "text",
+        "caption": "application.log",
+        "body": "org.apache.kafka.common.errors.TimeoutException:\n  Expiring 12 record(s) for orders-3:120001 ms has passed since batch creation"
+      },
       "choices": [
         {
           "id": "A",
-          "text": "`delivery.timeout.ms` (기본 120000) — 배치 대기와 모든 재시도의 합에 적용되는 전체 예산이다."
+          "text": "배치가 전체 전송 예산을 소진해 만료된 것이다. 리더 이동·브로커 지연 등 밀림의 원인을 먼저 확인하고, 필요하면 `delivery.timeout.ms` 를 키운다."
         },
         {
           "id": "B",
-          "text": "`retries` (기본 2147483647) — 재시도 횟수가 실질적인 종료 조건이다."
+          "text": "요청 하나의 응답 대기 시간이 초과한 것이다. `request.timeout.ms` 만 늘리면 해결된다."
         },
         {
           "id": "C",
-          "text": "`request.timeout.ms` (기본 30000) — 요청 한 번의 응답 대기가 곧 전체 상한이다."
+          "text": "`retries` 횟수를 모두 소진한 것이다. `retries` 를 더 큰 값으로 올려야 한다."
         },
         {
           "id": "D",
-          "text": "`retry.backoff.ms` (기본 100) — 백오프 간격이 총 재시도 시간을 결정한다."
+          "text": "레코드가 `max.request.size` 를 넘은 것이다. 레코드를 잘게 나눠 다시 보내야 한다."
         }
       ],
       "answer": [
         "A"
       ],
-      "explanation": "`retries` 의 기본값이 사실상 무한이므로 횟수는 종료 조건이 되지 못하고, 대신 `send()` 부터 성공 또는 최종 실패가 확정될 때까지의 전체 시간 예산인 `delivery.timeout.ms` 가 상한이 됩니다. 이 예산 안에는 배치가 accumulator에서 대기한 시간, 요청 전송, 재시도와 백오프가 모두 포함됩니다. 그래서 설정 검증은 `linger.ms + request.timeout.ms ≤ delivery.timeout.ms` 관계를 요구합니다. 재시도를 더 오래 허용하려면 횟수를 늘리는 대신 이 예산을 키우는 것이 4.x의 권장 방식입니다.",
+      "explanation": "\"batch creation 이후 경과 시간\"이 함께 찍히는 이 메시지는 배치가 accumulator 에서 대기한 시간과 재시도 시간을 합친 총 예산이 끝났다는 신호입니다. 그 예산이 `delivery.timeout.ms` 이고 기본값이 120000 이라 로그의 120001 과 맞물립니다. 예산을 키우는 것은 증상을 늦추는 조치일 뿐이므로, 파티션 리더가 옮겨 갔는지·ISR 이 줄었는지·브로커가 느린지를 먼저 봐야 합니다. 재시도 횟수는 기본값이 사실상 무한이므로 이 예외의 원인이 될 수 없습니다.",
       "distractorNotes": {
-        "B": "기본값이 약 21억이므로 시간이 먼저 소진됩니다. `retries=0` 은 중복을 막는 장치도 아닙니다.",
-        "C": "요청 한 번의 응답 대기이며, 초과하면 재시도 대상이 되므로 전체 상한이 아닙니다.",
-        "D": "백오프는 재시도 간격만 조절하고 종료 시점을 정하지 않습니다."
+        "B": "요청 단위 타임아웃은 별도 예외 경로이며, 초과하면 재시도 대상이 될 뿐 배치 만료 메시지를 만들지 않습니다.",
+        "C": "`retries` 기본값은 2147483647 이므로 횟수가 먼저 소진되는 일은 사실상 없습니다.",
+        "D": "크기 초과는 `RecordTooLargeException` 이며 재시도되지 않고 즉시 실패합니다. 만료 메시지와 다릅니다."
       },
       "refs": [
         {
-          "title": "Kafka Docs — Producer Configs: delivery.timeout.ms",
+          "title": "Apache Kafka — Producer Configs: delivery.timeout.ms",
           "url": "https://kafka.apache.org/documentation/#producerconfigs_delivery.timeout.ms"
         },
         {
-          "title": "Kafka Docs — Producer Configs: retries",
-          "url": "https://kafka.apache.org/documentation/#producerconfigs_retries"
+          "title": "Apache Kafka 4.3 Javadoc — KafkaProducer",
+          "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html"
         }
       ],
       "tags": [
-        "retriable-errors",
         "delivery.timeout.ms",
-        "retries"
+        "timeoutexception",
+        "producer"
       ]
     },
     {
@@ -2581,49 +2589,49 @@
       "chapter": "ch10",
       "difficulty": "medium",
       "type": "matching",
-      "question": "각 조인 유형을 윈도우와 co-partitioning 요건 조합과 연결하세요. 정답이 아닌 미끼 조합이 섞여 있습니다.",
+      "question": "아래 각 상황에서 Kafka Streams 가 실제로 보이는 반응을 연결하세요. 정답이 아닌 미끼 반응이 섞여 있습니다.",
       "code": null,
       "pairs": [
         {
           "id": "p1",
-          "left": "KStream ⋈ KStream",
-          "right": "윈도우 필수 · co-partitioning 필요"
+          "left": "KStream-KTable 조인에서 두 입력 토픽의 **파티션 수가 다르다**",
+          "right": "기동 시 `TopologyBuilderException` 으로 실패한다"
         },
         {
           "id": "p2",
-          "left": "KStream ⋈ KTable",
-          "right": "윈도우 불필요 · co-partitioning 필요"
+          "left": "KStream-KTable 조인에서 파티션 수는 같지만 두 토픽을 쓴 **파티셔너가 다르다**",
+          "right": "예외 없이 실행되고 매칭돼야 할 레코드가 조용히 누락된다"
         },
         {
           "id": "p3",
-          "left": "KStream ⋈ GlobalKTable",
-          "right": "윈도우 불필요 · co-partitioning 불필요 · 값 기반 조인 가능"
+          "left": "KStream-GlobalKTable 조인에서 두 입력 토픽의 파티션 수가 다르다",
+          "right": "정상 동작한다 — 이 조인은 co-partitioning 요건 자체가 없다"
         },
         {
           "id": "p4",
-          "left": "KTable ⋈ KTable (외래키 조인)",
-          "right": "윈도우 불필요 · Streams가 내부적으로 co-partitioning을 보장"
+          "left": "KTable-KTable **외래키** 조인에서 두 입력 토픽의 파티션 수가 다르다",
+          "right": "정상 동작한다 — Streams 가 내부 재분배로 처리한다"
         }
       ],
       "extraRights": [
-        "윈도우 필수 · co-partitioning 불필요",
-        "윈도우 불필요 · 양쪽 파티션 수가 달라도 런타임 검증을 통과"
+        "기동 시 `TopologyException` 으로 실패한다",
+        "런타임에 파티션 수를 자동으로 맞춰 재분배한 뒤 정상 동작한다"
       ],
-      "explanation": "KStream 두 개의 조인은 양쪽 이벤트가 서로 다른 시각에 도착하므로 매칭 범위를 정의하는 윈도우가 반드시 필요합니다. 테이블이 한쪽에 오면 조회 시점의 최신 상태를 보면 되므로 윈도우가 없고, 대신 같은 키가 같은 태스크로 모여야 하므로 co-partitioning이 필요합니다. GlobalKTable은 모든 인스턴스가 전체 사본을 갖기 때문에 co-partitioning이 필요하지 않고 `KeyValueMapper` 로 키가 아닌 값으로도 조인할 수 있습니다. KTable-KTable 외래키 조인은 Streams가 내부적으로 재분배를 처리해 주므로 사용자가 co-partitioning을 맞출 필요가 없습니다.",
+      "explanation": "Streams 가 런타임에 실제로 검증하는 co-partitioning 조건은 **파티션 수 하나**입니다. 그래서 파티션 수가 어긋나면 토폴로지 구성 단계에서 바로 막히지만, 파티셔너가 다른 경우는 아무 예외도 없이 잘못된 결과만 남아 훨씬 찾기 어렵습니다. GlobalKTable 조인은 모든 인스턴스가 전체 사본을 갖기 때문에 요건이 아예 없고, KTable 외래키 조인은 Streams 가 내부적으로 재분배를 해 주므로 사용자가 맞출 필요가 없습니다. 미끼로 넣은 `TopologyException` 은 실제 예외명이 아니며, 파티션 수를 알아서 맞춰 주는 동작도 존재하지 않습니다.",
       "distractorNotes": {
-        "p3": "GlobalKTable은 전체 복제이므로 크기가 큰 테이블에 쓰면 인스턴스마다 메모리와 시작 시간이 커집니다.",
-        "p4": "동일 키 기반 KTable-KTable 조인은 co-partitioning이 필요합니다. 요건이 면제되는 것은 외래키 조인입니다."
+        "p2": "파티션 수만 맞으면 안전하다고 착각하기 쉬운 지점입니다. 파티셔너 불일치는 검증 대상이 아니라 조용한 오답으로 나타납니다.",
+        "p4": "키 기준 KTable-KTable 조인과 구별해야 합니다. 요건이 면제되는 것은 외래키 조인입니다."
       },
       "refs": [
         {
-          "title": "Kafka Streams — DSL: Joining",
-          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#joining"
+          "title": "Apache Kafka — Streams DSL: Joining (Co-partitioning requirements)",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html"
         }
       ],
       "tags": [
-        "stream-join",
         "co-partitioning",
-        "globalktable"
+        "stream-join",
+        "exceptions"
       ]
     },
     {
@@ -2754,54 +2762,58 @@
       "chapter": "ch05",
       "difficulty": "hard",
       "type": "multiple",
-      "question": "`subscribe()` 로 구독한 컨슈머 그룹에서 리밸런스를 유발하는 것을 모두 고르세요. (2개 선택)",
-      "code": null,
+      "question": "컨슈머 그룹이 몇 분마다 리밸런스를 반복하며 아래 로그가 남는다. 근본 처방으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": {
+        "lang": "text",
+        "caption": "consumer.log",
+        "body": "Member consumer-orders-3-... sending LeaveGroup request to coordinator\n  due to consumer poll timeout has expired. This means the time between\n  subsequent calls to poll() was longer than the configured max.poll.interval.ms"
+      },
       "choices": [
         {
           "id": "A",
-          "text": "구독 중인 토픽의 파티션 수를 늘림"
+          "text": "`max.poll.records` 를 줄여 한 번의 `poll()` 이 가져오는 배치를 작게 만든다."
         },
         {
           "id": "B",
-          "text": "구독 정규식에 매칭되는 새 토픽이 생성됨"
+          "text": "`max.poll.interval.ms` 를 실제 배치 처리 시간보다 크게 늘린다."
         },
         {
           "id": "C",
-          "text": "구독 중인 토픽의 `retention.ms` 를 변경함"
+          "text": "`session.timeout.ms` 를 줄여 이탈을 더 빨리 감지하게 한다."
         },
         {
           "id": "D",
-          "text": "구독 중인 토픽의 파티션 수를 줄임"
+          "text": "`heartbeat.interval.ms` 를 늘려 하트비트 전송 빈도를 낮춘다."
         },
         {
           "id": "E",
-          "text": "`commitAsync()` 커밋이 한 번 실패함"
+          "text": "`auto.offset.reset` 을 `earliest` 로 바꿔 누락된 구간을 다시 읽게 한다."
         }
       ],
       "answer": [
         "A",
         "B"
       ],
-      "explanation": "리밸런스는 그룹이 파티션을 다시 나눠야 하는 사건에서 발생합니다. 멤버가 합류·이탈하거나 크래시한 경우, `max.poll.interval.ms` 를 초과한 경우, 구독 대상 파티션 집합이 변한 경우, 코디네이터에 문제가 생긴 경우가 대표적입니다. 파티션 수 증가와 패턴에 매칭되는 새 토픽 생성은 모두 구독 대상 집합을 바꾸므로 리밸런스를 부릅니다. 반면 파티션 수는 줄일 수 없고, 보관 설정 변경이나 커밋 실패는 파티션 배분과 무관합니다.",
+      "explanation": "이 로그는 하트비트가 끊긴 것이 아니라 두 `poll()` 호출 사이가 너무 길어 컨슈머가 스스로 그룹을 떠난 경우입니다. 즉 문제의 축은 세션 타임아웃이 아니라 처리 시간이므로, 한 번에 받는 레코드 수를 줄이거나 허용 간격을 늘리는 두 방향이 공식 문서가 제시하는 처방입니다. 하트비트는 별도 스레드가 계속 보내고 있었기 때문에 하트비트 관련 설정을 만져도 증상이 사라지지 않습니다. 오프셋 리셋 정책은 커밋이 없거나 범위를 벗어났을 때만 개입하므로 리밸런스 루프와 무관합니다.",
       "distractorNotes": {
-        "C": "보관 정책은 데이터 수명만 바꾸며 그룹 멤버십이나 파티션 집합에 영향이 없습니다.",
-        "D": "Kafka에서는 파티션 수를 줄일 수 없으므로 애초에 발생할 수 없는 사건입니다.",
-        "E": "`commitAsync()` 는 자동 재시도가 없어 조용히 실패할 수 있지만 리밸런스를 유발하지는 않습니다."
+        "C": "세션 타임아웃은 하트비트 기준 축입니다. 줄이면 오히려 더 쉽게 이탈 판정이 나 상황이 악화됩니다.",
+        "D": "하트비트는 정상적으로 전송되던 상태입니다. 빈도를 낮추면 장애 감지만 늦어집니다.",
+        "E": "리셋 정책은 커밋 오프셋이 없거나 범위를 벗어났을 때만 발동하며 멤버십과 무관합니다."
       },
       "refs": [
         {
-          "title": "Kafka Docs — Consumer API",
-          "url": "https://kafka.apache.org/documentation/#consumerapi"
+          "title": "Apache Kafka — Consumer Configs: max.poll.interval.ms",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms"
         },
         {
-          "title": "Kafka Docs — Consumer Rebalance Protocol",
-          "url": "https://kafka.apache.org/documentation/#consumer_rebalance_protocol"
+          "title": "Apache Kafka 4.3 Javadoc — KafkaConsumer",
+          "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html"
         }
       ],
       "tags": [
-        "rebalance-triggers",
-        "consumer-group",
-        "partitioning"
+        "max-poll-interval",
+        "max.poll.records",
+        "consumer"
       ]
     },
     {
@@ -2811,53 +2823,49 @@
       "chapter": "ch09",
       "difficulty": "hard",
       "type": "single",
-      "question": "`postgres-sink` 라는 이름으로 등록한 sink 커넥터가 얼마나 밀렸는지 확인하려 한다. 적절한 명령은?",
-      "code": {
-        "lang": "bash",
-        "caption": "확인하려는 대상",
-        "body": "# distributed 워커 클러스터 group.id = connect-cluster\n# 등록한 sink 커넥터 이름 = postgres-sink\n# 커넥터가 소비하는 토픽 = orders"
-      },
+      "question": "distributed 모드 `mysql-source` 커넥터가 소스 DB의 어디까지 읽었는지 확인해야 한다. 적절한 방법은?",
+      "code": null,
       "choices": [
         {
           "id": "A",
-          "text": "`kafka-consumer-groups.sh --describe --group postgres-sink`"
+          "text": "`kafka-consumer-groups.sh --describe --group connect-mysql-source` 로 `LAG` 을 확인한다."
         },
         {
           "id": "B",
-          "text": "`kafka-consumer-groups.sh --describe --group connect-cluster`"
+          "text": "워커의 `offset.storage.file.filename` 이 가리키는 파일을 직접 열어 확인한다."
         },
         {
           "id": "C",
-          "text": "`kafka-consumer-groups.sh --describe --group connect-postgres-sink`"
+          "text": "REST API `GET /connectors/mysql-source/offsets` 로 커넥터가 커밋한 소스 오프셋을 조회한다."
         },
         {
           "id": "D",
-          "text": "`kafka-console-consumer.sh --topic connect-offsets --from-beginning` 으로 오프셋 계산"
+          "text": "`status.storage.topic` 을 콘솔 컨슈머로 읽어 마지막 레코드에서 위치를 계산한다."
         }
       ],
       "answer": [
         "C"
       ],
-      "explanation": "sink 커넥터는 내부적으로 일반 컨슈머 그룹을 사용하며 그룹 이름은 `connect-{커넥터 이름}` 규칙으로 만들어집니다. 따라서 `connect-postgres-sink` 를 조회하면 파티션별 커밋 오프셋과 `LAG` 을 그대로 볼 수 있습니다. 워커의 `group.id` 인 `connect-cluster` 는 Connect 클러스터 멤버십을 관리하는 그룹이므로 커넥터 소비 진행 상황을 담고 있지 않습니다. `connect-offsets` 토픽은 source 커넥터의 소스 시스템 위치를 담는 내부 토픽이라 sink 밀림 계산에 쓸 수 없습니다.",
+      "explanation": "source 커넥터는 컨슈머 그룹을 만들지 않으므로 컨슈머 그룹 기반 CLI 로는 진행 위치를 볼 수 없습니다. 대신 Connect 가 `offset.storage.topic` 에 적어 둔 소스 시스템 좌표를 REST 오프셋 엔드포인트가 그대로 읽어 돌려주므로, 이 값을 소스 DB 의 현재 위치와 비교해야 합니다. 로컬 파일은 standalone 모드의 저장 위치이고 distributed 모드에서는 쓰이지 않습니다. sink 커넥터라면 반대로 `connect-{커넥터 이름}` 컨슈머 그룹을 조회하는 것이 맞다는 비대칭을 함께 기억해야 합니다.",
       "distractorNotes": {
-        "A": "`connect-` 접두사가 빠졌습니다. 커넥터 이름만으로는 그룹을 찾을 수 없습니다.",
-        "B": "워커 클러스터 그룹이며 커넥터의 소비 오프셋과 무관합니다.",
-        "D": "`connect-offsets` 는 source 커넥터용 저장소입니다. sink 오프셋은 `__consumer_offsets` 에 있습니다."
+        "A": "`connect-{이름}` 컨슈머 그룹은 sink 커넥터만 만듭니다. source 커넥터에는 그런 그룹이 없습니다.",
+        "B": "standalone 모드의 저장 위치입니다. distributed 모드는 상태를 Kafka 내부 토픽에 둡니다.",
+        "D": "`status.storage.topic` 은 커넥터·태스크의 실행 상태만 담습니다. 오프셋 정보가 없습니다."
       },
       "refs": [
         {
-          "title": "Kafka Docs — Checking consumer position",
-          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_lag"
+          "title": "Apache Kafka — Connect REST Interface",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
         },
         {
-          "title": "Kafka Docs — Connect User Guide",
+          "title": "Apache Kafka — Running Kafka Connect",
           "url": "https://kafka.apache.org/documentation/#connect_running"
         }
       ],
       "tags": [
         "connect-offsets",
-        "consumer-lag",
-        "connect"
+        "source-connector",
+        "connect-rest"
       ]
     },
     {
@@ -2915,53 +2923,53 @@
       "chapter": "ch10",
       "difficulty": "medium",
       "type": "single",
-      "question": "아래 성능 측정 명령의 결과 해석으로 옳은 것은?",
+      "question": "컨슈머 애플리케이션의 처리 성능을 확인하려고 `kafka-consumer-perf-test.sh` 를 돌려 아래 결과를 얻었다. 이 수치의 해석으로 옳은 것은?",
       "code": {
-        "lang": "bash",
-        "caption": "쓰기 성능 측정",
-        "body": "bin/kafka-producer-perf-test.sh --topic bench --num-records 5000000 \\\n  --record-size 1024 --throughput -1 \\\n  --command-property bootstrap.servers=localhost:9092\n\n# 출력 예: 254318 records/sec, 12.45 ms avg latency, 320.00 ms 99th"
+        "lang": "text",
+        "caption": "kafka-consumer-perf-test.sh 출력 (요약)",
+        "body": "start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec\n... , ... , 4882.81, 812.9, 5000000, 831255.0"
       },
       "choices": [
         {
           "id": "A",
-          "text": "`--throughput -1` 은 초당 1건으로 제한한다는 뜻이므로 이 결과는 무의미하다."
+          "text": "애플리케이션도 초당 83만 건 수준을 낼 수 있다는 처리량 근거로 쓸 수 있다."
         },
         {
           "id": "B",
-          "text": "평균 지연 12.45ms가 정상 범위이므로 99th 값은 무시해도 된다."
+          "text": "출력의 `MB.sec` 값이 곧 컨슈머 애플리케이션의 지연 지표이므로 SLA 검증에 쓸 수 있다."
         },
         {
           "id": "C",
-          "text": "이 명령은 목표 처리량을 지정한 상태이므로 지연 측정에 적합하다."
+          "text": "애플리케이션과 동일한 `group.id` 로 실행되므로 운영 조건과 같은 결과다."
         },
         {
           "id": "D",
-          "text": "`--throughput -1` 은 제한 없이 최대 처리량을 측정하는 설정이므로, 이때의 지연은 포화 상태의 값이라 백분위로 봐야 한다."
+          "text": "레코드를 받아 버리기만 하는 측정이므로 브로커·네트워크가 낼 수 있는 상한을 보여 줄 뿐, 애플리케이션의 처리 비용이 빠진 수치다."
         }
       ],
       "answer": [
         "D"
       ],
-      "explanation": "`--throughput -1` 은 전송 속도를 제한하지 않아 클라이언트가 낼 수 있는 최대 처리량을 측정합니다. 이 상태에서는 큐가 가득 찬 포화 조건이므로 평균 지연은 낙관적으로 보이고 꼬리 지연이 크게 벌어지며, 그래서 99th·99.9th 백분위를 함께 봐야 합니다. 지연 자체를 평가하려면 목표 처리량을 실제 트래픽 수준으로 지정해 그 부하에서의 지연을 재는 것이 맞습니다. 참고로 4.3에서는 옵션 이름이 정리되어 `--num-records` 와 `--command-property` 가 새 이름이며 구 옵션은 deprecated 상태입니다.",
+      "explanation": "이 도구는 받은 레코드를 애플리케이션 로직 없이 세기만 하므로, 결과는 클러스터와 네트워크가 공급할 수 있는 상한에 가깝습니다. 실제 애플리케이션은 역직렬화·비즈니스 로직·외부 시스템 호출에 시간을 쓰므로 처리량이 이 값보다 크게 낮아지는 것이 정상입니다. 따라서 이 수치는 \"클러스터가 병목인지\"를 가리는 용도이고, 애플리케이션 처리량은 실제 로직을 태운 부하 테스트로 따로 재야 합니다. 또한 출력은 처리량 지표이므로 지연 SLA 판정에는 쓸 수 없습니다.",
       "distractorNotes": {
-        "A": "-1은 무제한을 뜻합니다. 초당 1건이 아닙니다.",
-        "B": "포화 상태에서는 꼬리 지연이 사용자 체감을 지배하므로 백분위를 반드시 확인해야 합니다.",
-        "C": "이 명령은 제한을 두지 않은 상태입니다. 지연 측정에는 목표 처리량 지정이 필요합니다."
+        "A": "애플리케이션 처리 비용이 전혀 포함되지 않은 값이라 그대로 목표치로 쓸 수 없습니다.",
+        "B": "`MB.sec` 와 `nMsg.sec` 는 처리량 지표입니다. 지연은 별도 도구로 측정해야 합니다.",
+        "C": "측정용으로 별도의 그룹을 쓰며, 운영 그룹으로 돌리면 오프셋을 오염시킵니다."
       },
       "refs": [
         {
-          "title": "Kafka Docs — Operations: Basic Kafka Operations",
+          "title": "Apache Kafka — Basic Kafka Operations",
           "url": "https://kafka.apache.org/documentation/#basic_ops"
         },
         {
-          "title": "Kafka Docs — Upgrading Apache Kafka",
-          "url": "https://kafka.apache.org/documentation/#upgrade"
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
         }
       ],
       "tags": [
-        "kafka-testing",
         "perf-test",
-        "cli"
+        "kafka-testing",
+        "consumer"
       ]
     },
     {
@@ -3073,50 +3081,50 @@
       "chapter": "ch10",
       "difficulty": "medium",
       "type": "multiple",
-      "question": "`TopologyTestDriver` 만으로는 검증할 수 없는 것을 모두 고르세요. (2개 선택)",
+      "question": "`TopologyTestDriver` 단위 테스트는 전부 통과했는데 실제 클러스터에 배포하니 조인 결과가 일부 누락된다. 이 테스트가 원리적으로 잡아낼 수 없는 원인을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
         {
           "id": "A",
-          "text": "인스턴스가 늘거나 줄 때의 리밸런스와 태스크 재배치"
+          "text": "두 입력 토픽의 파티션 수가 서로 달라 co-partitioning 요건이 깨졌다."
         },
         {
           "id": "B",
-          "text": "브로커 장애 시의 복제와 리더 재선출 동작"
+          "text": "두 입력 토픽에 쓰는 프로듀서가 서로 다른 파티셔너를 써서 같은 키가 다른 파티션 번호로 들어갔다."
         },
         {
           "id": "C",
-          "text": "윈도우 집계 결과가 기대한 키와 값으로 나오는지"
+          "text": "조인 윈도우 크기를 의도보다 작게 지정했다."
         },
         {
           "id": "D",
-          "text": "상태 저장소에 기대한 값이 저장되었는지"
+          "text": "`selectKey` 의 키 계산식이 잘못되어 조인 키가 어긋났다."
         },
         {
           "id": "E",
-          "text": "`filter` 와 `mapValues` 체인의 출력 레코드"
+          "text": "집계 결과가 상태 저장소에 기대한 값으로 저장되지 않았다."
         }
       ],
       "answer": [
         "A",
         "B"
       ],
-      "explanation": "이 드라이버는 토폴로지의 처리 로직만 JVM 안에서 단일 태스크로 실행하므로, 그룹 조정과 클러스터 상태가 개입하는 동작은 재현 대상이 아닙니다. 리밸런스, 다중 인스턴스 분산, 브로커 장애와 복제는 실제 브로커가 있어야 검증할 수 있으므로 Testcontainers 같은 통합 테스트로 넘겨야 합니다. 반대로 윈도우 집계 결과, 상태 저장소 내용, stateless 체인의 출력은 이 드라이버가 가장 빠르고 정확하게 검증할 수 있는 영역입니다. 그래서 단위 테스트는 이 드라이버로, 분산·장애 시나리오는 통합 테스트로 나누는 것이 표준 구성입니다.",
+      "explanation": "이 드라이버는 브로커도 그룹 조정도 없이 토폴로지를 단일 태스크로 순차 실행하는 시뮬레이터입니다. 그래서 입력이 실제로 어떤 파티션에 어떻게 흩어져 있는지에 의존하는 문제, 즉 파티션 수 불일치와 파티셔너 불일치는 재현 자체가 되지 않습니다. 이런 축은 실제 토픽을 만드는 Testcontainers 류 통합 테스트에서 확인해야 합니다. 반대로 윈도우 크기·키 계산·상태 저장소 내용은 모두 이 드라이버가 가장 빠르고 정확하게 잡아내는 영역이므로, 여기서 통과했다면 로직 자체는 의심 대상이 아닙니다.",
       "distractorNotes": {
-        "C": "`TestOutputTopic` 으로 윈도우 집계 결과를 그대로 검증할 수 있습니다.",
-        "D": "`getKeyValueStore()` 로 상태 저장소를 조회하거나 미리 채울 수 있습니다.",
-        "E": "stateless 체인의 출력 검증은 이 드라이버의 대표적인 용도입니다."
+        "C": "`TestOutputTopic` 으로 윈도우별 결과를 직접 확인할 수 있어 단위 테스트가 잡습니다.",
+        "D": "키 계산 오류는 출력 레코드의 키로 즉시 드러나므로 단위 테스트 범위입니다.",
+        "E": "`getKeyValueStore()` 로 상태 저장소를 열어 확인할 수 있습니다."
       },
       "refs": [
         {
-          "title": "Kafka Streams — Testing a Streams Application",
+          "title": "Apache Kafka — Streams Testing",
           "url": "https://kafka.apache.org/documentation/streams/developer-guide/testing.html"
         }
       ],
       "tags": [
         "kafka-testing",
-        "topologytestdriver",
-        "integration-test"
+        "integration-test",
+        "co-partitioning"
       ]
     },
     {
@@ -3126,24 +3134,28 @@
       "chapter": "ch09",
       "difficulty": "hard",
       "type": "ordering",
-      "question": "source 커넥터에서 레코드 하나가 Kafka 토픽까지 도달하는 처리 순서를 배열하세요.",
-      "code": null,
+      "question": "`errors.tolerance=all` 과 DLQ 가 설정된 sink 커넥터에서, 역직렬화할 수 없는 레코드 하나가 처리되는 과정을 순서대로 배열하세요.",
+      "code": {
+        "lang": "properties",
+        "caption": "connector config (일부)",
+        "body": "errors.tolerance=all\nerrors.deadletterqueue.topic.name=orders-sink-dlq\nerrors.deadletterqueue.context.headers.enable=true"
+      },
       "items": [
         {
           "id": "i3",
-          "text": "converter가 key·value를 byte 배열로 직렬화"
+          "text": "원본 바이트와 오류 컨텍스트 헤더를 담은 레코드가 `orders-sink-dlq` 로 전송된다"
         },
         {
           "id": "i1",
-          "text": "`SourceTask.poll()` 이 `SourceRecord` 목록을 반환"
+          "text": "워커의 컨슈머가 토픽에서 레코드를 가져온다"
         },
         {
           "id": "i4",
-          "text": "워커의 프로듀서가 대상 Kafka 토픽에 기록"
+          "text": "해당 레코드의 오프셋이 커밋되어 태스크가 다음 레코드로 진행한다"
         },
         {
           "id": "i2",
-          "text": "`transforms` 로 지정한 SMT 체인이 순서대로 적용"
+          "text": "converter 가 역직렬화를 시도하다 예외를 만나고, `errors.tolerance=all` 이므로 태스크는 FAILED 로 가지 않는다"
         }
       ],
       "answer": [
@@ -3152,25 +3164,25 @@
         "i3",
         "i4"
       ],
-      "explanation": "source 커넥터는 외부 시스템에서 읽은 데이터를 Connect 내부 표현인 `SourceRecord` 로 만들어 반환합니다. SMT는 이 내부 표현 상태에서 적용되므로 converter보다 앞에 놓이며, 체인의 순서가 결과를 바꿉니다. 변환이 끝난 뒤 converter가 스키마와 값을 byte 배열로 직렬화하고, 마지막에 워커의 프로듀서가 토픽에 기록합니다. sink 커넥터는 이 흐름이 반대이므로 converter로 역직렬화한 뒤 SMT가 적용된다는 점이 함께 출제됩니다.",
+      "explanation": "DLQ 는 실패한 레코드를 건너뛰는 대신 어딘가에 남겨 두는 장치이므로, 실패가 확정된 뒤에야 동작합니다. 순서를 지배하는 것은 \"가져오기 → 실패 감지 → 격리 → 진행\"이고, 격리보다 오프셋 커밋이 앞서면 실패 레코드가 아무 기록도 없이 사라집니다. `errors.tolerance` 가 기본값 `none` 이면 두 번째 단계에서 태스크가 곧바로 FAILED 가 되므로 뒤 단계는 일어나지 않습니다. DLQ 는 sink 커넥터에만 있고, 헤더 옵션을 켜야 원래 토픽·파티션·오프셋과 예외 정보가 함께 남습니다.",
       "distractorNotes": {
-        "i2": "converter 뒤에 SMT가 온다고 착각하기 쉽습니다. source에서는 SMT가 먼저입니다.",
-        "i3": "sink 커넥터에서는 converter가 먼저 역직렬화를 수행합니다. 방향에 따라 순서가 반대입니다."
+        "i4": "오프셋 커밋을 DLQ 전송보다 앞에 두는 착각이 흔합니다. 그러면 실패 레코드가 유실됩니다.",
+        "i2": "`errors.tolerance` 를 켰다고 예외가 발생하지 않는 것으로 오해하기 쉽습니다. 예외는 발생하고 태스크가 죽지 않을 뿐입니다."
       },
       "refs": [
         {
-          "title": "Kafka Docs — Connect Transformations",
-          "url": "https://kafka.apache.org/documentation/#connect_transforms"
+          "title": "Apache Kafka — Connect Error Reporting (Dead Letter Queue)",
+          "url": "https://kafka.apache.org/documentation/#connect_errorreporting"
         },
         {
-          "title": "Kafka Docs — Connect Development Guide",
-          "url": "https://kafka.apache.org/documentation/#connect_development"
+          "title": "Apache Kafka — Sink Connector Configs",
+          "url": "https://kafka.apache.org/documentation/#sinkconnectconfigs"
         }
       ],
       "tags": [
-        "connect",
-        "smt",
-        "converter"
+        "connect-dlq",
+        "errors.tolerance",
+        "sink-connector"
       ]
     },
     {
@@ -3239,58 +3251,58 @@
       "chapter": "ch11",
       "difficulty": "hard",
       "type": "matching",
-      "question": "각 클라이언트 지표를 그 의미와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
+      "question": "각 지표를 그 지표가 실제로 노출되는 MBean 그룹과 연결하세요. 정답이 아닌 미끼 그룹이 섞여 있습니다.",
       "code": null,
       "pairs": [
         {
           "id": "p1",
-          "left": "`record-error-rate` (프로듀서)",
-          "right": "초당 전송에 실패한 레코드 수"
+          "left": "`records-lag-max`",
+          "right": "`kafka.consumer:type=consumer-fetch-manager-metrics`"
         },
         {
           "id": "p2",
-          "left": "`record-queue-time-avg` (프로듀서)",
-          "right": "레코드가 배치에서 전송 대기한 평균 시간"
+          "left": "`commit-latency-avg`",
+          "right": "`kafka.consumer:type=consumer-coordinator-metrics`"
         },
         {
           "id": "p3",
-          "left": "`records-lag-max` (컨슈머)",
-          "right": "현재 fetch 위치 기준 파티션 최대 lag"
+          "left": "`last-poll-seconds-ago`",
+          "right": "`kafka.consumer:type=consumer-metrics`"
         },
         {
           "id": "p4",
-          "left": "`commit-latency-avg` (컨슈머)",
-          "right": "오프셋 커밋 요청의 평균 소요 시간"
+          "left": "`record-queue-time-avg`",
+          "right": "`kafka.producer:type=producer-metrics`"
         },
         {
           "id": "p5",
-          "left": "`failed-rebalance-rate-per-hour` (컨슈머)",
-          "right": "시간당 실패한 리밸런스 횟수"
+          "left": "`source-record-poll-rate`",
+          "right": "`kafka.connect:type=source-task-metrics`"
         }
       ],
       "extraRights": [
-        "초당 재시도된 레코드 수",
-        "`poll()` 이 유휴 상태였던 시간의 비율"
+        "`kafka.server:type=BrokerTopicMetrics`",
+        "`kafka.streams:type=stream-thread-metrics`"
       ],
-      "explanation": "프로듀서 쪽에서 알림 1순위는 `record-error-rate` 이고, 배치 대기 시간이 길어지는 `record-queue-time-avg` 는 버퍼 압박이나 브로커 지연의 선행 신호입니다. 컨슈머 쪽 `records-lag-max` 는 커밋 오프셋이 아니라 현재 fetch 위치를 기준으로 계산된다는 점이 공식 문서에 명시되어 있어 `kafka-consumer-groups.sh` 의 `LAG` 과 값이 다를 수 있습니다. `commit-latency-avg` 와 `failed-rebalance-rate-per-hour` 는 코디네이터 관련 지표로, 후자가 0이 아니면 그룹 안정성 문제를 뜻합니다. 미끼로 넣은 두 설명은 `record-retry-rate` 와 `poll-idle-ratio-avg` 에 해당합니다.",
+      "explanation": "지표 이름만 외우면 대시보드를 만들 때 MBean 경로를 못 찾습니다. 컨슈머 지표는 세 갈래로 갈리는데, lag·fetch 계열은 fetch manager 쪽에, 커밋·할당·리밸런스 계열은 coordinator 쪽에, poll 관련 지표는 컨슈머 공통 그룹에 있습니다. 프로듀서는 그룹이 하나로 단순하고, Connect 는 커넥터 종류에 따라 source/sink task 그룹이 갈립니다. 미끼로 넣은 두 그룹은 각각 브로커 측 토픽 지표와 Streams 스레드 지표이므로 클라이언트 지표를 찾을 곳이 아닙니다.",
       "distractorNotes": {
-        "p2": "`request-latency-avg` 와 혼동하기 쉽습니다. 그 지표는 브로커 왕복 시간이고 이 지표는 전송 전 대기입니다.",
-        "p3": "커밋 오프셋 기준이라고 착각하기 쉽습니다. 문서는 현재 위치 기준임을 명시합니다."
+        "p1": "이름이 컨슈머 지표라서 공통 그룹에 있을 것으로 착각하기 쉽습니다. lag 은 fetch manager 그룹입니다.",
+        "p3": "poll 관련 지표를 coordinator 그룹에서 찾는 실수가 흔합니다. coordinator 는 커밋·리밸런스 축입니다."
       },
       "refs": [
         {
-          "title": "Kafka Docs — Monitoring: Producer Metrics",
-          "url": "https://kafka.apache.org/documentation/#producer_monitoring"
+          "title": "Apache Kafka — Monitoring: Consumer Metrics",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
         },
         {
-          "title": "Kafka Docs — Monitoring: Consumer Metrics",
-          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+          "title": "Apache Kafka — Monitoring: Connect Monitoring",
+          "url": "https://kafka.apache.org/documentation/#connect_monitoring"
         }
       ],
       "tags": [
         "monitoring",
-        "consumer-lag",
-        "jmx"
+        "jmx",
+        "mbean"
       ]
     }
   ]
