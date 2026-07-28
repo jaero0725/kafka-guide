@@ -72,8 +72,16 @@ npm run check-inline   # 치환 없이 누락된 SVG만 확인
 ## 배포
 
 정적 파일이므로 빌드 산출물을 그대로 올리면 됩니다.
-Vercel은 프레임워크 프리셋 **Other**, 빌드 명령 `npm run build`,
-출력 디렉터리 `.`(리포지터리 루트)로 설정합니다.
+Vercel 설정은 `vercel.json` 에 박아 두었으므로 대시보드에서 따로 만질 것이 없습니다.
+
+| 키 | 값 | 이유 |
+| --- | --- | --- |
+| `outputDirectory` | `.` | `inline-diagrams` 가 HTML을 제자리에서 고치므로 별도 `dist/` 가 없습니다. 이 값이 없으면 Vercel이 `public/` 를 찾다가 **No Output Directory** 로 실패합니다. |
+| `cleanUrls` | `false` | 내부 링크가 모두 `.html` 로 명시돼 있습니다. 켜면 링크마다 308 리다이렉트가 붙습니다. |
+| `framework` | `null` | 프레임워크 자동 감지가 빌드 명령을 덮어쓰지 않도록 합니다. |
+
+GitHub Pages에 올릴 경우에도 같은 산출물을 그대로 쓸 수 있습니다
+(`_` 로 시작하는 디렉터리가 없으므로 `.nojekyll` 은 필요하지 않습니다).
 
 ## 라이선스
 
