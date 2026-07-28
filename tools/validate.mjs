@@ -176,16 +176,26 @@ function checkHtmlQuality(file, text) {
      단, "4.0에서 제거되었다 / 더 이상 없다" 처럼 **제거 사실을 가르치는 문맥**은 허용합니다.
      그 서술 자체가 VERSION_POLICY 가 요구하는 내용이기 때문입니다. */
   const REMOVED_CTX = /제거|삭제|없습니다|없다|deprecated|더 이상|사라졌|폐기|지원하지 않|존재하지 않/;
+
+  /* 인라인된 SVG 다이어그램 내부는 이 검사에서 제외한다.
+     D-020(ZooKeeper vs KRaft 비교)처럼 두 모드를 나란히 보여주는 다이어그램은
+     좌측 패널에서 2.x 의 `--zookeeper` 사용을 설명하는 것이 정당하다.
+     그런데 패널 헤더("Kafka 2.x")와 설명 <text> 가 서로 다른 줄에 있어
+     문맥 윈도우(±200자)로는 역사적 맥락임을 판별할 수 없다.
+     → 다이어그램은 --diagrams 패스에서 별도로 검증하므로 여기서는 건너뛴다.
+     (inline-diagrams 실행 후에만 나타나던 오탐이라 배포 빌드에서만 터졌다) */
+  const proseOnly = text.replace(/<svg\b[\s\S]*?<\/svg>/gi, (mm) => ' '.repeat(mm.length));
+
   if (!isLegacyAppendix) {
-    for (const m of text.matchAll(/--zookeeper\b/g)) {
-      const ctx = text.slice(Math.max(0, m.index - 200), m.index + 200);
+    for (const m of proseOnly.matchAll(/--zookeeper\b/g)) {
+      const ctx = proseOnly.slice(Math.max(0, m.index - 200), m.index + 200);
       if (REMOVED_CTX.test(ctx)) continue;   // 제거 사실을 설명하는 문맥 → 허용
       err(f, lineAt(text, m.index),
         '`--zookeeper` 를 사용 가능한 옵션처럼 서술했습니다 — 4.0에서 제거되었습니다 (제거 사실을 설명하는 문맥만 허용)');
     }
     // "ZooKeeper에 접속/저장" 같은 현행 서술 탐지 (역사적 맥락 표현은 통과시킴)
-    for (const m of text.matchAll(/(?:ZooKeeper|주키퍼|zookeeper)(?:에|가|는|를|와|의)?\s*(접속|연결|저장|등록|기동|실행)/g)) {
-      const ctx = text.slice(Math.max(0, m.index - 120), m.index + 60);
+    for (const m of proseOnly.matchAll(/(?:ZooKeeper|주키퍼|zookeeper)(?:에|가|는|를|와|의)?\s*(접속|연결|저장|등록|기동|실행)/g)) {
+      const ctx = proseOnly.slice(Math.max(0, m.index - 120), m.index + 60);
       if (/이전|과거|였|했었|3\.x|2\.x|레거시|제거|더 이상|历史/.test(ctx)) continue;
       warn(f, lineAt(text, m.index), `ZooKeeper 를 현행 동작으로 서술한 것 같습니다: "${m[0]}" — 역사적 맥락임을 명시하세요`);
     }
