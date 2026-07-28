@@ -319,7 +319,7 @@
       "label": "Confluent Certified Developer for Apache Kafka",
       "durationMin": 90,
       "mockQuestionCount": 60,
-      "weightNote": "도메인 가중치는 공개 자료 기준 잠정치입니다. Confluent 공식 Exam Guide로 재확인하세요. 고정 문항 수와 합격 점수는 Confluent가 공개하지 않습니다.",
+      "weightNote": "도메인 가중치는 공개 자료 기준 잠정치입니다. Confluent 공식 Exam Guide로 재확인하세요. 시험은 60문항 / 90분이며 지문·선택지가 모두 영어입니다. 합격 점수는 Confluent가 공개하지 않습니다.",
       "domains": [
         {
           "name": "Application Development",
