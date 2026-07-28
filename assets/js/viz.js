@@ -797,6 +797,314 @@
     clear();
   });
 
+  /* --------------------------------------------------------------------------
+     D-062 — 로그 컴팩션 before / after (V2)
+     --------------------------------------------------------------------------
+     SVG(assets/diagrams/D-062-log-compaction.svg)가 제공하는 훅:
+       data-dg="rec-0" … "rec-11"   레코드 칸 <g>
+       data-dg="stage-box"          단계 표시 배경 <rect>
+       data-dg="stage-label"        단계 설명 <text>
+       data-dg="note-1" / "note-2"  본문 설명 <text>
+     로그 구성 (SVG 와 반드시 일치):
+       S0 봉인 = 0:A=1 1:B=1 2:A=2 3:C=1
+       S1 봉인 = 4:B=2 5:A=3 6:B=null(tombstone) 7:D=1
+       S2 활성 = 8:A=4 9:C=2 10:B=3 11:D=2   ← 컴팩션 대상 아님
+     봉인 범위(0~7)의 키별 최신값은 3(C) · 5(A) · 6(B tombstone) · 7(D) 이므로
+     밀려나는 오프셋은 0 · 1 · 2 · 4 다.
+     -------------------------------------------------------------------------- */
+  register('D-062', function (ctx) {
+    var TOTAL = 12;
+    var SUPERSEDED = [0, 1, 2, 4];   // 봉인 범위에서 키별 최신값에 밀려나는 오프셋
+    var TOMBSTONE = 6;               // B = null
+    var stage = 1;
+
+    var STAGE = {
+      1: '1단계 — 컴팩션 전: 같은 키가 여러 번 나타난 채로 전부 남아 있습니다',
+      2: '2단계 — 컴팩션 후: 봉인 세그먼트에서 키별 최신값만 남았습니다 (tombstone 은 아직 유지)',
+      3: '3단계 — delete.retention.ms 경과: tombstone 까지 제거되었습니다'
+    };
+    var NOTE1 = {
+      1: '봉인된 S0·S1 에서 A 는 0·2·5 에, B 는 1·4·6 에 나타납니다. 컴팩션은 이 범위에서 키별 마지막 것만 남깁니다.',
+      2: '사라진 것은 0(A=1) · 1(B=1) · 2(A=2) · 4(B=2) 입니다. 남은 것은 3(C=1) · 5(A=3) · 6(B=null) · 7(D=1) 입니다.',
+      3: 'tombstone 6(B=null) 까지 제거되었습니다. 남은 것은 3(C=1) · 5(A=3) · 7(D=1) 입니다.'
+    };
+    var NOTE2 = {
+      1: '활성 세그먼트 S2 의 A=4 · B=3 은 중복이지만 손대지 않습니다. 봉인된 뒤에야 대상이 됩니다.',
+      2: '활성 세그먼트 S2 는 그대로입니다 — 컴팩션 대상이 아니기 때문입니다.',
+      3: '이 뒤에 처음 읽기 시작한 컨슈머는 B 가 삭제되었다는 사실 자체를 알 수 없습니다.'
+    };
+
+    var ctrl = ctx.bindControls({
+      items: [
+        { type: 'button', name: 'compact', label: '컴팩션 실행', variant: 'primary' },
+        { type: 'button', name: 'expire', label: 'delete.retention.ms 경과' },
+        { type: 'reset', label: '처음으로' }
+      ],
+      onChange: function (values, api, meta) {
+        var hint = '';
+        if (meta.name === 'compact') {
+          if (stage >= 2) hint = ' 이미 컴팩션된 상태입니다.';
+          stage = stage < 2 ? 2 : stage;
+        } else if (meta.name === 'expire') {
+          if (stage < 2) { stage = 2; hint = ' 먼저 컴팩션이 일어나야 하므로 2단계로 갑니다.'; }
+          else stage = 3;
+        } else if (meta.type === 'reset' || meta.name === '__reset__') {
+          stage = 1;
+        }
+        apply(hint);
+      }
+    });
+
+    function gone(i) {
+      if (stage >= 2 && SUPERSEDED.indexOf(i) >= 0) return true;
+      return stage >= 3 && i === TOMBSTONE;
+    }
+
+    function apply(hint) {
+      var remain = 0;
+      for (var i = 0; i < TOTAL; i++) {
+        var g = ctx.q('rec-' + i);
+        if (!g) continue;
+        if (gone(i)) g.setAttribute('data-state', 'off');
+        else { g.removeAttribute('data-state'); remain++; }
+      }
+      ctx.setState('stage-box', stage === 1 ? null : (stage === 3 ? 'done' : 'active'));
+      ctx.text('stage-label', STAGE[stage]);
+      ctx.text('note-1', NOTE1[stage]);
+      ctx.text('note-2', NOTE2[stage]);
+      ctx.readout([
+        { label: '단계', value: stage + ' / 3' },
+        { label: '남은 레코드', value: remain + ' / ' + TOTAL + '건' },
+        { label: '봉인 S0·S1', value: (remain - 4) + '건' },
+        { label: '활성 S2', value: '4건 (항상 그대로)' }
+      ]);
+      ctrl.announce(STAGE[stage] + ' 남은 레코드는 ' + remain + '건입니다. ' +
+        '활성 세그먼트의 4건은 어느 단계에서도 줄지 않습니다.' + (hint || ''));
+    }
+
+    apply('');
+  });
+
+  /* --------------------------------------------------------------------------
+     D-064 — 디스크 산정 계산기 (V2)
+     --------------------------------------------------------------------------
+     SVG(assets/diagrams/D-064-disk-sizing-calculator.svg)가 제공하는 훅:
+       data-dg="input-1" / "input-2"                            입력 요약 <text>
+       data-dg="bar-raw|bar-comp|bar-rf|bar-total|bar-broker"    막대 <rect>
+       data-dg="val-raw|val-comp|val-rf|val-total|val-broker"    숫자 <text>
+     막대 좌표계: x=200 에서 시작, 최대 폭 400 (SVG 의 빈 트랙과 일치해야 함)
+     -------------------------------------------------------------------------- */
+  register('D-064', function (ctx) {
+    var BAR_X = 200, BAR_MAX = 400;
+
+    var ctrl = ctx.bindControls({
+      items: [
+        { type: 'range', name: 'msgs', label: '초당 메시지 수', min: 500, max: 50000, step: 500,
+          value: 5000, format: function (v) { return comma(v) + ' 건/초'; } },
+        { type: 'range', name: 'size', label: '평균 메시지 크기', min: 128, max: 8192, step: 128,
+          value: 1024, format: size },
+        { type: 'range', name: 'days', label: '보관 기간', min: 1, max: 30, step: 1,
+          value: 7, format: function (v) { return v + ' 일'; } },
+        { type: 'range', name: 'rf', label: 'replication.factor', min: 1, max: 5, step: 1,
+          value: 3, format: function (v) { return '× ' + v; } },
+        { type: 'range', name: 'comp', label: '압축 절감률', min: 0, max: 80, step: 5,
+          value: 40, format: function (v) { return v + ' %'; } },
+        { type: 'range', name: 'head', label: '여유율', min: 0, max: 60, step: 5,
+          value: 30, format: function (v) { return v + ' %'; } },
+        { type: 'range', name: 'brokers', label: '브로커 수', min: 1, max: 12, step: 1,
+          value: 3, format: function (v) { return v + ' 대'; } },
+        { type: 'reset', label: '기본값으로' }
+      ],
+      onChange: apply
+    });
+
+    function comma(n) {
+      var s = String(Math.round(n)), out = '', c = 0;
+      for (var i = s.length - 1; i >= 0; i--) {
+        out = s.charAt(i) + out;
+        if (++c % 3 === 0 && i > 0) out = ',' + out;
+      }
+      return out;
+    }
+    function size(v) {
+      return v >= 1024 ? (v / 1024).toFixed(1) + ' KiB' : v + ' B';
+    }
+    /** TB(=1000GB) 단위 값을 사람이 읽는 문자열로 */
+    function tb(v) {
+      if (v >= 1000) return (v / 1000).toFixed(2) + ' PB';
+      if (v >= 1) return v.toFixed(2) + ' TB';
+      return Math.round(v * 1000) + ' GB';
+    }
+
+    function apply(v) {
+      var bps = v.msgs * v.size;                        // 바이트/초
+      var perDayGB = bps * 86400 / 1e9;                 // GB/일 (10^9 기준)
+      var rawTB = perDayGB * v.days / 1000;
+      var compTB = rawTB * (1 - v.comp / 100);
+      var rfTB = compTB * v.rf;
+      var totalTB = rfTB / (1 - v.head / 100);
+      var perBrokerTB = totalTB / v.brokers;
+
+      var scale = Math.max(rawTB, totalTB) || 1;
+      function w(x) { return Math.max(2, Math.min(BAR_MAX, Math.round(x / scale * BAR_MAX))); }
+
+      ctx.attr('bar-raw', { x: BAR_X, width: w(rawTB) });
+      ctx.attr('bar-comp', { x: BAR_X, width: w(compTB) });
+      ctx.attr('bar-rf', { x: BAR_X, width: w(rfTB) });
+      ctx.attr('bar-total', { x: BAR_X, width: w(totalTB) });
+      ctx.attr('bar-broker', { x: BAR_X, width: w(perBrokerTB) });
+
+      ctx.text('val-raw', tb(rawTB));
+      ctx.text('val-comp', tb(compTB));
+      ctx.text('val-rf', tb(rfTB));
+      ctx.text('val-total', tb(totalTB));
+      ctx.text('val-broker', tb(perBrokerTB));
+
+      ctx.text('input-1', '입력: 초당 ' + comma(v.msgs) + '건 × ' + size(v.size) +
+        ' · 보관 ' + v.days + '일 · replication.factor ' + v.rf);
+      ctx.text('input-2', '압축 절감 ' + v.comp + '% · 여유 ' + v.head + '% · 브로커 ' +
+        v.brokers + '대 · 초당 ' + (bps / 1e6).toFixed(1) + ' MB/s · 일일 ' +
+        comma(perDayGB) + ' GB');
+
+      ctx.readout([
+        { label: '일일 유입', value: comma(perDayGB) + ' GB' },
+        { label: '압축 후 보관', value: tb(compTB) },
+        { label: '클러스터 총량', value: tb(totalTB) },
+        { label: '브로커 1대당', value: tb(perBrokerTB) }
+      ]);
+      ctrl.announce('일일 유입 ' + comma(perDayGB) + ' GB, 클러스터 총 필요량 ' + tb(totalTB) +
+        ', 브로커 한 대당 ' + tb(perBrokerTB) + ' 입니다.');
+    }
+
+    apply(ctrl.values());
+  });
+
+  /* --------------------------------------------------------------------------
+     D-072 — 스키마 호환성 모드 매트릭스 (V2)
+     --------------------------------------------------------------------------
+     SVG(assets/diagrams/D-072-compatibility-matrix.svg)가 제공하는 훅:
+       data-dg="cell-{m}-{c}"   각 칸 <g>            (m1~m7 × c1~c7)
+       data-dg="row-cursor" / "col-cursor" / "cell-cursor"   선택 강조 <rect>
+       data-dg="verdict" > rect + data-dg="verdict-text"     판정 배지
+       data-dg="combo" / "why-1" / "why-2"                   설명 <text>
+     기하 상수는 SVG 와 일치해야 한다 (X0 / CW / Y0 / RH).
+     판정 근거: Avro 스키마 해석 규칙 —
+       · reader 필드에 대응하는 writer 필드가 없으면 reader 쪽 default 가 있어야 한다
+       · writer 에만 있는 필드는 무시된다
+       · 승격은 int→long→float→double, bytes↔string 만 허용된다
+     BACKWARD = reader 가 새 스키마 / FORWARD = reader 가 옛 스키마.
+     -------------------------------------------------------------------------- */
+  register('D-072', function (ctx) {
+    var X0 = 180, CW = 75, Y0 = 84, RH = 34;
+
+    var MODES = [
+      { id: 'm1', name: 'BACKWARD',            scope: '직전 버전과 비교',      kind: 'b', order: '컨슈머를 먼저 올립니다.' },
+      { id: 'm2', name: 'BACKWARD_TRANSITIVE', scope: '모든 이전 버전과 비교', kind: 'b', order: '컨슈머를 먼저 올립니다.' },
+      { id: 'm3', name: 'FORWARD',             scope: '직전 버전과 비교',      kind: 'f', order: '프로듀서를 먼저 올립니다.' },
+      { id: 'm4', name: 'FORWARD_TRANSITIVE',  scope: '모든 이전 버전과 비교', kind: 'f', order: '프로듀서를 먼저 올립니다.' },
+      { id: 'm5', name: 'FULL',                scope: '직전 버전 · 양방향',    kind: 'x', order: '순서가 자유롭습니다.' },
+      { id: 'm6', name: 'FULL_TRANSITIVE',     scope: '모든 이전 · 양방향',    kind: 'x', order: '순서가 자유롭습니다.' },
+      { id: 'm7', name: 'NONE',                scope: '검사하지 않음',         kind: 'n', order: '어떤 순서로도 깨질 수 있습니다.' }
+    ];
+
+    var CHANGES = [
+      { id: 'c1', label: '필드 추가 (기본값 O)', b: 1, f: 1,
+        rb: '새 스키마의 새 필드가 옛 데이터에 없어도 default 로 채워집니다.',
+        rf: '옛 스키마는 새로 생긴 필드를 그냥 무시합니다.' },
+      { id: 'c2', label: '필드 추가 (기본값 X)', b: 0, f: 1,
+        rb: '새 스키마의 그 필드에 default 가 없어 옛 데이터에서 채울 값이 없습니다.',
+        rf: '옛 스키마는 새로 생긴 필드를 그냥 무시합니다.' },
+      { id: 'c3', label: '필드 삭제 (기본값 O)', b: 1, f: 1,
+        rb: '새 스키마에 없는 필드는 읽을 때 무시됩니다.',
+        rf: '옛 스키마의 그 필드는 default 가 있어 값이 없어도 채워집니다.' },
+      { id: 'c4', label: '필드 삭제 (기본값 X)', b: 1, f: 0,
+        rb: '새 스키마에 없는 필드는 읽을 때 무시됩니다.',
+        rf: '옛 스키마가 그 필드를 요구하는데 새 데이터에 없고 default 도 없습니다.' },
+      { id: 'c5', label: '타입 확대 (int→long)', b: 1, f: 0,
+        rb: 'Avro 는 int 를 long 으로 승격해 읽을 수 있습니다.',
+        rf: '옛 스키마의 int 로는 새로 쓰인 long 을 읽을 수 없습니다.' },
+      { id: 'c6', label: '타입 축소 (long→int)', b: 0, f: 1,
+        rb: '새 스키마의 int 로는 옛 데이터의 long 을 읽을 수 없습니다.',
+        rf: '옛 스키마의 long 은 새로 쓰인 int 를 승격해 읽습니다.' },
+      { id: 'c7', label: '필드 이름 변경', b: 0, f: 0,
+        rb: '이름이 달라 대응 필드를 찾지 못하고, 별칭(alias)도 default 도 없습니다.',
+        rf: '옛 이름의 필드를 새 데이터에서 찾을 수 없습니다.' }
+    ];
+
+    function verdict(mode, chg) {
+      if (mode.kind === 'n') return 1;
+      if (mode.kind === 'b') return chg.b;
+      if (mode.kind === 'f') return chg.f;
+      return (chg.b && chg.f) ? 1 : 0;
+    }
+    function idx(list, id) {
+      for (var i = 0; i < list.length; i++) if (list[i].id === id) return i;
+      return 0;
+    }
+
+    var ctrl = ctx.bindControls({
+      items: [
+        { type: 'select', name: 'chg', label: '변경 유형',
+          options: CHANGES.map(function (c) { return { value: c.id, label: c.label }; }),
+          value: 'c1' },
+        { type: 'select', name: 'mode', label: '호환성 모드',
+          options: MODES.map(function (m) { return { value: m.id, label: m.name }; }),
+          value: 'm1' },
+        { type: 'reset', label: '기본값으로' }
+      ],
+      onChange: function (v) { apply(v.mode, v.chg); }
+    });
+
+    function apply(modeId, chgId) {
+      var ri = idx(MODES, modeId), ci = idx(CHANGES, chgId);
+      var mode = MODES[ri], chg = CHANGES[ci];
+      var ok = verdict(mode, chg) === 1;
+
+      /* 커서 이동 */
+      ctx.attr('row-cursor', { y: Y0 + RH * ri + 2 });
+      ctx.attr('col-cursor', { x: X0 + CW * ci + 2 });
+      ctx.attr('cell-cursor', { x: X0 + CW * ci + 2, y: Y0 + RH * ri + 3 });
+
+      /* 선택된 칸만 active */
+      ctx.qsa('[data-dg^="cell-m"]').forEach(function (g) { g.removeAttribute('data-state'); });
+      var cell = ctx.q('cell-' + mode.id + '-' + chg.id);
+      if (cell) cell.setAttribute('data-state', 'active');
+
+      /* 판정 배지 */
+      var badge = ctx.qs('[data-dg="verdict"] rect');
+      if (badge) {
+        badge.setAttribute('class', mode.kind === 'n'
+          ? 'dg-node dg-node--warn'
+          : (ok ? 'dg-node dg-node--ok' : 'dg-node dg-node--danger'));
+      }
+      ctx.text('verdict-text', ok ? '허용' : '거부');
+      ctx.text('combo', mode.name + ' × ' + chg.label + ' — ' + mode.scope);
+
+      if (mode.kind === 'n') {
+        ctx.text('why-1', '검사를 하지 않으므로 어떤 변경이든 등록됩니다.');
+        ctx.text('why-2', '깨진 조합도 통과하므로 컨슈머 전체 장애로 이어질 수 있습니다.');
+      } else if (mode.kind === 'x') {
+        ctx.text('why-1', 'BACKWARD 판정 ' + (chg.b ? '허용' : '거부') +
+          ' · FORWARD 판정 ' + (chg.f ? '허용' : '거부') + ' → FULL 은 둘 다 허용일 때만 허용됩니다.');
+        ctx.text('why-2', !chg.b ? chg.rb : (!chg.f ? chg.rf : '양방향 모두 안전한 변경입니다.'));
+      } else {
+        ctx.text('why-1', mode.kind === 'b' ? chg.rb : chg.rf);
+        ctx.text('why-2', '업그레이드 순서: ' + mode.order);
+      }
+
+      ctx.readout([
+        { label: '모드', value: mode.name },
+        { label: '변경', value: chg.label },
+        { label: '판정', value: ok ? '허용' : '거부' },
+        { label: '비교 대상', value: mode.scope }
+      ]);
+      ctrl.announce(mode.name + ' 에서 ' + chg.label + ' 는 ' + (ok ? '허용' : '거부') +
+        ' 입니다. ' + (mode.kind === 'b' ? chg.rb : mode.kind === 'f' ? chg.rf : ''));
+    }
+
+    apply('m1', 'c1');
+  });
+
   /* ---------- 자동 마운트 ------------------------------------------------- */
   if (global.document) {
     var boot = function () { mountAll(global.document); };

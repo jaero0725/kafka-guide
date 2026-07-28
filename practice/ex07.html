@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>예제 7 · Avro + Schema Registry 스키마 진화 — Kafka Guide</title>
+  <meta name="description" content="Confluent Schema Registry 8.2.2와 Avro 1.12.1로 BACKWARD 호환 스키마 진화를 실습합니다. wire format, subject naming strategy, 호환성 검사 REST API, 배포 순서까지 다룹니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="practice" data-page="ex07"></div>
+
+  <main id="main" class="page" data-page-id="practice/ex07">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="ex01.html">실무 예제</a></li>
+        <li><span aria-current="page">예제 7 · Avro 스키마 진화</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실무 예제 · 7</p>
+      <h1>Avro + Schema Registry 스키마 진화</h1>
+      <p class="page__lead">
+        JSON으로 이벤트를 주고받다가 필드 하나를 바꾸면
+        <strong>어느 컨슈머가 깨지는지 아무도 모릅니다.</strong>
+        Schema Registry는 그 계약을 브로커 밖에 명시적으로 두고,
+        <strong>호환되지 않는 변경을 등록 시점에 거부</strong>합니다.
+        이 예제는 <code>BACKWARD</code> 호환으로 필드를 추가하고,
+        <strong>왜 컨슈머를 먼저 배포해야 하는지</strong>를 실행으로 확인합니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>Avro wire format(magic byte + schema id + payload)을 바이트 단위로 확인할 수 있습니다.</li>
+        <li>호환성 모드 7종을 구분하고, 어떤 변경이 어느 모드에서 허용되는지 판단할 수 있습니다.</li>
+        <li><code>BACKWARD</code>일 때 <strong>컨슈머를 먼저</strong>, <code>FORWARD</code>일 때 <strong>프로듀서를 먼저</strong> 배포해야 하는 이유를 설명할 수 있습니다.</li>
+        <li><code>auto.register.schemas</code>가 왜 프로덕션에서 위험한지 알 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="scenario">
+      <h2 id="scenario">시나리오</h2>
+
+      <p>
+        회원 도메인이 <code>users.signup</code> 토픽에 가입 이벤트를 발행합니다.
+        컨슈머는 세 팀입니다 — 마케팅(웰컴 메일), 분석(가입 퍼널), CS(고객 조회).
+      </p>
+      <p>
+        마케팅 팀이 <strong>유입 채널(<code>referralSource</code>) 필드를 추가해 달라</strong>고 요청했습니다.
+        JSON을 쓰던 시절에는 프로듀서가 필드를 추가해도 컨슈머들이 무시하기만 하면 되니 문제가 없어 보였습니다.
+        실제로 사고가 난 것은 <strong>필드 이름을 <code>signupAt</code> → <code>createdAt</code>으로 바꿨을 때</strong>였습니다.
+        세 컨슈머 중 두 개가 <code>NullPointerException</code>으로 죽고,
+        <strong>파티션이 막혀 lag이 40분간 쌓였습니다.</strong>
+      </p>
+      <p>
+        이번에는 <strong>스키마를 계약으로 만들고, 호환되지 않는 변경은 배포 전에 거부</strong>되게 만듭니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="architecture">
+      <h2 id="architecture">아키텍처</h2>
+
+      <figure class="diagram" data-diagram="D-070">
+        <figcaption>
+          Schema Registry 아키텍처 — 프로듀서가 스키마를 등록하고 id를 받아 메시지에 넣고, 컨슈머가 id로 스키마를 조회하는 흐름
+        </figcaption>
+      </figure>
+
+      <figure class="diagram" data-diagram="D-071">
+        <figcaption>
+          wire format 바이트 레이아웃 — magic byte 1바이트 + schema id 4바이트 + Avro payload
+        </figcaption>
+      </figure>
+
+      <p>
+        <strong>스키마 자체는 메시지에 들어가지 않습니다.</strong>
+        메시지에는 <strong>4바이트 정수 schema id</strong>만 들어가고,
+        컨슈머는 그 id로 Registry에서 스키마를 받아 캐시합니다.
+        그래서 Avro 메시지는 JSON보다 훨씬 작습니다 — 필드 이름이 반복되지 않기 때문입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>직렬화 형식 비교</caption>
+          <thead>
+            <tr>
+              <th scope="col">형식</th>
+              <th scope="col">스키마</th>
+              <th scope="col">크기</th>
+              <th scope="col">스키마 진화</th>
+              <th scope="col">적합한 상황</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">JSON (스키마 없음)</th>
+              <td>없음</td>
+              <td>가장 큼 (필드명 반복)</td>
+              <td><span class="mark-no">검증 불가</span> — 깨지는 시점이 런타임</td>
+              <td>프로토타입, 사람이 읽어야 하는 로그</td>
+            </tr>
+            <tr>
+              <th scope="row">JSON Schema</th>
+              <td>Registry</td>
+              <td>큼</td>
+              <td>가능</td>
+              <td>기존 JSON에서 점진적으로 넘어갈 때</td>
+            </tr>
+            <tr>
+              <th scope="row">Avro <span class="badge">이 예제</span></th>
+              <td>Registry (id 4바이트)</td>
+              <td>작음</td>
+              <td><span class="mark-ok">가장 성숙</span> — default 규칙이 명확</td>
+              <td>Kafka 생태계의 사실상 표준. Connect·Streams 지원이 가장 두텁습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">Protobuf</th>
+              <td>Registry (id 4바이트)</td>
+              <td>작음</td>
+              <td>가능 (필드 번호 기반)</td>
+              <td>gRPC를 이미 쓰는 조직. 다언어 환경</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prerequisites">
+      <h2 id="prerequisites">사전 요구사항</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>검증 환경</caption>
+          <thead><tr><th scope="col">항목</th><th scope="col">버전</th><th scope="col">비고</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Apache Kafka</th><td>4.3.1</td><td><a href="ex01.html">예제 1</a>의 클러스터</td></tr>
+            <tr><th scope="row">Confluent Schema Registry</th><td><strong>8.2.2</strong></td><td>Docker 이미지 <code>confluentinc/cp-schema-registry:8.2.2</code></td></tr>
+            <tr><th scope="row">Apache Avro</th><td><strong>1.12.1</strong></td><td>Maven Central. <code>avro</code> + <code>avro-maven-plugin</code></td></tr>
+            <tr><th scope="row"><code>kafka-avro-serializer</code></th><td><strong>8.2.2</strong></td><td>Schema Registry와 같은 버전. <strong>Maven Central이 아니라 <code>packages.confluent.io</code></strong>에서 받습니다</td></tr>
+            <tr><th scope="row">Java</th><td>17 이상</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="Confluent 아티팩트는 Maven Central에 없습니다">
+        <p>
+          <code>io.confluent:kafka-avro-serializer</code>는
+          <strong>Maven Central에 배포되지 않습니다.</strong>
+          <code>pom.xml</code>에 <code>https://packages.confluent.io/maven/</code> 저장소를
+          명시적으로 추가해야 합니다.
+          이 예제는 아티팩트 버전을 Schema Registry Docker 태그와 같은
+          <strong><code>8.2.2</code></strong>로 맞췄습니다 —
+          Confluent는 Schema Registry와 serializer를 같은 버전으로 릴리스합니다.
+          실제 저장소에서 사용 가능한 최신 버전은
+          <code>https://packages.confluent.io/maven/io/confluent/kafka-avro-serializer/</code>에서
+          직접 확인하세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="full-code">
+      <h2 id="full-code">전체 코드</h2>
+
+      <figure class="code">
+        <figcaption>디렉터리 구조</figcaption>
+        <pre><code class="lang-text">avro-evolution/
+├── docker-compose.schema-registry.yml   # 예제 1 클러스터에 붙이는 Registry
+├── pom.xml
+└── src/main/
+    ├── avro/
+    │   ├── UserSignup-v1.avsc            # 최초 스키마
+    │   └── UserSignup.avsc               # 진화한 스키마 (v2, 빌드 대상)
+    └── java/com/example/avro/
+        ├── SignupProducer.java
+        ├── SignupConsumer.java
+        └── Main.java</code></pre>
+      </figure>
+
+      <h3 id="compose">Schema Registry 컨테이너</h3>
+
+      <figure class="code">
+        <figcaption>avro-evolution/docker-compose.schema-registry.yml</figcaption>
+        <pre><code class="lang-yaml"># 예제 1의 kafka-lab 네트워크에 Schema Registry 를 붙입니다.
+# 실행: docker compose -f docker-compose.schema-registry.yml up -d
+---
+name: kafka-lab-sr
+
+services:
+  schema-registry:
+    image: confluentinc/cp-schema-registry:8.2.2
+    hostname: schema-registry
+    container_name: schema-registry
+    ports:
+      - '8081:8081'
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      # 컨테이너 네트워크 안에서 브로커를 찾습니다(예제 1의 PLAINTEXT 리스너).
+      SCHEMA_REGISTRY_KAFKA_BOOTSTRAP_SERVERS: 'PLAINTEXT://kafka-1:19092,PLAINTEXT://kafka-2:19092,PLAINTEXT://kafka-3:19092'
+      SCHEMA_REGISTRY_LISTENERS: 'http://0.0.0.0:8081'
+      # 스키마는 _schemas 라는 compact 토픽에 저장됩니다.
+      # 브로커가 3대이므로 RF 3 으로 둡니다(1이면 Registry 전체가 단일 장애점).
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC: '_schemas'
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 3
+      # 전역 기본 호환성 모드. Schema Registry 의 기본값은 backward 입니다.
+      # 명시해 의도를 남깁니다(subject 별로 덮어쓸 수 있습니다).
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: 'backward'
+    networks:
+      - kafka-lab_default
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:8081/subjects || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+networks:
+  # 예제 1의 compose 가 만든 네트워크를 재사용합니다.
+  # 이름은 "{프로젝트명}_default" 규칙을 따릅니다(예제 1의 name: kafka-lab).
+  kafka-lab_default:
+    external: true</code></pre>
+      </figure>
+
+      <h3 id="schema-v1">스키마 v1</h3>
+
+      <figure class="code">
+        <figcaption>src/main/avro/UserSignup-v1.avsc — 최초 버전 (참고용, 빌드 대상 아님)</figcaption>
+        <pre><code class="lang-json">{
+  "type": "record",
+  "name": "UserSignup",
+  "namespace": "com.example.avro.model",
+  "doc": "회원 가입 이벤트 v1",
+  "fields": [
+    { "name": "userId",    "type": "string", "doc": "회원 식별자" },
+    { "name": "email",     "type": "string" },
+    { "name": "signupAt",  "type": "long",
+      "doc": "가입 시각 (epoch millis)" },
+    { "name": "plan",
+      "type": { "type": "enum", "name": "Plan",
+                "symbols": ["FREE", "PRO", "ENTERPRISE"] },
+      "default": "FREE" }
+  ]
+}</code></pre>
+      </figure>
+
+      <h3 id="schema-v2">스키마 v2 — <code>BACKWARD</code> 호환으로 필드 추가</h3>
+
+      <figure class="code">
+        <figcaption>src/main/avro/UserSignup.avsc — 진화한 버전 (빌드 대상)</figcaption>
+        <pre><code class="lang-json">{
+  "type": "record",
+  "name": "UserSignup",
+  "namespace": "com.example.avro.model",
+  "doc": "회원 가입 이벤트 v2 — referralSource / marketingOptIn 추가",
+  "fields": [
+    { "name": "userId",    "type": "string", "doc": "회원 식별자" },
+    { "name": "email",     "type": "string" },
+    { "name": "signupAt",  "type": "long",
+      "doc": "가입 시각 (epoch millis). v2 에서도 이름을 바꾸지 않습니다 — 이름 변경은 BACKWARD 위반입니다" },
+    { "name": "plan",
+      "type": { "type": "enum", "name": "Plan",
+                "symbols": ["FREE", "PRO", "ENTERPRISE"] },
+      "default": "FREE" },
+
+    { "name": "referralSource",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "유입 채널. BACKWARD 호환의 핵심: 새 필드에는 반드시 default 가 있어야 합니다. default 가 없으면 새 스키마로 읽는 컨슈머가 v1 데이터를 해석할 수 없습니다" },
+
+    { "name": "marketingOptIn",
+      "type": "boolean",
+      "default": false,
+      "doc": "마케팅 수신 동의. null 을 허용하지 않아도 default 가 있으면 BACKWARD 호환입니다" }
+  ]
+}</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="BACKWARD 호환의 정확한 의미">
+        <p>
+          <strong><code>BACKWARD</code> = "새 스키마로 이전 데이터를 읽을 수 있다"</strong>입니다.
+          Registry는 <strong>새로 등록하려는 스키마</strong>를 reader로,
+          <strong>직전 버전</strong>을 writer로 두고 검사합니다.
+        </p>
+        <ul>
+          <li><strong>필드 추가</strong> — <code>default</code>가 있으면 <span class="mark-ok">허용</span>. 없으면 <span class="mark-no">거부</span> (v1 데이터에 그 필드가 없어서 채울 값이 없습니다).</li>
+          <li><strong>필드 삭제</strong> — <span class="mark-ok">허용</span> (새 스키마가 그 필드를 무시하면 됩니다).</li>
+          <li><strong>필드 이름 변경</strong> — <span class="mark-no">거부</span>. Avro는 이름으로 필드를 찾으므로 삭제 + 추가로 취급되고, 추가 쪽에 <code>default</code>가 없으면 실패합니다. <code>aliases</code>를 쓰면 우회할 수 있습니다.</li>
+          <li><strong>타입 변경</strong> — 승격 가능한 조합(<code>int</code>→<code>long</code> 등)만 제한적으로 허용됩니다.</li>
+        </ul>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-072">
+        <figcaption>
+          호환성 모드 매트릭스 — 변경 유형(필드 추가/삭제/타입 변경/이름 변경) × 모드별 허용 여부
+        </figcaption>
+      </figure>
+
+      <h3 id="pom"><code>pom.xml</code></h3>
+
+      <figure class="code">
+        <figcaption>avro-evolution/pom.xml</figcaption>
+        <pre><code class="lang-xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"&gt;
+  &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+  &lt;groupId&gt;com.example&lt;/groupId&gt;
+  &lt;artifactId&gt;avro-evolution&lt;/artifactId&gt;
+  &lt;version&gt;1.0.0&lt;/version&gt;
+
+  &lt;properties&gt;
+    &lt;maven.compiler.release&gt;17&lt;/maven.compiler.release&gt;
+    &lt;project.build.sourceEncoding&gt;UTF-8&lt;/project.build.sourceEncoding&gt;
+    &lt;kafka.version&gt;4.3.1&lt;/kafka.version&gt;
+    &lt;avro.version&gt;1.12.1&lt;/avro.version&gt;
+    &lt;!-- Schema Registry Docker 이미지 태그와 같은 버전으로 맞춥니다.
+         Confluent 는 Registry 와 serializer 를 같은 버전으로 릴리스합니다. --&gt;
+    &lt;confluent.version&gt;8.2.2&lt;/confluent.version&gt;
+    &lt;slf4j.version&gt;2.0.17&lt;/slf4j.version&gt;
+  &lt;/properties&gt;
+
+  &lt;repositories&gt;
+    &lt;!-- io.confluent 아티팩트는 Maven Central 에 없습니다.
+         이 저장소를 추가하지 않으면 kafka-avro-serializer 를 받을 수 없습니다. --&gt;
+    &lt;repository&gt;
+      &lt;id&gt;confluent&lt;/id&gt;
+      &lt;url&gt;https://packages.confluent.io/maven/&lt;/url&gt;
+    &lt;/repository&gt;
+  &lt;/repositories&gt;
+
+  &lt;dependencies&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+      &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
+      &lt;version&gt;${kafka.version}&lt;/version&gt;
+    &lt;/dependency&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.apache.avro&lt;/groupId&gt;
+      &lt;artifactId&gt;avro&lt;/artifactId&gt;
+      &lt;version&gt;${avro.version}&lt;/version&gt;
+    &lt;/dependency&gt;
+    &lt;!-- KafkaAvroSerializer / KafkaAvroDeserializer --&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;io.confluent&lt;/groupId&gt;
+      &lt;artifactId&gt;kafka-avro-serializer&lt;/artifactId&gt;
+      &lt;version&gt;${confluent.version}&lt;/version&gt;
+    &lt;/dependency&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.slf4j&lt;/groupId&gt;
+      &lt;artifactId&gt;slf4j-simple&lt;/artifactId&gt;
+      &lt;version&gt;${slf4j.version}&lt;/version&gt;
+    &lt;/dependency&gt;
+  &lt;/dependencies&gt;
+
+  &lt;build&gt;
+    &lt;plugins&gt;
+      &lt;!-- .avsc → SpecificRecord Java 클래스 생성 --&gt;
+      &lt;plugin&gt;
+        &lt;groupId&gt;org.apache.avro&lt;/groupId&gt;
+        &lt;artifactId&gt;avro-maven-plugin&lt;/artifactId&gt;
+        &lt;version&gt;${avro.version}&lt;/version&gt;
+        &lt;executions&gt;
+          &lt;execution&gt;
+            &lt;phase&gt;generate-sources&lt;/phase&gt;
+            &lt;goals&gt;&lt;goal&gt;schema&lt;/goal&gt;&lt;/goals&gt;
+            &lt;configuration&gt;
+              &lt;sourceDirectory&gt;${project.basedir}/src/main/avro&lt;/sourceDirectory&gt;
+              &lt;outputDirectory&gt;${project.build.directory}/generated-sources/avro&lt;/outputDirectory&gt;
+              &lt;!-- v1 은 참고용이라 생성 대상에서 제외합니다
+                   (같은 클래스명이 두 번 생성되면 충돌합니다) --&gt;
+              &lt;excludes&gt;
+                &lt;exclude&gt;**/UserSignup-v1.avsc&lt;/exclude&gt;
+              &lt;/excludes&gt;
+              &lt;!-- java.time 타입으로 매핑합니다(logicalType 사용 시) --&gt;
+              &lt;stringType&gt;String&lt;/stringType&gt;
+            &lt;/configuration&gt;
+          &lt;/execution&gt;
+        &lt;/executions&gt;
+      &lt;/plugin&gt;
+      &lt;plugin&gt;
+        &lt;groupId&gt;org.codehaus.mojo&lt;/groupId&gt;
+        &lt;artifactId&gt;exec-maven-plugin&lt;/artifactId&gt;
+        &lt;version&gt;3.5.0&lt;/version&gt;
+        &lt;configuration&gt;
+          &lt;mainClass&gt;com.example.avro.Main&lt;/mainClass&gt;
+        &lt;/configuration&gt;
+      &lt;/plugin&gt;
+    &lt;/plugins&gt;
+  &lt;/build&gt;
+&lt;/project&gt;</code></pre>
+      </figure>
+
+      <h3 id="producer">프로듀서</h3>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/avro/SignupProducer.java</figcaption>
+        <pre><code class="lang-java">package com.example.avro;
+
+import com.example.avro.model.Plan;
+import com.example.avro.model.UserSignup;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Properties;
+
+public class SignupProducer implements AutoCloseable {
+
+    private static final Logger log = LoggerFactory.getLogger(SignupProducer.class);
+
+    private final Producer&lt;String, UserSignup&gt; producer;
+    private final String topic;
+
+    public SignupProducer(String bootstrapServers, String schemaRegistryUrl,
+                          String topic, boolean autoRegister) {
+        this.topic = topic;
+
+        Properties p = new Properties();
+        p.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        p.put(ProducerConfig.CLIENT_ID_CONFIG, "signup-producer");
+        p.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        p.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class.getName());
+
+        // 내구성 — 예제 3과 같은 조합입니다.
+        p.put(ProducerConfig.ACKS_CONFIG, "all");
+        p.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        p.put(ProducerConfig.LINGER_MS_CONFIG, 20);
+
+        // --- Schema Registry 설정 -------------------------------------------
+        // Registry 주소. 여러 개를 쉼표로 적으면 장애 시 다른 노드를 씁니다.
+        p.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl);
+
+        // auto.register.schemas 의 기본값은 true 입니다.
+        // 개발 환경에서는 편하지만 프로덕션에서는 위험합니다 —
+        // 애플리케이션이 배포되는 순간 새 스키마가 조용히 등록되어,
+        // 리뷰 없이 계약이 바뀝니다.
+        // false 로 두면 CI 단계에서 등록·호환성 검사를 강제할 수 있습니다.
+        p.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, autoRegister);
+
+        // auto.register.schemas=false 일 때, 클라이언트가 이미 등록된
+        // 최신 버전을 조회해 쓰도록 합니다. 기본값 false.
+        // 이 값이 false 이고 스키마가 등록돼 있지 않으면 직렬화가 실패합니다.
+        p.put(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, !autoRegister);
+
+        // subject 이름 결정 방식.
+        // Schema Registry 8.x 의 기본값은 AssociatedNameStrategy 이며,
+        // Registry 에 연관 정보가 없으면 TopicNameStrategy 로 폴백합니다.
+        // 동작을 예측 가능하게 만들려면 명시하는 편이 안전합니다.
+        // TopicNameStrategy → subject 는 "{topic}-value" / "{topic}-key"
+        p.put(AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY,
+                io.confluent.kafka.serializers.subject.TopicNameStrategy.class.getName());
+
+        this.producer = new KafkaProducer&lt;&gt;(p);
+    }
+
+    public void send(String userId, String email, Plan plan, String referralSource) {
+        // Avro 생성 클래스는 builder 를 제공합니다.
+        // default 가 있는 필드는 생략할 수 있습니다.
+        UserSignup event = UserSignup.newBuilder()
+                .setUserId(userId)
+                .setEmail(email)
+                .setSignupAt(Instant.now().toEpochMilli())
+                .setPlan(plan)
+                .setReferralSource(referralSource)   // nullable
+                .setMarketingOptIn(false)
+                .build();
+
+        try {
+            producer.send(new ProducerRecord&lt;&gt;(topic, userId, event), (md, ex) -&gt; {
+                if (ex != null) {
+                    log.error("발행 실패 userId={}", userId, ex);
+                    return;
+                }
+                log.info("발행 성공 userId={} → {}-{}@{}",
+                        userId, md.topic(), md.partition(), md.offset());
+            });
+
+        } catch (SerializationException e) {
+            // 스키마 등록 실패 또는 호환성 위반이 여기로 옵니다.
+            // 재시도해도 결과가 같으므로 배포를 되돌려야 합니다.
+            log.error("직렬화 실패 — 스키마 호환성 또는 Registry 접근을 확인하세요. userId={}",
+                    userId, e);
+            throw e;
+        }
+    }
+
+    @Override
+    public void close() {
+        producer.flush();
+        producer.close(Duration.ofSeconds(130));
+    }
+}</code></pre>
+      </figure>
+
+      <h3 id="consumer">컨슈머</h3>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/avro/SignupConsumer.java</figcaption>
+        <pre><code class="lang-java">package com.example.avro;
+
+import com.example.avro.model.UserSignup;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
+import org.apache.kafka.clients.consumer.CloseOptions;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public class SignupConsumer implements Runnable {
+
+    private static final Logger log = LoggerFactory.getLogger(SignupConsumer.class);
+
+    private final org.apache.kafka.clients.consumer.Consumer&lt;String, UserSignup&gt; consumer;
+    private final String topic;
+    private final AtomicBoolean running = new AtomicBoolean(true);
+
+    public SignupConsumer(String bootstrapServers, String schemaRegistryUrl,
+                          String topic, String groupId) {
+        this.topic = topic;
+
+        Properties p = new Properties();
+        p.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        p.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        p.put(ConsumerConfig.CLIENT_ID_CONFIG, groupId + "-1");
+        p.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        p.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
+        p.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        // --- Schema Registry 설정 -------------------------------------------
+        p.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl);
+
+        // specific.avro.reader 의 기본값은 false 이고, 그때는 GenericRecord 를 돌려줍니다.
+        // true 로 두면 avro-maven-plugin 이 생성한 SpecificRecord 클래스로 역직렬화합니다.
+        // 타입 안전을 얻는 대신, 컨슈머가 자기 스키마(reader schema)로 읽게 되므로
+        // 호환성 규칙이 실제로 작동하는지가 중요해집니다.
+        p.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
+
+        this.consumer = new KafkaConsumer&lt;&gt;(p);
+    }
+
+    @Override
+    public void run() {
+        consumer.subscribe(List.of(topic));
+        try {
+            while (running.get()) {
+                ConsumerRecords&lt;String, UserSignup&gt; records =
+                        consumer.poll(Duration.ofSeconds(1));
+                if (records.isEmpty()) {
+                    continue;
+                }
+                for (ConsumerRecord&lt;String, UserSignup&gt; record : records) {
+                    UserSignup event = record.value();
+                    // v1 데이터를 v2 스키마로 읽으면 referralSource 는 default(null),
+                    // marketingOptIn 은 default(false) 로 채워집니다.
+                    // 이것이 BACKWARD 호환이 하는 일입니다.
+                    log.info("수신 {}-{}@{} userId={} plan={} referralSource={} marketingOptIn={}",
+                            record.topic(), record.partition(), record.offset(),
+                            event.getUserId(), event.getPlan(),
+                            event.getReferralSource(), event.getMarketingOptIn());
+                }
+                // 처리 후 커밋 → at-least-once (예제 4 참고)
+                consumer.commitSync(records.nextOffsets(), Duration.ofSeconds(15));
+            }
+        } catch (WakeupException e) {
+            log.info("종료 신호 수신");
+        } finally {
+            consumer.close(CloseOptions.timeout(Duration.ofSeconds(30)));
+        }
+    }
+
+    public void shutdown() {
+        running.set(false);
+        consumer.wakeup();
+    }
+}</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>src/main/java/com/example/avro/Main.java</figcaption>
+        <pre><code class="lang-java">package com.example.avro;
+
+import com.example.avro.model.Plan;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public final class Main {
+
+    private static final Logger log = LoggerFactory.getLogger(Main.class);
+
+    private static final String BOOTSTRAP =
+            "localhost:29092,localhost:39092,localhost:49092";
+    private static final String SCHEMA_REGISTRY = "http://localhost:8081";
+    private static final String TOPIC = "users.signup";
+
+    public static void main(String[] args) throws InterruptedException {
+        String mode = args.length &gt; 0 ? args[0] : "produce";
+
+        if ("consume".equals(mode)) {
+            String groupId = args.length &gt; 1 ? args[1] : "signup-analytics";
+            SignupConsumer consumer =
+                    new SignupConsumer(BOOTSTRAP, SCHEMA_REGISTRY, TOPIC, groupId);
+            Thread t = new Thread(consumer, "signup-consumer");
+            Runtime.getRuntime().addShutdownHook(new Thread(consumer::shutdown));
+            t.start();
+            t.join();
+            return;
+        }
+
+        // 프로덕션에서는 autoRegister=false 로 두고 CI 에서 등록합니다.
+        boolean autoRegister = !(args.length &gt; 1 &amp;&amp; "no-auto-register".equals(args[1]));
+        log.info("auto.register.schemas = {}", autoRegister);
+
+        try (SignupProducer producer =
+                     new SignupProducer(BOOTSTRAP, SCHEMA_REGISTRY, TOPIC, autoRegister)) {
+            producer.send("U-2001", "a@example.com", Plan.PRO, "google-ads");
+            producer.send("U-2002", "b@example.com", Plan.FREE, null);
+            producer.send("U-2003", "c@example.com", Plan.ENTERPRISE, "partner-referral");
+        }
+        log.info("발행 완료");
+    }
+}</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="how-to-run">
+      <h2 id="how-to-run">실행 방법</h2>
+
+      <figure class="code">
+        <figcaption>순서대로 실행</figcaption>
+        <pre><code class="lang-bash"># 0. 예제 1의 클러스터가 떠 있어야 합니다.
+cd kafka-lab &amp;&amp; docker compose ps
+
+# 1. 토픽 생성
+./kcli kafka-topics.sh --create --if-not-exists \
+  --topic users.signup --partitions 3 --replication-factor 3 \
+  --config min.insync.replicas=2
+
+# 2. Schema Registry 기동 (예제 1 네트워크에 붙습니다)
+cd ../avro-evolution
+docker compose -f docker-compose.schema-registry.yml up -d
+curl -s http://localhost:8081/subjects   # → [] 가 나오면 준비 완료
+
+# 3. v1 스키마를 먼저 등록합니다 (진화를 실습하기 위해 수동 등록)
+#    jq 로 .avsc 를 문자열로 감싸 REST 로 보냅니다.
+curl -s -X POST http://localhost:8081/subjects/users.signup-value/versions \
+  -H 'Content-Type: application/vnd.schemaregistry.v1+json' \
+  -d "$(jq -Rs '{schema: .}' &lt; src/main/avro/UserSignup-v1.avsc)"
+# → {"id":1}
+
+# 4. v2 가 BACKWARD 호환인지 "등록하지 않고" 먼저 검사합니다
+curl -s -X POST \
+  http://localhost:8081/compatibility/subjects/users.signup-value/versions/latest \
+  -H 'Content-Type: application/vnd.schemaregistry.v1+json' \
+  -d "$(jq -Rs '{schema: .}' &lt; src/main/avro/UserSignup.avsc)" | jq
+# → {"is_compatible": true}
+
+# 5. 빌드 (avro-maven-plugin 이 UserSignup.java 를 생성합니다)
+mvn -q clean package
+
+# 6. 컨슈머를 "먼저" 띄웁니다. BACKWARD 이므로 이 순서가 중요합니다.
+mvn -q exec:java -Dexec.args="consume signup-analytics" &amp;
+
+# 7. 프로듀서 실행 (v2 스키마로 발행)
+mvn -q exec:java -Dexec.args="produce"</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="verification">
+      <h2 id="verification">검증 방법</h2>
+
+      <h3 id="verify-subjects">1. subject와 버전이 만들어졌는가</h3>
+
+      <figure class="code">
+        <figcaption>Registry REST API 조회</figcaption>
+        <pre><code class="lang-bash"># subject 목록
+curl -s http://localhost:8081/subjects | jq
+# → ["users.signup-value"]
+
+# 이 subject 의 버전 목록
+curl -s http://localhost:8081/subjects/users.signup-value/versions | jq
+# → [1,2]
+
+# 최신 버전의 스키마
+curl -s http://localhost:8081/subjects/users.signup-value/versions/latest | jq
+
+# subject 별 호환성 모드 (설정하지 않으면 전역 기본값을 씁니다)
+curl -s http://localhost:8081/config/users.signup-value | jq
+curl -s http://localhost:8081/config | jq
+# → {"compatibilityLevel":"BACKWARD"}</code></pre>
+      </figure>
+
+      <p>
+        subject 이름이 <strong><code>users.signup-value</code></strong>인 것이
+        <code>TopicNameStrategy</code>가 동작한 결과입니다 —
+        <code>{topic}-value</code> 규칙입니다.
+        키에도 스키마를 쓴다면 <code>users.signup-key</code>가 함께 생깁니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-074">
+        <figcaption>
+          subject naming strategy 3종 — Topic / Record / TopicRecord가 만드는 subject 이름의 차이
+        </figcaption>
+      </figure>
+
+      <h3 id="verify-wire-format">2. wire format을 바이트로 확인</h3>
+
+      <p>
+        Avro 메시지의 앞 5바이트를 직접 보면 <strong>스키마가 메시지에 없다는 것</strong>을 확인할 수 있습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>레코드 원본 바이트 보기</figcaption>
+        <pre><code class="lang-bash">cd ../kafka-lab
+
+# 세그먼트 파일을 직접 덤프합니다.
+./kcli kafka-dump-log.sh \
+  --files /var/lib/kafka/data/users.signup-0/00000000000000000000.log \
+  --print-data-log --value-decoder-class kafka.serializer.DefaultDecoder \
+  | head -20</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>wire format 구조</figcaption>
+        <pre><code class="lang-text">바이트 0        : 0x00        magic byte (항상 0)
+바이트 1 ~ 4    : 0x00000001  schema id (4바이트 big-endian int) → 여기서는 1
+바이트 5 ~      : ...         Avro binary payload (필드 이름 없음, 순서와 타입만)</code></pre>
+      </figure>
+
+      <p>
+        <strong>magic byte가 <code>0x00</code>이 아니면</strong> 그 메시지는
+        Schema Registry 형식이 아닙니다 —
+        <code>StringSerializer</code>로 쓴 레코드를 <code>KafkaAvroDeserializer</code>로 읽으려 하면
+        여기서 실패합니다. 흔한 사고 경로입니다.
+      </p>
+
+      <h3 id="verify-backward">3. v1 데이터를 v2 컨슈머가 읽을 수 있는가 (<code>BACKWARD</code>의 실제 효과)</h3>
+
+      <figure class="code">
+        <figcaption>v1 스키마로 레코드를 하나 발행한 뒤, v2 컨슈머로 읽습니다</figcaption>
+        <pre><code class="lang-bash"># Registry 의 v1 스키마 id 를 확인합니다.
+curl -s http://localhost:8081/subjects/users.signup-value/versions/1 | jq '.id'
+
+# Confluent CLI 가 없다면, v1 필드만 채운 이벤트를 발행하는
+# 별도 프로듀서를 만들어 확인하는 것이 가장 확실합니다.
+# 이미 v1 으로 발행된 레코드가 남아 있다면 그것을 그대로 읽으면 됩니다.</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 컨슈머 로그 — v1 데이터가 default로 채워집니다</figcaption>
+        <pre><code class="lang-text">INFO c.e.avro.SignupConsumer - 수신 users.signup-1@0 userId=U-1001 plan=FREE referralSource=null marketingOptIn=false
+INFO c.e.avro.SignupConsumer - 수신 users.signup-1@1 userId=U-2001 plan=PRO referralSource=google-ads marketingOptIn=false</code></pre>
+      </figure>
+
+      <p>
+        첫 줄은 <strong>v1로 쓰인 레코드</strong>입니다.
+        <code>referralSource</code>가 데이터에 없으므로 스키마의 <code>default: null</code>이 채워졌습니다.
+        <strong>이 <code>default</code>가 없으면 이 지점에서 역직렬화가 실패합니다</strong> —
+        그것이 Registry가 등록을 거부하는 이유입니다.
+      </p>
+
+      <h3 id="verify-rejection">4. 호환되지 않는 변경이 거부되는가</h3>
+
+      <figure class="code">
+        <figcaption>시나리오의 사고를 재현 — 필드 이름 변경</figcaption>
+        <pre><code class="lang-bash"># signupAt → createdAt 으로 이름만 바꾼 스키마를 만듭니다.
+sed 's/"signupAt"/"createdAt"/' src/main/avro/UserSignup.avsc &gt; /tmp/UserSignup-bad.avsc
+
+# 등록 전 호환성 검사
+curl -s -X POST \
+  http://localhost:8081/compatibility/subjects/users.signup-value/versions/latest \
+  -H 'Content-Type: application/vnd.schemaregistry.v1+json' \
+  -d "$(jq -Rs '{schema: .}' &lt; /tmp/UserSignup-bad.avsc)" | jq</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>기대 출력 — 거부됩니다</figcaption>
+        <pre><code class="lang-json">{
+  "is_compatible": false
+}</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>이유까지 보려면 <code>verbose=true</code></figcaption>
+        <pre><code class="lang-bash">curl -s -X POST \
+  'http://localhost:8081/compatibility/subjects/users.signup-value/versions/latest?verbose=true' \
+  -H 'Content-Type: application/vnd.schemaregistry.v1+json' \
+  -d "$(jq -Rs '{schema: .}' &lt; /tmp/UserSignup-bad.avsc)" | jq</code></pre>
+      </figure>
+
+      <p>
+        <strong>이 검사를 CI에 넣는 것이 이 예제의 실질적 결론입니다.</strong>
+        머지 전에 <code>/compatibility</code> 엔드포인트로 검사하면
+        스키마 변경이 프로덕션에 도달하기 전에 막힙니다.
+        시나리오의 40분 장애는 이 한 줄로 예방됩니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="compat-modes">
+      <h2 id="compat-modes">호환성 모드 7종과 배포 순서</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Schema Registry 호환성 모드 (REST <code>/config</code>의 <code>compatibilityLevel</code>에 설정)</caption>
+          <thead>
+            <tr>
+              <th scope="col">모드</th>
+              <th scope="col">보장</th>
+              <th scope="col">검사 대상</th>
+              <th scope="col">배포 순서</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>BACKWARD</code> <span class="badge">기본값</span></th>
+              <td>새 스키마로 <strong>직전 버전</strong>의 데이터를 읽을 수 있음</td>
+              <td>직전 1개 버전</td>
+              <td><strong>컨슈머 먼저</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>BACKWARD_TRANSITIVE</code></th>
+              <td>새 스키마로 <strong>모든 이전 버전</strong>의 데이터를 읽을 수 있음</td>
+              <td>전체 버전</td>
+              <td><strong>컨슈머 먼저</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>FORWARD</code></th>
+              <td><strong>직전 버전</strong> 스키마로 새 데이터를 읽을 수 있음</td>
+              <td>직전 1개 버전</td>
+              <td><strong>프로듀서 먼저</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>FORWARD_TRANSITIVE</code></th>
+              <td><strong>모든 이전 버전</strong> 스키마로 새 데이터를 읽을 수 있음</td>
+              <td>전체 버전</td>
+              <td><strong>프로듀서 먼저</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>FULL</code></th>
+              <td>양방향 (직전 버전과)</td>
+              <td>직전 1개 버전</td>
+              <td>순서 무관</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>FULL_TRANSITIVE</code></th>
+              <td>양방향 (모든 버전과)</td>
+              <td>전체 버전</td>
+              <td>순서 무관</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>NONE</code></th>
+              <td>검사하지 않음</td>
+              <td>—</td>
+              <td>— (사고가 납니다)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="diagram" data-diagram="D-073">
+        <figcaption>
+          배포 순서 — <code>BACKWARD</code>는 컨슈머 먼저, <code>FORWARD</code>는 프로듀서 먼저.
+          뒤바꿨을 때 무슨 일이 생기는지
+        </figcaption>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCDAK Fundamentals">
+        <p>
+          <strong>배포 순서는 외우지 말고 유도하세요.</strong>
+        </p>
+        <ul>
+          <li><code>BACKWARD</code>는 <strong>"새 reader가 옛 데이터를 읽는다"</strong>를 보장합니다.
+            그래서 <strong>컨슈머(reader)를 먼저</strong> 새 스키마로 올려도 안전합니다.
+            프로듀서를 먼저 올리면 아직 옛 스키마인 컨슈머가 새 데이터를 못 읽습니다.</li>
+          <li><code>FORWARD</code>는 <strong>"옛 reader가 새 데이터를 읽는다"</strong>를 보장합니다.
+            그래서 <strong>프로듀서를 먼저</strong> 올려도 안전합니다.</li>
+        </ul>
+        <p>
+          그리고 <code>TRANSITIVE</code>가 붙지 않은 모드는 <strong>직전 한 버전만</strong> 검사합니다.
+          v1 → v2 → v3를 각각 <code>BACKWARD</code>로 통과시켜도
+          <strong>v3가 v1 데이터를 읽을 수 있다는 보장은 없습니다.</strong>
+          보관 기간이 길어 옛 데이터를 다시 읽어야 하는 토픽에는
+          <code>BACKWARD_TRANSITIVE</code>를 쓰세요.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>subject별 호환성 모드 변경</figcaption>
+        <pre><code class="lang-bash"># 이 subject 만 BACKWARD_TRANSITIVE 로 강화합니다.
+curl -s -X PUT http://localhost:8081/config/users.signup-value \
+  -H 'Content-Type: application/vnd.schemaregistry.v1+json' \
+  -d '{"compatibility": "BACKWARD_TRANSITIVE"}' | jq
+
+# 전역 기본값 변경 (모든 subject 에 영향)
+curl -s -X PUT http://localhost:8081/config \
+  -H 'Content-Type: application/vnd.schemaregistry.v1+json' \
+  -d '{"compatibility": "FULL_TRANSITIVE"}' | jq</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="production">
+      <h2 id="production">프로덕션 고려사항</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>로컬 예제와 프로덕션의 차이</caption>
+          <thead><tr><th scope="col">항목</th><th scope="col">이 예제</th><th scope="col">프로덕션</th></tr></thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>auto.register.schemas</code></th>
+              <td><code>true</code>(기본값)로 실습</td>
+              <td><strong><code>false</code></strong>. 애플리케이션 배포가 계약 변경을 일으키면 안 됩니다. CI에서 <code>/compatibility</code> 검사 후 등록합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">Registry 가용성</th>
+              <td>단일 인스턴스</td>
+              <td>2대 이상 + <code>schema.registry.url</code>에 모두 나열. <code>_schemas</code> 토픽 RF 3. Registry가 죽으면 <strong>새 스키마의 직렬화·역직렬화가 실패</strong>합니다(캐시된 것은 계속 동작)</td>
+            </tr>
+            <tr>
+              <th scope="row">역직렬화 실패</th>
+              <td>처리하지 않음</td>
+              <td><code>ErrorHandlingDeserializer</code>로 감싸지 않으면 잘못된 레코드가 <strong>포이즌 필</strong>이 되어 파티션을 영구히 막습니다(<a href="ex06.html">예제 6</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">호환성 모드</th>
+              <td>전역 <code>BACKWARD</code></td>
+              <td>토픽 성격별로 subject 단위 설정. 보관이 긴 토픽은 <code>BACKWARD_TRANSITIVE</code>, 양방향 배포가 필요하면 <code>FULL</code></td>
+            </tr>
+            <tr>
+              <th scope="row">보안</th>
+              <td>인증 없음</td>
+              <td>Registry에 인증(<code>basic.auth.credentials.source</code>)과 TLS를 적용하고, 쓰기 권한을 CI로 제한합니다. 인증 없는 Registry는 누구나 계약을 바꿀 수 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">스키마 소유권</th>
+              <td>애플리케이션 안 <code>.avsc</code></td>
+              <td>스키마 전용 저장소에 두고 <strong>리뷰를 거쳐</strong> 변경합니다. 프로듀서·컨슈머 팀이 같은 파일을 참조해야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>specific.avro.reader</code></th>
+              <td><code>true</code></td>
+              <td>타입 안전을 얻지만 스키마 변경 시 <strong>재빌드가 필요</strong>합니다. 스키마를 모르고 라우팅만 하는 서비스는 <code>GenericRecord</code>(기본값 <code>false</code>)가 유리합니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">자주 하는 실수</h2>
+
+      <aside class="note note--warn" data-label="실수 1 · 새 필드에 default 를 넣지 않는다">
+        <p>
+          <code>BACKWARD</code>에서 필드를 추가할 때 <code>default</code>가 없으면
+          <strong>등록 자체가 거부됩니다.</strong>
+          "필수 필드로 만들고 싶다"는 요구와 스키마 진화는 근본적으로 충돌합니다 —
+          이전 데이터에는 그 필드가 없기 때문입니다.
+          <strong>필수로 만들려면 새 토픽을 만들거나, <code>NONE</code>으로 내리고 전체를 동시 배포</strong>하는
+          수밖에 없습니다(후자는 다운타임을 뜻합니다).
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 2 · auto.register.schemas 를 켠 채로 배포한다">
+        <p>
+          기본값이 <strong><code>true</code></strong>입니다.
+          그래서 개발자가 로컬에서 스키마를 만지고 배포하면
+          <strong>리뷰 없이 프로덕션 Registry에 새 버전이 등록됩니다.</strong>
+          호환성 검사는 통과하겠지만, <strong>의도하지 않은 계약 변경</strong>이 쌓입니다.
+          그리고 스테이징 코드가 프로덕션 Registry를 가리키는 실수가 나면
+          엉뚱한 스키마가 등록됩니다.
+          프로덕션 클라이언트는 <code>false</code> + <code>use.latest.version=true</code>로 두세요.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 3 · TRANSITIVE 없는 모드로 여러 버전을 쌓는다">
+        <p>
+          <code>BACKWARD</code>는 <strong>직전 한 버전만</strong> 검사합니다.
+          v1→v2에서 필드 A를 추가하고, v2→v3에서 필드 A를 삭제하면
+          두 단계 모두 통과하지만 <strong>v3 스키마로 v1 데이터를 읽는 것은 보장되지 않습니다.</strong>
+          보관 기간이 길거나 재처리가 잦은 토픽은 <code>BACKWARD_TRANSITIVE</code>를 쓰세요.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 4 · 배포 순서를 뒤바꾼다">
+        <p>
+          <code>BACKWARD</code>인데 <strong>프로듀서를 먼저</strong> 배포하면,
+          아직 옛 스키마를 쓰는 컨슈머가 새 데이터를 읽지 못하고
+          <strong>역직렬화 실패로 파티션이 막힙니다.</strong>
+          호환성 모드를 정하는 것과 배포 순서를 정하는 것은 <strong>같은 결정</strong>입니다.
+          <a href="../cases/case09.html">케이스 9</a>가 이 사고를 다룹니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 5 · Avro 토픽에 평문을 쓴다">
+        <p>
+          <code>kafka-console-producer.sh</code>로 Avro 토픽에 텍스트를 넣으면
+          magic byte가 <code>0x00</code>이 아니어서
+          <code>KafkaAvroDeserializer</code>가 <strong>모든 컨슈머에서 실패</strong>합니다.
+          그 레코드는 재시도로 해결되지 않는 포이즌 필입니다.
+          Avro 토픽을 CLI로 확인할 때는
+          <code>kafka-avro-console-consumer</code>(Confluent Platform 제공)를 쓰거나
+          <code>--value-deserializer</code>를 <code>ByteArrayDeserializer</code>로 두세요.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="실수 6 · subject naming strategy 를 가정한다">
+        <p>
+          Schema Registry <strong>8.x의 기본 subject naming strategy는
+          <code>AssociatedNameStrategy</code></strong>이며,
+          Registry에 연관 정보가 없을 때 <code>TopicNameStrategy</code>로 폴백합니다.
+          "기본값은 <code>TopicNameStrategy</code>"라고 가정한 코드는
+          버전에 따라 다르게 동작할 수 있습니다.
+          <strong>동작을 고정하려면 <code>value.subject.name.strategy</code>를 명시하세요.</strong>
+          이 예제가 그렇게 했습니다.
+        </p>
+      </aside>
+
+      <h3 id="related-cases">관련 케이스 스터디</h3>
+      <ul>
+        <li><a href="../cases/case09.html">케이스 9</a> — 스키마 변경 배포 순서를 뒤바꿔 컨슈머가 전부 죽은 사고.</li>
+        <li><a href="../cases/case04.html">케이스 4</a> — 키 없는 발행으로 순서가 깨진 사고.</li>
+        <li><a href="../cases/case10.html">케이스 10</a> — 메시지 크기 초과. Avro는 payload가 작아 이 문제가 덜하지만 헤더는 별개입니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="next">
+      <h2 id="next">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch08.html">
+          <span class="card__title">8장 · 스키마와 직렬화</span>
+          <span class="card__desc">호환성 매트릭스와 wire format을 원리부터.</span>
+          <span class="card__meta">CCDAK Fundamentals</span>
+        </a></li>
+        <li><a class="card" href="ex08.html">
+          <span class="card__title">예제 8 · Connect CDC 파이프라인</span>
+          <span class="card__desc">Connect의 converter가 이 Registry를 그대로 씁니다.</span>
+          <span class="card__meta">실무</span>
+        </a></li>
+        <li><a class="card" href="ex06.html">
+          <span class="card__title">예제 6 · DLQ + 재시도 패턴</span>
+          <span class="card__desc">역직렬화 실패를 DLQ로 보내는 방법.</span>
+          <span class="card__meta">실무</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc">Producer/Consumer 설정 전체 표.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>
+        Kafka 설정은 Apache Kafka 4.3.1 문서에서, Schema Registry의 설정명·기본값·호환성 모드 목록은
+        <code>confluentinc/schema-registry</code> v8.2.2 소스에서 확인했습니다.
+      </p>
+      <ul>
+        <li><a href="https://docs.confluent.io/platform/current/schema-registry/index.html" rel="noopener noreferrer">Confluent Schema Registry</a> — 아키텍처, wire format(magic byte + 4바이트 schema id + payload), <code>_schemas</code> 토픽</li>
+        <li><a href="https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html" rel="noopener noreferrer">Schema Evolution and Compatibility</a> — 호환성 모드 7종(<code>BACKWARD</code>, <code>BACKWARD_TRANSITIVE</code>, <code>FORWARD</code>, <code>FORWARD_TRANSITIVE</code>, <code>FULL</code>, <code>FULL_TRANSITIVE</code>, <code>NONE</code>), 모드별 배포 순서, 전역 기본값 <code>BACKWARD</code></li>
+        <li><a href="https://docs.confluent.io/platform/current/schema-registry/develop/api.html" rel="noopener noreferrer">Schema Registry API Reference</a> — <code>/subjects</code>, <code>/subjects/{subject}/versions</code>, <code>/compatibility/subjects/{subject}/versions/{version}</code>, <code>/config</code></li>
+        <li><a href="https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html" rel="noopener noreferrer">Serializers, Deserializers</a> — <code>schema.registry.url</code>, <code>auto.register.schemas</code>(기본 <code>true</code>), <code>use.latest.version</code>(기본 <code>false</code>), <code>specific.avro.reader</code>(기본 <code>false</code>), <code>key.subject.name.strategy</code> / <code>value.subject.name.strategy</code></li>
+        <li><a href="https://avro.apache.org/docs/1.12.0/specification/" rel="noopener noreferrer">Apache Avro Specification</a> — 스키마 해석(resolution) 규칙, <code>default</code>의 역할, 타입 승격</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs" rel="noopener noreferrer">Producer Configs</a> — <code>acks</code>, <code>enable.idempotence</code>, <code>linger.ms</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#consumerconfigs" rel="noopener noreferrer">Consumer Configs</a> — <code>enable.auto.commit</code>, <code>auto.offset.reset</code></li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

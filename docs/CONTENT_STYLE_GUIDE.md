@@ -29,8 +29,8 @@
 |---|---|
 | KRaft | 4.0부터 유일 모드 |
 | KIP-848 새 컨슈머 리밸런스 프로토콜 | 4.0 GA — `group.protocol=consumer` |
-| KIP-932 Queues / Share Groups | 4.2부터 production-ready |
-| Streams Rebalance Protocol | 4.1 Early Access |
+| KIP-932 Queues / Share Groups | 4.1 preview → **4.2 production-ready**. ack 타입 4종: `ACCEPT`(1) `RELEASE`(2) `REJECT`(3) `RENEW`(4) |
+| Streams Rebalance Protocol | 4.1 EA → **4.2 production-ready** (신규 4.2+ 클러스터는 브로커 측 기본 활성) |
 | Tiered Storage | 3.9 GA 이후 안정화 |
 | Java 요구사항 | 브로커 Java 17+, 클라이언트 Java 11+ (4.x 기준, 문서에서 재확인할 것) |
 

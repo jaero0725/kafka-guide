@@ -1,0 +1,94 @@
+<svg viewBox="0 0 720 564" role="img" class="kg-diagram"
+     aria-labelledby="d117-title d117-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d117-title">case08 — cleanup.policy 오설정으로 상태 토픽의 최신 값이 사라지는 흐름</title>
+  <desc id="d117-desc">정상 흐름에서 상태 저장용 토픽과 Kafka Streams changelog 토픽은 cleanup.policy 를 compact 로 두어 키별 최신 값을 계속 보존합니다. 어긋나는 지점에서 이 토픽에 cleanup.policy=delete 와 retention.ms 7일이 적용되면 삭제 정책이 세그먼트 단위로 동작해 오래된 세그먼트를 통째로 버립니다. 결과적으로 마지막 갱신이 7일보다 오래된 키는 그 최신 값까지 함께 사라지고, 상태 저장소를 changelog 로 복구할 때 그 키들이 빠진 상태로 되살아납니다. 이미 삭제된 데이터는 복구할 수 없습니다. 처방은 kafka-configs.sh 로 정책을 확인하고 compact 로 되돌리며, Streams 내부 토픽 설정을 임의로 덮어쓰지 않는 것입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<rect class="dg-node dg-node--ok" x="8" y="8" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="29">1. 정상 흐름</text>
+<text class="dg-fs-sm dg-muted" x="698" y="29" text-anchor="end">상태 토픽은 compact</text>
+<g>
+<rect class="dg-node" x="24" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="58.5" text-anchor="middle">키별 갱신 이벤트</text>
+</g>
+<path class="dg-edge" d="M175.5,54 L194.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="198.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="58.5" text-anchor="middle">cleanup.policy=compact</text>
+</g>
+<path class="dg-edge" d="M350,54 L369,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="373" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="58.5" text-anchor="middle">키별 최신 값 유지</text>
+</g>
+<path class="dg-edge" d="M524.5,54 L543.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="547.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="58.5" text-anchor="middle">상태 복구 가능</text>
+</g>
+<text class="dg-fs-sm" x="24" y="98">compact 는 같은 키의 옛 값만 지우고 최신 값은 남깁니다 — 시간이 지나도 사라지지 않습니다.</text>
+<text class="dg-fs-sm" x="24" y="116">Kafka Streams 의 changelog 토픽은 이 성질에 의존해 상태 저장소를 복구합니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="152" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="173">2. 어긋나는 지점</text>
+<text class="dg-fs-sm dg-muted" x="698" y="173" text-anchor="end">삭제 정책이 세그먼트를 통째로 버립니다</text>
+<g>
+<rect class="dg-node dg-node--danger" x="24" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="202.6" text-anchor="middle">cleanup.policy=delete</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M175.5,198 L194.5,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--warn" x="198.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="202.6" text-anchor="middle">retention.ms 7일</text>
+</g>
+<path class="dg-edge" d="M350,198 L369,198" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="373" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="202.6" text-anchor="middle">7일 지난 세그먼트 삭제</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M524.5,198 L543.5,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="547.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="202.6" text-anchor="middle">최신 값도 함께 소멸</text>
+</g>
+<text class="dg-fs-sm" x="24" y="242">delete 는 키를 보지 않습니다 — 세그먼트의 시간·크기 조건만 보고 통째로 버립니다.</text>
+<text class="dg-fs-sm" x="24" y="260">마지막 갱신이 오래된 키일수록 먼저 사라집니다. 자주 갱신되는 키는 남아서 더 늦게 발견됩니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="296" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="317">3. 결과</text>
+<text class="dg-fs-sm dg-muted" x="698" y="317" text-anchor="end">복구된 상태에 구멍이 생깁니다</text>
+<g>
+<rect class="dg-node dg-node--warn" x="24" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="346.6" text-anchor="middle">changelog 에서 복구</text>
+</g>
+<path class="dg-edge" d="M175.5,342 L194.5,342" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="198.5" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="346.6" text-anchor="middle">오래된 키 누락</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M350,342 L369,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="373" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="346.6" text-anchor="middle">집계 결과 어긋남</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M524.5,342 L543.5,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="547.5" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="346.6" text-anchor="middle">되돌릴 수 없음</text>
+</g>
+<text class="dg-fs-sm" x="24" y="386">상태 저장소는 changelog 를 처음부터 재생해 복원하므로, 지워진 키는 복원되지 않습니다.</text>
+<text class="dg-fs-sm" x="24" y="404">집계·조인 결과가 조용히 틀려지고 원인을 로그에서 찾을 수 없습니다.</text>
+<path class="dg-edge dg-edge--danger" d="M360,132 L360,149" marker-end="url(#mk-arrow-danger)"/>
+<path class="dg-edge dg-edge--danger" d="M360,276 L360,293" marker-end="url(#mk-arrow-danger)"/>
+<rect class="dg-node dg-node--ok" x="8" y="440" width="704" height="116" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="461">처방</text>
+<text class="dg-fs-sm" x="70" y="461">확인: kafka-configs.sh --bootstrap-server :9092 --describe --entity-type topics --entity-name X</text>
+<text class="dg-fs-sm" x="70" y="479">복원: kafka-configs.sh --alter --entity-type topics --entity-name X</text>
+<text class="dg-fs-sm" x="70" y="497">      --add-config cleanup.policy=compact   (이미 삭제된 데이터는 복구 불가)</text>
+<text class="dg-fs-sm" x="70" y="515">두 정책을 함께 쓰려면 cleanup.policy=delete,compact 로 명시합니다 — 의도한 조합인지 확인합니다.</text>
+<text class="dg-fs-sm" x="70" y="533">Streams 내부 토픽(changelog · repartition)은 애플리케이션이 만든 설정을 임의로 바꾸지 않습니다.</text>
+</svg>

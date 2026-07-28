@@ -1,0 +1,90 @@
+<svg viewBox="0 0 720 582" role="img" class="kg-diagram"
+     aria-labelledby="d115-title d115-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d115-title">case06 — min.insync.replicas 를 1 로 둔 채 acks=all 을 믿다가 유실되는 흐름</title>
+  <desc id="d115-desc">정상 흐름에서 replication.factor 3, acks=all, min.insync.replicas 1 조합은 겉보기에 가장 강한 설정처럼 보입니다. 어긋나는 지점에서 팔로워 두 대가 지연되어 ISR 에서 빠지면 ISR 이 리더 한 대만 남지만, min.insync.replicas 가 1 이므로 쓰기는 계속 성공합니다. 이때 성공한 쓰기는 사실상 acks=1 과 같습니다. 결과적으로 리더가 죽으면 그 구간이 유실되고, 프로듀서는 acks=all 로 성공 응답을 받았기 때문에 사고를 인지하지 못합니다. 처방은 min.insync.replicas 를 2 로 올려 ISR 이 부족할 때 쓰기가 거부되게 하고 UnderMinIsrPartitionCount 를 감시하는 것입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<rect class="dg-node dg-node--ok" x="8" y="8" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="29">1. 정상 흐름</text>
+<text class="dg-fs-sm dg-muted" x="698" y="29" text-anchor="end">설정만 보면 가장 안전해 보입니다</text>
+<g>
+<rect class="dg-node dg-node--ok" x="24" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="58.5" text-anchor="middle">RF 3 · ISR 3</text>
+</g>
+<path class="dg-edge" d="M175.5,54 L194.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="198.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="58.5" text-anchor="middle">acks=all</text>
+</g>
+<path class="dg-edge" d="M350,54 L369,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="373" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="58.5" text-anchor="middle">ISR 전원 응답 후 성공</text>
+</g>
+<path class="dg-edge" d="M524.5,54 L543.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="547.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="58.5" text-anchor="middle">유실 없음</text>
+</g>
+<text class="dg-fs-sm" x="24" y="98">acks=all 은 "현재 ISR 전원"의 응답을 기다립니다 — ISR 이 3이면 3대 모두입니다.</text>
+<text class="dg-fs-sm" x="24" y="116">min.insync.replicas 는 그 ISR 이 최소 몇 개여야 쓰기를 받아 줄지의 하한선입니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="152" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="173">2. 어긋나는 지점</text>
+<text class="dg-fs-sm dg-muted" x="698" y="173" text-anchor="end">ISR 이 줄어드는 순간이 문제입니다</text>
+<g>
+<rect class="dg-node dg-node--warn" x="24" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="202.6" text-anchor="middle">팔로워 2대 지연</text>
+</g>
+<path class="dg-edge" d="M175.5,198 L194.5,198" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="198.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="202.6" text-anchor="middle">ISR = {리더} 1개</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M350,198 L369,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="373" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="202.6" text-anchor="middle">min.insync=1 이라 통과</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M524.5,198 L543.5,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="547.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="202.6" text-anchor="middle">사실상 acks=1</text>
+</g>
+<text class="dg-fs-sm" x="24" y="242">ISR 이 1로 줄어도 min.insync.replicas=1 이면 조건을 만족하므로 쓰기가 계속 성공합니다.</text>
+<text class="dg-fs-sm" x="24" y="260">이 구간의 데이터는 어느 팔로워에도 복제되어 있지 않습니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="296" width="704" height="140" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="317">3. 결과</text>
+<text class="dg-fs-sm dg-muted" x="698" y="317" text-anchor="end">acks=all 인데도 유실됩니다</text>
+<g>
+<rect class="dg-node dg-node--danger" x="24" y="326" width="206.7" height="32" rx="4"/>
+<text class="dg-fs-sm" x="127.3" y="346.6" text-anchor="middle">리더 장애</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M233.7,342 L252.7,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="256.7" y="326" width="206.7" height="32" rx="4"/>
+<text class="dg-fs-sm" x="360" y="346.6" text-anchor="middle">복제 안 된 구간 소실</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M466.3,342 L485.3,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="489.3" y="326" width="206.7" height="32" rx="4"/>
+<text class="dg-fs-sm" x="592.7" y="346.6" text-anchor="middle">프로듀서는 성공으로 인지</text>
+</g>
+<text class="dg-fs-sm" x="24" y="386">문서상 acks=all 은 "ISR 중 하나라도 살아 있으면 유실 없음"인데, ISR 이 1이면</text>
+<text class="dg-fs-sm" x="24" y="404">그 하나가 곧 리더입니다 — 리더가 죽으면 남는 것이 없습니다.</text>
+<text class="dg-fs-sm" x="24" y="422">min.insync.replicas 를 함께 올리지 않은 acks=all 은 보장을 만들지 못합니다.</text>
+<path class="dg-edge dg-edge--danger" d="M360,132 L360,149" marker-end="url(#mk-arrow-danger)"/>
+<path class="dg-edge dg-edge--danger" d="M360,276 L360,293" marker-end="url(#mk-arrow-danger)"/>
+<rect class="dg-node dg-node--ok" x="8" y="458" width="704" height="116" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="479">처방</text>
+<text class="dg-fs-sm" x="70" y="479">replication.factor 3 · min.insync.replicas 2 · acks=all 을 한 세트로 설정합니다.</text>
+<text class="dg-fs-sm" x="70" y="497">min.insync=2 면 ISR 부족 시 NotEnoughReplicas 로 쓰기가 거부됩니다.</text>
+<text class="dg-fs-sm" x="70" y="515">유실 대신 가용성을 희생하는 선택이라는 점을 팀과 합의해 둡니다.</text>
+<text class="dg-fs-sm" x="70" y="533">감시: UnderMinIsrPartitionCount 와 IsrShrinksPerSec 를 알람에 넣습니다.</text>
+<text class="dg-fs-sm" x="70" y="551">확인: kafka-topics.sh --bootstrap-server :9092 --describe --at-min-isr-partitions</text>
+</svg>

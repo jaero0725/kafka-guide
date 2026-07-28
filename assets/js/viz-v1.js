@@ -271,7 +271,14 @@
   var D034_STICKY_RUN = 5;      // 그림에서 한 배치로 축약한 건수
 
   register('D-034', function (ctx) {
+    // SVG 파일의 정적 초기 상태(키 order-42 · 파티션 6개 · 8건 전송)와 같은 값으로 시작합니다.
+    // JS 없이 본 그림과 JS 로드 직후의 그림이 달라지지 않아야 합니다.
     var st = { counts: [0, 0, 0, 0, 0, 0, 0, 0], seq: [], total: 0, sticky: 0, stickyLeft: D034_STICKY_RUN, rr: 0 };
+    function seedState() {
+      resetState();
+      var p0 = partitionForKey('order-42', 6);
+      for (var i = 0; i < 8; i++) { st.counts[p0]++; st.total++; st.seq.push(p0); }
+    }
 
     var ctrl = ctx.bindControls({
       items: [
@@ -386,6 +393,7 @@
       );
     }
 
+    seedState();
     render(ctrl.values());
   });
 
@@ -567,7 +575,7 @@
       items: [
         { type: 'range', name: 'consumers', label: '컨슈머 수', min: 1, max: 5, step: 1, value: 3,
           format: function (v) { return v + '명'; } },
-        { type: 'range', name: 'parts', label: '토픽당 파티션 수', min: 1, max: 6, step: 1, value: 6,
+        { type: 'range', name: 'parts', label: '토픽당 파티션 수', min: 2, max: 8, step: 1, value: 8,
           format: function (v) { return v + '개'; } },
         { type: 'range', name: 'topics', label: '토픽 수', min: 1, max: 2, step: 1, value: 1,
           format: function (v) { return v + '개'; } },
@@ -584,7 +592,9 @@
     }
     function fmt(list) {
       if (!list || !list.length) return '(없음)';
-      var s = list.map(function (pp) { return 't' + pp.t + 'p' + pp.p; });
+      // 읽기 쉽도록 토픽 → 파티션 순으로 정렬해 표시합니다 (할당 순서 자체는 의미 없음)
+      var s = list.slice().sort(function (a, b) { return a.t - b.t || a.p - b.p; })
+        .map(function (pp) { return 't' + pp.t + 'p' + pp.p; });
       if (s.length > 7) return s.slice(0, 6).join(' ') + ' …+' + (s.length - 6);
       return s.join(' ');
     }

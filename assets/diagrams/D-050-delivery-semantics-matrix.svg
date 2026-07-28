@@ -1,89 +1,94 @@
-<svg viewBox="0 0 720 352" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 378" role="img" class="kg-diagram"
      aria-labelledby="d050-title d050-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d050-title">3가지 전달 보장 비교 — at-most-once · at-least-once · exactly-once</title>
   <desc id="d050-desc">세 가지 전달 보장을 설정 조합과 결과로 비교하는 표입니다.
     at-most-once 는 프로듀서에서 acks=0, retries=0, enable.idempotence=false 로 재시도를 끄고
     컨슈머가 처리 전에 오프셋을 커밋합니다. 결과는 유실 있음, 중복 없음입니다.
-    at-least-once 는 Kafka 의 기본 동작으로 acks=all, retries 는 기본값인 사실상 무한,
+    at-least-once 는 Kafka 의 기본 동작으로 acks=all, retries 는 기본값 2147483647,
     enable.idempotence=true 이며 컨슈머가 처리 후에 커밋합니다. 결과는 유실 없음, 중복 있음입니다.
     exactly-once 는 여기에 transactional.id 를 설정한 트랜잭션 프로듀서를 더하고,
     컨슈머는 isolation.level=read_committed, enable.auto.commit=false 로 두고
     오프셋 커밋을 트랜잭션 안에 포함시킵니다. 결과는 유실도 중복도 없지만
-    그 보장은 Kafka 토픽에서 Kafka 토픽으로 처리하는 범위 안에서만 성립합니다.</desc>
+    그 보장은 Kafka 토픽에서 Kafka 토픽으로 처리하는 범위 안에서만 성립합니다.
+    retries 를 0 으로 두려면 enable.idempotence 를 false 로 함께 내려야 합니다.
+    멱등 프로듀서에서 retries 가 0 이면 ConfigException 이 발생합니다.</desc>
 
   <text x="12" y="20" class="dg-fs-md dg-bold">3가지 전달 보장 — 설정 조합이 결과를 결정합니다</text>
 
   <!-- exactly-once 열 강조 (핵심 경로) -->
-  <rect class="dg-node dg-node--accent" x="520" y="34" width="188" height="246" rx="4"/>
+  <rect class="dg-node dg-node--accent" x="504" y="34" width="204" height="264" rx="4"/>
 
   <!-- 헤더 밴드 -->
-  <rect class="dg-node dg-node--alt" x="12" y="34" width="508" height="28" rx="4"/>
+  <rect class="dg-node dg-node--alt" x="12" y="34" width="492" height="28" rx="4"/>
   <text class="dg-fs-sm dg-bold" x="20" y="52">구분</text>
-  <text class="dg-fs-sm dg-bold" x="152" y="52">at-most-once</text>
-  <text class="dg-fs-sm dg-bold" x="340" y="52">at-least-once <tspan class="dg-muted">(기본)</tspan></text>
-  <text class="dg-fs-sm dg-bold" x="528" y="52">exactly-once</text>
+  <text class="dg-fs-sm dg-bold" x="128" y="52">at-most-once</text>
+  <text class="dg-fs-sm dg-bold" x="320" y="52">at-least-once <tspan class="dg-muted">(기본)</tspan></text>
+  <text class="dg-fs-sm dg-bold" x="512" y="52">exactly-once</text>
 
   <!-- 그리드 -->
   <line class="dg-grid" x1="12" y1="62" x2="708" y2="62"/>
-  <line class="dg-grid" x1="12" y1="124" x2="708" y2="124"/>
-  <line class="dg-grid" x1="12" y1="186" x2="708" y2="186"/>
-  <line class="dg-grid" x1="12" y1="216" x2="708" y2="216"/>
-  <line class="dg-grid" x1="12" y1="246" x2="708" y2="246"/>
-  <line class="dg-grid" x1="12" y1="280" x2="708" y2="280"/>
-  <line class="dg-grid" x1="144" y1="34" x2="144" y2="280"/>
-  <line class="dg-grid" x1="332" y1="34" x2="332" y2="280"/>
+  <line class="dg-grid" x1="12" y1="142" x2="708" y2="142"/>
+  <line class="dg-grid" x1="12" y1="204" x2="708" y2="204"/>
+  <line class="dg-grid" x1="12" y1="234" x2="708" y2="234"/>
+  <line class="dg-grid" x1="12" y1="264" x2="708" y2="264"/>
+  <line class="dg-grid" x1="12" y1="298" x2="708" y2="298"/>
+  <line class="dg-grid" x1="120" y1="34" x2="120" y2="298"/>
+  <line class="dg-grid" x1="312" y1="34" x2="312" y2="298"/>
 
   <!-- 1행: 프로듀서 설정 -->
   <text class="dg-fs-sm dg-bold" x="20" y="80">프로듀서</text>
-  <text class="dg-fs-sm dg-mono" x="152" y="80">acks=0</text>
-  <text class="dg-fs-sm dg-mono" x="152" y="98">retries=0</text>
-  <text class="dg-fs-sm dg-mono" x="152" y="116">enable.idempotence=false</text>
-  <text class="dg-fs-sm dg-mono" x="340" y="80">acks=all</text>
-  <text class="dg-fs-sm dg-mono" x="340" y="98">retries=2147483647</text>
-  <text class="dg-fs-sm dg-mono" x="340" y="116">enable.idempotence=true</text>
-  <text class="dg-fs-sm" x="528" y="80">at-least-once 설정 +</text>
-  <text class="dg-fs-sm dg-mono dg-bold" x="528" y="98">transactional.id</text>
-  <text class="dg-fs-sm" x="528" y="116">트랜잭션 프로듀서</text>
+  <text class="dg-fs-sm dg-mono" x="128" y="80">acks=0</text>
+  <text class="dg-fs-sm dg-mono" x="128" y="97">retries=0</text>
+  <text class="dg-fs-sm dg-mono" x="128" y="114">enable.idempotence</text>
+  <text class="dg-fs-sm dg-mono" x="128" y="131">  = false</text>
+  <text class="dg-fs-sm dg-mono" x="320" y="80">acks=all</text>
+  <text class="dg-fs-sm dg-mono" x="320" y="97">retries=2147483647</text>
+  <text class="dg-fs-sm dg-mono" x="320" y="114">enable.idempotence</text>
+  <text class="dg-fs-sm dg-mono" x="320" y="131">  = true</text>
+  <text class="dg-fs-sm" x="512" y="80">at-least-once 설정 +</text>
+  <text class="dg-fs-sm dg-mono dg-bold" x="512" y="97">transactional.id</text>
+  <text class="dg-fs-sm" x="512" y="114">트랜잭션 프로듀서를</text>
+  <text class="dg-fs-sm" x="512" y="131">컨슈머와 1:1 로 둡니다</text>
 
   <!-- 2행: 컨슈머 설정 -->
-  <text class="dg-fs-sm dg-bold" x="20" y="142">컨슈머</text>
-  <text class="dg-fs-sm" x="152" y="142">처리 <tspan class="dg-bold">전</tspan> 오프셋 커밋</text>
-  <text class="dg-fs-sm dg-muted" x="152" y="160">커밋 후 죽으면</text>
-  <text class="dg-fs-sm dg-muted" x="152" y="178">그 구간은 처리 안 됨</text>
-  <text class="dg-fs-sm" x="340" y="142">처리 <tspan class="dg-bold">후</tspan> 오프셋 커밋</text>
-  <text class="dg-fs-sm dg-muted" x="340" y="160">처리 후 커밋 전에 죽으면</text>
-  <text class="dg-fs-sm dg-muted" x="340" y="178">같은 구간을 다시 처리</text>
-  <text class="dg-fs-sm dg-mono" x="528" y="142">read_committed</text>
-  <text class="dg-fs-sm dg-mono" x="528" y="160">auto.commit=false</text>
-  <text class="dg-fs-sm dg-bold" x="528" y="178">오프셋을 트랜잭션에 포함</text>
+  <text class="dg-fs-sm dg-bold" x="20" y="160">컨슈머</text>
+  <text class="dg-fs-sm" x="128" y="160">처리 <tspan class="dg-bold">전</tspan> 오프셋 커밋</text>
+  <text class="dg-fs-sm dg-muted" x="128" y="177">커밋 후 죽으면</text>
+  <text class="dg-fs-sm dg-muted" x="128" y="194">그 구간은 처리 안 됨</text>
+  <text class="dg-fs-sm" x="320" y="160">처리 <tspan class="dg-bold">후</tspan> 오프셋 커밋</text>
+  <text class="dg-fs-sm dg-muted" x="320" y="177">커밋 전에 죽으면</text>
+  <text class="dg-fs-sm dg-muted" x="320" y="194">같은 구간을 다시 처리</text>
+  <text class="dg-fs-sm dg-mono" x="512" y="160">read_committed</text>
+  <text class="dg-fs-sm dg-mono" x="512" y="177">auto.commit=false</text>
+  <text class="dg-fs-sm dg-bold" x="512" y="194">오프셋을 트랜잭션에</text>
 
   <!-- 3행: 유실 -->
-  <text class="dg-fs-sm dg-bold" x="20" y="205">유실</text>
-  <rect class="dg-node dg-node--danger" x="152" y="192" width="52" height="18" rx="3"/>
-  <text class="dg-fs-sm dg-bold" x="178" y="205" text-anchor="middle">있음</text>
-  <rect class="dg-node dg-node--ok" x="340" y="192" width="52" height="18" rx="3"/>
-  <text class="dg-fs-sm dg-bold" x="366" y="205" text-anchor="middle">없음</text>
-  <rect class="dg-node dg-node--ok" x="528" y="192" width="52" height="18" rx="3"/>
-  <text class="dg-fs-sm dg-bold" x="554" y="205" text-anchor="middle">없음</text>
+  <text class="dg-fs-sm dg-bold" x="20" y="223">유실</text>
+  <rect class="dg-node dg-node--danger" x="128" y="210" width="52" height="18" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="154" y="223" text-anchor="middle">있음</text>
+  <rect class="dg-node dg-node--ok" x="320" y="210" width="52" height="18" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="346" y="223" text-anchor="middle">없음</text>
+  <rect class="dg-node dg-node--ok" x="512" y="210" width="52" height="18" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="538" y="223" text-anchor="middle">없음</text>
 
   <!-- 4행: 중복 -->
-  <text class="dg-fs-sm dg-bold" x="20" y="235">중복</text>
-  <rect class="dg-node dg-node--ok" x="152" y="222" width="52" height="18" rx="3"/>
-  <text class="dg-fs-sm dg-bold" x="178" y="235" text-anchor="middle">없음</text>
-  <rect class="dg-node dg-node--danger" x="340" y="222" width="52" height="18" rx="3"/>
-  <text class="dg-fs-sm dg-bold" x="366" y="235" text-anchor="middle">있음</text>
-  <rect class="dg-node dg-node--ok" x="528" y="222" width="52" height="18" rx="3"/>
-  <text class="dg-fs-sm dg-bold" x="554" y="235" text-anchor="middle">없음</text>
+  <text class="dg-fs-sm dg-bold" x="20" y="253">중복</text>
+  <rect class="dg-node dg-node--ok" x="128" y="240" width="52" height="18" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="154" y="253" text-anchor="middle">없음</text>
+  <rect class="dg-node dg-node--danger" x="320" y="240" width="52" height="18" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="346" y="253" text-anchor="middle">있음</text>
+  <rect class="dg-node dg-node--ok" x="512" y="240" width="52" height="18" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="538" y="253" text-anchor="middle">없음</text>
 
   <!-- 5행: 성립 범위 -->
-  <text class="dg-fs-sm dg-bold" x="20" y="267">성립 범위</text>
-  <text class="dg-fs-sm dg-muted" x="152" y="267">재시도를 포기한 대가</text>
-  <text class="dg-fs-sm dg-muted" x="340" y="267">Kafka 의 기본 보장</text>
-  <text class="dg-fs-sm dg-bold" x="528" y="267">Kafka 토픽 → 토픽 안에서만</text>
+  <text class="dg-fs-sm dg-bold" x="20" y="285">성립 범위</text>
+  <text class="dg-fs-sm dg-muted" x="128" y="285">재시도를 포기한 대가</text>
+  <text class="dg-fs-sm dg-muted" x="320" y="285">Kafka 의 기본 보장</text>
+  <text class="dg-fs-sm dg-bold" x="512" y="285">Kafka 토픽 → 토픽 안에서만</text>
 
   <!-- 각주 -->
-  <line class="dg-grid" x1="12" y1="292" x2="708" y2="292"/>
-  <text class="dg-fs-sm" x="12" y="310"><tspan class="dg-mono">retries=0</tspan> 은 <tspan class="dg-mono">enable.idempotence=false</tspan> 와 함께여야 합니다 — 멱등 프로듀서는 <tspan class="dg-mono">retries</tspan> 가 0 이면 ConfigException 을 던집니다.</text>
-  <text class="dg-fs-sm" x="12" y="330">exactly-once 는 외부 DB·HTTP 호출까지 보장하지 않습니다. 경계는 <tspan class="dg-bold">D-054</tspan> 를 보세요.</text>
-  <text class="dg-fs-sm dg-muted" x="12" y="348">기준: Apache Kafka 4.3 (acks 기본 all, enable.idempotence 기본 true, isolation.level 기본 read_uncommitted)</text>
+  <line class="dg-grid" x1="12" y1="312" x2="708" y2="312"/>
+  <text class="dg-fs-sm" x="12" y="330"><tspan class="dg-mono">retries=0</tspan> 은 <tspan class="dg-mono">enable.idempotence=false</tspan> 와 함께여야 합니다.</text>
+  <text class="dg-fs-sm" x="12" y="348">멱등 프로듀서(기본값)에서 <tspan class="dg-mono">retries</tspan> 가 0 이면 <tspan class="dg-bold">ConfigException</tspan> 이 발생합니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="366">exactly-once 는 외부 DB·HTTP 호출까지 보장하지 않습니다 (D-054). 기준: Apache Kafka 4.3.</text>
 </svg>

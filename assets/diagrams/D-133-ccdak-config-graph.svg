@@ -18,7 +18,7 @@
 <text class="dg-fs-sm" x="266" y="41">● 토픽</text>
 <rect class="dg-node dg-node--alt" x="362" y="30" width="16" height="12" rx="3"/>
 <text class="dg-fs-sm" x="384" y="41">◆ 컨슈머</text>
-<text class="dg-fs-sm dg-muted" x="478" y="41">노드를 클릭하면 연결된 설정만 남습니다</text>
+<text class="dg-fs-sm dg-muted" x="462" y="41">노드를 클릭하면 연결된 설정만 남습니다</text>
 <text class="dg-fs-sm" x="8" y="60">⇒ 필요 조건      ≤ ≥ 값 상한 · 하한      ⊂ 예산 · 용량에 포함      ⊕ 둘 중 먼저 오는 쪽</text>
 <text class="dg-fs-sm" x="8" y="78">⊳ 토픽이 브로커 값을 덮어씀      ⊗ 한 번에 처리할 양      ⨯ 보장을 무력화(위험)      ∥ 직접 의존 없음</text>
 <rect class="dg-panel" x="30" y="90" width="682" height="132" rx="4"/>

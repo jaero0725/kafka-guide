@@ -1,0 +1,87 @@
+<svg viewBox="0 0 720 646" role="img" class="kg-diagram"
+     aria-labelledby="d119-title d119-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d119-title">case10 — 메시지 크기 설정 5종의 소속과 막히는 지점</title>
+  <desc id="d119-desc">왼쪽에서 오른쪽으로 프로듀서 앱, 프로듀서 버퍼, 브로커 수신, 토픽 override, 팔로워 복제, 컨슈머 fetch 순서로 레코드가 지나가는 경로를 그리고 각 지점에 관련 설정과 기본값, 소속을 표시했습니다. 프로듀서의 max.request.size 1048576, 브로커의 message.max.bytes 1048588, 토픽의 max.message.bytes 1048588 은 넘으면 거부하는 하드 게이트입니다. 프로듀서 쪽은 전송 전에 RecordTooLargeException 으로 실패하고 브로커 쪽은 MESSAGE_TOO_LARGE 로 거부합니다. 반면 브로커의 replica.fetch.max.bytes 1048576, 컨슈머의 max.partition.fetch.bytes 1048576, fetch.max.bytes 52428800 은 절대 상한이 아니며 첫 배치가 더 커도 그대로 반환해 복제와 소비가 멈추지 않도록 보장합니다. 토픽만 올리면 프로듀서에서 막히고 프로듀서만 올리면 브로커가 거부하므로 두 곳을 함께 올려야 합니다. RecordTooLargeException 은 재시도 가능한 오류가 아니라 즉시 실패하며, 무한 재시도로 보이는 증상은 대개 애플리케이션 자체의 재전송 루프입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="20">case10 — 1.5MB 레코드가 어디서 막히는가 (설정별 소속과 성격)</text>
+<text class="dg-fs-sm dg-muted" x="8" y="42">레코드가 지나가는 순서대로 상한 설정을 늘어놓았습니다. 위에서 아래로 읽습니다.</text>
+<rect class="dg-node dg-node--alt" x="28" y="54" width="684" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="74">1  프로듀서 앱</text>
+<text class="dg-fs-sm dg-mono dg-bold" x="150" y="74">send(1.5MB)</text>
+<text class="dg-fs-sm dg-num" x="376" y="74">기본 —</text>
+<text class="dg-fs-sm" x="468" y="74">애플리케이션</text>
+<text class="dg-fs-sm" x="552" y="74"></text>
+<rect class="dg-node dg-node--danger" x="28" y="88" width="684" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="108">2  프로듀서 버퍼</text>
+<text class="dg-fs-sm dg-mono dg-bold" x="150" y="108">max.request.size</text>
+<text class="dg-fs-sm dg-num" x="376" y="108">기본 1048576</text>
+<text class="dg-fs-sm" x="468" y="108">프로듀서 ▲</text>
+<text class="dg-fs-sm" x="552" y="108">하드 — 전송 전 거부</text>
+<rect class="dg-node dg-node--danger" x="28" y="122" width="684" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="142">3  브로커 수신</text>
+<text class="dg-fs-sm dg-mono dg-bold" x="150" y="142">message.max.bytes</text>
+<text class="dg-fs-sm dg-num" x="376" y="142">기본 1048588</text>
+<text class="dg-fs-sm" x="468" y="142">브로커 ■</text>
+<text class="dg-fs-sm" x="552" y="142">하드 — 브로커가 거부</text>
+<rect class="dg-node dg-node--danger" x="28" y="156" width="684" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="176">4  토픽 override</text>
+<text class="dg-fs-sm dg-mono dg-bold" x="150" y="176">max.message.bytes</text>
+<text class="dg-fs-sm dg-num" x="376" y="176">기본 1048588</text>
+<text class="dg-fs-sm" x="468" y="176">토픽 ●</text>
+<text class="dg-fs-sm" x="552" y="176">하드 — 브로커 값을 덮어씀</text>
+<rect class="dg-node dg-node--ok" x="28" y="190" width="684" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="210">5  팔로워 복제</text>
+<text class="dg-fs-sm dg-mono dg-bold" x="150" y="210">replica.fetch.max.bytes</text>
+<text class="dg-fs-sm dg-num" x="376" y="210">기본 1048576</text>
+<text class="dg-fs-sm" x="468" y="210">브로커 ■</text>
+<text class="dg-fs-sm" x="552" y="210">소프트 — 진행 보장</text>
+<rect class="dg-node dg-node--ok" x="28" y="224" width="684" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="244">6  컨슈머 fetch</text>
+<text class="dg-fs-sm dg-mono dg-bold" x="150" y="244">max.partition.fetch.bytes</text>
+<text class="dg-fs-sm dg-num" x="376" y="244">기본 1048576</text>
+<text class="dg-fs-sm" x="468" y="244">컨슈머 ◆</text>
+<text class="dg-fs-sm" x="552" y="244">소프트 — 진행 보장</text>
+<rect class="dg-node dg-node--ok" x="28" y="258" width="684" height="30" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="278">6  컨슈머 fetch</text>
+<text class="dg-fs-sm dg-mono dg-bold" x="150" y="278">fetch.max.bytes</text>
+<text class="dg-fs-sm dg-num" x="376" y="278">기본 52428800</text>
+<text class="dg-fs-sm" x="468" y="278">컨슈머 ◆</text>
+<text class="dg-fs-sm" x="552" y="278">소프트 — 요청 전체 예산</text>
+<path class="dg-edge dg-edge--accent" d="M18,60 L18,280" marker-end="url(#mk-arrow-accent)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="8" y="300" width="348" height="96" rx="4"/>
+<text class="dg-fs-sm" x="20" y="320.6" text-anchor="start">하드 게이트 — 넘으면 거부합니다</text>
+<text class="dg-fs-sm" x="20" y="336.6" text-anchor="start">max.request.size (프로듀서) : 전송 전에</text>
+<text class="dg-fs-sm" x="20" y="352.6" text-anchor="start">  RecordTooLargeException 으로 즉시 실패</text>
+<text class="dg-fs-sm" x="20" y="368.6" text-anchor="start">message.max.bytes / max.message.bytes (브로커·토픽) :</text>
+<text class="dg-fs-sm" x="20" y="384.6" text-anchor="start">  브로커가 MESSAGE_TOO_LARGE 로 거부</text>
+</g>
+<g>
+<rect class="dg-node dg-node--ok" x="364" y="300" width="348" height="96" rx="4"/>
+<text class="dg-fs-sm" x="376" y="320.6" text-anchor="start">소프트 상한 — 진행을 막지 않습니다</text>
+<text class="dg-fs-sm" x="376" y="336.6" text-anchor="start">replica.fetch.max.bytes · max.partition.fetch.bytes ·</text>
+<text class="dg-fs-sm" x="376" y="352.6" text-anchor="start">fetch.max.bytes 는 절대 상한이 아닙니다.</text>
+<text class="dg-fs-sm" x="376" y="368.6" text-anchor="start">첫 배치가 이 값보다 커도 그대로 반환해</text>
+<text class="dg-fs-sm" x="376" y="384.6" text-anchor="start">복제와 소비가 멈추지 않게 보장합니다 (문서 명시).</text>
+</g>
+<rect class="dg-node dg-node--danger" x="8" y="410" width="704" height="96" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="430">어긋나는 지점과 결과</text>
+<text class="dg-fs-sm" x="24" y="452">토픽 max.message.bytes 만 10MB 로 올리고 프로듀서를 그대로 두면 프로듀서에서 먼저 막힙니다.</text>
+<text class="dg-fs-sm" x="24" y="470">반대로 프로듀서만 올리면 브로커가 MESSAGE_TOO_LARGE 로 거부합니다 — 두 곳을 함께 올려야 합니다.</text>
+<text class="dg-fs-sm" x="24" y="488">RecordTooLargeException 은 재시도 가능한 오류가 아닙니다 — 즉시 실패하고 반복되지 않습니다.</text>
+<text class="dg-fs-sm" x="24" y="506">"무한 재시도"로 보이는 증상은 대개 애플리케이션이 실패한 레코드를 다시 넣는 자체 루프입니다.</text>
+<rect class="dg-node dg-node--ok" x="8" y="518" width="704" height="116" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="538">처방</text>
+<text class="dg-fs-sm" x="24" y="560">큰 레코드를 허용하려면 프로듀서 max.request.size 와 브로커·토픽 쪽 상한을 함께 올립니다.</text>
+<text class="dg-fs-sm" x="24" y="578">복제·소비 쪽은 진행이 보장되므로 필수는 아니지만 처리량을 위해 함께 검토합니다.</text>
+<text class="dg-fs-sm" x="24" y="596">확인: kafka-configs.sh --bootstrap-server :9092 --describe --entity-type topics --entity-name X</text>
+<text class="dg-fs-sm" x="24" y="614">가능하면 큰 본문은 오브젝트 스토리지에 두고 Kafka 에는 참조 키만 보냅니다 (claim check 패턴).</text>
+<text class="dg-fs-sm" x="24" y="632">message.max.bytes 는 압축 후 배치 크기 기준입니다 — 압축을 켜면 실제 통과량이 달라집니다.</text>
+</svg>

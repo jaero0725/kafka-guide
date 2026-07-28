@@ -68,7 +68,7 @@
 
 | # | 토픽 | 반드시 다룰 포인트 | 담당 |
 |:--:|---|---|---|
-| F1 | 두 토픽 조인 조건 | **co-partitioning 요구사항**: ① 양쪽 **키가 같아야** 함 ② **파티션 수가 동일**해야 함 ③ **같은 파티셔닝 전략** 사용 / 위반 시 `TopologyException` 또는 잘못된 결과 / 불일치 시 `repartition()`으로 강제 재분배 / **GlobalKTable 조인은 co-partitioning 불필요** (전체 복제) / KStream-KStream 조인은 **윈도우 필수** | ch10, ccdak-streams |
+| F1 | 두 토픽 조인 조건 | ⚠️ **정정(A3 확인)**: 공식 문서가 명시하는 co-partitioning 요건은 **② 파티션 수 동일 ③ 파티셔너 동일 두 개**다. "① 키 동일"은 요건이 아니라 **equi-join의 전제**다. 그리고 **Streams가 런타임에 검증하는 것은 파티션 수뿐**이다 — 파티셔너 불일치는 조용히 잘못된 결과를 낸다 / 예외명은 `TopologyException`이 아니라 **`TopologyBuilderException`** / 불일치 시 `repartition()`으로 강제 재분배 / **GlobalKTable·FK 조인은 co-partitioning 불필요** / KStream-KStream 조인은 **윈도우 필수** | ch10, ccdak-streams |
 | F2 | KStream vs KTable에 적합한 데이터 | **KStream**: 독립적인 사실의 연속 — 클릭, 결제 트랜잭션, 센서 측정, 로그 (**append-only, 같은 키 반복 = 각각 별개 이벤트**) / **KTable**: 키별 최신 상태 — 사용자 프로필, 재고 수량, 계정 잔액 (**upsert 의미, 같은 키 반복 = 갱신, null = 삭제**) / **GlobalKTable**: 작고 자주 안 변하는 참조 데이터 (국가 코드, 환율) / changelog vs record stream 이원성 | ch10, ccdak-streams |
 | F3 | stateless vs stateful 연산 | **stateless**: `map`, `mapValues`, `filter`, `filterNot`, `flatMap`, `flatMapValues`, `foreach`, `peek`, `branch`, `merge`, `selectKey`, `to`, `through` / **stateful**: `count`, `reduce`, `aggregate`, 모든 **윈도우 연산**, 모든 **조인**, `suppress` / stateful은 **상태 저장소(RocksDB) + changelog 토픽** 생성 / **키를 바꾸는 연산(`map`, `selectKey`)은 리파티션 유발** — `mapValues`는 유발하지 않음 (**시험 단골**) | ch10, cheatsheet/streams |
 
@@ -88,7 +88,7 @@
 
 | # | 토픽 | 반드시 다룰 포인트 | 담당 |
 |:--:|---|---|---|
-| I1 | Kafka 테스팅 도구 | **단위 테스트**: `MockProducer` / `MockConsumer` (kafka-clients), Streams는 **`TopologyTestDriver`** + `TestInputTopic`/`TestOutputTopic` (브로커 불필요, 가장 자주 출제) / **통합 테스트**: **Testcontainers**(`KafkaContainer`), `EmbeddedKafkaCluster`, Spring `@EmbeddedKafka` / **성능 테스트**: **`kafka-producer-perf-test.sh`**, **`kafka-consumer-perf-test.sh`**, `kafka-e2e-latency.sh` — 주요 옵션과 출력 해석 / **목 데이터 생성**: Confluent **`kafka-connect-datagen`** 커넥터, ksqlDB `datagen` / 어떤 상황에 무엇을 쓰는지 **선택 기준 표** | ch10, practice/ex-테스트, ccdak-testing |
+| I1 | Kafka 테스팅 도구 | **단위 테스트**: `MockProducer` / `MockConsumer` (kafka-clients), Streams는 **`TopologyTestDriver`** + `TestInputTopic`/`TestOutputTopic` + `MockProcessorContext` (브로커 불필요, 가장 자주 출제) / **통합 테스트**: **Testcontainers**(`KafkaContainer`), Spring `@EmbeddedKafka` — ⚠️ **정정(A3 확인)**: `EmbeddedKafkaCluster`는 **Apache Kafka의 공개 배포 아티팩트가 아니다** (`streams/integration-tests` 내부 테스트 유틸리티). "Apache 제공 도구"로 분류하면 틀린다 — 오답 유도 지점으로 쓰기 좋다 / **성능 테스트**: **`kafka-producer-perf-test.sh`**, **`kafka-consumer-perf-test.sh`**, `kafka-e2e-latency.sh` / **목 데이터 생성**: Confluent `kafka-connect-datagen`, ksqlDB `datagen` (외부 프로젝트 — 버전·API를 단정하지 말 것) / **Apache 제공 vs 외부 프로젝트를 구분하는 선택 기준 표** | ch10, practice, ccdak-testing |
 
 ---
 

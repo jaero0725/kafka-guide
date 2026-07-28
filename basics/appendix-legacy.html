@@ -96,8 +96,8 @@
           <tbody>
             <tr><th scope="row"><code>kafka_2.13</code></th><td><strong>Scala 2.13</strong>으로 컴파일된 배포판. 현행 Kafka가 제공하는 유일한 Scala 버전입니다</td></tr>
             <tr><th scope="row"><code>-4.3.1</code></th><td><strong>Apache Kafka 버전</strong></td></tr>
-            <tr><th scope="row"><code>_2.12</code></th><td>과거 배포판에 있던 Scala 2.12 빌드. <strong>Scala 2.12 지원은 Kafka 4.0에서 제거</strong>되었습니다(KIP-751)</td></tr>
-            <tr><th scope="row"><code>_2.11</code></th><td>더 오래된 배포판. 2.x 시절 이미 사라졌습니다</td></tr>
+            <tr><th scope="row"><code>_2.12</code></th><td>Scala 2.12 빌드. 3.9까지 함께 배포되었고 <strong>Scala 2.12 지원은 Kafka 4.0에서 제거</strong>되었습니다(KIP-751)</td></tr>
+            <tr><th scope="row"><code>_2.11</code></th><td>더 오래된 배포판. <strong>2.0에는 있었고 2.8 배포에서는 이미 사라졌습니다</strong> (아카이브 확인)</td></tr>
             <tr><th scope="row"><code>kafka-4.3.1-src.tgz</code></th><td>소스 배포판. <strong>Scala 접두어가 없습니다</strong> — 접두어 유무로 바이너리/소스를 구분할 수 있습니다</td></tr>
           </tbody>
         </table>
@@ -997,8 +997,8 @@ bin/kafka-features.sh --bootstrap-server localhost:9092 describe
             </tr>
             <tr>
               <th scope="row">Scala 배포판</th>
-              <td>2.11 → 2.12 / 2.13</td>
-              <td>2.12 / 2.13</td>
+              <td>2.0은 <strong>2.11 / 2.12</strong>. <strong>2.4에 2.13이 추가</strong>되고(2.11/2.12/2.13 셋), 2.8에서 <strong>2.11이 사라져</strong> 2.12/2.13</td>
+              <td>2.12 / 2.13 (3.0~3.9 전부)</td>
               <td><strong><code>kafka_2.13-4.3.1.tgz</code> 단일.</strong> Scala 2.12 지원은 4.0에서 제거(KIP-751)</td>
             </tr>
             <tr>

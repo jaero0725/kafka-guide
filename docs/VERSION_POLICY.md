@@ -67,15 +67,18 @@ kafka_2.13-4.3.0.tgz
 | `enable.idempotence` 기본값 | false | 3.0부터 true | true |
 | `acks` 기본값 | 1 | 3.0부터 all | all |
 | 컨슈머 리밸런스 프로토콜 | eager 중심 | cooperative 도입 | **KIP-848 GA** |
-| `--zookeeper` CLI 옵션 | 사용 | deprecated | **제거됨** |
-| 파티션 할당 기본 전략 | Range | Range/Cooperative | **`[RangeAssignor, CooperativeStickyAssignor]`** ✔확인 |
-| Queues / Share Groups | 없음 | 없음 | **4.2 GA** |
+| `--zookeeper` CLI 옵션 | 사용 | **3.0에서 관리 도구에서 제거 (KIP-604)** ✔확인 | 없음 |
+| 파티션 할당 기본 전략 | `RangeAssignor` ✔확인 | 3.0부터 `[RangeAssignor, CooperativeStickyAssignor]` (KIP-726) ✔확인 | 동일 ✔확인 |
+| Queues / Share Groups | 없음 | 없음 | 4.0 EA → 4.1 preview → **4.2 production-ready** ✔확인 |
+| Streams Rebalance Protocol | 없음 | 없음 | 4.1 EA → **4.2 production-ready** ✔확인 |
+| Connect exactly-once (source) | 없음 | **3.3부터** ✔확인 | 지원 |
+| Connect 리밸런스 프로토콜 | 2.3부터 증분 협력적 ✔확인 | 동일 | 동일 |
 | Tiered Storage | 없음 | 3.6 EA → 3.9 GA | 지원 |
 | Java 최소 버전 | 8 | 8/11 | **17·21·25 완전 지원. 8은 4.0에서 제거** ✔확인 |
-| Scala 배포판 | 2.12 / 2.13 | 2.12 / 2.13 | **2.13 전용** |
+| Scala 배포판 | 2.0=2.11+2.12, 2.4에 2.13 추가, 2.8에 2.11 소멸 ✔아카이브 실측 | 2.12 / 2.13 | **2.13 단일** ✔확인 |
 
-> ⚠️ 위 표의 값들도 **에이전트가 공식 문서로 재확인**한 뒤 쓴다.
-> 확인 못 한 칸은 비우고 반환 리포트에 남긴다. 추정치를 채우지 않는다.
+> ✔확인 = A1·A2·A3가 4.3.1 site-docs / 소스 / archive.apache.org 실측으로 확정한 칸.
+> 재확인 없이 그대로 쓴다. `basics/appendix-legacy.html`에 16행 확장표가 있으니 그것도 참조.
 
 ---
 

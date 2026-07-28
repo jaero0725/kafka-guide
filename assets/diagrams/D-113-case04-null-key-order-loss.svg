@@ -1,0 +1,92 @@
+<svg viewBox="0 0 720 528" role="img" class="kg-diagram"
+     aria-labelledby="d113-title d113-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d113-title">case04 — 키 없이 프로듀싱해 같은 엔티티의 순서 보장이 깨지는 흐름</title>
+  <desc id="d113-desc">정상 흐름에서는 주문 아이디를 키로 주므로 파티셔너가 murmur2 해시를 파티션 수로 나눈 나머지를 써서 같은 키를 항상 같은 파티션으로 보냅니다. 순서 보장은 파티션 안에서만 성립하므로 이때 한 주문의 이벤트 순서가 지켜집니다. 어긋나는 지점에서 키를 null 로 두면 파티셔너가 sticky 방식으로 배치 단위로 파티션을 바꾸므로 같은 주문의 생성, 수정, 취소 이벤트가 서로 다른 파티션에 흩어집니다. 결과적으로 컨슈머 세 명이 각 파티션을 병렬로 처리하면서 취소가 생성보다 먼저 처리될 수 있고 최종 상태가 어긋납니다. 처방은 순서가 중요한 이벤트에 엔티티 키를 반드시 지정하는 것입니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--ok" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--warn" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<rect class="dg-node dg-node--ok" x="8" y="8" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="29">1. 정상 흐름</text>
+<text class="dg-fs-sm dg-muted" x="698" y="29" text-anchor="end">같은 키는 같은 파티션</text>
+<g>
+<rect class="dg-node dg-node--ok" x="24" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="58.5" text-anchor="middle">key=order-42</text>
+</g>
+<path class="dg-edge" d="M175.5,54 L194.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node" x="198.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="58.5" text-anchor="middle">murmur2(key) % 파티션수</text>
+</g>
+<path class="dg-edge" d="M350,54 L369,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="373" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="58.5" text-anchor="middle">항상 파티션 1</text>
+</g>
+<path class="dg-edge" d="M524.5,54 L543.5,54" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--ok" x="547.5" y="38" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="58.5" text-anchor="middle">파티션 안에서 순서 보장</text>
+</g>
+<text class="dg-fs-sm" x="24" y="98">기본 파티셔너는 키가 있으면 murmur2(key) 를 파티션 수로 나눈 나머지로 정합니다 (결정적).</text>
+<text class="dg-fs-sm" x="24" y="116">Kafka 는 파티션 안에서만 순서를 보장합니다. 토픽 전체 순서라는 개념은 없습니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="152" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="173">2. 어긋나는 지점</text>
+<text class="dg-fs-sm dg-muted" x="698" y="173" text-anchor="end">key=null 이면 배치마다 파티션이 바뀝니다</text>
+<g>
+<rect class="dg-node dg-node--warn" x="24" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="202.6" text-anchor="middle">key=null</text>
+</g>
+<path class="dg-edge" d="M175.5,198 L194.5,198" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="198.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="202.6" text-anchor="middle">sticky 배치 파티셔닝</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M350,198 L369,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="373" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="202.6" text-anchor="middle">CREATE → P0</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M524.5,198 L543.5,198" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="547.5" y="182" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="202.6" text-anchor="middle">CANCEL → P2</text>
+</g>
+<text class="dg-fs-sm" x="24" y="242">키가 없으면 파티셔너는 배치가 찰 때까지 한 파티션에 몰아 쓰고 그다음 배치는 다른 파티션을 고릅니다 (sticky).</text>
+<text class="dg-fs-sm" x="24" y="260">레코드마다 번갈아 도는 순수 라운드로빈이 아니라 배치 단위로 옮겨 가는 방식입니다.</text>
+<rect class="dg-node dg-node--danger" x="8" y="296" width="704" height="122" rx="4"/>
+<text class="dg-fs-md dg-bold" x="22" y="317">3. 결과</text>
+<text class="dg-fs-sm dg-muted" x="698" y="317" text-anchor="end">취소가 생성보다 먼저 처리됩니다</text>
+<g>
+<rect class="dg-node dg-node--warn" x="24" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="98.2" y="346.6" text-anchor="middle">컨슈머 3명 병렬 처리</text>
+</g>
+<path class="dg-edge" d="M175.5,342 L194.5,342" marker-end="url(#mk-arrow)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="198.5" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="272.8" y="346.6" text-anchor="middle">P2 가 먼저 소비</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M350,342 L369,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="373" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="447.2" y="346.6" text-anchor="middle">CANCEL 먼저 적용</text>
+</g>
+<path class="dg-edge dg-edge--danger" d="M524.5,342 L543.5,342" marker-end="url(#mk-arrow-danger)"/>
+<g>
+<rect class="dg-node dg-node--danger" x="547.5" y="326" width="148.5" height="32" rx="4"/>
+<text class="dg-fs-sm" x="621.8" y="346.6" text-anchor="middle">최종 상태 불일치</text>
+</g>
+<text class="dg-fs-sm" x="24" y="386">파티션이 다르면 처리 순서를 보장할 방법이 없습니다 — 컨슈머 수를 줄여도 해결되지 않습니다.</text>
+<text class="dg-fs-sm" x="24" y="404">이미 흩어진 데이터는 사후에 순서를 복원할 수 없습니다.</text>
+<path class="dg-edge dg-edge--danger" d="M360,132 L360,149" marker-end="url(#mk-arrow-danger)"/>
+<path class="dg-edge dg-edge--danger" d="M360,276 L360,293" marker-end="url(#mk-arrow-danger)"/>
+<rect class="dg-node dg-node--ok" x="8" y="440" width="704" height="80" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="22" y="461">처방</text>
+<text class="dg-fs-sm" x="70" y="461">순서가 중요한 이벤트에는 엔티티 식별자를 키로 지정합니다 (주문 ID · 계정 ID 등).</text>
+<text class="dg-fs-sm" x="70" y="479">파티션 수를 늘리면 키 → 파티션 매핑이 바뀌므로 순서가 필요한 토픽의 파티션 증설은 신중하게 합니다.</text>
+<text class="dg-fs-sm" x="70" y="497">전역 순서가 꼭 필요하면 파티션 1개를 쓰되 처리량 상한을 감수합니다.</text>
+</svg>

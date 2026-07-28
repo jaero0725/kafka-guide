@@ -80,10 +80,10 @@
 <text class="dg-fs-sm" x="380" y="246.6" text-anchor="start">브로커 = 옵서버 (voter 아님)</text>
 <text class="dg-fs-sm" x="380" y="262.6" text-anchor="start">브로커는 쿼럼 투표에 참여하지 않고 메타데이터 로그만</text>
 <text class="dg-fs-sm" x="380" y="278.6" text-anchor="start">복제해 캐시합니다. 그래서 컨트롤러가 잠시 멈춰도</text>
-<text class="dg-fs-sm" x="380" y="294.6" text-anchor="start">이미 아는 메타데이터로 읽기·쓰기를 계속할 수 있습니다.</text>
+<text class="dg-fs-sm" x="380" y="294.6" text-anchor="start">이미 아는 메타데이터로 계속 동작합니다.</text>
 </g>
 <text class="dg-fs-sm dg-bold" x="8" y="334">쿼럼 크기는 3 또는 5 를 권장합니다 — 3대면 1대 장애, 5대면 2대 장애까지 견딥니다.</text>
-<text class="dg-fs-sm" x="8" y="354">주소 지정은 controller.quorum.bootstrap.servers 를 씁니다 (controller.quorum.voters 는 KRaft version 1 에서 deprecated).</text>
+<text class="dg-fs-sm" x="8" y="354">주소는 controller.quorum.bootstrap.servers 로 지정합니다 — controller.quorum.voters 는 deprecated 입니다.</text>
 <text class="dg-fs-sm dg-bold" x="8" y="374">상태 확인</text>
 <text class="dg-fs-sm dg-mono dg-muted" x="76" y="374">kafka-metadata-quorum.sh --bootstrap-controller :9093 describe --status</text>
 </svg>

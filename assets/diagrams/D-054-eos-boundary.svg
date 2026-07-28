@@ -30,7 +30,7 @@
   <text class="dg-fs-sm dg-bold" x="172" y="76">애플리케이션 (Streams 또는 직접 구현)</text>
   <text class="dg-fs-sm dg-mono" x="172" y="94">read_committed · auto.commit=false</text>
   <text class="dg-fs-sm dg-mono" x="172" y="110">transactional.id 설정</text>
-  <text class="dg-fs-sm dg-muted" x="172" y="128">Streams 라면 processing.guarantee=exactly_once_v2</text>
+  <text class="dg-fs-sm dg-muted" x="172" y="128">Streams: <tspan class="dg-mono">exactly_once_v2</tspan></text>
 
   <line class="dg-edge dg-edge--accent" x1="428" y1="77" x2="445" y2="77"/>
   <path class="dg-marker--accent" d="M444,72 L452,77 L444,82 Z"/>
@@ -40,11 +40,11 @@
   <line class="dg-edge dg-edge--accent" x1="428" y1="123" x2="445" y2="123"/>
   <path class="dg-marker--accent" d="M444,118 L452,123 L444,128 Z"/>
   <rect class="dg-node dg-node--accent" x="452" y="104" width="244" height="38" rx="4"/>
-  <text class="dg-fs-sm dg-mono dg-bold" x="462" y="122">__consumer_offsets</text>
-  <text class="dg-fs-sm" x="600" y="122">같은 트랜잭션</text>
+  <text class="dg-fs-sm dg-mono dg-bold" x="462" y="120">__consumer_offsets</text>
+  <text class="dg-fs-sm" x="462" y="136">같은 트랜잭션 안에서 커밋</text>
 
   <!-- ================= 경계선 ================= -->
-  <text x="12" y="170" class="dg-fs-md dg-bold">EOS 경계 — Kafka 가 원자성을 보장하는 범위는 여기까지입니다</text>
+  <text x="12" y="170" class="dg-fs-md dg-bold">EOS 경계 — Kafka 의 보장은 여기서 끊깁니다</text>
   <line class="dg-edge dg-edge--danger dg-edge--dashdot" x1="12" y1="180" x2="708" y2="180"/>
 
   <!-- 경계를 통과하는 외부 호출 -->
@@ -54,7 +54,7 @@
     <line class="dg-x" x1="286" y1="172" x2="302" y2="188"/>
     <line class="dg-x" x1="302" y1="172" x2="286" y2="188"/>
   </g>
-  <text class="dg-fs-sm dg-bold" x="312" y="176">처리 중 외부 호출 — 트랜잭션에 참여하지 못합니다</text>
+  <text class="dg-fs-sm dg-bold" x="312" y="199">처리 중 외부 호출 — 트랜잭션에 참여하지 못합니다</text>
 
   <!-- ================= 경계 밖: 외부 시스템 ================= -->
   <rect class="dg-node dg-node--danger" x="12" y="204" width="696" height="102" rx="6"/>

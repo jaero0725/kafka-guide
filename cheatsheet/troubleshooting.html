@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>트러블슈팅 치트시트 — Kafka Guide</title>
-  <meta name="description" content="Apache Kafka 4.3 장애 대응 치트시트. 컨슈머·프로듀서·브로커 증상별 의사결정 트리, 증상 → 확인 명령 → 원인 후보 → 조치 표, 자주 보는 예외 클래스 45개의 원인과 대응.">
+  <meta name="description" content="Apache Kafka 4.3 장애 대응 치트시트. 컨슈머·프로듀서·브로커 증상별 의사결정 트리, 증상 → 확인 명령 → 원인 후보 → 조치 표, 자주 보는 예외 클래스 46개의 원인과 대응.">
   <link rel="stylesheet" href="../assets/css/tokens.css">
   <link rel="stylesheet" href="../assets/css/main.css">
   <link rel="stylesheet" href="../assets/css/code.css">
@@ -39,7 +39,7 @@
         <li><a href="#triage">30초 트리아지</a> — 무엇이 부러졌는지 먼저 가릅니다.</li>
         <li><a href="#tree-consumer">컨슈머가 안 읽는다</a> / <a href="#tree-producer">프로듀서 전송 실패</a> / <a href="#tree-broker">브로커 성능 저하</a> — 의사결정 트리 3개.</li>
         <li><a href="#symptoms">증상 → 확인 명령 → 원인 → 조치</a> 표.</li>
-        <li><a href="#exceptions">예외 사전 45개</a> — 클래스명으로 검색.</li>
+        <li><a href="#exceptions">예외 사전 46개</a> — 클래스명으로 검색.</li>
       </ul>
     </section>
 
@@ -683,7 +683,7 @@ bin/kafka-configs.sh --bootstrap-server $BS --alter \
 
       <div class="table-scroll">
         <table class="config-table" id="t-exceptions">
-          <caption>자주 보는 예외 45개 — 클래스명은 Kafka 4.3 소스 확인</caption>
+          <caption>자주 보는 예외 46개 — 클래스명은 Kafka 4.3 소스 확인</caption>
           <thead>
             <tr>
               <th scope="col">예외 클래스</th>
@@ -823,7 +823,7 @@ bin/kafka-configs.sh --bootstrap-server $BS --alter \
             <tr>
               <th scope="row"><code>CommitFailedException</code></th>
               <td><span class="mark-no">아니오</span></td>
-              <td>커밋 시점에 이미 파티션 소유권을 잃음. 대개 <code>poll()</code> 간격이 <code>max.poll.interval.ms</code>를 초과</td>
+              <td>커밋 시점에 이미 파티션 소유권을 잃음. 대개 <code>poll()</code> 간격이 <code>max.poll.interval.ms</code>를 초과. <strong>예외 메시지가 원인과 조치를 그대로 알려 줍니다</strong> — <a href="#commit-failed-message">아래 전문</a></td>
               <td><code>max.poll.records</code>를 줄이거나 <code>max.poll.interval.ms</code>를 늘리세요. 처리를 별도 스레드로 옮기는 것도 방법</td>
               <td><a href="../cases/case02.html">케이스 2</a></td>
             </tr>
@@ -896,6 +896,13 @@ bin/kafka-configs.sh --bootstrap-server $BS --alter \
               <td>직렬화·역직렬화 실패의 상위 예외. 스키마 불일치도 여기로 옵니다</td>
               <td>스키마 호환성 모드와 배포 순서를 확인하세요 (<a href="../basics/ch08.html">8장</a>)</td>
               <td><a href="../cases/case09.html">케이스 9</a></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>IllegalStateException</code>: Subscription to topics, partitions and pattern are mutually exclusive</th>
+              <td><span class="mark-no">아니오</span></td>
+              <td>한 컨슈머에서 <code>subscribe(토픽 목록)</code>, <code>subscribe(패턴)</code>, <code>assign(파티션)</code>을 <strong>섞어 호출</strong>했습니다</td>
+              <td>세 방식은 배타적입니다. 하나만 쓰세요. 전환하려면 먼저 <code>unsubscribe()</code>를 호출해야 합니다</td>
+              <td><a href="../basics/ch05.html">5장</a></td>
             </tr>
             <tr>
               <th scope="row"><code>TopicAuthorizationException</code></th>
@@ -1012,6 +1019,46 @@ bin/kafka-configs.sh --bootstrap-server $BS --alter \
           </tbody>
         </table>
       </div>
+
+      <h3 id="commit-failed-message"><code>CommitFailedException</code> 메시지 전문</h3>
+
+      <p>
+        이 예외는 <strong>메시지 자체가 진단서</strong>입니다.
+        인자 없이 생성될 때의 기본 메시지가 아래와 같이 고정되어 있으므로
+        (Kafka 4.3 <code>CommitFailedException.java</code> 확인),
+        로그에서 이 문장을 보면 원인을 더 찾을 필요가 없습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>기본 메시지 (소스 확인)</figcaption>
+        <pre><code class="lang-text">Commit cannot be completed since the group has already rebalanced and assigned
+the partitions to another member. This means that the time between subsequent
+calls to poll() was longer than the configured max.poll.interval.ms, which
+typically implies that the poll loop is spending too much time message
+processing. You can address this either by increasing max.poll.interval.ms or
+by reducing the maximum size of batches returned in poll() with max.poll.records.</code></pre>
+      </figure>
+
+      <aside class="note" data-label="읽는 법">
+        <p>
+          문장이 지목하는 두 가지 조치가 곧 정답입니다 —
+          <strong><code>max.poll.interval.ms</code>를 올리거나
+          <code>max.poll.records</code>를 줄이는 것</strong>입니다.
+          <code>session.timeout.ms</code>는 여기 등장하지 않습니다.
+          이 예외는 하트비트가 아니라 <strong><code>poll()</code> 간격</strong> 문제이기 때문입니다.
+        </p>
+      </aside>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          <strong><code>NotLeaderForPartitionException</code>은 Kafka 4.x에 존재하지 않습니다.</strong>
+          3.9 브랜치에는 있지만 4.3 소스에서는 제거되었고,
+          같은 상황은 이제 <code>NotLeaderOrFollowerException</code>으로 보고됩니다
+          (프로토콜 에러 코드 <code>NOT_LEADER_OR_FOLLOWER</code>, 코드 6).
+          3.x 기준으로 작성된 예외 처리 코드가 이 클래스를 <code>catch</code>하고 있으면
+          4.x 클라이언트로 올릴 때 컴파일이 깨집니다.
+        </p>
+      </aside>
 
       <aside class="note note--exam" data-label="시험 포인트 · Application Development">
         <p>

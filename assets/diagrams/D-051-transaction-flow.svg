@@ -1,4 +1,4 @@
-<svg viewBox="0 0 720 404" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 424" role="img" class="kg-diagram"
      aria-labelledby="d051-title d051-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d051-title">트랜잭션 흐름 — initTransactions 부터 commit 또는 abort 까지</title>
   <desc id="d051-desc">트랜잭션 프로듀서의 API 호출 순서와 각 호출이 트랜잭션 코디네이터에서 무엇을 하는지,
@@ -15,7 +15,7 @@
 
   <!-- 열 헤더 -->
   <text x="48" y="38" class="dg-fs-sm dg-bold">프로듀서 API 호출</text>
-  <text x="286" y="38" class="dg-fs-sm dg-bold">트랜잭션 코디네이터 <tspan class="dg-mono dg-muted">__transaction_state</tspan></text>
+  <text x="286" y="38" class="dg-fs-sm dg-bold">트랜잭션 코디네이터</text>
   <text x="520" y="38" class="dg-fs-sm dg-bold">기록 위치</text>
 
   <!-- ============ 1단계 ============ -->
@@ -99,7 +99,7 @@
     <line class="dg-edge dg-edge--accent" x1="258" y1="276" x2="275" y2="276"/>
     <rect class="dg-node dg-node--accent" x="286" y="254" width="206" height="44" rx="4"/>
     <text class="dg-fs-sm dg-mono" x="294" y="272">EndTxn</text>
-    <text class="dg-fs-sm" x="294" y="289">PREPARE → 마커 → COMPLETE</text>
+    <text class="dg-fs-sm" x="294" y="289">PREPARE → 마커 → 완료</text>
     <path class="dg-marker--accent" d="M508,271 L516,276 L508,281 Z"/>
     <line class="dg-edge dg-edge--accent" x1="492" y1="276" x2="509" y2="276"/>
     <rect class="dg-node dg-node--accent" x="520" y="254" width="188" height="44" rx="4"/>
@@ -129,5 +129,6 @@
   <!-- 각주 -->
   <line class="dg-grid" x1="12" y1="362" x2="708" y2="362"/>
   <text class="dg-fs-sm" x="12" y="380">레코드는 <tspan class="dg-bold">기록된 뒤에 마커로 확정</tspan>됩니다. 그래서 abort 된 레코드도 로그에는 남아 있고, 컨슈머가 걸러냅니다.</text>
-  <text class="dg-fs-sm dg-muted" x="12" y="398"><tspan class="dg-mono">transaction.timeout.ms</tspan> 기본 60000 · <tspan class="dg-mono">transaction.state.log.replication.factor</tspan> 기본 3 · <tspan class="dg-mono">transaction.state.log.min.isr</tspan> 기본 2</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="398"><tspan class="dg-mono">transaction.timeout.ms</tspan> 기본 60000 · <tspan class="dg-mono">transactional.id.expiration.ms</tspan> 기본 604800000</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="416"><tspan class="dg-mono">transaction.state.log.replication.factor</tspan> 기본 3 · <tspan class="dg-mono">transaction.state.log.min.isr</tspan> 기본 2</text>
 </svg>

@@ -1,0 +1,117 @@
+<svg viewBox="0 0 720 492" role="img" class="kg-diagram"
+     aria-labelledby="d046-title d046-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d046-title">파티션 할당 전략 4종 비교 — 같은 조건에서 결과가 어떻게 갈리는가</title>
+  <desc id="d046-desc">같은 컨슈머 수, 토픽 수, 파티션 수에 대해 네 가지 할당 전략의 결과를 2행 2열로 나란히 보여 주는 인터랙티브 그림입니다.
+    RangeAssignor 는 토픽별로 파티션을 앞에서부터 잘라 나누므로 연속된 번호가 한 컨슈머에게 뭉칩니다.
+    RoundRobinAssignor 는 모든 토픽의 파티션을 이름 순으로 정렬한 뒤 컨슈머에게 순환 배정하므로 번호가 흩어집니다.
+    StickyAssignor 는 균형을 먼저 맞추고 그 안에서 이전 할당을 최대한 유지합니다.
+    이전 할당이 없는 첫 배정에서는 결과가 RoundRobinAssignor 와 같아지고, 차이는 재할당할 때 드러납니다.
+    CooperativeStickyAssignor 의 최종 할당은 StickyAssignor 와 완전히 같습니다.
+    다른 점은 리밸런스 프로토콜이며, 옮겨 갈 파티션만 회수하고 두 번의 리밸런스로 나눠 처리합니다.
+    직전에 컨슈머 1명이 이탈한 상황 토글을 켜면 이탈 전 할당을 기준으로 다시 배정하므로
+    Sticky 계열이 유지하는 파티션 수와 Range, RoundRobin 이 이동시키는 파티션 수의 차이가 드러납니다.
+    초기 상태는 컨슈머 3명, 토픽 1개, 파티션 8개의 첫 배정입니다.</desc>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">같은 조건, 네 전략 — 슬라이더와 토글로 조건을 바꿔 보세요</text>
+  <text data-dg="cond" x="8" y="44" class="dg-fs-sm dg-bold">조건: 컨슈머 3명 · 토픽 1개 × 파티션 8개 = 총 8개 · 첫 배정</text>
+  <rect class="dg-panel" x="8" y="58" width="348" height="182" rx="4"/>
+  <rect class="dg-node dg-node--alt" x="8" y="58" width="348" height="24" rx="3"/>
+  <text data-dg="p0-title" x="18" y="75" class="dg-fs-sm dg-bold">RangeAssignor</text>
+  <g data-dg="p0-row-0">
+    <text data-dg="p0-name-0" x="18" y="105" class="dg-fs-sm dg-bold">C1</text>
+    <text data-dg="p0-assign-0" x="52" y="105" class="dg-fs-sm dg-mono">t0p0 t0p1 t0p2</text>
+  </g>
+  <g data-dg="p0-row-1">
+    <text data-dg="p0-name-1" x="18" y="131" class="dg-fs-sm dg-bold">C2</text>
+    <text data-dg="p0-assign-1" x="52" y="131" class="dg-fs-sm dg-mono">t0p3 t0p4 t0p5</text>
+  </g>
+  <g data-dg="p0-row-2">
+    <text data-dg="p0-name-2" x="18" y="157" class="dg-fs-sm dg-bold">C3</text>
+    <text data-dg="p0-assign-2" x="52" y="157" class="dg-fs-sm dg-mono">t0p6 t0p7</text>
+  </g>
+  <g data-dg="p0-row-3" data-state="hidden">
+    <text data-dg="p0-name-3" x="18" y="183" class="dg-fs-sm dg-bold"></text>
+    <text data-dg="p0-assign-3" x="52" y="183" class="dg-fs-sm dg-mono"></text>
+  </g>
+  <g data-dg="p0-row-4" data-state="hidden">
+    <text data-dg="p0-name-4" x="18" y="209" class="dg-fs-sm dg-bold"></text>
+    <text data-dg="p0-assign-4" x="52" y="209" class="dg-fs-sm dg-mono"></text>
+  </g>
+  <text data-dg="p0-summary" x="18" y="232" class="dg-fs-sm dg-muted">컨슈머별 담당: 3 / 3 / 2 (총 8개)</text>
+  <rect class="dg-panel" x="364" y="58" width="348" height="182" rx="4"/>
+  <rect class="dg-node dg-node--alt" x="364" y="58" width="348" height="24" rx="3"/>
+  <text data-dg="p1-title" x="374" y="75" class="dg-fs-sm dg-bold">RoundRobinAssignor</text>
+  <g data-dg="p1-row-0">
+    <text data-dg="p1-name-0" x="374" y="105" class="dg-fs-sm dg-bold">C1</text>
+    <text data-dg="p1-assign-0" x="408" y="105" class="dg-fs-sm dg-mono">t0p0 t0p3 t0p6</text>
+  </g>
+  <g data-dg="p1-row-1">
+    <text data-dg="p1-name-1" x="374" y="131" class="dg-fs-sm dg-bold">C2</text>
+    <text data-dg="p1-assign-1" x="408" y="131" class="dg-fs-sm dg-mono">t0p1 t0p4 t0p7</text>
+  </g>
+  <g data-dg="p1-row-2">
+    <text data-dg="p1-name-2" x="374" y="157" class="dg-fs-sm dg-bold">C3</text>
+    <text data-dg="p1-assign-2" x="408" y="157" class="dg-fs-sm dg-mono">t0p2 t0p5</text>
+  </g>
+  <g data-dg="p1-row-3" data-state="hidden">
+    <text data-dg="p1-name-3" x="374" y="183" class="dg-fs-sm dg-bold"></text>
+    <text data-dg="p1-assign-3" x="408" y="183" class="dg-fs-sm dg-mono"></text>
+  </g>
+  <g data-dg="p1-row-4" data-state="hidden">
+    <text data-dg="p1-name-4" x="374" y="209" class="dg-fs-sm dg-bold"></text>
+    <text data-dg="p1-assign-4" x="408" y="209" class="dg-fs-sm dg-mono"></text>
+  </g>
+  <text data-dg="p1-summary" x="374" y="232" class="dg-fs-sm dg-muted">컨슈머별 담당: 3 / 3 / 2 (총 8개)</text>
+  <rect class="dg-panel" x="8" y="250" width="348" height="182" rx="4"/>
+  <rect class="dg-node dg-node--accent" x="8" y="250" width="348" height="24" rx="3"/>
+  <text data-dg="p2-title" x="18" y="267" class="dg-fs-sm dg-bold">StickyAssignor</text>
+  <g data-dg="p2-row-0">
+    <text data-dg="p2-name-0" x="18" y="297" class="dg-fs-sm dg-bold">C1</text>
+    <text data-dg="p2-assign-0" x="52" y="297" class="dg-fs-sm dg-mono">t0p0 t0p3 t0p6</text>
+  </g>
+  <g data-dg="p2-row-1">
+    <text data-dg="p2-name-1" x="18" y="323" class="dg-fs-sm dg-bold">C2</text>
+    <text data-dg="p2-assign-1" x="52" y="323" class="dg-fs-sm dg-mono">t0p1 t0p4 t0p7</text>
+  </g>
+  <g data-dg="p2-row-2">
+    <text data-dg="p2-name-2" x="18" y="349" class="dg-fs-sm dg-bold">C3</text>
+    <text data-dg="p2-assign-2" x="52" y="349" class="dg-fs-sm dg-mono">t0p2 t0p5</text>
+  </g>
+  <g data-dg="p2-row-3" data-state="hidden">
+    <text data-dg="p2-name-3" x="18" y="375" class="dg-fs-sm dg-bold"></text>
+    <text data-dg="p2-assign-3" x="52" y="375" class="dg-fs-sm dg-mono"></text>
+  </g>
+  <g data-dg="p2-row-4" data-state="hidden">
+    <text data-dg="p2-name-4" x="18" y="401" class="dg-fs-sm dg-bold"></text>
+    <text data-dg="p2-assign-4" x="52" y="401" class="dg-fs-sm dg-mono"></text>
+  </g>
+  <text data-dg="p2-summary" x="18" y="424" class="dg-fs-sm dg-muted">컨슈머별 담당: 3 / 3 / 2 (총 8개)</text>
+  <rect class="dg-panel" x="364" y="250" width="348" height="182" rx="4"/>
+  <rect class="dg-node dg-node--accent" x="364" y="250" width="348" height="24" rx="3"/>
+  <text data-dg="p3-title" x="374" y="267" class="dg-fs-sm dg-bold">CooperativeStickyAssignor</text>
+  <g data-dg="p3-row-0">
+    <text data-dg="p3-name-0" x="374" y="297" class="dg-fs-sm dg-bold">C1</text>
+    <text data-dg="p3-assign-0" x="408" y="297" class="dg-fs-sm dg-mono">t0p0 t0p3 t0p6</text>
+  </g>
+  <g data-dg="p3-row-1">
+    <text data-dg="p3-name-1" x="374" y="323" class="dg-fs-sm dg-bold">C2</text>
+    <text data-dg="p3-assign-1" x="408" y="323" class="dg-fs-sm dg-mono">t0p1 t0p4 t0p7</text>
+  </g>
+  <g data-dg="p3-row-2">
+    <text data-dg="p3-name-2" x="374" y="349" class="dg-fs-sm dg-bold">C3</text>
+    <text data-dg="p3-assign-2" x="408" y="349" class="dg-fs-sm dg-mono">t0p2 t0p5</text>
+  </g>
+  <g data-dg="p3-row-3" data-state="hidden">
+    <text data-dg="p3-name-3" x="374" y="375" class="dg-fs-sm dg-bold"></text>
+    <text data-dg="p3-assign-3" x="408" y="375" class="dg-fs-sm dg-mono"></text>
+  </g>
+  <g data-dg="p3-row-4" data-state="hidden">
+    <text data-dg="p3-name-4" x="374" y="401" class="dg-fs-sm dg-bold"></text>
+    <text data-dg="p3-assign-4" x="408" y="401" class="dg-fs-sm dg-mono"></text>
+  </g>
+  <text data-dg="p3-summary" x="374" y="424" class="dg-fs-sm dg-muted">컨슈머별 담당: 3 / 3 / 2 (총 8개)</text>
+  <text data-dg="note" x="8" y="450" class="dg-fs-sm">이전 할당이 없는 첫 배정에서는 Sticky 결과가 RoundRobin 과 같습니다 — 차이는 재할당 때 드러납니다. 토글을 켜 보세요.</text>
+  <line class="dg-grid" x1="8" y1="460" x2="712" y2="460"/>
+  <text x="8" y="478" class="dg-fs-sm"><tspan class="dg-bold">Cooperative 와 Sticky 의 최종 할당은 같습니다.</tspan> 차이는 회수 방식(전체 vs 이동 대상만)입니다.</text>
+  <text x="8" y="490" class="dg-fs-sm dg-muted">4.x 기본값은 <tspan class="dg-mono">[RangeAssignor, CooperativeStickyAssignor]</tspan> 목록입니다.</text>
+</svg>
