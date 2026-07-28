@@ -213,22 +213,12 @@
     var diag = P.diagnostic();
     var diagTaken = !!(diag && diag.at);
 
-    /* --- 기록이 전혀 없으면 대시보드 대신 시작 안내 --- */
-    if (!rp.read && !attemptedIds.length && !diagTaken) {
-      mount.innerHTML =
-        '<h2 id="dashboard">내 진도</h2>' +
-        '<aside class="note note--info" data-label="아직 기록이 없습니다">' +
-        '<p>진단 테스트를 먼저 풀면 CCDAK 6개 도메인 중 약한 곳이 드러나고, ' +
-        '이 자리에 도메인별 정답률 · 읽은 페이지 · 모의고사 이력이 채워집니다. ' +
-        '기록은 이 브라우저의 <code>localStorage</code>에만 남고 서버로 전송되지 않습니다.</p>' +
-        '<p><a class="btn btn--primary" href="quiz/diagnostic.html">진단 테스트 30문항 시작</a></p>' +
-        '</aside>';
-      return;
-    }
-
+    var fresh = !rp.read && !attemptedIds.length && !diagTaken;
     var html = '<h2 id="dashboard">내 진도</h2>';
 
     /* --- KPI --- */
+    /* 기록이 없어도 KPI 격자는 항상 그립니다. index.html 의 골격과 같은 구조라
+       교체 시점에 레이아웃이 움직이지 않고, 0/61 · 0/852 자체가 정보가 됩니다. */
     html += '<ul class="kpi-grid" role="list">' +
       kpi('읽은 페이지', rp.read + '<small>/' + rp.total + '</small>',
         ratio(rp.read, rp.total) + '% 완료') +
@@ -243,6 +233,19 @@
       kpi('플래시카드 졸업', graduated + '<small>/' + FLASHCARD_TOTAL + '</small>',
         ratio(graduated, FLASHCARD_TOTAL) + '% 암기', 'ccdak/flashcards.html') +
       '</ul>';
+
+    /* --- 첫 방문: 여기서 끝냅니다 (아직 그릴 통계가 없습니다) --- */
+    if (fresh) {
+      html += '<aside class="note note--info" data-label="아직 기록이 없습니다">' +
+        '<p>진단 테스트를 먼저 풀면 CCDAK 6개 도메인 중 약한 곳이 드러나고, ' +
+        '이 자리에 도메인별 정답률 · 다음에 할 일 · 응시 이력이 채워집니다. ' +
+        '기록은 이 브라우저의 <code>localStorage</code>에만 남고 서버로 전송되지 않습니다.</p>' +
+        '<p><a class="btn btn--primary" href="quiz/diagnostic.html">진단 테스트 30문항 시작</a></p>' +
+        '</aside>';
+      mount.innerHTML = html;
+      mount.removeAttribute('aria-busy');
+      return;
+    }
 
     /* --- CCDAK 도메인 숙련도 --- */
     var domainRows = CCDAK_ORDER.map(function (d) {
@@ -334,6 +337,7 @@
     }
 
     mount.innerHTML = html;
+    mount.removeAttribute('aria-busy');
   }
 
   /* ---------- 부팅 ------------------------------------------------------- */
@@ -351,6 +355,7 @@
         '<p>이 브라우저에서 <code>localStorage</code>를 쓸 수 없어(사생활 보호 모드 등) ' +
         '읽음 기록과 퀴즈 통계를 남기지 못합니다. 학습 자료와 문제 풀이 자체는 정상 동작합니다.</p>' +
         '</aside>';
+      mount.removeAttribute('aria-busy');
       return;
     }
 
@@ -371,6 +376,7 @@
         '<code>npm run serve</code> 로 띄운 뒤 <code>http://localhost:8000</code>에서 열어 주세요.</p>' +
         '<p><small>' + esc(err && err.message) + '</small></p>' +
         '</aside>';
+      mount.removeAttribute('aria-busy');
     });
   }
 

@@ -10,8 +10,9 @@
   <link rel="stylesheet" href="assets/css/main.css">
   <link rel="stylesheet" href="assets/css/code.css">
   <link rel="stylesheet" href="assets/css/viz.css">
+  <script src="assets/js/boot.js"></script>
 </head>
-<body>
+<body class="has-sidebar has-toc">
   <a class="skip-link" href="#main">본문 바로가기</a>
   <div id="sidebar-mount" data-section="home" data-page="index"></div>
 
@@ -26,9 +27,18 @@
       </p>
     </header>
 
-    <section id="home-dashboard" aria-labelledby="dashboard">
+    <!-- home.js 가 이 안을 통째로 교체합니다. 골격을 최종 렌더와 같은 높이로 두어
+         교체 순간 아래 내용이 밀리지 않게 합니다(레이아웃 이동 방지). -->
+    <section id="home-dashboard" aria-labelledby="dashboard" aria-busy="true">
       <h2 id="dashboard">내 진도</h2>
-      <p class="dash__note">진도를 불러오고 있습니다…</p>
+      <ul class="kpi-grid" role="list">
+        <li class="kpi"><span class="kpi__body"><span class="kpi__label">읽은 페이지</span><b class="kpi__value">—</b><span class="kpi__sub">불러오는 중</span></span></li>
+        <li class="kpi"><span class="kpi__body"><span class="kpi__label">푼 문항</span><b class="kpi__value">—</b><span class="kpi__sub">불러오는 중</span></span></li>
+        <li class="kpi"><span class="kpi__body"><span class="kpi__label">정답률</span><b class="kpi__value">—</b><span class="kpi__sub">불러오는 중</span></span></li>
+        <li class="kpi"><span class="kpi__body"><span class="kpi__label">오답 노트</span><b class="kpi__value">—</b><span class="kpi__sub">불러오는 중</span></span></li>
+        <li class="kpi"><span class="kpi__body"><span class="kpi__label">모의고사 최고</span><b class="kpi__value">—</b><span class="kpi__sub">불러오는 중</span></span></li>
+        <li class="kpi"><span class="kpi__body"><span class="kpi__label">플래시카드 졸업</span><b class="kpi__value">—</b><span class="kpi__sub">불러오는 중</span></span></li>
+      </ul>
     </section>
 
     <section aria-labelledby="start-here">
