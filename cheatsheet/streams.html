@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Streams 치트시트 — Kafka Guide</title>
-  <meta name="description" content="Kafka Streams 4.3 치트시트. DSL 연산자별 입력→출력 타입, 상태 저장 여부, 리파티션 유발 여부. 윈도 타입 4종 비교, 조인 매트릭스 5종(윈도·co-partitioning 요구), 핵심 설정 25개, 내부 토픽 규칙.">
+  <meta name="description" content="Kafka Streams 4.3 치트시트. DSL 연산자별 입력→출력 타입, 상태 저장 여부, 리파티션 유발 여부. 윈도 타입 4종 비교, 조인 매트릭스 5종(윈도·co-partitioning 요구), 핵심 설정, 내부 토픽 규칙.">
   <link rel="stylesheet" href="../assets/css/tokens.css">
   <link rel="stylesheet" href="../assets/css/main.css">
   <link rel="stylesheet" href="../assets/css/code.css">
@@ -715,7 +715,7 @@ KTable&lt;String, Customer&gt; repartitionedTable =
 
     <!-- ============================================================== -->
     <section aria-labelledby="streams-configs">
-      <h2 id="streams-configs">핵심 설정 25개</h2>
+      <h2 id="streams-configs">핵심 설정</h2>
 
       <div class="toolbar">
         <div class="field">
@@ -727,7 +727,7 @@ KTable&lt;String, Customer&gt; repartitionedTable =
 
       <div class="table-scroll">
         <table class="config-table" id="t-streams-config">
-          <caption>Kafka Streams 핵심 설정 25개 — Apache Kafka 4.3.1 공식 문서 기준 기본값</caption>
+          <caption>Kafka Streams 핵심 설정 33개 — Apache Kafka 4.3.1 공식 문서 기준 기본값</caption>
           <thead>
             <tr>
               <th scope="col">설정</th>

@@ -16,7 +16,7 @@
 <path class="dg-node dg-node--warn" d="M158,54 L308,96 L158,138 L8,96 Z"/>
 </g>
 <text class="dg-fs-sm dg-bold" x="158" y="92" text-anchor="middle">RecordTooLargeException?</text>
-<text class="dg-fs-sm dg-mono dg-muted" x="158" y="110" text-anchor="middle">kafka-configs.sh --describe</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="158" y="110" text-anchor="middle">kafka-configs.sh</text>
 <rect class="dg-node dg-node--danger" x="352" y="57" width="360" height="78" rx="4"/>
 <text class="dg-fs-sm dg-bold" x="364" y="76">크기 상한 불일치</text>
 <text class="dg-fs-sm" x="364" y="94">· 프로듀서 max.request.size 1048576</text>
