@@ -1,0 +1,293 @@
+{
+  "setId": "basics-ch01",
+  "title": "1장 확인 문제 — Kafka 개요와 이벤트 스트리밍",
+  "exam": "BASICS",
+  "domain": "Kafka 개요와 이벤트 스트리밍",
+  "kafkaVersion": "4.3",
+  "questions": [
+    {
+      "id": "basics-ch01-001",
+      "exam": "BASICS",
+      "domain": "Kafka 개요와 이벤트 스트리밍",
+      "chapter": "ch01",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Apache Kafka 배포 파일명 `kafka_2.13-4.3.1.tgz` 에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "Kafka 2.13 버전을 4.3.1 빌드 번호로 패키징한 배포판이다." },
+        { "id": "B", "text": "`2.13` 은 이 배포판을 실행하기 위한 최소 Java 버전이다." },
+        { "id": "C", "text": "`2.13` 은 배포판이 컴파일된 Scala 버전이고, Kafka 버전은 `4.3.1` 이다." },
+        { "id": "D", "text": "`2.13` 은 클라이언트-브로커 wire protocol 버전이고, Kafka 버전은 `4.3.1` 이다." }
+      ],
+      "answer": ["C"],
+      "explanation": "배포 파일명은 `kafka_{Scala버전}-{Kafka버전}.tgz` 구조입니다. 앞의 `_2.13` 은 배포판이 어떤 Scala 컴파일러로 빌드되었는지를 나타내며, 현행 Kafka는 Scala 2.13 빌드만 제공합니다. Kafka 버전은 하이픈 뒤의 `4.3.1` 입니다. Kafka는 2.8 다음 릴리스가 3.0이므로 2.13이라는 Kafka 버전은 애초에 존재할 수 없습니다. 브로커는 JVM 바이너리로 동작하므로 Scala를 직접 쓰지 않는다면 Scala 버전을 고민할 필요가 없습니다.",
+      "distractorNotes": {
+        "A": "Kafka 2.13 버전은 존재하지 않습니다. 2.8 다음 릴리스가 3.0입니다.",
+        "B": "Java 요구사항은 파일명에 표기되지 않습니다. 4.3 문서는 Java 17·21·25 완전 지원, Java 11은 clients/streams 등 일부 모듈이라고 명시합니다.",
+        "D": "wire protocol 버전은 파일명에 들어가지 않으며, 브로커 설정 `inter.broker.protocol.version` 이나 메타데이터 버전으로 관리됩니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Downloads", "url": "https://kafka.apache.org/downloads" },
+        { "title": "Apache Kafka — Java Version", "url": "https://kafka.apache.org/documentation/#java" }
+      ],
+      "tags": ["scala-version", "versioning", "downloads"]
+    },
+    {
+      "id": "basics-ch01-002",
+      "exam": "BASICS",
+      "domain": "Kafka 개요와 이벤트 스트리밍",
+      "chapter": "ch01",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "Kafka의 순서 보장 범위에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "하나의 토픽에 기록된 모든 레코드는 발행된 순서대로 소비되는 것이 보장된다." },
+        { "id": "B", "text": "같은 컨슈머 그룹에 속한 컨슈머들은 토픽 전체에 대한 단일 순서를 공유한다." },
+        { "id": "C", "text": "복제 계수를 3 이상으로 두면 토픽 전체에 대한 순서가 보장된다." },
+        { "id": "D", "text": "하나의 토픽-파티션 안에서만 기록된 순서대로 소비되는 것이 보장된다." }
+      ],
+      "answer": ["D"],
+      "explanation": "Kafka는 토픽-파티션 단위로만 순서를 보장합니다. 레코드는 발행 시 하나의 파티션 끝에 append되고 그 안에서 단조 증가 오프셋을 받으므로, 그 파티션을 읽는 소비자는 같은 순서를 보게 됩니다. 서로 다른 파티션 사이에는 시간 순서를 정의하는 장치가 없습니다. 따라서 특정 엔티티의 이벤트 순서를 유지하려면 그 엔티티 식별자를 메시지 키로 지정해 같은 파티션으로 보내야 합니다.",
+      "distractorNotes": {
+        "A": "토픽은 여러 파티션으로 나뉘어 서로 다른 브로커에 분산되므로 토픽 전역 순서는 정의되지 않습니다.",
+        "B": "컨슈머 그룹은 파티션을 멤버에게 나눠 할당합니다. 각 멤버는 자기 파티션의 순서만 봅니다.",
+        "C": "복제는 내구성과 가용성을 위한 장치이며 순서 보장 범위와 무관합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Introduction: Main Concepts and Terminology", "url": "https://kafka.apache.org/documentation/#intro_concepts_and_terms" }
+      ],
+      "tags": ["ordering", "partitioning", "topics"]
+    },
+    {
+      "id": "basics-ch01-003",
+      "exam": "BASICS",
+      "domain": "Kafka 개요와 이벤트 스트리밍",
+      "chapter": "ch01",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "컨슈머 그룹 A가 `orders` 토픽의 모든 레코드를 읽고 오프셋을 커밋했다. 그 직후의 상태로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "레코드는 토픽의 보관 정책이 허용하는 동안 남아 있고, 컨슈머 그룹 B는 처음부터 전체를 읽을 수 있다." },
+        { "id": "B", "text": "읽힌 레코드는 브로커에서 제거되므로 컨슈머 그룹 B는 그 레코드를 읽을 수 없다." },
+        { "id": "C", "text": "컨슈머 그룹 B는 그룹 A의 커밋 오프셋을 이어받아 그 뒤부터 읽기 시작한다." },
+        { "id": "D", "text": "레코드는 남지만 한 번 커밋한 오프셋을 되돌려 재처리할 수는 없다." }
+      ],
+      "answer": ["A"],
+      "explanation": "Kafka에서 소비는 읽기 동작일 뿐이며 레코드를 제거하지 않습니다. 삭제 시점은 토픽별 보관 설정이 결정하고, `delete` 정책의 `retention.ms` 기본값은 604800000ms(7일)입니다. 오프셋은 컨슈머 그룹별로 따로 관리되므로 새 그룹은 자기 `auto.offset.reset` 정책에 따라 처음부터 읽을 수 있습니다. 이 성질이 재처리와 다중 소비를 가능하게 하며, 반대로 보관 기간이 지나면 누구도 그 데이터를 다시 읽을 수 없다는 제약도 함께 만듭니다.",
+      "distractorNotes": {
+        "B": "이것은 전통적 메시지 큐의 동작입니다. Kafka는 소비 후 삭제하지 않습니다.",
+        "C": "오프셋은 그룹 단위로 격리됩니다. 다른 그룹의 커밋 위치를 상속하지 않습니다.",
+        "D": "오프셋을 되돌려(seek) 재처리하는 것은 정상적인 사용법이며, 로그가 남아 있는 범위 안에서 언제든 가능합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Introduction", "url": "https://kafka.apache.org/documentation/#intro_concepts_and_terms" },
+        { "title": "Apache Kafka — Topic Configs: retention.ms", "url": "https://kafka.apache.org/documentation/#topicconfigs_retention.ms" }
+      ],
+      "tags": ["retention", "consumer-group", "offset-reset"]
+    },
+    {
+      "id": "basics-ch01-004",
+      "exam": "BASICS",
+      "domain": "Kafka 개요와 이벤트 스트리밍",
+      "chapter": "ch01",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "프로듀서 설정에서 `bootstrap.servers` 에 브로커를 여러 개 적는 주된 이유는?",
+      "code": {
+        "lang": "properties",
+        "caption": "producer.properties",
+        "body": "bootstrap.servers=kafka-1:9092,kafka-2:9092,kafka-3:9092"
+      },
+      "choices": [
+        { "id": "A", "text": "요청 부하를 나열한 브로커들에 균등하게 분산하기 위해서다." },
+        { "id": "B", "text": "목록에 없는 브로커에는 접속하지 않으므로 클러스터의 전체 브로커를 적어야 한다." },
+        { "id": "C", "text": "부트스트랩 시점의 단일 장애점을 없애기 위해서다. 하나만 연결되면 나머지는 메타데이터로 알아낸다." },
+        { "id": "D", "text": "나열한 순서대로 파티션 리더를 선택해 지역성을 확보하기 위해서다." }
+      ],
+      "answer": ["C"],
+      "explanation": "`bootstrap.servers` 는 최초 연결과 메타데이터 조회에만 쓰이는 진입점 목록입니다. 클라이언트는 그중 하나에 붙어 클러스터 메타데이터를 받고, 그 뒤로는 각 파티션 리더에 직접 연결합니다. 공식 문서는 목록 순서가 중요하지 않으며 전체 브로커를 적을 필요도 없다고 하면서도, 일부 서버가 다운되었을 때의 복원력을 위해 하나 이상 적을 것을 권고합니다. 즉 목적은 부트스트랩 단계의 이중화이며, 실제 요청 분산은 파티션 리더 배치가 결정합니다.",
+      "distractorNotes": {
+        "A": "부하 분산은 파티션과 리더 배치가 결정합니다. 부트스트랩 목록은 요청 라우팅에 관여하지 않습니다.",
+        "B": "하나만 연결되어도 메타데이터로 전체 클러스터를 알아냅니다. 전체 목록을 적을 필요는 없습니다.",
+        "D": "리더 선택은 브로커가 관리하는 파티션 리더십이 결정하며 클라이언트 설정 순서와 무관합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Producer Configs: bootstrap.servers", "url": "https://kafka.apache.org/documentation/#producerconfigs_bootstrap.servers" }
+      ],
+      "tags": ["bootstrap-servers", "metadata", "producer"]
+    },
+    {
+      "id": "basics-ch01-005",
+      "exam": "BASICS",
+      "domain": "Kafka 개요와 이벤트 스트리밍",
+      "chapter": "ch01",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "Kafka 4.3 브로커의 `message.max.bytes` 기본값과 그 의미로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "1048576 bytes이며, 압축 여부와 무관한 개별 메시지의 최대 크기다." },
+        { "id": "B", "text": "1048588 bytes이며, 압축이 적용된 뒤의 레코드 배치 최대 크기다." },
+        { "id": "C", "text": "1048588 bytes이며, 압축 전 개별 메시지의 최대 크기다." },
+        { "id": "D", "text": "기본값이 설정되어 있지 않아 브로커 메모리가 허용하는 만큼 받아들인다." }
+      ],
+      "answer": ["B"],
+      "explanation": "공식 문서는 `message.max.bytes` 를 \"Kafka가 허용하는 가장 큰 레코드 배치 크기(압축이 적용된 경우 압축 후 기준)\"로 정의하고 기본값을 1048588로 명시합니다. 흔히 \"1MB\"로 외우지만 1MB는 1048576이므로 경계값을 묻는 문항에서 갈립니다. 단위가 개별 메시지가 아니라 레코드 배치라는 점도 중요합니다. 토픽 레벨 `max.message.bytes` 가 이 값을 오버라이드하며, 프로듀서의 `max.request.size`(기본 1048576)와 컨슈머·팔로워 fetch 설정까지 함께 정합해야 큰 메시지가 무한 재시도로 쌓이는 사고를 막을 수 있습니다.",
+      "distractorNotes": {
+        "A": "1048576은 프로듀서 `max.request.size` 의 기본값입니다. 브로커 값은 1048588로 조금 더 큽니다.",
+        "C": "숫자는 맞지만 기준이 틀렸습니다. 압축이 적용되면 압축 후 배치 크기로 판정합니다.",
+        "D": "명시적 기본값이 있습니다. 무제한이 아닙니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Broker Configs: message.max.bytes", "url": "https://kafka.apache.org/documentation/#brokerconfigs_message.max.bytes" },
+        { "title": "Apache Kafka — Producer Configs: max.request.size", "url": "https://kafka.apache.org/documentation/#producerconfigs_max.request.size" }
+      ],
+      "tags": ["message-size", "defaults", "message.max.bytes"]
+    },
+    {
+      "id": "basics-ch01-006",
+      "exam": "BASICS",
+      "domain": "Kafka 개요와 이벤트 스트리밍",
+      "chapter": "ch01",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "Kafka 4.3 클러스터에서 KIP-848 새 컨슈머 리밸런스 프로토콜을 사용하려고 한다. 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "서버 쪽은 4.0부터 자동 활성화되지만, 컨슈머는 `group.protocol=consumer` 로 명시해야 새 프로토콜을 쓴다." },
+        { "id": "B", "text": "4.0에서 GA가 되었으므로 컨슈머 쪽 설정 없이도 자동으로 새 프로토콜이 사용된다." },
+        { "id": "C", "text": "컨슈머의 `partition.assignment.strategy` 를 `uniform` 으로 바꾸면 새 프로토콜이 활성화된다." },
+        { "id": "D", "text": "브로커에 `group.protocol=consumer` 를 설정하면 접속한 모든 컨슈머가 새 프로토콜로 전환된다." }
+      ],
+      "answer": ["A"],
+      "explanation": "새 프로토콜은 4.0에서 GA가 되어 프로덕션에 쓸 수 있고, 브로커 쪽에서는 `group.version` 피처 플래그로 관리되며 4.0부터 자동 활성화됩니다. 그러나 컨슈머 클라이언트의 `group.protocol` 기본값은 여전히 `classic` 이므로, 명시적으로 `consumer` 로 바꾸지 않으면 기존 프로토콜을 계속 씁니다. 새 프로토콜을 켜면 하트비트 간격과 세션 타임아웃을 브로커가 관리하므로 `heartbeat.interval.ms`, `session.timeout.ms`, `partition.assignment.strategy` 는 클라이언트에서 더 이상 쓰이지 않습니다. GA와 기본값을 같은 것으로 착각하는 것이 이 주제의 대표적인 함정입니다.",
+      "distractorNotes": {
+        "B": "GA는 \"프로덕션에 쓸 수 있다\"는 의미이고 기본값이라는 뜻이 아닙니다. `group.protocol` 기본값은 `classic` 입니다.",
+        "C": "새 프로토콜에서는 할당자를 서버가 관리하므로 `partition.assignment.strategy` 자체가 쓰이지 않습니다. 서버 쪽 할당자 이름이 `uniform` 인 것과 혼동한 것입니다.",
+        "D": "`group.protocol` 은 컨슈머 클라이언트 설정입니다. 브로커에서 컨슈머의 프로토콜을 강제로 바꿀 수 없습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Consumer Rebalance Protocol", "url": "https://kafka.apache.org/documentation/#consumer_rebalance_protocol" },
+        { "title": "Apache Kafka — Consumer Configs: group.protocol", "url": "https://kafka.apache.org/documentation/#consumerconfigs_group.protocol" }
+      ],
+      "tags": ["kip-848", "group.protocol", "rebalance", "defaults"]
+    },
+    {
+      "id": "basics-ch01-007",
+      "exam": "BASICS",
+      "domain": "Kafka 개요와 이벤트 스트리밍",
+      "chapter": "ch01",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "오프셋(offset)에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "레코드가 파티션에 append될 때 부여되며 그 뒤로 값이 변하지 않는다." },
+        { "id": "B", "text": "토픽 전체를 가로지르는 전역 오프셋이 존재해 파티션 간 순서를 비교할 수 있다." },
+        { "id": "C", "text": "하나의 파티션 안에서만 유효한 단조 증가 정수다." },
+        { "id": "D", "text": "컨슈머가 레코드를 읽으면 브로커가 해당 오프셋의 레코드를 제거한다." },
+        { "id": "E", "text": "브로커가 컨슈머마다 별도로 오프셋을 재계산해 부여한다." }
+      ],
+      "answer": ["A", "C"],
+      "explanation": "오프셋은 파티션 로그에 append되는 순간 결정되는 위치 값이며 불변입니다. 범위는 파티션 하나로 한정되므로, 서로 다른 파티션의 오프셋 5를 비교하는 것은 의미가 없습니다. 컨슈머가 관리하는 것은 이 좌표를 어디까지 처리했는지 기록한 커밋 오프셋이며, 로그 자체를 바꾸지 않습니다. 실제로 하나의 파티션 위에는 log-start-offset, committed offset, high watermark, LEO 네 지점이 동시에 존재하며 이들을 구분하는 것이 이후 장의 핵심입니다.",
+      "distractorNotes": {
+        "B": "전역 오프셋은 존재하지 않습니다. 파티션 간 순서를 정의하는 장치도 없습니다.",
+        "D": "읽기는 삭제가 아닙니다. 삭제는 보관 정책(retention/compaction)이 결정합니다.",
+        "E": "오프셋은 브로커가 로그에 기록하는 시점에 한 번 정해집니다. 컨슈머별로 다시 계산되지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Design: The Persistence / Log", "url": "https://kafka.apache.org/documentation/#log" },
+        { "title": "Apache Kafka — Introduction", "url": "https://kafka.apache.org/documentation/#intro_concepts_and_terms" }
+      ],
+      "tags": ["offsets", "partitioning", "log"]
+    },
+    {
+      "id": "basics-ch01-008",
+      "exam": "BASICS",
+      "domain": "Kafka 개요와 이벤트 스트리밍",
+      "chapter": "ch01",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 설정을 Apache Kafka 4.3 기준 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        { "id": "p1", "left": "`num.partitions` (broker)", "right": "1" },
+        { "id": "p2", "left": "`retention.ms` (topic)", "right": "604800000" },
+        { "id": "p3", "left": "`cleanup.policy` (topic)", "right": "delete" },
+        { "id": "p4", "left": "`message.max.bytes` (broker)", "right": "1048588" },
+        { "id": "p5", "left": "`linger.ms` (producer)", "right": "5" }
+      ],
+      "extraRights": ["1048576", "compact", "0", "86400000"],
+      "explanation": "자동 생성 토픽의 기본 파티션 수는 1이므로 프로덕션 토픽은 항상 명시적으로 생성해야 합니다. `retention.ms` 기본값 604800000ms는 7일이고, `cleanup.policy` 기본값은 `delete` 이므로 상태 저장 용도의 토픽이라면 `compact` 로 바꿔야 합니다. 브로커의 `message.max.bytes` 는 1048588이며 1MB(1048576)와 다르고, 1048576은 프로듀서 `max.request.size` 의 기본값입니다. `linger.ms` 는 Kafka 4.0에서 0에서 5로 바뀌었으므로 3.x 기준 자료를 그대로 믿으면 틀립니다.",
+      "distractorNotes": {
+        "p4": "1048576(=1MB)을 고르기 쉽습니다. 브로커 값은 1048588이고, 1048576은 프로듀서 `max.request.size` 기본값입니다.",
+        "p5": "대부분의 자료가 3.x 기준으로 0이라고 적습니다. 4.0부터 기본값이 5입니다.",
+        "p3": "상태 저장 토픽을 떠올려 `compact` 를 고르기 쉽지만, 기본값은 `delete` 입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" },
+        { "title": "Apache Kafka — Topic Configs", "url": "https://kafka.apache.org/documentation/#topicconfigs" },
+        { "title": "Apache Kafka — Producer Configs: linger.ms", "url": "https://kafka.apache.org/documentation/#producerconfigs_linger.ms" }
+      ],
+      "tags": ["defaults", "retention", "linger.ms", "message-size"]
+    },
+    {
+      "id": "basics-ch01-009",
+      "exam": "BASICS",
+      "domain": "Kafka 개요와 이벤트 스트리밍",
+      "chapter": "ch01",
+      "difficulty": "hard",
+      "type": "ordering",
+      "question": "내려받은 Kafka 4.3 배포판으로 KRaft 단일 노드를 처음 띄우고 토픽을 만드는 절차를 올바른 순서로 배열하세요.",
+      "code": null,
+      "items": [
+        { "id": "i3", "text": "`bin/kafka-server-start.sh config/server.properties` — 브로커 프로세스 기동" },
+        { "id": "i1", "text": "`bin/kafka-storage.sh random-uuid` — 클러스터 UUID 생성" },
+        { "id": "i4", "text": "`bin/kafka-topics.sh --create --topic quickstart-events --bootstrap-server localhost:9092` — 토픽 생성" },
+        { "id": "i2", "text": "`bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/server.properties` — 로그 디렉터리 포맷" }
+      ],
+      "answer": ["i1", "i2", "i3", "i4"],
+      "explanation": "KRaft에는 ZooKeeper가 없으므로 클러스터 신원을 스토리지에 직접 새겨야 합니다. 먼저 `random-uuid` 로 클러스터 ID를 만들고, 그 ID로 `format` 을 실행해 로그 디렉터리에 메타데이터를 기록합니다. 포맷하지 않은 디렉터리로 브로커를 기동하면 실패하므로 이 두 단계는 기동보다 반드시 앞에 옵니다. 브로커가 올라온 뒤에야 Admin 요청을 받을 수 있으므로 토픽 생성은 마지막이며, 4.x에서는 `--bootstrap-server` 로만 접속합니다.",
+      "distractorNotes": {
+        "i2": "`format` 을 브로커 기동 뒤에 실행하는 것으로 착각하기 쉽습니다. 포맷은 기동 전 1회, 스토리지 초기화 단계입니다.",
+        "i1": "UUID 생성은 클러스터 최초 구축 시 한 번만 합니다. 노드를 추가할 때는 같은 클러스터 ID를 재사용합니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Quickstart", "url": "https://kafka.apache.org/quickstart" },
+        { "title": "Apache Kafka — KRaft Configuration", "url": "https://kafka.apache.org/documentation/#kraft_config" }
+      ],
+      "tags": ["kraft", "kafka-storage", "bootstrap", "cli"]
+    },
+    {
+      "id": "basics-ch01-010",
+      "exam": "BASICS",
+      "domain": "Kafka 개요와 이벤트 스트리밍",
+      "chapter": "ch01",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "ZooKeeper 모드로 운영 중인 Kafka 2.8 클러스터를 4.3으로 올리려 한다. 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "2.8에서 4.3으로 직접 롤링 업그레이드하면 브로커가 기동 시 자동으로 KRaft로 전환된다." },
+        { "id": "B", "text": "`inter.broker.protocol.version` 만 4.3으로 올리면 메타데이터 저장소 없이 동작한다." },
+        { "id": "C", "text": "4.3에서도 ZooKeeper 모드를 계속 쓸 수 있으므로 KRaft 전환은 선택 사항이다." },
+        { "id": "D", "text": "먼저 KRaft로 마이그레이션한 뒤 4.3으로 올려야 하며, 소프트웨어·메타데이터 버전이 최소 3.3.x여야 한다." }
+      ],
+      "answer": ["D"],
+      "explanation": "4.3 업그레이드 문서는 4.3이 KRaft 모드만 지원하며 ZooKeeper 모드는 제거되었다고 명시합니다. 따라서 브로커를 4.3으로 올리려면 KRaft 모드여야 하고, 소프트웨어와 메타데이터 버전이 최소 3.3.x(KRaft가 production-ready로 선언된 첫 버전)여야 합니다. ZooKeeper 모드 클러스터는 4.3으로 올리기 전에 반드시 KRaft로 마이그레이션해야 하며, 3.3.x보다 오래된 KRaft 클러스터는 3.9.x를 경유하는 것이 권장 경로입니다. 자동 전환 같은 장치는 없고, 마이그레이션은 명시적인 운영 절차입니다.",
+      "distractorNotes": {
+        "A": "자동 전환 기능은 존재하지 않습니다. ZooKeeper에서 KRaft로의 마이그레이션은 별도의 명시적 절차입니다.",
+        "B": "`inter.broker.protocol.version` 은 프로토콜 호환 수준을 조정하는 설정이며 메타데이터 저장소를 대체하지 않습니다. KRaft에서는 메타데이터가 `__cluster_metadata` 로그에 저장됩니다.",
+        "C": "ZooKeeper 모드는 4.0에서 제거되었습니다. 3.9가 마지막 지원 버전이므로 선택 사항이 아닙니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Upgrading to 4.3.0", "url": "https://kafka.apache.org/documentation/#upgrade_4_3_0" },
+        { "title": "Apache Kafka — ZooKeeper to KRaft Migration", "url": "https://kafka.apache.org/documentation/#kraft_zk_migration" }
+      ],
+      "tags": ["kraft", "upgrade", "zookeeper-removal", "version-2x"]
+    }
+  ]
+}

@@ -185,15 +185,15 @@ function findFigures(html) {
 function stripInlined(body) {
   let out = body;
   // .dg-scroll 래퍼 통째로
-  out = out.replace(/[ \t]*<div\b[^>]*class\s*=\s*["'][^"']*\bdg-scroll\b[^"']*["'][^>]*>[\s\S]*?<\/div>\s*\n?/gi, '');
+  out = out.replace(/[ \t]*<div\b[^>]*class\s*=\s*["'][^"']*\bdg-scroll\b[^"']*["'][^>]*>[\s\S]*?<\/div>[ \t]*\n?/gi, '');
   // 직속 <svg>…</svg>
-  out = out.replace(/[ \t]*<svg\b[\s\S]*?<\/svg>\s*\n?/gi, '');
+  out = out.replace(/[ \t]*<svg\b[\s\S]*?<\/svg>[ \t]*\n?/gi, '');
   // app.js 가 남긴 안내 박스
-  out = out.replace(/[ \t]*<div\b[^>]*class\s*=\s*["'][^"']*\bdiagram__missing\b[^"']*["'][^>]*>[\s\S]*?<\/div>\s*\n?/gi, '');
+  out = out.replace(/[ \t]*<div\b[^>]*class\s*=\s*["'][^"']*\bdiagram__missing\b[^"']*["'][^>]*>[\s\S]*?<\/div>[ \t]*\n?/gi, '');
   // viz.js 가 만든 컨트롤 (정적 파일에 저장되면 안 됨)
-  out = out.replace(/[ \t]*<div\b[^>]*class\s*=\s*["'][^"']*\bdg-controls\b[^"']*["'][^>]*>[\s\S]*?<\/div>\s*\n?/gi, '');
-  out = out.replace(/[ \t]*<p\b[^>]*class\s*=\s*["'][^"']*\bdg-live\b[^"']*["'][^>]*>[\s\S]*?<\/p>\s*\n?/gi, '');
-  out = out.replace(/[ \t]*<div\b[^>]*class\s*=\s*["'][^"']*\bdg-readout\b[^"']*["'][^>]*>[\s\S]*?<\/div>\s*\n?/gi, '');
+  out = out.replace(/[ \t]*<div\b[^>]*class\s*=\s*["'][^"']*\bdg-controls\b[^"']*["'][^>]*>[\s\S]*?<\/div>[ \t]*\n?/gi, '');
+  out = out.replace(/[ \t]*<p\b[^>]*class\s*=\s*["'][^"']*\bdg-live\b[^"']*["'][^>]*>[\s\S]*?<\/p>[ \t]*\n?/gi, '');
+  out = out.replace(/[ \t]*<div\b[^>]*class\s*=\s*["'][^"']*\bdg-readout\b[^"']*["'][^>]*>[\s\S]*?<\/div>[ \t]*\n?/gi, '');
   return out;
 }
 
@@ -234,6 +234,10 @@ for (const file of htmlFiles) {
     let newBody = stripInlined(fig.body);
     let newTag = markTag(fig.tag, false);
 
+    // figure 본문의 끝 공백을 정규화합니다. 이걸 하지 않으면 실행마다 빈 줄이 하나씩
+    // 늘어나 결과가 바이트 단위로 달라집니다(멱등성 위반).
+    newBody = newBody.replace(/\s+$/, '') + '\n' + fig.indent;
+
     if (REVERT) {
       if (hadInline) reverted++;
       const rebuilt = newTag + newBody + '</figure>';
@@ -272,18 +276,16 @@ for (const file of htmlFiles) {
     const wrapped = '\n' + inner + '<div class="dg-scroll">\n' +
       indentSvg(svg, inner + '  ') + '\n' + inner + '</div>\n';
 
-    // figcaption 앞에 삽입
+    // figcaption 앞에 삽입 (결과가 항상 같은 바이트가 되도록 공백을 정규화)
     const capIdx = newBody.search(/<figcaption\b/i);
     let merged;
     if (capIdx >= 0) {
-      const before = newBody.slice(0, capIdx).replace(/\s*$/, '');
-      const after = newBody.slice(capIdx);
-      merged = before + wrapped + inner + after.replace(/^\s*/, '');
+      const before = newBody.slice(0, capIdx).replace(/\s+$/, '');
+      const after = newBody.slice(capIdx).replace(/^\s+/, '').replace(/\s+$/, '');
+      merged = before + wrapped + inner + after + '\n' + fig.indent;
     } else {
-      merged = wrapped + newBody.replace(/^\s*/, '');
+      merged = wrapped + newBody.replace(/^\s+/, '').replace(/\s+$/, '') + '\n' + fig.indent;
     }
-    if (!/\n$/.test(merged)) merged += '\n';
-    merged += fig.indent;
 
     newTag = markTag(fig.tag, true);
     const rebuilt = newTag + merged + '</figure>';

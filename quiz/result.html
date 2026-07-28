@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>결과 리포트 — Kafka Guide</title>
+  <meta name="description" content="마지막 채점 결과의 상세 리포트입니다. 도메인별·유형별 정답률, 취약 도메인 Top 3, 복습 챕터 링크, 오답 목록, 응시 이력을 보여줍니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="quiz" data-page="result"></div>
+
+  <main id="main" class="page" data-page-id="quiz/result" data-quiz-page="result">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">문제 풀이</a></li>
+        <li><span aria-current="page">결과 리포트</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">문제 풀이</p>
+      <h1>결과 리포트</h1>
+      <p class="page__lead">
+        가장 최근에 완주한 세트의 채점 결과입니다. 총점보다 중요한 것은
+        <strong>어느 도메인과 어느 유형에서 떨어지는가</strong>입니다. 아래 두 바차트를 먼저 보세요.
+      </p>
+    </header>
+
+    <section aria-labelledby="report">
+      <h2 id="report">리포트</h2>
+      <div data-quiz-host></div>
+    </section>
+
+    <section aria-labelledby="how-to-read">
+      <h2 id="how-to-read">리포트 읽는 법</h2>
+      <div class="table-scroll">
+        <table>
+          <caption>구간별 해석 기준</caption>
+          <thead>
+            <tr><th scope="col">정답률</th><th scope="col">해석</th><th scope="col">권장 행동</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">80% 이상</th><td>유지 구간</td><td>따로 학습하지 않고 모의고사에서만 점검합니다.</td></tr>
+            <tr><th scope="row">60 ~ 79%</th><td>보강 구간</td><td>헷갈리는 쌍을 정리하고 도메인 연습을 절반 정도 풉니다.</td></tr>
+            <tr><th scope="row">60% 미달</th><td>집중 학습 구간</td><td>해당 챕터 본문을 다시 읽고 도메인 연습을 전량 풉니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <aside class="note" data-label="유형별 정답률을 꼭 보세요">
+        <p>
+          도메인은 괜찮은데 <strong>연결형</strong>이나 <strong>순서 배열</strong>에서만 떨어진다면
+          지식이 아니라 <strong>정확한 값과 순서를 외우지 못한 것</strong>입니다.
+          이 경우 본문 재독보다 <a href="../ccdak/flashcards.html">플래시카드</a>가 훨씬 빠릅니다.
+        </p>
+      </aside>
+      <aside class="note note--warn" data-label="합격선에 대하여">
+        <p>
+          Confluent는 합격 점수를 공개하지 않습니다. 이 사이트의 80% 기준은
+          <strong>학습 우선순위를 정하기 위한 내부 기준</strong>이며 합격선이 아닙니다.
+        </p>
+      </aside>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

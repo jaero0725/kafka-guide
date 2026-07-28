@@ -542,8 +542,15 @@
         var id = (fig.getAttribute('data-diagram') || '').toUpperCase();
         var file = map && map[id];
         var candidates = [];
-        if (file) candidates.push(file);
-        candidates.push(id + '.svg');
+        if (file) {
+          candidates.push(file);
+        } else if (!map) {
+          // 매핑 파일이 아예 없을 때만 파일명을 추정합니다.
+          // 매핑이 있는데 항목이 없다면 "아직 만들어지지 않은 다이어그램" 이므로
+          // 불필요한 404 를 만들지 않고 바로 안내를 띄웁니다.
+          candidates.push(id + '.svg');
+        }
+        if (!candidates.length) { showMissing(fig, id, false); return null; }
         return tryFiles(candidates, 0);
 
         function tryFiles(list, i) {

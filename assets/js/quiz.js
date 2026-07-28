@@ -132,6 +132,40 @@
     });
   }
 
+  /**
+   * manifest.json 은 Wave 2 B6 가 생성합니다. 그 전에도 사이트가 동작해야 하므로
+   * 매니페스트가 없으면 아래 목록을 후보로 삼아 실제 존재하는 파일만 골라 씁니다.
+   * (Wave 0 이 만든 basics-ch01 로 엔진 검증이 가능해야 합니다.)
+   */
+  var FALLBACK_SET_CANDIDATES = [
+    'basics-ch01', 'basics-ch02', 'basics-ch03', 'basics-ch04', 'basics-ch05',
+    'basics-ch06', 'basics-ch07', 'basics-ch08', 'basics-ch09', 'basics-ch10',
+    'basics-ch11', 'basics-appendix-legacy',
+    'ccdak-diagnostic',
+    'ccdak-app-development', 'ccdak-fundamentals', 'ccdak-connect',
+    'ccdak-observability', 'ccdak-streams', 'ccdak-testing',
+    'ccdak-mock-1', 'ccdak-mock-2', 'ccdak-mock-3', 'ccdak-mock-4',
+    'ccaak-fundamentals', 'ccaak-security', 'ccaak-connect',
+    'ccaak-deployment', 'ccaak-cluster-config', 'ccaak-observability',
+    'ccaak-troubleshooting', 'ccaak-mock-1'
+  ];
+
+  function discoverSets() {
+    return Promise.all(FALLBACK_SET_CANDIDATES.map(function (id) {
+      return loadSet(id).then(function (s) {
+        return {
+          setId: s.setId || id,
+          file: id + '.json',
+          exam: s.exam || null,
+          domain: s.domain || null,
+          title: s.title || id,
+          count: s.questions.length,
+          mock: /-mock-\d+$/.test(id)
+        };
+      }).catch(function () { return null; });
+    })).then(function (list) { return list.filter(Boolean); });
+  }
+
   function loadManifest() {
     if (cache.manifest) return Promise.resolve(cache.manifest);
     return fetchJSON(url('data/questions/manifest.json')).then(function (m) {
@@ -139,8 +173,11 @@
       if (!Array.isArray(cache.manifest.sets)) cache.manifest.sets = [];
       return cache.manifest;
     }).catch(function () {
-      cache.manifest = { sets: [], exams: {}, __missing: true };
-      return cache.manifest;
+      // 매니페스트 없음 → 후보 목록에서 실제 존재하는 세트를 탐색
+      return discoverSets().then(function (sets) {
+        cache.manifest = { sets: sets, exams: {}, __discovered: true, __missing: !sets.length };
+        return cache.manifest;
+      });
     });
   }
 
@@ -524,8 +561,16 @@
     if (btn) { if (btn.disabled) { var alt = btn.parentNode.querySelector('.qo__btn:not(:disabled)'); if (alt) alt.focus(); } else btn.focus(); }
     var p = this.prepared[this.index];
     var item = (p.order || []).filter(function (x) { return x.id === itemId; })[0];
-    this.announce((item ? item.text : '항목') + ' 을 ' + (j + 1) + '번째로 이동했습니다.');
+    // 스크린리더가 백틱·별표를 읽지 않도록 마크업 기호를 제거하고 길이를 줄입니다.
+    this.announce(plain(item ? item.text : '항목', 40) + ' 을 ' + (j + 1) + '번째로 이동했습니다.');
   };
+
+  /** 낭독용 평문화: `코드`/**강조** 기호 제거 + 길이 제한 */
+  function plain(s, max) {
+    var t = String(s == null ? '' : s).replace(/[`*_]/g, '').replace(/\s+/g, ' ').trim();
+    if (max && t.length > max) t = t.slice(0, max) + '…';
+    return t;
+  }
 
   Engine.prototype.toggleFlag = function () {
     this.flags[this.index] = !this.flags[this.index];
@@ -905,9 +950,9 @@
       if (!g) {
         out += '<span class="qo__ctrl">';
         out += '<button type="button" class="qo__btn" data-act="up" data-item="' + esc(id) + '"' +
-          (i === 0 ? ' disabled' : '') + ' aria-label="' + esc(byId[id] || id) + ' 위로 이동">▲</button>';
+          (i === 0 ? ' disabled' : '') + ' aria-label="' + esc(plain(byId[id] || id, 40)) + ' 위로 이동">▲</button>';
         out += '<button type="button" class="qo__btn" data-act="down" data-item="' + esc(id) + '"' +
-          (i === seq.length - 1 ? ' disabled' : '') + ' aria-label="' + esc(byId[id] || id) + ' 아래로 이동">▼</button>';
+          (i === seq.length - 1 ? ' disabled' : '') + ' aria-label="' + esc(plain(byId[id] || id, 40)) + ' 아래로 이동">▼</button>';
         out += '</span>';
       } else {
         out += '<span class="qo__mark" aria-hidden="true">' + (verdict === 'correct' ? '✓' : '✕') + '</span>';
@@ -1214,35 +1259,35 @@
     cfg = cfg || {};
     var mode = cfg.mode || 'study';
 
+    /* --- 명시적 세트 지정 (인라인 위젯의 기본 경로) ---
+       매니페스트를 읽지 않습니다. 콘텐츠 페이지가 필요 없는 파일을 탐색해
+       404 를 쏟아내지 않도록 하는 것이 중요합니다. */
+    if (cfg.sets && cfg.sets.length) {
+      return loadSets(cfg.sets).then(function (sets) {
+        var qs = [];
+        sets.forEach(function (s) { qs = qs.concat(s.questions); });
+        return {
+          questions: qs,
+          title: cfg.title || (sets.length === 1 ? (sets[0].title || sets[0].setId) : '문제 풀이'),
+          setIds: sets.length ? sets.map(function (s) { return s.setId; }) : cfg.sets.slice(),
+          missing: sets.length ? null : cfg.sets.join(', '),
+          manifest: null
+        };
+      });
+    }
+
+    /* --- diagnostic: 단일 세트이므로 매니페스트가 필요 없습니다 --- */
+    if (mode === 'diagnostic') {
+      return loadSet('ccdak-diagnostic').then(function (s) {
+        return { questions: s.questions, title: s.title || 'CCDAK 진단 테스트', setIds: [s.setId] };
+      }).catch(function () {
+        return { questions: [], title: 'CCDAK 진단 테스트', setIds: ['ccdak-diagnostic'],
+                 missing: 'ccdak-diagnostic.json' };
+      });
+    }
+
     return loadManifest().then(function (manifest) {
       var exam = cfg.exam || null;
-
-      /* --- 명시적 세트 지정 --- */
-      if (cfg.sets && cfg.sets.length) {
-        return loadSets(cfg.sets).then(function (sets) {
-          var qs = [];
-          sets.forEach(function (s) { qs = qs.concat(s.questions); });
-          return {
-            questions: qs,
-            title: cfg.title || (sets.length === 1 ? (sets[0].title || sets[0].setId) : '문제 풀이'),
-            setIds: sets.map(function (s) { return s.setId; }),
-            manifest: manifest
-          };
-        });
-      }
-
-      /* --- diagnostic --- */
-      if (mode === 'diagnostic') {
-        return loadSet('ccdak-diagnostic').then(function (s) {
-          return {
-            questions: s.questions, title: s.title || 'CCDAK 진단 테스트',
-            setIds: [s.setId], manifest: manifest
-          };
-        }).catch(function () {
-          return { questions: [], title: 'CCDAK 진단 테스트', setIds: ['ccdak-diagnostic'],
-                   manifest: manifest, missing: 'ccdak-diagnostic' };
-        });
-      }
 
       /* --- review (오답 노트) --- */
       if (mode === 'review') {
@@ -1352,8 +1397,8 @@
       if (!s.questions.length) {
         var hint = s.emptyReason ? EMPTY_HINTS[s.emptyReason] : null;
         if (!hint) {
-          hint = '문제은행 파일을 찾을 수 없습니다. Wave 2에서 <code>data/questions/' +
-            esc(s.missing || (cfg.sets ? cfg.sets.join(', ') : 'manifest.json')) +
+          var f = s.missing || (cfg.sets ? cfg.sets.join(', ') + '.json' : 'manifest.json');
+          hint = '문제은행 파일을 찾을 수 없습니다. Wave 2에서 <code>data/questions/' + esc(f) +
             '</code> 이 생성되면 자동으로 표시됩니다.';
         }
         el.innerHTML = emptyBox('아직 풀 수 있는 문항이 없습니다.', hint);
@@ -1405,9 +1450,409 @@
     });
   }
 
+  /* ======================================================================
+     페이지 컨트롤러
+     ---------------------------------------------------------------------
+     인라인 <script> 가 금지되어 있으므로 quiz/*.html 의 동작도 여기서 처리합니다.
+     <main data-quiz-page="hub|diagnostic|review|result"> 로 지정합니다.
+     ====================================================================== */
+  function query() {
+    var out = {};
+    try {
+      var s = new global.URLSearchParams(global.location.search);
+      s.forEach(function (v, k) { out[k] = v; });
+    } catch (e) {}
+    return out;
+  }
+
+  var MODE_LABEL = {
+    study: '학습 모드 — 제출 즉시 정답과 해설',
+    exam: '시험 모드 — 타이머 + 마지막 일괄 채점',
+    domain: '도메인 연습 — 특정 도메인만',
+    random: '랜덤 챌린지 — 전체 은행에서 무작위',
+    review: '오답 노트 — 틀린 문항만 (3회 연속 정답 시 졸업)',
+    weakness: '약점 집중 — 정답률 80% 미달 도메인',
+    diagnostic: '진단 테스트 — 30문항 취약점 분석'
+  };
+
+  /* ---------- 허브 (quiz/index.html) ------------------------------------- */
+  function pageHub(main) {
+    var host = main.querySelector('[data-quiz-host]');
+    var panel = main.querySelector('[data-quiz-panel]');
+    if (!host) return;
+    var q = query();
+
+    loadManifest().then(function (manifest) {
+      var sets = manifest.sets || [];
+      var exams = [];
+      sets.forEach(function (s) { if (s.exam && exams.indexOf(s.exam) < 0) exams.push(s.exam); });
+      var domains = [];
+      sets.forEach(function (s) { if (s.domain && domains.indexOf(s.domain) < 0) domains.push(s.domain); });
+
+      if (panel) {
+        var h = '';
+        if (!sets.length) {
+          h += '<div class="quiz__empty"><strong>문제은행이 아직 없습니다.</strong>' +
+            '<p>Wave 2 에이전트가 <code>data/questions/</code> 를 생성하면 이 화면에서 모드를 골라 응시할 수 있습니다. ' +
+            'file:// 로 열었다면 <code>python3 -m http.server</code> 로 로컬 서버를 띄워 주세요.</p></div>';
+        } else {
+          h += '<div class="toolbar">';
+          h += '<div class="field"><label for="qh-mode">모드</label><select id="qh-mode">';
+          ['study', 'exam', 'domain', 'random', 'review', 'weakness'].forEach(function (m) {
+            h += '<option value="' + m + '"' + (q.mode === m ? ' selected' : '') + '>' + esc(MODE_LABEL[m]) + '</option>';
+          });
+          h += '</select></div>';
+
+          h += '<div class="field"><label for="qh-exam">시험</label><select id="qh-exam">';
+          h += '<option value="">전체</option>';
+          exams.forEach(function (e) {
+            h += '<option value="' + esc(e) + '"' + (q.exam === e ? ' selected' : '') + '>' + esc(e) + '</option>';
+          });
+          h += '</select></div>';
+
+          h += '<div class="field"><label for="qh-domain">도메인 (도메인 연습)</label><select id="qh-domain">';
+          h += '<option value="">전체</option>';
+          domains.forEach(function (d) {
+            h += '<option value="' + esc(d) + '"' + (q.domain === d ? ' selected' : '') + '>' + esc(d) + '</option>';
+          });
+          h += '</select></div>';
+
+          h += '<div class="field"><label for="qh-set">세트 직접 선택</label><select id="qh-set">';
+          h += '<option value="">(모드에 맡김)</option>';
+          sets.forEach(function (s) {
+            h += '<option value="' + esc(s.setId) + '"' + (q.set === s.setId ? ' selected' : '') + '>' +
+              esc(s.title || s.setId) + ' · ' + (s.count || 0) + '문항</option>';
+          });
+          h += '</select></div>';
+
+          h += '<div class="field"><label for="qh-count">문항 수</label><select id="qh-count">';
+          [10, 20, 30, 60, 0].forEach(function (n) {
+            h += '<option value="' + n + '"' + (String(q.count) === String(n) ? ' selected' : '') + '>' +
+              (n === 0 ? '전체' : n + '문항') + '</option>';
+          });
+          h += '</select></div>';
+
+          h += '<button type="button" class="btn btn--primary" data-act="start">시작</button>';
+          h += '</div>';
+
+          if (manifest.__discovered) {
+            h += '<aside class="note" data-label="안내"><p><code>data/questions/manifest.json</code> 이 아직 없어 ' +
+              '파일을 직접 탐색해 ' + sets.length + '개 세트를 찾았습니다. Wave 2 B6 가 매니페스트를 생성하면 ' +
+              '도메인 가중치와 모의고사 구분이 정확해집니다.</p></aside>';
+          }
+          h += renderProgressSummary();
+        }
+        panel.innerHTML = h;
+      }
+
+      function start(cfg) {
+        var engine = mount(host, cfg);
+        host.scrollIntoView({ behavior: 'auto', block: 'start' });
+        return engine;
+      }
+
+      if (panel) {
+        panel.addEventListener('click', function (e) {
+          var b = e.target.closest && e.target.closest('[data-act="start"]');
+          if (!b) return;
+          e.preventDefault();
+          var mode = (panel.querySelector('#qh-mode') || {}).value || 'study';
+          var exam = (panel.querySelector('#qh-exam') || {}).value || null;
+          var domain = (panel.querySelector('#qh-domain') || {}).value || null;
+          var setId = (panel.querySelector('#qh-set') || {}).value || null;
+          var count = parseInt((panel.querySelector('#qh-count') || {}).value, 10) || 0;
+          start({
+            mode: mode, exam: exam || null, domain: domain || null,
+            sets: setId ? [setId] : null,
+            count: mode === 'exam' && !count ? 60 : count,
+            durationSec: mode === 'exam' ? 90 * 60 : null
+          });
+        });
+      }
+
+      // 쿼리 파라미터로 바로 시작 (진단 결과의 학습 순서 링크가 이 경로를 씁니다)
+      if (q.mode || q.set) {
+        start({
+          mode: q.mode || 'study',
+          exam: q.exam || null,
+          domain: q.domain || null,
+          sets: q.set ? [q.set] : null,
+          count: parseInt(q.count, 10) || (q.mode === 'exam' ? 60 : 0),
+          durationSec: q.mode === 'exam' ? 90 * 60 : null
+        });
+      } else if (sets.length) {
+        host.innerHTML = emptyBox('모드를 고르고 “시작”을 누르세요.',
+          '학습 모드는 문항마다 즉시 채점하고, 시험 모드는 90분 타이머로 60문항을 일괄 채점합니다.');
+      }
+    });
+  }
+
+  function renderProgressSummary() {
+    var p = progressApi();
+    if (!p) return '';
+    var stats = p.quizStats();
+    var ids = Object.keys(stats);
+    if (!ids.length) return '';
+    var attempts = 0, correct = 0, graduated = 0;
+    ids.forEach(function (id) {
+      attempts += stats[id].attempts || 0;
+      correct += stats[id].correct || 0;
+      if ((stats[id].streak || 0) >= GRADUATE_STREAK) graduated++;
+    });
+    var wrong = p.wrongQuestionIds().length;
+    var pct = attempts ? Math.round((correct / attempts) * 100) : 0;
+    var out = '<div class="result__score">';
+    out += '<span class="result__pct" data-band="' + band(pct) + '">' + pct + '%</span>';
+    out += '<span class="result__frac">누적 ' + correct + ' / ' + attempts + ' 시도</span>';
+    out += '<span class="result__stat">푼 문항<b>' + ids.length + '</b></span>';
+    out += '<span class="result__stat">졸업<b>' + graduated + '</b></span>';
+    out += '<span class="result__stat">복습 대기<b>' + wrong + '</b></span>';
+    out += '</div>';
+    var diag = p.diagnostic();
+    if (diag && diag.plan && diag.plan.length) {
+      out += '<p><a href="' + url('quiz/diagnostic.html') + '">진단 결과</a>가 저장되어 있습니다 (' +
+        esc(String(diag.at).slice(0, 10)) + '). 약점 집중 모드가 이 결과를 우선 참조합니다.</p>';
+    }
+    return out;
+  }
+
+  /* ---------- 진단 (quiz/diagnostic.html) -------------------------------- */
+  function pageDiagnostic(main) {
+    var host = main.querySelector('[data-quiz-host]');
+    var prev = main.querySelector('[data-diagnostic-previous]');
+    if (!host) return;
+    var p = progressApi();
+
+    if (prev) {
+      var diag = p ? p.diagnostic() : null;
+      if (diag && diag.plan && diag.plan.length) {
+        prev.innerHTML = '<h2 id="previous-result">지난 진단 결과 (' + esc(String(diag.at).slice(0, 10)) + ')</h2>' +
+          '<p>총점 ' + diag.score + ' / ' + diag.total + '. 아래 순서대로 학습하면 가중치가 큰 약점을 먼저 메웁니다.</p>' +
+          renderPlan(diag) +
+          '<p><button type="button" class="btn btn--sm btn--danger" data-act="clear-diagnostic">진단 결과 삭제</button></p>';
+        prev.addEventListener('click', function (e) {
+          var b = e.target.closest && e.target.closest('[data-act="clear-diagnostic"]');
+          if (!b) return;
+          e.preventDefault();
+          if (global.confirm('저장된 진단 결과를 삭제합니다. 계속할까요?')) {
+            if (p) p.setDiagnostic(null);
+            prev.innerHTML = '';
+          }
+        });
+      }
+    }
+
+    mount(host, {
+      mode: 'diagnostic',
+      diagnostic: true,
+      shuffleQuestions: false,   // 도메인 × 5문항 구성을 유지
+      title: 'CCDAK 진단 테스트',
+      exam: 'CCDAK',
+      onFinish: function (result) {
+        // 결과 요약은 Engine 이 이미 렌더링합니다. 학습 순서는 진단 블록에도 반영.
+        if (prev && result.diagnostic) {
+          prev.innerHTML = '<h2 id="previous-result">진단 결과가 저장되었습니다</h2>' +
+            '<p>홈 대시보드와 “약점 집중” 모드가 이 결과를 참조합니다.</p>';
+        }
+      }
+    });
+  }
+
+  /* ---------- 오답 노트 (quiz/review.html) ------------------------------- */
+  function pageReview(main) {
+    var host = main.querySelector('[data-quiz-host]');
+    var summary = main.querySelector('[data-review-summary]');
+    if (!host) return;
+    var p = progressApi();
+
+    if (summary && p) {
+      var stats = p.quizStats();
+      var ids = Object.keys(stats);
+      var wrong = p.wrongQuestionIds();
+      var graduated = ids.filter(function (id) { return (stats[id].streak || 0) >= GRADUATE_STREAK; });
+      var h = '<div class="result__score">';
+      h += '<span class="result__pct" data-band="' + (wrong.length ? 'low' : 'high') + '">' + wrong.length + '</span>';
+      h += '<span class="result__frac">복습 대기 문항</span>';
+      h += '<span class="result__stat">졸업<b>' + graduated.length + '</b></span>';
+      h += '<span class="result__stat">푼 문항<b>' + ids.length + '</b></span>';
+      h += '</div>';
+      h += '<p>같은 문항을 <strong>3회 연속으로 맞히면 졸업</strong> 처리되어 이 목록에서 빠집니다. ' +
+        '한 번이라도 틀리면 연속 기록이 0으로 돌아갑니다.</p>';
+      if (ids.length) {
+        h += '<p><button type="button" class="btn btn--sm btn--danger" data-act="reset-quiz">퀴즈 통계 초기화</button></p>';
+      }
+      summary.innerHTML = h;
+      summary.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('[data-act="reset-quiz"]');
+        if (!b) return;
+        e.preventDefault();
+        if (global.confirm('퀴즈 통계·시험 이력·진단 결과를 삭제합니다. 계속할까요?')) {
+          p.reset('quiz');
+          global.location.reload();
+        }
+      });
+    }
+
+    mount(host, { mode: 'review', title: '오답 노트', shuffleQuestions: true });
+  }
+
+  /* ---------- 결과 리포트 (quiz/result.html) ----------------------------- */
+  function pageResult(main) {
+    var host = main.querySelector('[data-quiz-host]');
+    if (!host) return;
+    var p = progressApi();
+    var r = p ? p.lastResult() : null;
+
+    if (!r) {
+      host.innerHTML = emptyBox('표시할 채점 결과가 없습니다.',
+        '<a href="' + url('quiz/index.html') + '">문제 풀이 허브</a>에서 한 세트를 완주하면 ' +
+        '이 페이지에 상세 리포트가 남습니다.');
+      return;
+    }
+
+    var pct = r.total ? Math.round((r.score / r.total) * 100) : 0;
+    var h = '';
+    h += '<div class="result__score">';
+    h += '<span class="result__pct" data-band="' + band(pct) + '">' + pct + '%</span>';
+    h += '<span class="result__frac">' + r.score + ' / ' + r.total + ' 문항</span>';
+    h += '<span class="result__stat">소요 시간<b>' + fmtTime(r.durationSec) + '</b></span>';
+    h += '<span class="result__stat">모드<b>' + esc(r.mode) + '</b></span>';
+    h += '<span class="result__stat">응시 시각<b>' + esc(String(r.at).replace('T', ' ').slice(0, 16)) + '</b></span>';
+    h += '</div>';
+    if (r.title) h += '<p>' + esc(r.title) + (r.autoSubmitted ? ' · 시간 종료로 자동 제출됨' : '') + '</p>';
+
+    h += renderBreakdown('도메인별 정답률', r.byDomain);
+    h += renderBreakdown('유형별 정답률', r.byType, TYPE_LABEL);
+
+    /* 취약 도메인 Top 3 → 챕터 링크 */
+    var weak = Object.keys(r.byDomain || {}).map(function (d) {
+      var v = r.byDomain[d];
+      return { domain: d, pct: v.total ? Math.round((v.correct / v.total) * 100) : 0,
+               correct: v.correct, total: v.total, meta: domainMeta(d) };
+    }).filter(function (x) { return x.pct < 100; })
+      .sort(function (a, b) {
+        var wa = (a.meta.weight || 10) * (100 - a.pct);
+        var wb = (b.meta.weight || 10) * (100 - b.pct);
+        return wb - wa;
+      }).slice(0, 3);
+
+    if (weak.length) {
+      h += '<h2 id="weak-domains">취약 도메인 Top ' + weak.length + '</h2>';
+      h += '<p>가중치 × 부족분 순입니다. 위쪽을 먼저 학습하는 것이 점수 상승 폭이 큽니다.</p>';
+      h += '<ol class="plan">';
+      weak.forEach(function (w) {
+        var tier = w.pct < 60 ? 'focus' : (w.pct < 80 ? 'reinforce' : 'maintain');
+        h += '<li data-tier="' + tier + '"><div class="plan__head">' +
+          '<span class="plan__domain">' + esc(w.domain) + '</span>' +
+          '<span class="bar-chart__val">' + w.pct + '% (' + w.correct + '/' + w.total + ')' +
+          (w.meta.weight ? ' · 가중치 ' + w.meta.weight + '%' : '') + '</span></div>';
+        h += '<ul class="plan__links">';
+        (w.meta.chapters || []).forEach(function (ch) {
+          h += '<li><a href="' + url('basics/' + ch + '.html') + '">' + esc(ch) + ' 본문</a></li>';
+        });
+        h += '<li><a href="' + url('quiz/index.html') + '?mode=domain&amp;domain=' +
+          encodeURIComponent(w.domain) + '">' + esc(w.domain) + ' 연습</a></li>';
+        h += '</ul></li>';
+      });
+      h += '</ol>';
+    }
+
+    /* 챕터별 복습 추천 */
+    var chapters = Object.keys(r.byChapter || {}).filter(function (ch) {
+      var v = r.byChapter[ch];
+      return v.total && v.correct < v.total;
+    }).sort();
+    if (chapters.length) {
+      h += '<h2 id="review-chapters">복습할 챕터</h2><ul class="plan__links">';
+      chapters.forEach(function (ch) {
+        var v = r.byChapter[ch];
+        h += '<li><a href="' + url('basics/' + ch + '.html') + '">' + esc(ch) +
+          ' (' + v.correct + '/' + v.total + ')</a></li>';
+      });
+      h += '</ul>';
+    }
+
+    /* 오답 목록 */
+    var wrongQs = (r.questions || []).filter(function (d) { return !d.correct; });
+    h += '<h2 id="wrong-questions">오답 ' + wrongQs.length + '문항</h2>';
+    if (!wrongQs.length) {
+      h += '<aside class="note note--ok" data-label="완주"><p>전 문항 정답입니다.</p></aside>';
+    } else {
+      h += '<ul class="wrong-list">';
+      wrongQs.forEach(function (d) {
+        h += '<li><details><summary>' +
+          '<span class="badge badge--' + esc(d.difficulty || 'medium') + '">' +
+          esc(DIFF_LABEL[d.difficulty] || d.difficulty || '') + '</span> ' +
+          '<span class="badge">' + esc(TYPE_LABEL[d.type] || d.type) + '</span> ' +
+          md(d.question) + '</summary><div class="wrong-list__body">';
+        h += '<p><b>내 답</b><br>' + esc(d.yourAnswer) + '</p>';
+        h += '<p><b>정답</b><br>' + esc(d.correctAnswer) + '</p>';
+        h += '<p>' + md(d.explanation) + '</p>';
+        if (Array.isArray(d.refs) && d.refs.length) {
+          h += '<ul class="quiz__refs">';
+          d.refs.forEach(function (rf) {
+            h += '<li><a href="' + esc(rf.url) + '" target="_blank" rel="noopener noreferrer">' +
+              esc(rf.title || rf.url) + '</a></li>';
+          });
+          h += '</ul>';
+        }
+        if (d.chapter) h += '<p><a href="' + url('basics/' + d.chapter + '.html') + '">' + esc(d.chapter) + ' 복습</a></p>';
+        h += '</div></details></li>';
+      });
+      h += '</ul>';
+    }
+
+    /* 응시 이력 */
+    var hist = p ? p.exams() : [];
+    if (hist.length) {
+      h += '<h2 id="exam-history">응시 이력</h2><div class="table-scroll"><table>';
+      h += '<caption>최근 응시 기록 (최신 20건)</caption><thead><tr>' +
+        '<th scope="col">일시</th><th scope="col">모드</th><th scope="col">세트</th>' +
+        '<th scope="col">점수</th><th scope="col">소요</th></tr></thead><tbody>';
+      hist.slice(-20).reverse().forEach(function (e) {
+        var ep = e.total ? Math.round((e.score / e.total) * 100) : 0;
+        h += '<tr><td>' + esc(String(e.at).replace('T', ' ').slice(0, 16)) + '</td>' +
+          '<td>' + esc(e.mode || '') + '</td><td>' + esc(e.setId || '') + '</td>' +
+          '<td>' + e.score + ' / ' + e.total + ' (' + ep + '%)</td>' +
+          '<td>' + fmtTime(e.durationSec) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+
+    h += '<div class="toolbar">';
+    h += '<a class="btn btn--primary" href="' + url('quiz/index.html') + '">다시 응시</a>';
+    h += '<a class="btn" href="' + url('quiz/review.html') + '">오답 노트로</a>';
+    h += '<button type="button" class="btn btn--ghost btn--sm" data-act="clear-result">이 결과 지우기</button>';
+    h += '</div>';
+
+    host.innerHTML = h;
+    highlightIn(host);
+    host.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-act="clear-result"]');
+      if (!b) return;
+      e.preventDefault();
+      if (p) p.clearLastResult();
+      global.location.reload();
+    });
+  }
+
+  var PAGES = { hub: pageHub, diagnostic: pageDiagnostic, review: pageReview, result: pageResult };
+
+  function initPage() {
+    var main = doc.querySelector('main[data-quiz-page]');
+    if (!main) return;
+    var kind = main.getAttribute('data-quiz-page');
+    var fn = PAGES[kind];
+    if (fn) {
+      try { fn(main); } catch (e) { if (global.console) console.error('[quiz] 페이지 초기화 실패', e); }
+    }
+  }
+
   /* ---------- 공개 -------------------------------------------------------- */
   global.KG = global.KG || {};
   global.KG.quiz = {
+    initPage: initPage,
+    MODE_LABEL: MODE_LABEL,
     mount: mount,
     autoMount: autoMount,
     Engine: Engine,
@@ -1416,6 +1861,7 @@
     loadSets: loadSets,
     loadAllQuestions: loadAllQuestions,
     pickSetIds: pickSetIds,
+    discoverSets: discoverSets,
     buildSession: buildSession,
     buildDiagnostic: buildDiagnostic,
     renderPlan: renderPlan,
@@ -1436,8 +1882,9 @@
     _esc: esc
   };
 
+  function boot() { autoMount(); initPage(); }
   if (doc) {
-    if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', function () { autoMount(); });
-    else autoMount();
+    if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot);
+    else boot();
   }
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -172,10 +172,16 @@ function checkHtmlQuality(file, text) {
     }
   }
 
-  /* ZooKeeper 현행 서술 금지 */
+  /* ZooKeeper 현행 서술 금지
+     단, "4.0에서 제거되었다 / 더 이상 없다" 처럼 **제거 사실을 가르치는 문맥**은 허용합니다.
+     그 서술 자체가 VERSION_POLICY 가 요구하는 내용이기 때문입니다. */
+  const REMOVED_CTX = /제거|삭제|없습니다|없다|deprecated|더 이상|사라졌|폐기|지원하지 않|존재하지 않/;
   if (!isLegacyAppendix) {
     for (const m of text.matchAll(/--zookeeper\b/g)) {
-      err(f, lineAt(text, m.index), '`--zookeeper` 옵션은 Kafka 4.0에서 제거되었습니다 (부록 외 사용 금지)');
+      const ctx = text.slice(Math.max(0, m.index - 200), m.index + 200);
+      if (REMOVED_CTX.test(ctx)) continue;   // 제거 사실을 설명하는 문맥 → 허용
+      err(f, lineAt(text, m.index),
+        '`--zookeeper` 를 사용 가능한 옵션처럼 서술했습니다 — 4.0에서 제거되었습니다 (제거 사실을 설명하는 문맥만 허용)');
     }
     // "ZooKeeper에 접속/저장" 같은 현행 서술 탐지 (역사적 맥락 표현은 통과시킴)
     for (const m of text.matchAll(/(?:ZooKeeper|주키퍼|zookeeper)(?:에|가|는|를|와|의)?\s*(접속|연결|저장|등록|기동|실행)/g)) {
@@ -185,8 +191,14 @@ function checkHtmlQuality(file, text) {
     }
   }
 
-  /* 2.13을 Kafka 버전으로 서술 */
-  for (const m of text.matchAll(/Kafka\s*(?:버전\s*)?2\.13/gi)) {
+  /* 2.13을 Kafka 버전으로 서술
+     "Kafka 2.13이라는 버전은 존재하지 않는다" 처럼 **부정하는 문맥은 허용**합니다.
+     그 문장이 바로 VERSION_POLICY §1 이 요구하는 서술입니다.
+     줄바꿈을 건너뛰지 않도록 같은 줄 안에서만 매칭합니다(코드블록의 지시선 아트 오탐 방지). */
+  for (const m of text.matchAll(/Kafka[ \t]*(?:버전[ \t]*)?2\.13/gi)) {
+    const ctx = text.slice(m.index, m.index + 120);
+    if (REMOVED_CTX.test(ctx)) continue;                 // "…존재하지 않습니다"
+    if (/Scala/i.test(text.slice(Math.max(0, m.index - 120), m.index + 120))) continue;
     err(f, lineAt(text, m.index), '"2.13"은 Scala 버전입니다. Kafka 2.13이라는 버전은 존재하지 않습니다');
   }
 
@@ -244,7 +256,12 @@ function checkLinks(file, text) {
     if (!raw) continue;
     if (/^(?:https?:|mailto:|tel:|data:|javascript:|\/\/)/i.test(raw)) continue;
 
-    const [target, frag] = raw.split('#');
+    // href="page.html?mode=exam#anchor" → 쿼리스트링과 프래그먼트를 분리
+    const hashAt = raw.indexOf('#');
+    const frag = hashAt >= 0 ? raw.slice(hashAt + 1) : '';
+    let target = hashAt >= 0 ? raw.slice(0, hashAt) : raw;
+    const qAt = target.indexOf('?');
+    if (qAt >= 0) target = target.slice(0, qAt);
 
     /* 같은 페이지 앵커 */
     if (target === '') {

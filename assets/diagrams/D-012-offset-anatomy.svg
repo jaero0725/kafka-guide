@@ -73,12 +73,12 @@
   <text x="8" y="288" class="dg-fs-md dg-bold">팔로워 복제 진행 (ISR 멤버) — high watermark 는 이 중 최소 LEO 로 결정</text>
 
   <rect class="dg-node--empty" x="96" y="300" width="480" height="16" rx="3"/>
-  <rect data-dg="follower-bar-b" class="dg-node dg-node--alt" x="96" y="300" width="360" height="16" rx="3"/>
+  <rect data-dg="follower-bar-b" class="dg-node dg-node--accent" x="96" y="300" width="360" height="16" rx="3"/>
   <text x="8" y="312" class="dg-fs-sm dg-bold">팔로워 B</text>
   <text data-dg="follower-val-b" class="dg-fs-sm dg-num dg-muted" x="462" y="312" text-anchor="start">LEO 9</text>
 
   <rect class="dg-node--empty" x="96" y="324" width="480" height="16" rx="3"/>
-  <rect data-dg="follower-bar-c" class="dg-node dg-node--alt" x="96" y="324" width="280" height="16" rx="3"/>
+  <rect data-dg="follower-bar-c" class="dg-node dg-node--accent" x="96" y="324" width="280" height="16" rx="3"/>
   <text x="8" y="336" class="dg-fs-sm dg-bold">팔로워 C</text>
   <text data-dg="follower-val-c" class="dg-fs-sm dg-num dg-muted" x="382" y="336" text-anchor="start">LEO 7</text>
 
@@ -110,5 +110,5 @@
   <rect class="dg-node--empty" x="580" y="432" width="16" height="12" rx="2"/>
   <text class="dg-fs-sm" x="602" y="442">삭제됨</text>
 
-  <text class="dg-fs-sm dg-muted" x="8" y="462">컨슈머는 high watermark 를 넘어서 읽지 못합니다. 슬라이더로 복제·커밋 진행을 움직여 네 지점이 벌어지는 방식을 확인하세요.</text>
+  <text class="dg-fs-sm dg-muted" x="8" y="462">컨슈머는 high watermark 를 넘어서 읽지 못합니다.</text>
 </svg>
