@@ -1,0 +1,69 @@
+{
+  "generatedAt": "2026-07-28",
+  "decks": [
+    {
+      "deckId": "ccdak-configs",
+      "file": "ccdak-configs.json",
+      "title": "CCDAK — 반드시 외울 설정 기본값",
+      "exam": "CCDAK",
+      "chapter": "ch04",
+      "count": 60
+    },
+    {
+      "deckId": "ccdak-app-development",
+      "file": "ccdak-app-development.json",
+      "title": "CCDAK — Application Development",
+      "exam": "CCDAK",
+      "chapter": "ch04",
+      "count": 40
+    },
+    {
+      "deckId": "ccdak-fundamentals",
+      "file": "ccdak-fundamentals.json",
+      "title": "CCDAK — Fundamentals",
+      "exam": "CCDAK",
+      "chapter": "ch02",
+      "count": 35
+    },
+    {
+      "deckId": "ccdak-connect",
+      "file": "ccdak-connect.json",
+      "title": "CCDAK — Kafka Connect",
+      "exam": "CCDAK",
+      "chapter": "ch09",
+      "count": 20
+    },
+    {
+      "deckId": "ccdak-observability",
+      "file": "ccdak-observability.json",
+      "title": "CCDAK — Application Observability",
+      "exam": "CCDAK",
+      "chapter": "ch11",
+      "count": 18
+    },
+    {
+      "deckId": "ccdak-streams",
+      "file": "ccdak-streams.json",
+      "title": "CCDAK — Kafka Streams",
+      "exam": "CCDAK",
+      "chapter": "ch10",
+      "count": 22
+    },
+    {
+      "deckId": "ccdak-testing",
+      "file": "ccdak-testing.json",
+      "title": "CCDAK — Application Testing",
+      "exam": "CCDAK",
+      "chapter": "ch10",
+      "count": 12
+    },
+    {
+      "deckId": "ccdak-exceptions",
+      "file": "ccdak-exceptions.json",
+      "title": "CCDAK — 예외 클래스와 재시도 가능 여부",
+      "exam": "CCDAK",
+      "chapter": "ch04",
+      "count": 25
+    }
+  ]
+}

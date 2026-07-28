@@ -1,0 +1,555 @@
+{
+  "setId": "ccaak-connect",
+  "title": "CCAAK — Kafka Connect",
+  "exam": "CCAAK",
+  "domain": "Kafka Connect",
+  "kafkaVersion": "4.3",
+  "questions": [
+    {
+      "id": "ccaak-connect-001",
+      "exam": "CCAAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "분산 모드 Connect 클러스터의 워커를 3대에서 6대로 늘렸는데 커넥터 처리량이 그대로다. 가장 먼저 확인할 것은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "워커의 `scheduled.rebalance.max.delay.ms` 가 5분이라 아직 재분배가 끝나지 않았다."
+        },
+        {
+          "id": "B",
+          "text": "`offset.storage.partitions` 가 25로 고정되어 태스크 병렬성을 제한하고 있다."
+        },
+        {
+          "id": "C",
+          "text": "커넥터의 `tasks.max` 가 기본값 1이라 워커 수와 무관하게 태스크가 1개다."
+        },
+        {
+          "id": "D",
+          "text": "`connect.protocol` 이 증분 협력 리밸런싱이라 새 워커에 태스크가 배정되지 않는다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "워커는 태스크를 담는 그릇이고 태스크를 만들어 내지는 않습니다. 커넥터가 몇 개의 태스크로 쪼개질지는 `tasks.max` 가 상한을 정하며 기본값이 1이므로, 이 값을 올리지 않으면 워커를 아무리 늘려도 일하는 프로세스는 하나입니다. 이것이 Connect 스케일링 사고의 1순위 원인이고, `GET /connectors/{name}/tasks` 로 실제 태스크 수를 보면 바로 확인됩니다. 값을 올려도 늘지 않는다면 source 커넥터가 나눌 수 있는 단위 수, sink 커넥터라면 입력 토픽의 파티션 수가 실질 상한이라는 점을 함께 봐야 합니다.",
+      "distractorNotes": {
+        "A": "이 지연은 워커가 그룹을 떠났을 때 재분배를 미루는 값입니다. 워커를 추가할 때의 대기 시간이 아니며 처리량 정체의 원인이 아닙니다.",
+        "B": "이 토픽은 source 커넥터의 오프셋 저장소이며 태스크 개수와 관련이 없습니다.",
+        "D": "증분 협력 리밸런싱은 필요한 태스크만 이동시키는 방식이며 새 워커에 배정을 막지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Kafka Connect",
+          "url": "https://kafka.apache.org/documentation/#connect"
+        },
+        {
+          "title": "Apache Kafka — Connect Configs",
+          "url": "https://kafka.apache.org/documentation/#connectconfigs"
+        }
+      ],
+      "tags": [
+        "tasks.max",
+        "scaling",
+        "distributed-mode"
+      ]
+    },
+    {
+      "id": "ccaak-connect-002",
+      "exam": "CCAAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "워커 `worker-3` 이 프로세스째로 죽었다. 아래 응답을 살아 있는 워커에서 받았을 때, 예외의 전체 스택을 얻는 방법으로 옳은 것은?",
+      "code": {
+        "lang": "json",
+        "caption": "curl -s http://worker-1:8083/connectors/pg-source/status",
+        "body": "{\n  \"name\": \"pg-source\",\n  \"connector\": { \"state\": \"RUNNING\", \"worker_id\": \"worker-1:8083\" },\n  \"tasks\": [\n    { \"id\": 0, \"state\": \"FAILED\", \"worker_id\": \"worker-3:8083\",\n      \"trace\": \"org.apache.kafka.connect.errors.ConnectException: ...\" }\n  ],\n  \"type\": \"source\"\n}"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "`worker-3` 의 REST 엔드포인트로 `GET /admin/loggers` 를 호출해 로그를 내려받는다."
+        },
+        {
+          "id": "B",
+          "text": "`worker_id` 로 지목된 `worker-3` 의 로컬 프로세스 로그를 직접 확인한다."
+        },
+        {
+          "id": "C",
+          "text": "`config.storage.topic` 을 콘솔 컨슈머로 읽어 실패 시점의 로그 레코드를 찾는다."
+        },
+        {
+          "id": "D",
+          "text": "커넥터를 삭제하고 다시 생성해 같은 실패를 재현시킨 뒤 리더 워커 로그를 본다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "REST API는 살아 있는 워커만 응답하므로 죽은 노드에서 로그를 끌어올 수는 없습니다. `status` 응답의 `trace` 는 `status.storage.topic` 을 통해 공유되므로 다른 워커에서도 실패 원인을 요약 수준으로 볼 수 있지만, 전체 스택과 주변 컨텍스트는 그 태스크를 돌리던 노드의 프로세스 로그에만 남습니다. 그래서 `worker_id` 로 호스트를 특정한 뒤 그 노드의 로그 파일이나 중앙 로그 수집에서 해당 호스트로 필터링하는 것이 정답 경로입니다. 추가 조사가 필요하면 살아 있는 워커에 `PUT /admin/loggers/{logger}` 로 레벨을 올려 재현하고, 조사 후 반드시 원래 레벨로 되돌립니다.",
+      "distractorNotes": {
+        "A": "죽은 프로세스는 REST 요청에 응답하지 않습니다. 또 `/admin/loggers` 는 로거 레벨을 다루는 엔드포인트이고 로그 파일을 내려주지 않습니다.",
+        "C": "이 토픽에는 커넥터·태스크 설정이 담기며 예외 스택은 들어가지 않습니다.",
+        "D": "삭제·재생성은 비가역적이고 오프셋 상태까지 흔듭니다. 진단 단계에서 선택할 조치가 아닙니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect REST Interface",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        },
+        {
+          "title": "Apache Kafka — Connect Administration",
+          "url": "https://kafka.apache.org/documentation/#connect_administration"
+        }
+      ],
+      "tags": [
+        "connect-rest",
+        "worker",
+        "logging",
+        "cli-output"
+      ]
+    },
+    {
+      "id": "ccaak-connect-003",
+      "exam": "CCAAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "자동화 스크립트가 커넥터 설정을 갱신하는 `PUT` 요청에서 간헐적으로 `409 Conflict` 를 받는다. 가장 적절한 대응은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "리밸런스가 끝난 뒤 재시도하도록 스크립트에 409 재시도 로직을 넣는다."
+        },
+        {
+          "id": "B",
+          "text": "요청을 항상 리더 워커에만 보내도록 로드밸런서에서 나머지 워커를 제외한다."
+        },
+        {
+          "id": "C",
+          "text": "`connect.protocol` 을 `eager` 로 바꿔 리밸런스가 한 번에 끝나게 한다."
+        },
+        {
+          "id": "D",
+          "text": "커넥터를 삭제한 뒤 같은 설정으로 다시 생성한다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "409는 지금 그 요청을 받아들일 수 없는 상태라는 뜻이며, Connect에서는 리밸런스가 진행 중이라 태스크 할당이나 리더가 확정되지 않은 경우가 대표적입니다. 설정 쓰기는 리더 워커를 거쳐야 하므로 리밸런스 중에는 처리할 수 없고, 잠시 뒤 재시도하면 성공합니다. 세 번째 원인으로 follower 워커가 리더 REST로 요청을 전달하지 못하는 경우가 있는데, 이때는 `rest.advertised.*` 값이 워커 간에 실제 도달 가능한지 확인해야 합니다. 따라서 자동화 코드에서 409는 영구 실패가 아니라 재시도 대상으로 다루는 것이 맞습니다.",
+      "distractorNotes": {
+        "B": "리더는 리밸런스로 바뀔 수 있어 고정할 수 없습니다. 워커 간 전달이 정상이면 어느 워커로 보내도 됩니다.",
+        "C": "`eager` 는 전체 태스크를 정지시킨 뒤 재분배하는 예전 방식이라 중단 시간이 늘어납니다. 특별한 이유 없이 바꾸지 않습니다.",
+        "D": "비가역적이며 오프셋과 상태를 잃을 위험이 있습니다. 일시적인 상태 충돌에 대한 대응이 아닙니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect REST Interface",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
+      ],
+      "tags": [
+        "connect-rest",
+        "409",
+        "rebalance"
+      ]
+    },
+    {
+      "id": "ccaak-connect-004",
+      "exam": "CCAAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "`config.storage.topic` 의 처리량이 걱정되어 파티션을 10개로 늘리려 한다. 옳은 판단은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "복제 계수만 3 이상이면 파티션 수는 자유롭게 늘릴 수 있다."
+        },
+        {
+          "id": "B",
+          "text": "워커 수와 같게 맞추면 각 워커가 자기 파티션만 읽어 효율이 올라간다."
+        },
+        {
+          "id": "C",
+          "text": "`offset.storage.topic` 과 같은 기본값 25로 맞추는 것이 권장된다."
+        },
+        {
+          "id": "D",
+          "text": "설정 변경의 전역 순서가 필요하므로 이 토픽은 파티션 1개여야 한다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "커넥터·태스크 설정은 모든 워커가 완전히 같은 순서로 읽어야 하고, Kafka는 파티션 하나 안에서만 순서를 보장합니다. 그래서 이 토픽은 파티션 1개로 고정이며, 늘리면 워커들이 서로 다른 설정 순서를 보게 되어 일관성이 깨집니다. 반면 `offset.storage.topic`(기본 25)과 `status.storage.topic`(기본 5)은 처리량을 위해 여러 파티션을 씁니다. 세 토픽 모두 compaction이 걸리고 복제 계수 기본값은 3이므로 브로커가 3대 미만인 환경에서는 워커 기동 자체가 실패합니다.",
+      "distractorNotes": {
+        "A": "복제 계수와 순서 보장은 별개입니다. 순서는 파티션 단위로만 보장됩니다.",
+        "C": "25는 오프셋 토픽의 기본값입니다. 설정 토픽에 그대로 적용하면 안 됩니다.",
+        "B": "설정 토픽은 모든 워커가 전체를 읽어야 하는 토픽이므로 워커별 분담이 성립하지 않습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Running Kafka Connect",
+          "url": "https://kafka.apache.org/documentation/#connect_running"
+        },
+        {
+          "title": "Apache Kafka — Connect Configs",
+          "url": "https://kafka.apache.org/documentation/#connectconfigs"
+        }
+      ],
+      "tags": [
+        "config.storage.topic",
+        "internal-topics",
+        "distributed-mode"
+      ]
+    },
+    {
+      "id": "ccaak-connect-005",
+      "exam": "CCAAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "아래 응답이 10분째 그대로 유지되고 있다. 옳은 해석은?",
+      "code": {
+        "lang": "json",
+        "caption": "curl -s http://worker-1:8083/connectors/es-sink/status",
+        "body": "{\n  \"name\": \"es-sink\",\n  \"connector\": { \"state\": \"RUNNING\", \"worker_id\": \"worker-2:8083\" },\n  \"tasks\": [\n    { \"id\": 0, \"state\": \"FAILED\", \"worker_id\": \"worker-2:8083\", \"trace\": \"...\" },\n    { \"id\": 1, \"state\": \"RUNNING\", \"worker_id\": \"worker-1:8083\" }\n  ],\n  \"type\": \"sink\"\n}"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "커넥터가 RUNNING이므로 태스크 0도 곧 자동으로 복구된다."
+        },
+        {
+          "id": "B",
+          "text": "커넥터 상태가 잘못 보고된 것이므로 워커를 재시작해야 한다."
+        },
+        {
+          "id": "C",
+          "text": "Connect는 실패한 태스크를 자동 재시작하지 않으므로 원인 확인 후 수동 재시작이 필요하다."
+        },
+        {
+          "id": "D",
+          "text": "태스크 1개가 살아 있으므로 처리량 손실 없이 정상 동작 중이다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "커넥터와 태스크는 상태가 따로 관리되며, 커넥터가 RUNNING이어도 개별 태스크는 FAILED로 남을 수 있습니다. Connect는 실패한 태스크를 자동으로 되살리지 않는데, 원인을 그대로 둔 채 반복 재시작하는 것을 막기 위한 설계입니다. 따라서 `trace` 로 원인을 먼저 확인하고 `POST /connectors/{name}/restart?includeTasks=true&onlyFailed=true` 로 실패분만 되살립니다. 데이터 자체가 문제라면 `errors.tolerance=all` 과 DLQ를 붙여 나쁜 레코드를 격리하는 것이 재발 방지입니다.",
+      "distractorNotes": {
+        "A": "자동 복구는 없습니다. 이 오해 때문에 몇 시간씩 절반의 처리량으로 도는 사고가 생깁니다.",
+        "B": "상태 보고 오류가 아닙니다. 상태 전파 지연은 몇 초 수준이며 10분간 유지되지 않습니다.",
+        "D": "태스크 절반이 죽었으므로 처리량이 그만큼 줄고 담당 파티션의 lag이 계속 늘어납니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect REST Interface",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        },
+        {
+          "title": "Apache Kafka — Connect Error Reporting",
+          "url": "https://kafka.apache.org/documentation/#connect_errorreporting"
+        }
+      ],
+      "tags": [
+        "connect-rest",
+        "task-state",
+        "restart",
+        "cli-output"
+      ]
+    },
+    {
+      "id": "ccaak-connect-006",
+      "exam": "CCAAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "운영 중인 source 커넥터와 sink 커넥터의 진행 위치를 모니터링 시스템에 연결하려 한다. 옳은 방법은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "둘 다 `kafka-consumer-groups.sh --describe` 로 조회할 수 있다. 그룹 ID는 `connect-{커넥터 이름}` 이다."
+        },
+        {
+          "id": "B",
+          "text": "source는 `kafka-consumer-groups.sh` 로 조회하고, sink는 `status.storage.topic` 에서 읽는다."
+        },
+        {
+          "id": "C",
+          "text": "둘 다 `offset.storage.topic` 에 저장되므로 그 토픽을 소비해 파싱한다."
+        },
+        {
+          "id": "D",
+          "text": "sink는 `kafka-consumer-groups.sh` 로 조회하고, source는 `GET /connectors/{name}/offsets` 로 조회한다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "sink 커넥터는 내부적으로 컨슈머이므로 진행 위치가 일반 컨슈머와 똑같이 `__consumer_offsets` 에 커밋되고, 컨슈머 그룹 도구로 lag까지 볼 수 있습니다. 반면 source 커넥터의 위치는 원본 시스템 좌표(파일 오프셋, DB LSN 등)이므로 Kafka 오프셋으로 표현되지 않고 Connect의 `offset.storage.topic` 에 저장됩니다. 그래서 source의 진행은 컨슈머 그룹 도구로 볼 수 없고 REST의 오프셋 조회 엔드포인트를 씁니다. 이 비대칭이 Connect 운영 문항의 단골이며, source 오프셋을 변경·초기화하려면 커넥터를 먼저 `STOPPED` 로 만들어야 합니다.",
+      "distractorNotes": {
+        "A": "source는 컨슈머 그룹을 만들지 않으므로 조회되지 않습니다. sink 쪽 그룹 ID 규칙만 맞습니다.",
+        "C": "sink는 이 토픽을 쓰지 않습니다. 오프셋 저장 위치가 비대칭이라는 것이 핵심입니다.",
+        "B": "두 커넥터의 저장 위치가 서로 반대로 서술되어 있고, `status.storage.topic` 은 상태 전파용입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Kafka Connect",
+          "url": "https://kafka.apache.org/documentation/#connect"
+        },
+        {
+          "title": "Apache Kafka — Connect REST Interface",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
+      ],
+      "tags": [
+        "offsets",
+        "sink-connector",
+        "source-connector",
+        "monitoring"
+      ]
+    },
+    {
+      "id": "ccaak-connect-007",
+      "exam": "CCAAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "커넥터의 `PAUSED` 와 `STOPPED` 상태를 비교한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`PAUSED` 는 태스크를 살려 둔 채 자원을 계속 점유하므로 재개가 빠르다."
+        },
+        {
+          "id": "B",
+          "text": "오프셋 조회·변경·초기화 API는 `STOPPED` 상태에서만 동작한다."
+        },
+        {
+          "id": "C",
+          "text": "`STOPPED` 는 커넥터 설정까지 함께 삭제하므로 재개 시 설정을 다시 등록해야 한다."
+        },
+        {
+          "id": "D",
+          "text": "`PAUSED` 상태에서는 실패한 태스크가 자동으로 복구된다."
+        },
+        {
+          "id": "E",
+          "text": "두 상태 모두 개별 태스크 단위로 지정할 수 있다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
+      ],
+      "explanation": "`PAUSED` 는 태스크 인스턴스를 유지하면서 처리만 멈추므로 스레드와 연결 같은 자원을 계속 잡고 있고, 그래서 재개가 즉시 이루어집니다. `STOPPED` 는 태스크를 종료하고 자원을 반납하는 상태이며, 오프셋 관리 API는 진행 중인 태스크가 없어야 안전하므로 이 상태만 허용합니다. 커넥터 설정은 어느 쪽에서도 지워지지 않고 `config.storage.topic` 에 그대로 남습니다. 원격 시스템 점검처럼 짧은 정지는 `PAUSED`, 오프셋을 손대야 하는 작업은 `STOPPED` 로 구분해 쓰는 것이 실무 기준입니다.",
+      "distractorNotes": {
+        "C": "설정은 유지됩니다. 삭제는 `DELETE /connectors/{name}` 로만 일어납니다.",
+        "D": "어떤 상태에서도 실패한 태스크가 자동 복구되지는 않습니다. restart API가 필요합니다.",
+        "E": "`STOPPED` 는 커넥터 단위 상태입니다. 태스크 단위로 지정할 수 없습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect REST Interface",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
+      ],
+      "tags": [
+        "connect-rest",
+        "task-state",
+        "offsets"
+      ]
+    },
+    {
+      "id": "ccaak-connect-008",
+      "exam": "CCAAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "역직렬화 실패로 sink 태스크가 반복해서 죽는다. 다음 중 옳은 조치와 사실을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`errors.tolerance` 기본값은 `none` 이므로 첫 오류에 태스크가 FAILED가 된다."
+        },
+        {
+          "id": "B",
+          "text": "`errors.tolerance=all` 만 켜고 DLQ 토픽 이름을 지정하지 않으면 실패 레코드는 그냥 버려진다."
+        },
+        {
+          "id": "C",
+          "text": "`errors.log.enable` 기본값이 `true` 라 실패 레코드의 토픽·파티션·오프셋이 이미 로그에 남아 있다."
+        },
+        {
+          "id": "D",
+          "text": "DLQ 설정은 source 커넥터에도 동일하게 적용된다."
+        },
+        {
+          "id": "E",
+          "text": "`errors.retry.timeout` 기본값이 60000이므로 1분간 자동 재시도한 뒤 실패한다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
+      ],
+      "explanation": "기본 정책은 오류를 허용하지 않는 것이므로 나쁜 레코드 하나로 태스크가 즉시 FAILED가 됩니다. `all` 로 바꾸면 건너뛰지만, `errors.deadletterqueue.topic.name` 이 빈 문자열이면 격리할 곳이 없어 레코드가 소실되므로 두 설정은 함께 가야 의미가 있습니다. `errors.log.enable` 기본값은 `false` 라서 켜지 않으면 어떤 레코드가 실패했는지 로그에 남지 않고, 컨텍스트 헤더 기록도 기본 `false` 입니다. DLQ는 싱크 커넥터 전용 기능이며 source에는 해당 설정이 없습니다.",
+      "distractorNotes": {
+        "C": "기본값은 `false` 입니다. 진단을 위해서는 명시적으로 켜야 합니다.",
+        "D": "DLQ는 싱크 전용입니다. source 커넥터에는 `errors.deadletterqueue.*` 가 없습니다.",
+        "E": "`errors.retry.timeout` 기본값은 0이며 재시도하지 않음을 뜻합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect Error Reporting",
+          "url": "https://kafka.apache.org/documentation/#connect_errorreporting"
+        },
+        {
+          "title": "Apache Kafka — Sink Connector Configs",
+          "url": "https://kafka.apache.org/documentation/#sinkconnectconfigs"
+        }
+      ],
+      "tags": [
+        "errors.tolerance",
+        "dlq",
+        "sink-connector",
+        "defaults"
+      ]
+    },
+    {
+      "id": "ccaak-connect-009",
+      "exam": "CCAAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 Connect 설정을 Apache Kafka 4.3 기준 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`tasks.max` (connector)",
+          "right": "1"
+        },
+        {
+          "id": "p2",
+          "left": "`offset.storage.partitions` (worker)",
+          "right": "25"
+        },
+        {
+          "id": "p3",
+          "left": "`status.storage.partitions` (worker)",
+          "right": "5"
+        },
+        {
+          "id": "p4",
+          "left": "`scheduled.rebalance.max.delay.ms` (worker)",
+          "right": "300000"
+        },
+        {
+          "id": "p5",
+          "left": "`listeners` (worker)",
+          "right": "http://:8083"
+        }
+      ],
+      "extraRights": [
+        "3",
+        "50",
+        "60000",
+        "http://:9092"
+      ],
+      "explanation": "워커 REST 리스너의 기본값은 `http://:8083` 이며, 4.x에는 `rest.port` 설정이 존재하지 않으므로 포트를 바꾸려면 `listeners` 를 씁니다. 내부 토픽 3종의 파티션 요구는 서로 달라서 오프셋 25, 상태 5, 설정 토픽은 1로 고정입니다. `scheduled.rebalance.max.delay.ms` 가 300000ms이므로 워커가 이탈한 뒤 5분간 태스크가 미할당으로 남는데, 이는 버그가 아니라 롤링 업그레이드를 위한 설계된 지연입니다. `tasks.max` 가 1인 것은 스케일링 사고의 최대 원인이므로 커넥터를 만들 때마다 명시하는 습관이 필요합니다.",
+      "distractorNotes": {
+        "p2": "상태 토픽 기본값 5와 바꿔 놓는 오답이 자주 나옵니다. 오프셋 쪽이 더 큽니다.",
+        "p4": "60000(1분)으로 착각하기 쉽습니다. 실제는 5분이며 이 값을 모르면 워커 재시작 후의 정지를 장애로 오판합니다.",
+        "p5": "`rest.port=8083` 이라고 기억하기 쉽지만 4.x에는 그 설정이 없습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect Configs",
+          "url": "https://kafka.apache.org/documentation/#connectconfigs"
+        },
+        {
+          "title": "Apache Kafka — Running Kafka Connect",
+          "url": "https://kafka.apache.org/documentation/#connect_running"
+        }
+      ],
+      "tags": [
+        "defaults",
+        "tasks.max",
+        "internal-topics",
+        "listeners"
+      ]
+    },
+    {
+      "id": "ccaak-connect-010",
+      "exam": "CCAAK",
+      "domain": "Kafka Connect",
+      "chapter": "ch09",
+      "difficulty": "hard",
+      "type": "ordering",
+      "question": "운영 중인 source 커넥터의 오프셋을 초기화해 원본을 처음부터 다시 읽게 하는 절차를 올바른 순서로 배열하세요.",
+      "code": null,
+      "items": [
+        {
+          "id": "i3",
+          "text": "`DELETE /connectors/pg-source/offsets` — 저장된 오프셋 초기화"
+        },
+        {
+          "id": "i1",
+          "text": "`PUT /connectors/pg-source/stop` — 커넥터를 STOPPED로 전환"
+        },
+        {
+          "id": "i4",
+          "text": "`PUT /connectors/pg-source/resume` — 커넥터 재개"
+        },
+        {
+          "id": "i2",
+          "text": "`GET /connectors/pg-source/offsets` — 현재 저장된 오프셋 확인·백업"
+        }
+      ],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
+      ],
+      "explanation": "오프셋 관리 API는 진행 중인 태스크가 없어야 안전하므로 `STOPPED` 상태에서만 동작하고, 따라서 정지가 첫 단계입니다. 정지 후 현재 값을 조회해 백업해 두면 되돌릴 여지가 생기므로 파괴적인 초기화보다 앞에 옵니다. 초기화가 끝난 뒤 재개하면 커넥터가 원본을 처음부터 다시 읽습니다. `PAUSED` 로는 이 절차가 성립하지 않는데, 태스크가 살아 있어 오프셋 API가 거부되기 때문입니다.",
+      "distractorNotes": {
+        "i1": "정지 없이 바로 초기화를 호출하는 것으로 착각하기 쉽습니다. `STOPPED` 가 아니면 요청이 거부됩니다.",
+        "i2": "조회를 생략하기 쉽지만, 초기화는 되돌릴 수 없으므로 백업 단계를 넣는 것이 운영 원칙입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Connect REST Interface",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
+      ],
+      "tags": [
+        "connect-rest",
+        "offsets",
+        "source-connector",
+        "operations"
+      ]
+    }
+  ]
+}

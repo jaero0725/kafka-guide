@@ -1,0 +1,661 @@
+{
+  "setId": "ccaak-observability",
+  "title": "CCAAK — Observability",
+  "exam": "CCAAK",
+  "domain": "Observability",
+  "kafkaVersion": "4.3",
+  "questions": [
+    {
+      "id": "ccaak-observability-001",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch11",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "컨트롤러 3대 중 두 대에서 `ActiveControllerCount` 가 0으로 보고된다. 옳은 판단은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "노드별 값이 0인 것은 스탠바이 컨트롤러의 정상 상태이며, 알림은 클러스터 합계가 1이 아닐 때 걸어야 한다."
+        },
+        {
+          "id": "B",
+          "text": "각 컨트롤러 노드에서 항상 1이어야 하므로 두 노드가 쿼럼에서 이탈한 상태다."
+        },
+        {
+          "id": "C",
+          "text": "합계가 1이므로 정상이지만 두 노드는 메타데이터를 복제하지 않고 있다."
+        },
+        {
+          "id": "D",
+          "text": "이 메트릭은 브로커에서만 노출되므로 컨트롤러의 값은 의미가 없다."
+        }
+      ],
+      "answer": [
+        "A"
+      ],
+      "explanation": "이 메트릭은 노드별 게이지로, 각 노드에서 0 또는 1이며 액티브 컨트롤러 하나만 1을 보고합니다. 따라서 정상 상태의 판정 기준은 클러스터 전체 합계가 정확히 1인지입니다. 합계가 0이면 액티브 컨트롤러가 없어 메타데이터 변경이 전부 실패하고, 2 이상이면 분열을 의심해야 합니다. 노드별로 알림을 걸면 스탠바이 컨트롤러 때문에 매번 울리므로 합계 기준으로 설정해야 합니다.",
+      "distractorNotes": {
+        "B": "스탠바이 컨트롤러는 정상적으로 0을 보고합니다. 이 값만으로 쿼럼 이탈을 판단할 수 없습니다.",
+        "C": "스탠바이도 메타데이터 로그를 계속 따라 읽습니다. 복제 진행은 `describe --replication` 으로 확인합니다.",
+        "D": "컨트롤러 관련 메트릭이며 액티브 컨트롤러 판별에 쓰입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — KRaft Monitoring",
+          "url": "https://kafka.apache.org/documentation/#kraft_monitoring"
+        }
+      ],
+      "tags": [
+        "ActiveControllerCount",
+        "monitoring",
+        "alerting"
+      ]
+    },
+    {
+      "id": "ccaak-observability-002",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch11",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "`RequestHandlerAvgIdlePercent` 가 0.05로 떨어졌다. 옳은 해석과 조치는?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "유휴 비율이 낮으므로 여유가 있다는 뜻이며 별도 조치가 필요 없다."
+        },
+        {
+          "id": "B",
+          "text": "요청 처리 스레드가 포화 상태이며 `num.io.threads`(기본 8) 상향과 쿼터를 검토한다."
+        },
+        {
+          "id": "C",
+          "text": "네트워크 스레드가 포화 상태이며 `num.network.threads`(기본 3) 를 올린다."
+        },
+        {
+          "id": "D",
+          "text": "값이 0에 가까울수록 좋으므로 목표치에 도달한 상태다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "이름에 idle이 들어가므로 이 값은 유휴 비율이며 높을수록 여유가 있고 0에 가까울수록 위험합니다. 이상적인 기준은 0.3 이상이고, 0.05는 요청 처리 스레드가 거의 쉬지 못한다는 뜻이라 모든 요청 지연이 함께 나빠집니다. 단기 조치는 `num.io.threads` 상향인데 cluster-wide 갱신 모드라 재시작이 필요하지 않고, 중기 조치는 원인 트래픽에 쿼터를 부여하는 것입니다. 다만 CPU가 이미 포화라면 스레드를 늘려도 효과가 없으므로 함께 확인해야 합니다.",
+      "distractorNotes": {
+        "A": "유휴 비율이 낮은 것은 여유가 없다는 뜻입니다. 해석이 반대입니다.",
+        "C": "네트워크 스레드의 여유는 `NetworkProcessorAvgIdlePercent` 로 봅니다. 두 지표는 서로 다른 스레드 풀입니다.",
+        "D": "0.3 이상을 목표로 삼습니다. 0에 가까울수록 위험합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs: num.io.threads",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_num.io.threads"
+        }
+      ],
+      "tags": [
+        "RequestHandlerAvgIdlePercent",
+        "num.io.threads",
+        "monitoring"
+      ]
+    },
+    {
+      "id": "ccaak-observability-003",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch11",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "`UnderReplicatedPartitions` 가 12로 올라갔지만 프로듀서는 오류 없이 계속 쓰고 있다. 옳은 설명은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "메트릭 수집 지연이며 실제로는 쓰기가 이미 실패하고 있다."
+        },
+        {
+          "id": "B",
+          "text": "`acks=1` 로 설정된 프로듀서만 성공하고 `acks=all` 은 이미 실패 중이다."
+        },
+        {
+          "id": "C",
+          "text": "URP는 복제가 뒤처졌다는 신호이고, ISR이 `min.insync.replicas` 를 만족하는 동안 쓰기는 계속된다."
+        },
+        {
+          "id": "D",
+          "text": "URP가 0보다 크면 커밋된 데이터가 유실되었으므로 즉시 복구가 필요하다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "URP는 ISR 크기가 전체 레플리카 수보다 작은 파티션의 개수이며 그 자체로 쓰기 실패를 뜻하지 않습니다. 쓰기가 거부되는 경계는 ISR이 `min.insync.replicas` 보다 작아지는 시점이고 그것을 세는 지표가 `UnderMinIsrPartitionCount` 입니다. 그 사이에 `AtMinIsrPartitionCount` 가 있어 한 대만 더 빠지면 중단된다는 선행 경고를 주므로, 세 지표에 서로 다른 심각도를 두어야 알림 피로가 생기지 않습니다. 데이터 유실을 확정적으로 알려 주는 지표는 `UncleanLeaderElectionsPerSec` 입니다.",
+      "distractorNotes": {
+        "A": "URP와 쓰기 가능성은 서로 다른 조건이므로 수집 지연으로 설명할 필요가 없습니다.",
+        "B": "`acks=all` 도 ISR이 최소 조건을 만족하면 성공합니다. `acks` 값만으로 갈리지 않습니다.",
+        "D": "URP는 뒤처짐을 뜻하며 커밋된 데이터는 남아 있습니다. 유실 지표는 다릅니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs: min.insync.replicas",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas"
+        }
+      ],
+      "tags": [
+        "UnderReplicatedPartitions",
+        "UnderMinIsrPartitionCount",
+        "monitoring"
+      ]
+    },
+    {
+      "id": "ccaak-observability-004",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "컨슈머 프로세스가 이틀 전에 죽었는데 lag 알림이 한 번도 울리지 않았다. 알림은 `records-lag-max` 하나에만 걸려 있다. 원인은?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "임계값이 너무 높게 설정되어 lag이 임계값을 넘지 못했다."
+        },
+        {
+          "id": "B",
+          "text": "이 메트릭은 브로커가 발행하며 컨슈머가 없으면 0으로 보고된다."
+        },
+        {
+          "id": "C",
+          "text": "`offsets.retention.minutes` 가 지나 커밋 오프셋이 삭제되어 lag이 0으로 계산되었다."
+        },
+        {
+          "id": "D",
+          "text": "이 메트릭은 컨슈머가 발행하므로 컨슈머가 죽으면 값이 커지지 않고 사라진다."
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "`records-lag-max` 는 컨슈머 클라이언트가 자기 JMX로 노출하는 메트릭이며 공식 문서도 브로커가 아니라 컨슈머가 발행한다고 명시합니다. 따라서 컨슈머 프로세스가 사라지면 값이 커지는 대신 메트릭 자체가 없어지고, 값 기준 알림은 아무것도 감지하지 못합니다. 대책은 메트릭 부재 자체에 알림을 걸고, 동시에 브로커에서 커밋 오프셋 기준 lag을 주기적으로 수집해 이중화하는 것입니다. 그룹의 활성 멤버 수에 알림을 걸면 컨슈머가 사라진 것을 직접 감지할 수 있습니다.",
+      "distractorNotes": {
+        "B": "브로커 JMX에는 이 메트릭이 없습니다. 발행 주체를 반대로 이해한 것입니다.",
+        "C": "커밋 오프셋 보존은 CLI 기준 lag 조회에 영향을 줄 수 있지만 컨슈머 발행 메트릭의 소멸을 설명하지 못합니다.",
+        "A": "값이 존재하지 않았으므로 임계값 비교 자체가 일어나지 않았습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer Fetch Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_fetch_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
+      ],
+      "tags": [
+        "records-lag-max",
+        "consumer-lag",
+        "alerting"
+      ]
+    },
+    {
+      "id": "ccaak-observability-005",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "아래 출력을 받았다. 이 시점에 가장 먼저 해야 할 판단은?",
+      "code": {
+        "lang": "bash",
+        "caption": "kafka-consumer-groups.sh --describe --group order-settlement",
+        "body": "Consumer group 'order-settlement' has no active members.\n\nGROUP             TOPIC   PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG      CONSUMER-ID  HOST  CLIENT-ID\norder-settlement  orders  0          43904812        48213771        4308959  -            -     -\norder-settlement  orders  1          43655902        47982033        4326131  -            -     -\norder-settlement  orders  2          43712004        48044190        4332186  -            -     -"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "파티션별 lag이 균등하므로 데이터 편향 문제이며 파티션을 늘려야 한다."
+        },
+        {
+          "id": "B",
+          "text": "소비하는 컨슈머가 존재하지 않는 상태이므로 애플리케이션 기동 여부를 먼저 확인한다."
+        },
+        {
+          "id": "C",
+          "text": "복제가 뒤처져 high watermark가 밀린 상태이므로 URP를 먼저 확인한다."
+        },
+        {
+          "id": "D",
+          "text": "커밋 오프셋이 남아 있으므로 리밸런스가 진행 중이며 잠시 기다린다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "첫 줄의 활성 멤버가 없다는 안내와 `CONSUMER-ID`·`HOST`·`CLIENT-ID` 가 모두 하이픈이라는 점이 같은 사실을 두 번 알려 줍니다. 커밋 오프셋은 남아 있으므로 그룹 자체는 존재하지만 지금 읽고 있는 프로세스가 없고, 그래서 `LOG-END-OFFSET` 만 계속 증가해 lag이 벌어집니다. 이 상황에서 확인할 것은 브로커가 아니라 컨슈머 애플리케이션의 기동 상태와 배포 이력입니다. 리밸런스 중이라면 도구가 별도의 rebalancing 경고를 표준 에러로 출력하므로 구분할 수 있습니다.",
+      "distractorNotes": {
+        "A": "lag이 파티션마다 비슷하므로 편향의 근거가 없고, 파티션 증설은 소비자가 없는 문제를 해결하지 못합니다.",
+        "C": "복제 지연이라면 `LOG-END-OFFSET` 대비 소비 상한이 문제인데, 여기서는 읽는 주체 자체가 없습니다.",
+        "D": "리밸런스 중이라는 별도 경고가 출력되지 않았고, 활성 멤버가 없다는 안내는 다른 의미입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer group operations",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        }
+      ],
+      "tags": [
+        "kafka-consumer-groups",
+        "consumer-lag",
+        "cli-output"
+      ]
+    },
+    {
+      "id": "ccaak-observability-006",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch11",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "Produce 요청의 `TotalTimeMs` 가 두 배로 늘었다. 분해해 보니 원격(remote) 대기가 대부분이었다. 옳은 조치는?",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`num.io.threads` 를 올려 요청 처리 스레드를 늘린다."
+        },
+        {
+          "id": "B",
+          "text": "브로커를 추가해 파티션을 분산한다."
+        },
+        {
+          "id": "C",
+          "text": "`acks=all` 구성에서 팔로워 복제가 느린 것이므로 복제 쪽을 조사한다."
+        },
+        {
+          "id": "D",
+          "text": "`queued.max.requests` 를 올려 요청 큐 깊이를 확보한다."
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "요청 전체 시간은 큐 대기, 로컬 처리, 원격 대기, 응답 전송으로 분해되며 어느 구간이 커졌는지에 따라 조치가 완전히 달라집니다. 원격 대기는 `acks=all` 요청이 팔로워의 확인을 기다리는 시간이므로, 이 구간이 크면 느린 팔로워나 복제 대역이 원인입니다. 이때는 스레드나 브로커를 늘려도 개선되지 않고 ISR 상태, 팔로워의 디스크 I/O, 남아 있는 복제 스로틀을 봐야 합니다. 반대로 큐 대기가 크면 처리 스레드 부족, 응답 전송이 크면 네트워크나 과도하게 큰 fetch 응답이 원인입니다.",
+      "distractorNotes": {
+        "A": "스레드 부족은 큐 대기 구간이 커질 때의 원인입니다. 원격 대기는 줄지 않습니다.",
+        "B": "브로커 추가는 총 처리 용량을 늘리지만 팔로워 확인 대기 자체를 줄이지 않습니다.",
+        "D": "큐 깊이는 요청 적재량을 다루며 복제 확인 대기와 무관합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
+      ],
+      "tags": [
+        "TotalTimeMs",
+        "request-metrics",
+        "acks",
+        "replication"
+      ]
+    },
+    {
+      "id": "ccaak-observability-007",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch03",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "아래 출력에서 노드 3001에 대해 내릴 결론은?",
+      "code": {
+        "lang": "bash",
+        "caption": "kafka-metadata-quorum.sh describe --replication (발췌)",
+        "body": "NodeId  DirectoryId              LogEndOffset  Lag   LastFetchTimestamp  LastCaughtUpTimestamp  Status\n3002    g42deArWBTRM5A1yuVpMCg   248193        0     1785299400123       1785299400123          Leader\n3000    ILZ5MPTeRWakmJu99uBJCA   248193        0     1785299400051       1785299400051          Follower\n3001    b-DwmhtOheTqZzPoh52kfA   201884        46309 1785299399980       1785297100210          Follower"
+      },
+      "choices": [
+        {
+          "id": "A",
+          "text": "3001이 액티브 컨트롤러이므로 `LastAppliedRecordLagMs` 가 0이어야 한다."
+        },
+        {
+          "id": "B",
+          "text": "3001이 메타데이터 로그를 크게 뒤처진 상태이므로 이 노드의 디스크·네트워크를 조사해야 한다."
+        },
+        {
+          "id": "C",
+          "text": "3001은 observer이므로 lag이 있어도 정상이며 조치가 필요 없다."
+        },
+        {
+          "id": "D",
+          "text": "쿼럼 과반이 깨졌으므로 메타데이터 변경이 이미 실패하고 있다."
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "`Lag` 이 46309이고 마지막 fetch 시각은 최신인데 마지막으로 따라잡은 시각은 한참 전이라는 조합은, 이 노드가 계속 요청은 보내지만 진행이 밀리고 있음을 뜻합니다. 컨트롤러의 메타데이터 로그 지연은 대개 그 노드의 디스크 성능이나 네트워크에서 오므로 `metadata.log.dir` 이 놓인 디스크를 먼저 확인합니다. 스탠바이 컨트롤러에서는 `LastAppliedRecordLagMs` 가 함께 커지는지도 보면 좋은데, 액티브 컨트롤러에서는 이 값이 정의상 항상 0이라 의미가 없습니다. 이 상태를 방치하면 리더 장애 시 뒤처진 노드가 승격되어 복구가 늦어집니다.",
+      "distractorNotes": {
+        "A": "`Status` 가 Follower이므로 액티브 컨트롤러가 아닙니다. 리더는 3002입니다.",
+        "C": "이 출력의 세 노드는 모두 voter 상태로 표기되어 있고, voter가 뒤처진 것은 쿼럼 안전성에 직접 영향을 줍니다.",
+        "D": "3대 중 2대가 따라잡은 상태이므로 과반은 유지되고 메타데이터 변경은 계속 가능합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — KRaft",
+          "url": "https://kafka.apache.org/documentation/#kraft"
+        },
+        {
+          "title": "Apache Kafka — KRaft Monitoring",
+          "url": "https://kafka.apache.org/documentation/#kraft_monitoring"
+        }
+      ],
+      "tags": [
+        "kafka-metadata-quorum",
+        "controller",
+        "monitoring",
+        "cli-output"
+      ]
+    },
+    {
+      "id": "ccaak-observability-008",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "컨슈머 lag을 측정하는 세 경로에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "CLI의 `LAG` 열은 `LOG-END-OFFSET − CURRENT-OFFSET` 이므로 처리했지만 아직 커밋하지 않은 분량이 lag으로 보인다."
+        },
+        {
+          "id": "B",
+          "text": "브로커의 `LogEndOffset` 만으로는 lag이 나오지 않으며 커밋 오프셋을 따로 가져와 계산해야 한다."
+        },
+        {
+          "id": "C",
+          "text": "컨슈머 JMX의 `records-lag-max` 는 커밋 오프셋 기준이므로 CLI 값과 항상 동일하다."
+        },
+        {
+          "id": "D",
+          "text": "CLI 조회는 컨슈머에 에이전트를 붙여야 동작한다."
+        },
+        {
+          "id": "E",
+          "text": "브로커 메트릭만으로 컨슈머 그룹별 lag이 직접 노출되므로 별도 계산이 필요 없다."
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
+      ],
+      "explanation": "CLI 경로는 커밋된 오프셋을 기준으로 계산하므로 커밋 주기가 길면 실제 처리 진행보다 lag이 크게 보입니다. 브로커 측 경로는 토픽의 끝 오프셋만 알려 주므로 그것만으로는 lag이 되지 않고 커밋 오프셋과 조합해야 하며, 대신 컨슈머가 없어도 유입 속도를 볼 수 있다는 장점이 있습니다. 컨슈머 JMX 경로는 실시간 상태를 보여 주지만 컨슈머가 죽으면 메트릭이 사라진다는 한계가 있습니다. 세 경로가 보는 것이 조금씩 다르므로 운영에서는 최소 두 경로를 함께 씁니다.",
+      "distractorNotes": {
+        "C": "이 메트릭은 컨슈머가 실제로 읽은 위치 기준이며 커밋 기준이 아닙니다. 그래서 CLI 값과 어긋날 수 있습니다.",
+        "D": "CLI는 브로커에 admin 요청을 보내 조회하므로 컨슈머 쪽에 아무것도 설치하지 않습니다.",
+        "E": "브로커는 그룹별 lag을 직접 노출하지 않습니다. 커밋 오프셋과 끝 오프셋을 조합해야 합니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Consumer group operations",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        },
+        {
+          "title": "Apache Kafka — Consumer Fetch Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_fetch_monitoring"
+        }
+      ],
+      "tags": [
+        "consumer-lag",
+        "records-lag-max",
+        "monitoring"
+      ]
+    },
+    {
+      "id": "ccaak-observability-009",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch11",
+      "difficulty": "hard",
+      "type": "multiple",
+      "question": "다음 중 값이 0이 아니게 되면 즉시 조사·대응해야 하는 메트릭을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        {
+          "id": "A",
+          "text": "`ControllerStats,name=UncleanLeaderElectionsPerSec`"
+        },
+        {
+          "id": "B",
+          "text": "`KafkaController,name=MetadataErrorCount`"
+        },
+        {
+          "id": "C",
+          "text": "`KafkaController,name=PreferredReplicaImbalanceCount`"
+        },
+        {
+          "id": "D",
+          "text": "`ReplicaFetcherManager,name=MaxLag,clientId=Replica`"
+        },
+        {
+          "id": "E",
+          "text": "`KafkaController,name=LastCommittedRecordOffset`"
+        }
+      ],
+      "answer": [
+        "A",
+        "B"
+      ],
+      "explanation": "unclean 선출 카운터는 0이 아니게 되는 순간 ISR 밖 레플리카가 리더가 되어 데이터가 확정적으로 유실되었음을 뜻하므로 사후 확인이 아니라 알림 대상입니다. 메타데이터 오류 카운터는 그 노드가 메타데이터 로그 처리 중 오류를 만났다는 뜻이므로 손상 가능성을 안고 즉시 조사해야 합니다. 반면 preferred 리더 불균형은 롤링 재시작 직후 일시적으로 오르는 것이 정상이고 자동 복구를 기다리면 됩니다. 팔로워 최대 lag은 produce 배치 크기에 비례해 항상 어느 정도 값을 가지므로 절대값이 아니라 추세로 판단합니다.",
+      "distractorNotes": {
+        "C": "롤링 재시작 후 일시적으로 오르며 `auto.leader.rebalance.enable=true` 라면 점검 주기에 따라 자동 복구됩니다.",
+        "D": "정상 운영에서도 0이 아닌 값을 가집니다. 계속 커지는 추세일 때만 문제입니다.",
+        "E": "커밋된 메타데이터 오프셋을 나타내는 단조 증가 값이므로 0이 아닌 것이 정상입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — KRaft Monitoring",
+          "url": "https://kafka.apache.org/documentation/#kraft_monitoring"
+        }
+      ],
+      "tags": [
+        "UncleanLeaderElectionsPerSec",
+        "MetadataErrorCount",
+        "alerting",
+        "monitoring"
+      ]
+    },
+    {
+      "id": "ccaak-observability-010",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch11",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "각 파티션 상태 지표를 그것이 성립하는 조건과 연결하세요. 정답이 아닌 미끼 조건이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`UnderReplicatedPartitions`",
+          "right": "|ISR| < |전체 레플리카|"
+        },
+        {
+          "id": "p2",
+          "left": "`AtMinIsrPartitionCount`",
+          "right": "|ISR| = min.insync.replicas"
+        },
+        {
+          "id": "p3",
+          "left": "`UnderMinIsrPartitionCount`",
+          "right": "|ISR| < min.insync.replicas"
+        },
+        {
+          "id": "p4",
+          "left": "`OfflinePartitionsCount`",
+          "right": "사용 가능한 리더가 없어 읽기·쓰기 모두 불가"
+        }
+      ],
+      "extraRights": [
+        "|ISR| = |전체 레플리카| 이지만 리더가 preferred가 아님",
+        "리더가 preferred 레플리카와 다른 파티션 수"
+      ],
+      "explanation": "네 지표는 심각도가 다르고 쓰기 가능성의 경계도 다르므로 구분하지 못하면 조치가 반대로 갑니다. URP는 복제가 뒤처졌다는 경고일 뿐 `min.insync.replicas` 를 만족하는 동안 쓰기는 계속되고, 그 조건이 깨지는 순간을 세는 것이 UnderMinIsr입니다. AtMinIsr은 딱 경계에 걸린 상태로 한 대만 더 빠지면 중단되므로 사고 전에 개입할 수 있는 선행 지표입니다. Offline은 리더가 없어 읽기까지 막히는 가장 심각한 상태이므로 대응 순서에서 항상 앞에 옵니다.",
+      "distractorNotes": {
+        "p1": "`UnderMinIsrPartitionCount` 의 조건과 바꿔 놓는 오답이 가장 흔합니다. 비교 대상이 전체 레플리카 수인지 최소 ISR인지가 갈림점입니다.",
+        "p2": "등호 조건이라는 점을 놓치기 쉽습니다. 이미 미달인 상태는 UnderMinIsr입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs: min.insync.replicas",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas"
+        }
+      ],
+      "tags": [
+        "UnderReplicatedPartitions",
+        "UnderMinIsrPartitionCount",
+        "OfflinePartitionsCount",
+        "monitoring"
+      ]
+    },
+    {
+      "id": "ccaak-observability-011",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 메트릭을 정상 상태에서 기대되는 값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        {
+          "id": "p1",
+          "left": "`OfflinePartitionsCount`",
+          "right": "0"
+        },
+        {
+          "id": "p2",
+          "left": "`ActiveControllerCount` (클러스터 합계)",
+          "right": "정확히 1"
+        },
+        {
+          "id": "p3",
+          "left": "`RequestHandlerAvgIdlePercent`",
+          "right": "0.3 이상"
+        },
+        {
+          "id": "p4",
+          "left": "`LastAppliedRecordLagMs` (액티브 컨트롤러)",
+          "right": "정의상 항상 0"
+        },
+        {
+          "id": "p5",
+          "left": "`IsrShrinksPerSec` (평시)",
+          "right": "0이며 브로커 장애 시에만 상승"
+        }
+      ],
+      "extraRights": [
+        "노드마다 정확히 1",
+        "0.05 이하",
+        "브로커 수와 같음"
+      ],
+      "explanation": "정상값의 형태가 지표마다 다르다는 점이 이 영역의 핵심입니다. 개수형 지표는 0을 기대하고, 비율형 지표는 유휴 비율이므로 높을수록 좋으며 0.3 이상을 목표로 삼습니다. `ActiveControllerCount` 는 노드별로 0 또는 1이고 클러스터 합계가 1이어야 하므로 노드 단위 알림을 걸면 오탐이 발생합니다. `LastAppliedRecordLagMs` 는 액티브 컨트롤러에서 정의상 0이므로 스탠바이 컨트롤러에서 봐야 의미가 있습니다.",
+      "distractorNotes": {
+        "p2": "노드마다 1이어야 한다고 착각하기 쉽습니다. 스탠바이는 0이 정상입니다.",
+        "p3": "낮을수록 좋다고 오해하기 쉽습니다. 유휴 비율이므로 반대입니다.",
+        "p4": "이 값이 0이면 지연이 없다고 해석하기 쉽지만, 액티브 컨트롤러에서는 항상 0이라 정보가 없습니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — KRaft Monitoring",
+          "url": "https://kafka.apache.org/documentation/#kraft_monitoring"
+        }
+      ],
+      "tags": [
+        "monitoring",
+        "thresholds",
+        "ActiveControllerCount"
+      ]
+    },
+    {
+      "id": "ccaak-observability-012",
+      "exam": "CCAAK",
+      "domain": "Observability",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "복제 관련 지표를 심각도가 높은 것부터, 즉 먼저 대응해야 하는 순서대로 배열하세요.",
+      "code": null,
+      "items": [
+        {
+          "id": "i2",
+          "text": "`UnderMinIsrPartitionCount` > 0 — acks=all 쓰기가 이미 거부되는 중"
+        },
+        {
+          "id": "i4",
+          "text": "`UnderReplicatedPartitions` > 0 — 복제가 뒤처졌지만 쓰기는 계속됨"
+        },
+        {
+          "id": "i1",
+          "text": "`OfflinePartitionsCount` > 0 — 리더가 없어 읽기·쓰기 모두 불가"
+        },
+        {
+          "id": "i3",
+          "text": "`AtMinIsrPartitionCount` > 0 — 경계에 걸려 한 대만 더 빠지면 중단"
+        }
+      ],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
+      ],
+      "explanation": "대응 순서는 서비스에 미치는 영향 범위로 결정됩니다. 리더가 없는 파티션은 읽기와 쓰기가 모두 막히므로 가장 앞에 오고, 그다음이 쓰기가 실제로 거부되고 있는 상태입니다. 경계에 걸린 상태는 아직 정상 동작 중이지만 한 대만 더 잃으면 즉시 사고가 되므로 뒤처짐 경고보다 우선합니다. 뒤처짐 자체는 쓰기·읽기가 유지되므로 마지막이며, 이 순서를 알림 심각도에 그대로 반영하면 알림 피로를 줄일 수 있습니다.",
+      "distractorNotes": {
+        "i3": "이미 문제가 생긴 상태로 오해해 UnderMinIsr보다 앞에 두기 쉽습니다. 경계에 걸린 것이지 아직 쓰기는 성공합니다.",
+        "i4": "URP를 가장 심각한 지표로 보기 쉽지만, 쓰기와 읽기가 모두 유지되므로 네 지표 중 가장 뒤입니다."
+      },
+      "refs": [
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
+      ],
+      "tags": [
+        "monitoring",
+        "alerting",
+        "isr",
+        "operations"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,351 @@
+{
+  "setId": "ccaak-fundamentals",
+  "title": "CCAAK — Kafka Fundamentals",
+  "exam": "CCAAK",
+  "domain": "Kafka Fundamentals",
+  "kafkaVersion": "4.3",
+  "questions": [
+    {
+      "id": "ccaak-fundamentals-001",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "아래 출력에서 파티션 4와 7의 상태를 옳게 해석한 것은?",
+      "code": {
+        "lang": "bash",
+        "caption": "kafka-topics.sh --describe --topic payment-events",
+        "body": "Topic: payment-events\tTopicId: hR9pQ2vLT4ac-5Wm0eXpZQ\tPartitionCount: 12\tReplicationFactor: 3\tConfigs: retention.ms=604800000\n\tTopic: payment-events\tPartition: 0\tLeader: 1\tReplicas: 1,2,3\tIsr: 1,2,3\tElr: N/A\tLastKnownElr: N/A\n\tTopic: payment-events\tPartition: 4\tLeader: 3\tReplicas: 2,3,1\tIsr: 3\tElr: N/A\tLastKnownElr: N/A\n\tTopic: payment-events\tPartition: 7\tLeader: 3\tReplicas: 2,1,3\tIsr: 3\tElr: N/A\tLastKnownElr: N/A"
+      },
+      "choices": [
+        { "id": "A", "text": "레플리카가 1개로 줄어들어 두 파티션의 복제 계수가 실제로 1이 되었다." },
+        { "id": "B", "text": "브로커 3만 ISR에 남아 두 파티션이 under-replicated 상태이며 사본은 여전히 3개다." },
+        { "id": "C", "text": "리더가 preferred 레플리카가 아니므로 리더 선출이 진행 중이다." },
+        { "id": "D", "text": "`Elr: N/A` 이므로 두 파티션은 이미 offline이며 읽기·쓰기가 모두 불가하다." }
+      ],
+      "answer": ["B"],
+      "explanation": "`Replicas` 는 배치된 사본 목록이고 `Isr` 는 그중 리더를 충분히 따라잡은 부분집합입니다. 두 값의 길이가 다르면 그 파티션은 under-replicated이며, `UnderReplicatedPartitions` 메트릭이 세는 대상이 바로 이 상태입니다. 사본 자체는 여전히 세 브로커에 있고, 뒤처진 브로커가 따라잡으면 ISR로 복귀합니다. 쓰기 가능 여부는 이 출력만으로 결정되지 않고 `min.insync.replicas` 와 비교해야 판단할 수 있습니다.",
+      "distractorNotes": {
+        "A": "복제 계수는 `ReplicationFactor` 와 `Replicas` 가 나타내며 ISR 축소로 바뀌지 않습니다. 재할당 없이 사본 수가 줄어드는 일은 없습니다.",
+        "C": "파티션 4의 `Replicas` 첫 항목은 2인데 리더가 3이므로 preferred가 아닌 것은 맞지만, 그것만으로 선출이 진행 중이라고 볼 수는 없습니다. 선출 중이면 `Leader` 가 비어 있습니다.",
+        "D": "`Elr: N/A` 는 추적 중인 eligible leader replica가 없다는 표시일 뿐입니다. offline이면 `Leader` 가 none으로 표시됩니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Basic Operations", "url": "https://kafka.apache.org/documentation/#basic_ops" },
+        { "title": "Apache Kafka — Replication", "url": "https://kafka.apache.org/documentation/#replication" }
+      ],
+      "tags": ["isr", "under-replicated", "kafka-topics", "cli-output"]
+    },
+    {
+      "id": "ccaak-fundamentals-002",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "easy",
+      "type": "single",
+      "question": "운영 중인 토픽의 파티션 수를 40에서 20으로 줄여 달라는 요청을 받았다. 관리자가 취할 조치로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`kafka-topics.sh --alter --partitions 20` 을 실행하면 초과 파티션이 비워지고 제거된다." },
+        { "id": "B", "text": "재할당 JSON에서 파티션 20~39를 제외하고 `--execute` 하면 축소된다." },
+        { "id": "C", "text": "축소는 지원되지 않으므로 원하는 파티션 수로 새 토픽을 만들어 데이터와 클라이언트를 이전해야 한다." },
+        { "id": "D", "text": "`retention.ms` 를 0으로 두어 비운 뒤 `--alter` 로 줄이면 안전하게 축소된다." }
+      ],
+      "answer": ["C"],
+      "explanation": "Kafka는 파티션 수 감소를 지원하지 않습니다. 파티션마다 독립적인 로그와 오프셋 공간이 있어 제거하면 그 안의 데이터와 오프셋 좌표를 버려야 하고, 키 해시 분배도 함께 깨지기 때문입니다. 따라서 유일한 경로는 목표 파티션 수로 새 토픽을 만들고 데이터를 복사한 뒤 프로듀서와 컨슈머를 전환하는 것입니다. 반대 방향인 증설은 `--alter --partitions` 로 가능하지만 기존 키의 분배가 바뀌므로 순서 보장이 깨진다는 대가가 따릅니다.",
+      "distractorNotes": {
+        "A": "`--alter --partitions` 는 현재 값보다 큰 수만 받습니다. 더 작은 값을 주면 명령이 거부됩니다.",
+        "B": "재할당은 레플리카가 어느 브로커에 놓이는지를 바꾸는 도구이며 파티션 개수를 바꾸지 않습니다.",
+        "D": "데이터를 비우는 것과 파티션 개수를 줄이는 것은 별개입니다. 로그를 비워도 파티션 수는 그대로입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Modifying topics", "url": "https://kafka.apache.org/documentation/#basic_ops_modify_topic" }
+      ],
+      "tags": ["partitions", "kafka-topics", "topic-management"]
+    },
+    {
+      "id": "ccaak-fundamentals-003",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "RF=3, `min.insync.replicas=2` 인 토픽에 프로듀서가 `acks=all` 로 쓰고 있다. 브로커 2대를 동시에 잃었을 때의 결과로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "ISR이 1로 줄어 쓰기는 계속되지만 커밋된 데이터의 일부가 유실된다." },
+        { "id": "B", "text": "파티션이 offline이 되어 읽기와 쓰기가 모두 중단된다." },
+        { "id": "C", "text": "`acks` 가 자동으로 1로 강등되어 쓰기가 그대로 성공한다." },
+        { "id": "D", "text": "ISR이 1로 줄어 쓰기는 거부되지만 이미 커밋된 데이터는 남아 있다." }
+      ],
+      "answer": ["D"],
+      "explanation": "`acks=all` 요청은 현재 ISR 크기가 `min.insync.replicas` 이상일 때만 성공할 수 있습니다. ISR이 1이 되면 조건을 충족할 수 없으므로 브로커는 `NotEnoughReplicas` 또는 `NotEnoughReplicasAfterAppend` 를 반환하고 프로듀서는 재시도 가능한 오류로 처리합니다. 반면 살아 있는 레플리카가 리더 하나라도 있으면 파티션은 offline이 아니므로 컨슈머는 high watermark까지 계속 읽을 수 있습니다. 이 문항군의 핵심은 쓰기 실패와 데이터 유실을 구분하는 것이며, 여기서는 쓰기만 막히고 유실은 없습니다.",
+      "distractorNotes": {
+        "A": "쓰기가 계속된다는 부분이 틀렸습니다. 그리고 커밋된 데이터가 사라지는 것은 unclean 선출이 일어났을 때의 결과입니다.",
+        "B": "리더가 살아 있으면 offline이 아닙니다. offline은 사용 가능한 리더가 아예 없는 상태를 말합니다.",
+        "C": "`acks` 는 프로듀서 설정이며 브로커가 런타임에 낮춰 주는 장치는 없습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Topic Configs: min.insync.replicas", "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas" },
+        { "title": "Apache Kafka — Producer Configs: acks", "url": "https://kafka.apache.org/documentation/#producerconfigs_acks" }
+      ],
+      "tags": ["min.insync.replicas", "acks", "isr", "durability"]
+    },
+    {
+      "id": "ccaak-fundamentals-004",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch03",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "아래 출력을 받은 관리자가 클러스터 구성에 대해 내릴 수 있는 결론은?",
+      "code": {
+        "lang": "bash",
+        "caption": "kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --status",
+        "body": "ClusterId:              fMCL8kv1SWm87L_Md-I2hg\nLeaderId:               3002\nLeaderEpoch:            2\nHighWatermark:          10\nMaxFollowerLag:         0\nMaxFollowerLagTimeMs:   -1\nCurrentVoters:          [{\"id\": 3000, ...}, {\"id\": 3001, ...}, {\"id\": 3002, ...}]\nCurrentObservers:       [{\"id\": 0, ...}, {\"id\": 1, ...}, {\"id\": 2, ...}]"
+      },
+      "choices": [
+        { "id": "A", "text": "컨트롤러 3대와 브로커 3대로 구성되어 있고 액티브 컨트롤러는 3002다." },
+        { "id": "B", "text": "브로커 3대가 쿼럼의 voter이고 컨트롤러 3대는 관찰자로만 참여한다." },
+        { "id": "C", "text": "노드 6대 전부가 `broker,controller` 결합 모드로 동작한다." },
+        { "id": "D", "text": "쿼럼에 리더가 없어 메타데이터 변경이 불가능한 상태다." }
+      ],
+      "answer": ["A"],
+      "explanation": "`CurrentVoters` 는 메타데이터 쿼럼에 투표권을 가진 노드, 즉 컨트롤러 목록입니다. `CurrentObservers` 는 메타데이터 로그를 따라 읽기만 하는 노드로 브로커가 여기에 나타납니다. `LeaderId` 가 3002이므로 그 노드가 현재 액티브 컨트롤러이고, `MaxFollowerLag` 이 0이라 나머지 컨트롤러도 따라잡은 정상 상태입니다. 브로커가 응답하지 않는 상황에서는 같은 명령을 `--bootstrap-controller` 로 컨트롤러에 직접 실행합니다.",
+      "distractorNotes": {
+        "B": "voter와 observer의 역할이 반대로 서술되어 있습니다. 브로커는 쿼럼에 observer로만 참여합니다.",
+        "C": "결합 모드 여부는 이 출력으로 알 수 없습니다. voter와 observer의 노드 ID가 겹치지 않는다는 점은 오히려 역할이 분리되어 있음을 시사합니다.",
+        "D": "`LeaderId` 와 `LeaderEpoch` 가 채워져 있으므로 리더가 선출된 상태입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — KRaft", "url": "https://kafka.apache.org/documentation/#kraft" }
+      ],
+      "tags": ["kraft", "kafka-metadata-quorum", "controller", "cli-output"]
+    },
+    {
+      "id": "ccaak-fundamentals-005",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "프로듀서는 정상적으로 쓰고 있는데 컨슈머가 최신 레코드를 보지 못한다. 팔로워 한 대가 심하게 뒤처져 ISR에서 빠진 상태다. 원인 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "컨슈머는 LEO까지 읽을 수 있으므로 원인은 복제가 아니라 컨슈머의 fetch 설정이다." },
+        { "id": "B", "text": "ISR에서 빠진 레플리카가 리더로 승격되어 로그가 잘렸기 때문이다." },
+        { "id": "C", "text": "high watermark는 ISR 내 최소 LEO이므로 소비 가능 지점이 뒤로 밀린다." },
+        { "id": "D", "text": "`replica.lag.time.max.ms` 를 초과한 파티션은 컨슈머 fetch가 차단되기 때문이다." }
+      ],
+      "answer": ["C"],
+      "explanation": "컨슈머가 읽을 수 있는 상한은 high watermark이고, 이 값은 ISR에 속한 레플리카들의 LEO 중 최솟값으로 결정됩니다. ISR 안에 느린 레플리카가 남아 있으면 그 레플리카가 따라잡기 전까지 high watermark가 전진하지 못합니다. Eligible Leader Replicas가 활성인 클러스터에서는 ISR 크기가 `min.insync.replicas` 보다 작아지면 high watermark 전진이 아예 멈추는 strict min ISR 규칙도 함께 적용됩니다. 따라서 이 증상에서 봐야 할 것은 컨슈머가 아니라 복제 상태입니다.",
+      "distractorNotes": {
+        "A": "LEO는 리더가 마지막으로 append한 위치이며 컨슈머에게 노출되지 않습니다. 컨슈머의 상한은 high watermark입니다.",
+        "B": "로그 절단이 일어나려면 unclean 선출이 필요하고, 그것은 기본값 `false` 에서 발생하지 않습니다. 또 이 경우 증상은 데이터 유실로 나타납니다.",
+        "D": "이 설정은 ISR 이탈 판정 기준이며 컨슈머 fetch를 차단하지 않습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Replicated Log", "url": "https://kafka.apache.org/documentation/#design_replicatedlog" },
+        { "title": "Apache Kafka — Eligible Leader Replicas", "url": "https://kafka.apache.org/documentation/#eligible_leader_replicas" }
+      ],
+      "tags": ["high-watermark", "leo", "isr", "consumer-lag"]
+    },
+    {
+      "id": "ccaak-fundamentals-006",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch11",
+      "difficulty": "medium",
+      "type": "single",
+      "question": "브로커를 정상 종료했는데 종료 절차가 끝나지 않고 계속 대기한다. 가장 먼저 확인할 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "`controlled.shutdown.enable` 이 `false` 로 꺼져 있는지 확인한다." },
+        { "id": "B", "text": "그 브로커가 리더인 파티션 중 복제 계수가 1인 토픽이 있는지 확인한다." },
+        { "id": "C", "text": "`replica.lag.time.max.ms` 가 너무 작게 설정되어 있는지 확인한다." },
+        { "id": "D", "text": "컨슈머 그룹이 리밸런스 중인지 확인한다." }
+      ],
+      "answer": ["B"],
+      "explanation": "`controlled.shutdown.enable` 은 기본값이 `true` 이므로 브로커는 종료 전에 자기 리더 파티션을 다른 레플리카로 넘기려 시도합니다. 그런데 복제 계수가 1인 파티션이 하나라도 있으면 넘길 대상이 없어 이 단계가 성공하지 못합니다. RF=1 토픽은 `auto.create.topics.enable=true` 와 `default.replication.factor=1` 이라는 기본값 조합 때문에 오타 토픽 형태로 조용히 생기는 일이 많습니다. 조치는 재할당으로 그 토픽의 복제 계수를 올리는 것이고, 재발 방지는 자동 생성을 끄고 기본 복제 계수를 올리는 것입니다.",
+      "distractorNotes": {
+        "A": "꺼져 있으면 리더 이관을 시도하지 않고 즉시 종료되므로 오래 걸리는 증상과 방향이 반대입니다.",
+        "C": "이 값이 작으면 ISR이 예민하게 축소되지만 종료 절차를 붙잡지는 않습니다.",
+        "D": "컨슈머 그룹 리밸런스는 클라이언트 측 동작이며 브로커 종료 절차의 완료 조건이 아닙니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Graceful shutdown", "url": "https://kafka.apache.org/documentation/#basic_ops_restarting" },
+        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" }
+      ],
+      "tags": ["controlled-shutdown", "replication-factor", "auto.create.topics.enable"]
+    },
+    {
+      "id": "ccaak-fundamentals-007",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "hard",
+      "type": "single",
+      "question": "Kafka 4.3에서 새로 구축한 클러스터의 Eligible Leader Replicas(ELR)에 대한 설명으로 옳은 것은?",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "4.1부터 새 클러스터에서 기본 활성이며, ISR이 비었을 때 ELR 중 fenced가 아닌 레플리카를 리더로 뽑는다." },
+        { "id": "B", "text": "4.0부터 모든 클러스터에서 기본 활성이며, unclean 선출을 대체해 ISR 밖 레플리카를 무조건 리더로 올린다." },
+        { "id": "C", "text": "컨슈머가 high watermark를 넘어 읽을 수 있게 해 복제 지연 중에도 최신 데이터를 노출한다." },
+        { "id": "D", "text": "브로커 레벨 `min.insync.replicas` 를 필수로 요구하며 클러스터 레벨 지정은 허용되지 않는다." }
+      ],
+      "answer": ["A"],
+      "explanation": "ELR은 KIP-966 1부로 4.0에서 사용 가능해졌고 4.1부터 새 클러스터에서 기본 활성입니다. 컨트롤러는 ISR에 없더라도 유실 없이 리더가 될 수 있는 레플리카를 추적해 두고, 선출 시 ISR → ELR(fenced 아닌 것) → 마지막으로 알려진 리더(unfenced) 순으로 후보를 고릅니다. 이 기능이 켜지면 `min.insync.replicas` 는 클러스터 레벨로 관리되고 브로커 레벨 값은 제거되며 브로커 레벨 변경도 허용되지 않습니다. 또 `min.insync.replicas` 를 갱신하면 값이 같아도 ELR 상태가 초기화된다는 점을 함께 알아 두어야 합니다.",
+      "distractorNotes": {
+        "B": "4.0에서는 기본 활성이 아니며 `eligible.leader.replicas.version=1` 로 켜야 합니다. 그리고 ELR은 유실 없이 승격 가능한 레플리카만 추적하므로 unclean 선출과 성격이 다릅니다.",
+        "C": "컨슈머의 가시성 상한은 여전히 high watermark입니다. ELR은 리더 선출 후보를 넓히는 기능입니다.",
+        "D": "반대입니다. ELR이 활성이면 클러스터 레벨 `min.insync.replicas` 가 기준이 되고 브로커 레벨 값은 제거됩니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Eligible Leader Replicas", "url": "https://kafka.apache.org/documentation/#eligible_leader_replicas" }
+      ],
+      "tags": ["elr", "leader-election", "min.insync.replicas", "version-4x"]
+    },
+    {
+      "id": "ccaak-fundamentals-008",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "medium",
+      "type": "multiple",
+      "question": "`unclean.leader.election.enable` 에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "기본값은 `false` 이며 브로커와 토픽 양쪽에서 설정할 수 있다." },
+        { "id": "B", "text": "`true` 로 켜면 ISR 밖 레플리카가 리더가 될 수 있어 커밋된 데이터가 유실될 수 있다." },
+        { "id": "C", "text": "기본값은 `true` 이며 가용성을 우선하는 Kafka의 설계 방침을 반영한다." },
+        { "id": "D", "text": "이 설정을 켜면 뒤처진 팔로워도 ISR에 유지되어 복제 지연 경고가 사라진다." },
+        { "id": "E", "text": "read-only 설정이므로 장애 중에 값을 바꾸려면 롤링 재시작이 필요하다." }
+      ],
+      "answer": ["A", "B"],
+      "explanation": "이 설정은 ISR이 비었을 때 ISR 밖 레플리카를 리더로 승격할지 결정하며, 승격된 레플리카는 커밋된 구간을 갖고 있지 않을 수 있으므로 유실이 확정됩니다. 그래서 기본값은 `false` 이고, 브로커 기본값과 토픽 오버라이드 양쪽에서 지정할 수 있습니다. 갱신 모드는 cluster-wide이므로 장애 중에도 재시작 없이 바꿀 수 있지만, 켜고 나면 즉시 되돌리는 것이 원칙입니다. 실제 유실 발생 여부는 `UncleanLeaderElectionsPerSec` 가 0에서 올라갔는지로 확인합니다.",
+      "distractorNotes": {
+        "C": "기본값은 `false` 입니다. Kafka는 이 지점에서 가용성보다 내구성을 기본으로 택합니다.",
+        "D": "ISR 판정은 `replica.lag.time.max.ms` 가 결정하며 이 설정과 무관합니다.",
+        "E": "cluster-wide 설정이므로 `kafka-configs.sh` 로 재시작 없이 변경됩니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Unclean leader election", "url": "https://kafka.apache.org/documentation/#brokerconfigs_unclean.leader.election.enable" },
+        { "title": "Apache Kafka — Unclean Leader Election", "url": "https://kafka.apache.org/documentation/#design_uncleanleader" }
+      ],
+      "tags": ["unclean.leader.election.enable", "leader-election", "durability"]
+    },
+    {
+      "id": "ccaak-fundamentals-009",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "easy",
+      "type": "multiple",
+      "question": "ISR(in-sync replicas)의 축소와 복귀에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": null,
+      "choices": [
+        { "id": "A", "text": "팔로워가 `replica.lag.time.max.ms`(기본 30000) 안에 리더의 로그 끝까지 따라잡지 못하면 ISR에서 빠진다." },
+        { "id": "B", "text": "ISR에서 빠진 레플리카는 다시 따라잡으면 자동으로 ISR로 복귀한다." },
+        { "id": "C", "text": "ISR에서 한 번 빠진 레플리카는 재할당을 실행해야 다시 편입된다." },
+        { "id": "D", "text": "ISR 축소는 컨트롤러가 아니라 컨슈머 그룹 코디네이터가 판정한다." },
+        { "id": "E", "text": "ISR 크기는 항상 복제 계수와 같으며 다를 수 없다." }
+      ],
+      "answer": ["A", "B"],
+      "explanation": "ISR은 리더를 충분히 따라잡은 레플리카의 집합이며, 판정 기준은 `replica.lag.time.max.ms` 기본 30000ms입니다. 이 시간 안에 로그 끝까지 따라잡은 fetch 요청을 보내지 못하면 제외되고, 따라잡으면 다시 포함됩니다. 이 오르내림은 `IsrShrinksPerSec` 와 `IsrExpandsPerSec` 로 관측되며 평시에는 둘 다 0이어야 합니다. 값이 반복적으로 튀면 특정 브로커의 디스크나 네트워크, 또는 해제되지 않은 복제 스로틀을 의심합니다.",
+      "distractorNotes": {
+        "C": "복귀는 자동입니다. 재할당은 레플리카의 배치를 바꾸는 별개의 작업입니다.",
+        "D": "ISR은 파티션 리더가 갱신을 요청하고 컨트롤러가 메타데이터에 반영합니다. 컨슈머 그룹 코디네이터는 관여하지 않습니다.",
+        "E": "ISR은 레플리카 집합의 부분집합입니다. 두 값이 다른 상태가 under-replicated입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Broker Configs: replica.lag.time.max.ms", "url": "https://kafka.apache.org/documentation/#brokerconfigs_replica.lag.time.max.ms" },
+        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" }
+      ],
+      "tags": ["isr", "replica.lag.time.max.ms", "replication"]
+    },
+    {
+      "id": "ccaak-fundamentals-010",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "medium",
+      "type": "matching",
+      "question": "각 설정을 Apache Kafka 4.3 기준 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        { "id": "p1", "left": "`min.insync.replicas` (broker · topic)", "right": "1" },
+        { "id": "p2", "left": "`replica.lag.time.max.ms` (broker)", "right": "30000" },
+        { "id": "p3", "left": "`message.max.bytes` (broker)", "right": "1048588" },
+        { "id": "p4", "left": "`log.segment.bytes` (broker)", "right": "1073741824" },
+        { "id": "p5", "left": "`offsets.topic.replication.factor` (broker)", "right": "3" }
+      ],
+      "extraRights": ["2", "1048576", "300000", "604800000"],
+      "explanation": "`min.insync.replicas` 는 복제 계수와 무관하게 기본값이 1이므로, RF=3 토픽에서도 명시하지 않으면 `acks=all` 쓰기가 리더 하나의 확인으로 성공합니다. `replica.lag.time.max.ms` 는 30000ms이고 300000ms는 컨슈머의 `max.poll.interval.ms` 기본값이라 자릿수로 헷갈립니다. 브로커의 `message.max.bytes` 는 1048588로 1MB(1048576)와 다르며, 1048576은 프로듀서 `max.request.size` 와 컨슈머 `max.partition.fetch.bytes` 의 기본값입니다. `offsets.topic.replication.factor` 가 3이기 때문에 브로커가 3대 미만인 실습 클러스터에서는 `__consumer_offsets` 생성 자체가 실패합니다.",
+      "distractorNotes": {
+        "p1": "RF=3이면 2일 것이라고 짐작하기 쉽지만 기본값은 1입니다. 2는 권장 운영값이며 기본값이 아닙니다.",
+        "p2": "30000과 300000을 혼동하기 쉽습니다. 자릿수 하나 차이가 경계값 문항에서 갈립니다.",
+        "p3": "1048576(=1MB)을 고르기 쉽습니다. 브로커 값은 1048588이고 압축 후 배치 크기 기준입니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" },
+        { "title": "Apache Kafka — Topic Configs", "url": "https://kafka.apache.org/documentation/#topicconfigs" }
+      ],
+      "tags": ["defaults", "min.insync.replicas", "message.max.bytes"]
+    },
+    {
+      "id": "ccaak-fundamentals-011",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "hard",
+      "type": "matching",
+      "question": "복제 관련 용어를 정확한 정의와 연결하세요. 정답이 아닌 미끼 정의가 섞여 있습니다.",
+      "code": null,
+      "pairs": [
+        { "id": "p1", "left": "leader", "right": "그 파티션의 읽기·쓰기 요청을 실제로 처리하는 레플리카" },
+        { "id": "p2", "left": "preferred leader", "right": "레플리카 목록의 첫 번째로 지정된, 리더가 되어야 할 브로커" },
+        { "id": "p3", "left": "ISR", "right": "리더를 충분히 따라잡은 레플리카의 집합" },
+        { "id": "p4", "left": "ELR", "right": "ISR에 없지만 유실 없이 리더가 될 수 있다고 컨트롤러가 추적하는 레플리카" }
+      ],
+      "extraRights": ["파티션의 레플리카가 배치된 브로커 전체 목록", "메타데이터 쿼럼에서 투표권을 가진 노드", "리더가 마지막으로 append한 오프셋"],
+      "explanation": "leader는 현재 상태이고 preferred leader는 배치 설계상의 지정이므로 둘이 다른 것 자체는 장애가 아닙니다. 다만 차이가 누적되면 리더가 한쪽 브로커에 쏠려 `PreferredReplicaImbalanceCount` 가 올라가고 부하 불균형이 생깁니다. ISR은 레플리카 집합의 부분집합이며, 여기서 빠진 레플리카 중에서도 유실 없이 승격 가능한 것을 컨트롤러가 ELR로 따로 추적합니다. 미끼로 제시된 정의들은 각각 Replicas 목록, 쿼럼 voter, LEO의 설명이므로 함께 구분해 두어야 합니다.",
+      "distractorNotes": {
+        "p2": "현재 리더와 같은 것으로 착각하기 쉽습니다. preferred leader는 `Replicas` 목록의 첫 항목이라는 설계상의 지정입니다.",
+        "p4": "unclean 선출 대상과 혼동하기 쉽습니다. ELR은 유실 없이 승격 가능하다고 판정된 레플리카만 담습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Replication", "url": "https://kafka.apache.org/documentation/#replication" },
+        { "title": "Apache Kafka — Eligible Leader Replicas", "url": "https://kafka.apache.org/documentation/#eligible_leader_replicas" }
+      ],
+      "tags": ["isr", "elr", "leader-election", "terminology"]
+    },
+    {
+      "id": "ccaak-fundamentals-012",
+      "exam": "CCAAK",
+      "domain": "Kafka Fundamentals",
+      "chapter": "ch02",
+      "difficulty": "medium",
+      "type": "ordering",
+      "question": "하나의 파티션 위에 존재하는 네 지점을 오프셋 값이 작은 것부터 큰 것 순으로 배열하세요.",
+      "code": null,
+      "items": [
+        { "id": "i3", "text": "high watermark — ISR 내 최소 LEO. 컨슈머가 읽을 수 있는 상한" },
+        { "id": "i1", "text": "log start offset — 리텐션 정리 후 남아 있는 로그의 시작" },
+        { "id": "i4", "text": "LEO(log end offset) — 리더가 마지막으로 append한 다음 위치" },
+        { "id": "i2", "text": "committed offset — 컨슈머 그룹이 처리를 마쳤다고 커밋한 위치" }
+      ],
+      "answer": ["i1", "i2", "i3", "i4"],
+      "explanation": "log start offset은 리텐션으로 앞부분이 지워진 뒤 남은 로그의 시작점이므로 가장 작습니다. 컨슈머 그룹의 committed offset은 그 뒤에 있고, 컨슈머는 high watermark를 넘어 읽을 수 없으므로 커밋 위치는 항상 high watermark 이하입니다. high watermark는 ISR 내 최소 LEO로 정의되므로 리더의 LEO보다 크지 않습니다. 이 네 지점의 순서를 알고 있으면 `kafka-consumer-groups.sh` 의 LAG가 왜 LOG-END-OFFSET 기준이고, 복제가 뒤처졌을 때 왜 lag이 0이 되지 않는지도 함께 설명됩니다.",
+      "distractorNotes": {
+        "i3": "high watermark를 LEO와 같은 것으로 보기 쉽습니다. ISR에 느린 레플리카가 있으면 둘 사이에 간격이 생깁니다.",
+        "i2": "committed offset이 항상 로그의 끝이라고 오해하기 쉽습니다. 미처리 구간이 남아 있으면 그만큼 뒤에 있습니다."
+      },
+      "refs": [
+        { "title": "Apache Kafka — Replicated Log", "url": "https://kafka.apache.org/documentation/#design_replicatedlog" },
+        { "title": "Apache Kafka — Consumer group operations", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" }
+      ],
+      "tags": ["offsets", "high-watermark", "leo", "consumer-lag"]
+    }
+  ]
+}
