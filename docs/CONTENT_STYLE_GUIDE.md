@@ -35,9 +35,30 @@
 | Java 요구사항 | 브로커 Java 17+, 클라이언트 Java 11+ (4.x 기준, 문서에서 재확인할 것) |
 
 ### 1-3. 사실 확인 규칙
-- **설정명·기본값·CLI 옵션은 반드시 공식 문서에서 확인한 값만 쓴다.** 기억에 의존 금지.
-- 확인 도구: `WebFetch`로 https://kafka.apache.org/documentation/ 및 하위 앵커 조회
+
+> ⚠️ **`docs/FACT_SOURCES.md`를 반드시 읽을 것.** 이 환경은 공식 문서 웹사이트가
+> 네트워크 정책으로 차단되어 있다. `kafka.apache.org`, `docs.confluent.io`,
+> `cwiki.apache.org`, `www.confluent.io`, `developer.confluent.io` 전부 403이다.
+> **재시도하지 말고**, 대신 Apache Kafka **소스 코드**로 확인한다 (웹사이트보다 상위 1차 소스).
+
+- **설정명·기본값·CLI 옵션은 반드시 확인한 값만 쓴다.** 기억에 의존 금지.
+- 확인 경로: `raw.githubusercontent.com/apache/kafka/4.3/{경로}`
+  → 파일 경로 14개와 이미 확인된 기본값 16개는 `docs/FACT_SOURCES.md` §3·§4에 있다.
+- 릴리스 노트·KIP 등 서술형 정보는 **WebSearch**로 확인한다.
 - 확인 불가능한 수치는 **쓰지 않는다.** "약", "대략" 으로 얼버무리지 말 것.
+- `refs`와 "공식 문서 출처"에는 **여전히 `kafka.apache.org` URL을 쓴다.**
+  사이트를 읽는 사람은 그 URL을 열 수 있다. 인용은 공식 문서, 검증은 소스 코드로 분리한다.
+
+#### 자주 틀리는 4.x 기본값 (소스 확인 완료)
+| 설정 | 기본값 | 함정 |
+|---|---|---|
+| `linger.ms` | **`5`** | **4.0에서 `0`→`5` 변경.** 시중 자료 대부분이 `0`으로 적혀 있다 |
+| `acks` | `all` | 3.0부터 변경 |
+| `enable.idempotence` | `true` | 3.0부터 변경 |
+| `group.protocol` | **`classic`** | KIP-848은 4.0 GA지만 **기본값이 아니다** |
+| `session.timeout.ms` | `45000` | 이전 `10000`에서 변경됨 |
+| `auto.offset.reset` | `latest` | |
+| `isolation.level` | `read_uncommitted` | |
 
 ### 1-4. 출처 정책
 - ✅ 허용: `kafka.apache.org`, `cwiki.apache.org` (KIP), `docs.confluent.io`, `developer.confluent.io`, 공식 GitHub

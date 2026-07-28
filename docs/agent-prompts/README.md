@@ -31,7 +31,8 @@ Application Development(28%) + Fundamentals(23%) = 51%에 자원이 집중된다
 3. docs/VERSION_POLICY.md         — 버전 기준·2.13 혼동·레거시 병기 규칙
 4. docs/CCDAK_TOPIC_CHECKLIST.md  — 필수 출제 토픽 24개 + 태그 규약
 5. docs/DIAGRAM_CATALOG.md        — 다이어그램 83개 카탈로그·작성 규칙·분리 구조
-6. docs/QUESTION_SCHEMA.md        — 문제 JSON 스키마 (문제 생성 에이전트만)
+6. docs/FACT_SOURCES.md           — ★ 사실 확인 경로 (공식 문서 웹사이트가 차단됨)
+7. docs/QUESTION_SCHEMA.md        — 문제 JSON 스키마 (문제 생성 에이전트만)
 
 절대 규칙:
 - 기준 버전은 Apache Kafka 4.3.x. ZooKeeper는 4.0에서 제거되었으므로
@@ -39,8 +40,14 @@ Application Development(28%) + Fundamentals(23%) = 51%에 자원이 집중된다
   (예외: basics/appendix-legacy.html 안에서만 ZooKeeper 서술이 허용됩니다.)
 - "2.13"은 Kafka 버전이 아니라 Scala 버전입니다 (kafka_2.13-4.3.0).
   이를 Kafka 버전으로 서술하면 즉시 반려됩니다.
-- 설정명·기본값·CLI 옵션은 WebFetch로 https://kafka.apache.org/documentation/
-  에서 확인한 값만 씁니다. 기억에 의존하지 마세요. 확인 못 하면 쓰지 마세요.
+- ★ 공식 문서 웹사이트(kafka.apache.org, docs.confluent.io, cwiki.apache.org,
+  confluent.io)는 이 환경의 네트워크 정책으로 **차단되어 있습니다. 재시도 금지.**
+  설정명·기본값은 Apache Kafka 소스 코드로 확인합니다:
+  raw.githubusercontent.com/apache/kafka/4.3/{경로}
+  → 파일 경로와 이미 확인된 기본값은 docs/FACT_SOURCES.md 에 정리되어 있습니다.
+  기억에 의존하지 마세요. 확인 못 하면 쓰지 마세요.
+- linger.ms 기본값은 5입니다 (4.0에서 0→5 변경). group.protocol 기본값은 classic입니다.
+  이 두 개는 시중 자료가 거의 다 틀렸으니 특히 주의하세요.
 - 시험 덤프 사이트(examtopics, validexamdumps, pass4success, skillcertpro,
   itexams, examcollection 등) 참조·복제 전면 금지.
 - 외부 CDN/폰트/스크립트 참조 금지. 모든 자원은 상대 경로.
