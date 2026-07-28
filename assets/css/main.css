@@ -30,6 +30,9 @@ html {
 
 body {
   margin: 0;
+  /* 상단바는 app.js 가 나중에 주입하지만 position:fixed 이므로 흐름에 끼지 않습니다.
+     그 높이를 여기서 미리 비워 둬야 주입 순간 본문이 아래로 밀리지 않습니다. */
+  padding-top: var(--header-h);
   font-family: var(--font-sans);
   font-size: var(--fs-base);
   line-height: var(--lh-body);
@@ -139,8 +142,12 @@ kbd {
    TOPBAR (app.js 주입)
    ========================================================================== */
 .topbar {
-  position: sticky;
+  /* sticky 가 아니라 fixed 입니다. 흐름에서 빠져야 body.padding-top 이 미리 잡아 둔
+     자리에 그대로 들어가고, 주입 시점에 레이아웃이 움직이지 않습니다. */
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: var(--z-sticky);
   display: flex;
   align-items: center;
@@ -836,6 +843,20 @@ select, input[type="text"], input[type="search"], input[type="number"] {
   margin: var(--space-4) 0;
 }
 
+/* quiz.js 가 채우기 전까지 자리를 비워 둡니다 — 채워지는 순간 아래 내용이 밀리지 않게.
+   값은 실제 렌더 높이를 재서 넣었습니다(허브 툴바 255px · 복습 요약 199px).
+   :empty 라서 채워진 뒤에는 아무 영향이 없고, 값이 어긋나도 작은 이동만 생깁니다. */
+[data-quiz-panel]:empty { min-height: 16rem; }
+[data-review-summary]:empty { min-height: 12.5rem; }
+/* 결과 페이지만 — 응시 결과가 로드와 동시에 채워집니다.
+   허브·복습의 data-quiz-host 는 사용자가 "시작"을 눌러야 채워지므로(=의도된 상호작용)
+   여기서 자리를 잡으면 빈 공간만 남습니다. 그래서 result 페이지로 한정합니다. */
+[data-quiz-page="result"] [data-quiz-host]:empty { min-height: 11rem; }
+@media (max-width: 420px) {
+  [data-quiz-panel]:empty { min-height: 22rem; }
+  [data-review-summary]:empty { min-height: 14rem; }
+}
+
 /* ==========================================================================
    카드 그리드 (index.html / 허브)
    ========================================================================== */
@@ -1459,6 +1480,8 @@ a.card:hover { border-color: var(--c-accent-border); background: var(--c-accent-
   .topbar, #sidebar-mount, .page-toc, .drawer-overlay,
   .code__copy, .search-dialog, .quiz__actions, .quiz__nav,
   .pager, .icon-btn, .btn, .heading-anchor { display: none !important; }
+  /* 상단바를 숨기므로 그 자리를 비워 두면 첫 장 위에 빈 띠가 남습니다. */
+  body { padding-top: 0; }
   body.has-sidebar .page,
   body.has-sidebar.has-toc .page { margin: 0; max-width: none; }
   .page { padding: 0; }

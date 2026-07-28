@@ -353,7 +353,9 @@
       }
     });
 
-    if (list.length < 2) return null;
+    /* has-toc 는 HTML 에 정적으로 박혀 있습니다(레이아웃 이동 방지).
+       목차를 만들 수 없는 페이지에서는 여기서 걷어냅니다. */
+    if (list.length < 2) { doc.body.classList.remove('has-toc'); return null; }
 
     var aside = doc.createElement('aside');
     aside.className = 'page-toc';
