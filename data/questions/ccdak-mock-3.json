@@ -2655,7 +2655,7 @@
         },
         {
           "id": "B",
-          "text": "파티션 수 불일치를 감지해 `TopologyBuilderException` 으로 실패한다."
+          "text": "파티션 수 불일치를 감지해 `TopologyException` 으로 실패한다."
         },
         {
           "id": "C",
@@ -2669,7 +2669,7 @@
       "answer": [
         "B"
       ],
-      "explanation": "co-partitioning 요건 중 Streams가 런타임에 실제로 검증하는 것은 파티션 수뿐이며, 불일치하면 `TopologyBuilderException` 으로 실패합니다. 반대로 파티셔너가 다른 경우는 감지되지 않아 조인이 조용히 누락되는데, 이것이 훨씬 찾기 어려운 실패 양상입니다. 맞출 때는 적은 쪽을 많은 쪽에 맞춰 `repartition()` 하며, KStream-KTable이면 KStream을 리파티션하는 편이 상태 저장소를 추가로 만들지 않아 유리합니다. KStream-GlobalKTable 조인과 KTable 외래키 조인은 co-partitioning이 필요하지 않습니다.",
+      "explanation": "co-partitioning 요건 중 Streams가 런타임에 실제로 검증하는 것은 파티션 수뿐이며, 불일치하면 `TopologyException` 으로 실패합니다. 반대로 파티셔너가 다른 경우는 감지되지 않아 조인이 조용히 누락되는데, 이것이 훨씬 찾기 어려운 실패 양상입니다. 맞출 때는 적은 쪽을 많은 쪽에 맞춰 `repartition()` 하며, KStream-KTable이면 KStream을 리파티션하는 편이 상태 저장소를 추가로 만들지 않아 유리합니다. KStream-GlobalKTable 조인과 KTable 외래키 조인은 co-partitioning이 필요하지 않습니다.",
       "distractorNotes": {
         "A": "자동 리파티션은 일어나지 않습니다. 명시적으로 처리해야 합니다.",
         "C": "조용한 누락은 파티셔너 불일치일 때의 증상입니다.",

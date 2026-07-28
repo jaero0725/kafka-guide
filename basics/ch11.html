@@ -585,10 +585,12 @@ bin/kafka-acls.sh --bootstrap-server localhost:9092 --list --topic Test-topic</c
               <td>합계가 0이면 컨트롤러 없음, 2 이상이면 split-brain 의심입니다</td>
             </tr>
             <tr>
-              <th scope="row">Leader election rate</th>
-              <td><code>kafka.controller:type=ControllerStats,<br>name=LeaderElectionRateAndTimeMs</code></td>
-              <td><strong>브로커 장애 시에만 0이 아님</strong></td>
-              <td>평상시에 오르면 브로커가 반복적으로 이탈·복귀하고 있습니다</td>
+              <th scope="row">리더 교체 조짐</th>
+              <td><code>kafka.server:type=ReplicaManager,<br>name=IsrShrinksPerSec</code> · <code>IsrExpandsPerSec</code><br>
+                  <code>kafka.controller:type=ControllerStats,<br>name=UncleanLeaderElectionsPerSec</code></td>
+              <td><strong>평시 0</strong></td>
+              <td>평상시에 오르면 브로커가 반복적으로 이탈·복귀하고 있습니다.
+                  ZooKeeper 시절의 <code>LeaderElectionRateAndTimeMs</code>는 <strong>KRaft에서 제거</strong>되었으므로 쓰지 마세요</td>
             </tr>
             <tr>
               <th scope="row">Unclean leader election</th>

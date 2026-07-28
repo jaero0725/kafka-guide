@@ -358,7 +358,10 @@ ccaak/index, ccaak/domain-security, quiz/index
 - **D-093**: co-partitioning 요건은 **2개**입니다 — ① 파티션 수 동일 ② 파티셔너 동일.
   "같은 키로 파티셔닝"은 equi-join 의 **전제**이지 세 번째 요건이 아니며,
   Streams 런타임이 실제로 검증하는 것은 파티션 수뿐입니다
-  (불일치 시 `TopologyBuilderException`, `TopologyException` 아님).
+  (불일치 시 `TopologyException` — "Topics not co-partitioned: [...]".
+   `TopologyBuilderException` 은 Kafka 2.0 에서 삭제된 클래스이므로 4.x 에서는 오답입니다.
+   공식 문서 산문에 옛 이름이 남아 있으나 소스가 정본입니다:
+   `streams/.../processor/internals/assignment/CopartitionedTopicsEnforcer.java`).
   **3요건으로 그려져 있으면 그게 오류입니다.** GlobalKTable·FK 조인 예외가 표현되었는가?
 - **D-094**: map은 리파티션 유발, mapValues는 미유발. 뒤바뀌었으면 CRITICAL
 - **D-101**: listeners / advertised.listeners / protocol.map 관계가 정확한가?

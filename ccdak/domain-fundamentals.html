@@ -242,7 +242,7 @@
           큰 메시지를 허용하려면 <strong>순서대로 전부</strong> 올려야 합니다.
           ① 토픽 <code>max.message.bytes</code> → ② 프로듀서 <code>max.request.size</code> →
           ③ 컨슈머 <code>max.partition.fetch.bytes</code> → ④ 브로커 <code>replica.fetch.max.bytes</code>.
-          ④를 빼먹으면 쓰기는 되지만 <strong>복제가 실패해 ISR이 줄어듭니다.</strong>
+          ④를 빼먹어도 <strong>복제가 멈추지는 않습니다</strong> — fetch 계열은 하드 상한이 아니라 큰 배치도 그대로 반환됩니다. 대신 fetch 응답당 배치 1건으로 떨어져 <strong>복제 처리량이 무너지고</strong>, 그 상태가 이어지면 팔로워가 뒤처져 ISR에서 빠질 수 있습니다.
           list order 유형으로 나오기 좋은 소재입니다 (<a href="../cases/case10.html">케이스 10</a>).
         </p>
       </aside>
@@ -566,7 +566,7 @@ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \
             <tr><th scope="row"><code>unclean.leader.election.enable</code></th><td>브로커 · 토픽</td><td><code>false</code></td><td><code>true</code>면 가용성↑ 내구성↓ (유실 허용)</td></tr>
             <tr><th scope="row"><code>replica.lag.time.max.ms</code></th><td>브로커</td><td>30000</td><td>이 시간 못 따라오면 ISR 제외</td></tr>
             <tr><th scope="row"><code>message.max.bytes</code></th><td>브로커</td><td>1048588</td><td>압축 후 배치 기준</td></tr>
-            <tr><th scope="row"><code>replica.fetch.max.bytes</code></th><td>브로커</td><td>1048576</td><td>빼먹으면 복제만 실패</td></tr>
+            <tr><th scope="row"><code>replica.fetch.max.bytes</code></th><td>브로커</td><td>1048576</td><td>하드 상한 아님 · 빼먹으면 복제 처리량 급감</td></tr>
             <tr><th scope="row"><code>offsets.retention.minutes</code></th><td>브로커</td><td>10080 (7일)</td><td>커밋 오프셋 만료 → <code>auto.offset.reset</code> 발동</td></tr>
             <tr><th scope="row"><code>transaction.state.log.replication.factor</code></th><td>브로커</td><td>3</td><td>EOS는 브로커 3대 이상을 전제</td></tr>
             <tr><th scope="row"><code>transaction.state.log.min.isr</code></th><td>브로커</td><td>2</td><td>단일 브로커 개발 환경에서 낮춰야 EOS가 동작</td></tr>

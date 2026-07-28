@@ -2595,7 +2595,7 @@
         {
           "id": "p1",
           "left": "KStream-KTable 조인에서 두 입력 토픽의 **파티션 수가 다르다**",
-          "right": "기동 시 `TopologyBuilderException` 으로 실패한다"
+          "right": "파티션 배정 단계에서 `TopologyException` 으로 실패한다"
         },
         {
           "id": "p2",
@@ -2614,10 +2614,10 @@
         }
       ],
       "extraRights": [
-        "기동 시 `TopologyException` 으로 실패한다",
+        "파티션 배정 단계에서 `TopologyBuilderException` 으로 실패한다",
         "런타임에 파티션 수를 자동으로 맞춰 재분배한 뒤 정상 동작한다"
       ],
-      "explanation": "Streams 가 런타임에 실제로 검증하는 co-partitioning 조건은 **파티션 수 하나**입니다. 그래서 파티션 수가 어긋나면 토폴로지 구성 단계에서 바로 막히지만, 파티셔너가 다른 경우는 아무 예외도 없이 잘못된 결과만 남아 훨씬 찾기 어렵습니다. GlobalKTable 조인은 모든 인스턴스가 전체 사본을 갖기 때문에 요건이 아예 없고, KTable 외래키 조인은 Streams 가 내부적으로 재분배를 해 주므로 사용자가 맞출 필요가 없습니다. 미끼로 넣은 `TopologyException` 은 실제 예외명이 아니며, 파티션 수를 알아서 맞춰 주는 동작도 존재하지 않습니다.",
+      "explanation": "Streams 가 런타임에 실제로 검증하는 co-partitioning 조건은 **파티션 수 하나**입니다. 파티션 수가 어긋나면 파티션 배정 단계에서 `TopologyException` 으로 막히지만, 파티셔너가 다른 경우는 아무 예외도 없이 잘못된 결과만 남아 훨씬 찾기 어렵습니다. GlobalKTable 조인은 모든 인스턴스가 전체 사본을 갖기 때문에 요건이 아예 없고, KTable 외래키 조인은 Streams 가 내부적으로 재분배를 해 주므로 사용자가 맞출 필요가 없습니다. 미끼로 넣은 `TopologyBuilderException` 은 `TopologyBuilderException` 은 Kafka 2.0 에서 삭제된 클래스입니다. 공식 문서 산문에는 아직 옛 이름이 남아 있지만 4.x 런타임이 실제로 던지는 것은 `TopologyException` 입니다. 파티션 수를 알아서 맞춰 주는 동작도 존재하지 않습니다.",
       "distractorNotes": {
         "p2": "파티션 수만 맞으면 안전하다고 착각하기 쉬운 지점입니다. 파티셔너 불일치는 검증 대상이 아니라 조용한 오답으로 나타납니다.",
         "p4": "키 기준 KTable-KTable 조인과 구별해야 합니다. 요건이 면제되는 것은 외래키 조인입니다."

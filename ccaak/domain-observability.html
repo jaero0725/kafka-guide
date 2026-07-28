@@ -205,9 +205,10 @@
               <td>0이 아니면 <strong>데이터가 유실되었습니다.</strong> 사후 확인이 아니라 알림 대상입니다.</td>
             </tr>
             <tr>
-              <th scope="row"><code>ControllerStats,name=LeaderElectionRateAndTimeMs</code></th>
-              <td>평시 0, 장애 시 non-zero</td>
-              <td>리더 선출 빈도와 소요 시간. 반복적으로 non-zero면 브로커가 플래핑합니다.</td>
+              <th scope="row"><code>ControllerStats,name=UncleanLeaderElectionsPerSec</code></th>
+              <td>항상 0</td>
+              <td>ISR 밖 레플리카가 리더가 된 횟수. 리더 교체 빈도는 <code>IsrShrinksPerSec</code>/<code>IsrExpandsPerSec</code>로 봅니다.
+                  <code>LeaderElectionRateAndTimeMs</code>는 ZooKeeper 전용이라 <strong>KRaft에서 제거</strong>되었습니다.</td>
             </tr>
             <tr>
               <th scope="row"><code>KafkaController,name=PreferredReplicaImbalanceCount</code></th>

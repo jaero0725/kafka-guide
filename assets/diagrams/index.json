@@ -191,7 +191,7 @@
       "title": "배치와 linger.ms — batch.size 도달과 linger.ms 만료 중 먼저 오는 쪽에 전송",
       "desc": "두 시나리오를 같은 12밀리초 시간축 위에 놓고 비교합니다. 각 시나리오에는 두 개의 막대가 있습니다. 위 막대는 batch.size 16384 바이트가 채워지기까지 걸리는 시간, 아래 막대는 linger.ms 5 밀리초 타이머가 만료되기까지 걸리는 시간입니다. 막대가 더 짧은 쪽, 즉 먼저 끝나는 조건이 전송을 유발합니다. 시나리오 1은 트래픽이 많아 3 밀리초에 batch.size 가 먼저 채워지므로 linger 타이머가 만료되기 전에 전송되고 배치가 꽉 찹니다. 시나리오 2는 트래픽이 적어 12 밀리초 동안 4200 바이트밖에 모이지 않으므로 5 밀리초에 linger.ms 만료가 먼저 와서 부분만 찬 배치가 전송됩니다. linger.ms 기본값은 Kafka 4.0부터 0 이 아니라 5 입니다.",
       "interactive": false,
-      "bytes": 6625
+      "bytes": 6681
     },
     "D-032": {
       "file": "D-032-acks-comparison.svg",
@@ -341,9 +341,9 @@
       "file": "D-050-delivery-semantics-matrix.svg",
       "slug": "delivery-semantics-matrix",
       "title": "3가지 전달 보장 비교 — at-most-once · at-least-once · exactly-once",
-      "desc": "세 가지 전달 보장을 설정 조합과 결과로 비교하는 표입니다. at-most-once 는 프로듀서에서 acks=0, retries=0, enable.idempotence=false 로 재시도를 끄고 컨슈머가 처리 전에 오프셋을 커밋합니다. 결과는 유실 있음, 중복 없음입니다. at-least-once 는 Kafka 의 기본 동작으로 acks=all, retries 는 기본값 2147483647, enable.idempotence=true 이며 컨슈머가 처리 후에 커밋합니다. 결과는 유실 없음, 중복 있음입니다. exactly-once 는 여기에 transactional.id 를 설정한 트랜잭션 프로듀서를 더하고, 컨슈머는 isolation.level=read_committed, enable.auto.commit=false 로 두고 오프셋 커밋을 트랜잭션 안에 포함시킵니다. 결과는 유실도 중복도 없지만 그 보장은 Kafka 토픽에서 Kafka 토픽으로 처리하는 범위 안에서만 성립합니다. retries 를 0 으로 두려면 enable.idempotence 를 false 로 함께 내려야 합니다. 멱등 프로듀서에서 retries 가 0 이면 ConfigException 이 발생합니다.",
+      "desc": "세 가지 전달 보장을 설정 조합과 결과로 비교하는 표입니다. at-most-once 는 프로듀서에서 acks=0, retries=0, enable.idempotence=false 로 재시도를 끄고 컨슈머가 처리 전에 오프셋을 커밋합니다. 결과는 유실 있음, 중복 없음입니다. at-least-once 는 Kafka 의 기본 동작으로 acks=all, retries 는 기본값 2147483647, enable.idempotence=true 이며 컨슈머가 처리 후에 커밋합니다. 결과는 유실 없음, 중복 있음입니다. exactly-once 는 여기에 transactional.id 를 설정한 트랜잭션 프로듀서를 더하고, 컨슈머는 isolation.level=read_committed, enable.auto.commit=false 로 두고 오프셋 커밋을 트랜잭션 안에 포함시킵니다. 결과는 유실도 중복도 없지만 그 보장은 Kafka 토픽에서 Kafka 토픽으로 처리하는 범위 안에서만 성립합니다. retries 를 0 으로 두려면 enable.idempotence 를 false 로 함께 내려야 합니다. enable.idempotence 를 true 로 명시한 상태에서 retries 가 0 이면 ConfigException 이 발생하고, 명시하지 않았다면 예외 없이 멱등성이 조용히 꺼집니다.",
       "interactive": false,
-      "bytes": 6591
+      "bytes": 6739
     },
     "D-051": {
       "file": "D-051-transaction-flow.svg",
@@ -533,9 +533,9 @@
       "file": "D-094-stateless-stateful-repartition.svg",
       "slug": "stateless-stateful-repartition",
       "title": "stateless · stateful · 리파티션 유발 연산 — map 과 mapValues 의 차이",
-      "desc": "Kafka Streams DSL 연산을 세 갈래로 분류한 그림입니다. 첫째 열 stateless 는 상태 저장소가 필요 없는 연산입니다. filter, filterNot, map, mapValues, flatMap, flatMapValues, selectKey, branch 또는 split, merge, peek, foreach, print, to, groupByKey, groupBy 가 여기에 속합니다. 둘째 열 stateful 은 상태 저장소가 필요한 연산입니다. aggregate, reduce, count, 윈도우 집계, KStream-KStream 조인, KStream-KTable 조인, KTable-KTable 조인, suppress, 상태 저장소를 연결한 process 가 여기에 속합니다. 셋째 열은 리파티션을 유발하는지에 따른 분류입니다. groupBy 와 repartition 은 항상 리파티션을 유발합니다. map, flatMap, selectKey 는 키를 바꿀 수 있으므로 스트림에 리파티션 표시를 남기고, 그 뒤에 그룹화나 조인이 오면 실제로 리파티션이 일어납니다. mapValues, flatMapValues, filter, peek 은 키를 건드리지 않으므로 리파티션을 유발하지 않습니다. groupByKey 는 앞에서 표시가 붙지 않았다면 리파티션을 하지 않습니다. 핵심 대비는 map 과 mapValues 입니다. map 은 키를 바꿀 수 있으므로 리파티션 토픽을 거쳐 네트워크 왕복이 생기고, mapValues 는 값만 바꾸므로 그대로 로컬에서 처리됩니다.",
+      "desc": "Kafka Streams DSL 연산을 세 갈래로 분류한 그림입니다. 첫째 열 stateless 는 상태 저장소가 필요 없는 연산입니다. filter, filterNot, map, mapValues, flatMap, flatMapValues, selectKey, split, merge, peek, foreach, print, to, groupByKey, groupBy 가 여기에 속합니다. branch 와 through 는 4.0 에서 제거되었으므로 각각 split 과 repartition 을 씁니다. 둘째 열 stateful 은 상태 저장소가 필요한 연산입니다. aggregate, reduce, count, 윈도우 집계, KStream-KStream 조인, KStream-KTable 조인, KTable-KTable 조인, suppress, 상태 저장소를 연결한 process 가 여기에 속합니다. 셋째 열은 리파티션을 유발하는지에 따른 분류입니다. groupBy 와 repartition 은 항상 리파티션을 유발합니다. map, flatMap, selectKey 는 키를 바꿀 수 있으므로 스트림에 리파티션 표시를 남기고, 그 뒤에 그룹화나 조인이 오면 실제로 리파티션이 일어납니다. mapValues, flatMapValues, filter, peek 은 키를 건드리지 않으므로 리파티션을 유발하지 않습니다. groupByKey 는 앞에서 표시가 붙지 않았다면 리파티션을 하지 않습니다. 핵심 대비는 map 과 mapValues 입니다. map 은 키를 바꿀 수 있으므로 리파티션 토픽을 거쳐 네트워크 왕복이 생기고, mapValues 는 값만 바꾸므로 그대로 로컬에서 처리됩니다.",
       "interactive": false,
-      "bytes": 6932
+      "bytes": 7002
     },
     "D-095": {
       "file": "D-095-state-store-changelog.svg",
@@ -757,9 +757,9 @@
       "file": "D-133-ccdak-config-graph.svg",
       "slug": "ccdak-config-graph",
       "title": "CCDAK 설정값 관계도 — 내구성 · 재시도 · 배치 · 메시지 크기 · 컨슈머 생존 5개 클러스터",
-      "desc": "프로듀서 · 브로커 · 토픽 · 컨슈머 설정 23개를 다섯 묶음으로 나누고, 공식 문서에 명시된 의존 관계만 화살표로 이은 관계도입니다. 소속은 색과 기호로 구분하며 세모는 프로듀서, 네모는 브로커, 동그라미는 토픽, 마름모는 컨슈머입니다. 내구성 묶음에서는 acks=all 일 때만 min.insync.replicas 를 검사하고, min.insync.replicas 는 replication.factor 이하여야 하며, unclean.leader.election.enable 이 true 면 ISR 밖 레플리카가 리더가 되어 그 보장이 깨집니다. 재시도 예산 묶음에서는 delivery.timeout.ms 가 request.timeout.ms 와 linger.ms 의 합 이상이어야 하고, enable.idempotence 는 acks=all 과 max.in.flight 5 이하를 요구합니다. 배치 묶음에서는 batch.size 도달과 linger.ms 만료 중 먼저 오는 쪽에 전송하며 압축은 배치 단위입니다. 메시지 크기 묶음에서는 max.request.size 와 message.max.bytes 만 하드 상한이고 fetch 쪽 세 설정은 첫 배치가 더 커도 반환해 진행을 보장합니다. 컨슈머 생존 묶음에서는 하트비트 축과 poll 축이 서로 달라 처리가 길어지면 max.poll.interval.ms 쪽이 먼저 터집니다.",
+      "desc": "프로듀서 · 브로커 · 토픽 · 컨슈머 설정 23개를 다섯 묶음으로 나누고, 공식 문서에 명시된 의존 관계만 화살표로 이은 관계도입니다. 소속은 색과 기호로 구분하며 세모는 프로듀서, 네모는 브로커, 동그라미는 토픽, 마름모는 컨슈머입니다. 내구성 묶음에서는 acks=all 일 때만 min.insync.replicas 를 검사하고, min.insync.replicas 는 replication.factor 이하여야 하며, unclean.leader.election.enable 이 true 면 ISR 밖 레플리카가 리더가 되어 그 보장이 깨집니다. 재시도 예산 묶음에서는 delivery.timeout.ms 가 request.timeout.ms 와 linger.ms 의 합 이상이어야 하고, enable.idempotence 는 acks=all 과 max.in.flight 5 이하를 요구합니다. 배치 묶음에서는 batch.size 도달과 linger.ms 만료 중 먼저 오는 쪽에 전송하며 압축은 배치 단위입니다. 메시지 크기 묶음에서는 max.request.size 와 message.max.bytes(토픽 max.message.bytes 가 덮어씀) 두 계열만 하드 상한이고 fetch 쪽 세 설정은 첫 배치가 더 커도 반환해 진행을 보장합니다. 컨슈머 생존 묶음에서는 하트비트 축과 poll 축이 서로 달라 처리가 길어지면 max.poll.interval.ms 쪽이 먼저 터집니다.",
       "interactive": true,
-      "bytes": 20377
+      "bytes": 20442
     },
     "D-134": {
       "file": "D-134-ccdak-confusing-pairs.svg",
