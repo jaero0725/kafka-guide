@@ -1,0 +1,71 @@
+<svg viewBox="0 0 720 370" role="img" class="kg-diagram"
+     aria-labelledby="d095-title d095-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d095-title">상태 저장소와 changelog — RocksDB · changelog 토픽 · standby 복구</title>
+  <desc id="d095-desc">Kafka Streams 의 상태 저장이 어떻게 이루어지고 장애에서 어떻게 복구되는지 그린 그림입니다.
+    위쪽은 쓰기 경로입니다. 스트림 스레드가 레코드를 처리하면서 로컬 RocksDB 저장소에 값을 쓰고,
+    같은 변경을 changelog 토픽에도 씁니다.
+    changelog 는 로컬 상태의 백업이며 태스크마다 자기 파티션을 하나 가집니다.
+    key-value 저장소의 changelog 는 cleanup.policy 가 compact 이고,
+    윈도우 저장소의 changelog 는 delete 와 compact 를 함께 씁니다.
+    아래쪽은 복구 경로입니다.
+    standby 레플리카가 없으면 태스크가 다른 인스턴스로 옮겨간 뒤 changelog 를 처음부터 재생해야 하므로
+    상태가 클수록 복구가 오래 걸립니다.
+    num.standby.replicas 를 1 이상으로 두면 다른 인스턴스가 미리 changelog 를 따라 읽어
+    거의 최신 상태를 들고 있으므로 훨씬 빨리 처리를 재개합니다.
+    num.standby.replicas 의 기본값은 0 입니다.
+    changelog 토픽 이름은 application.id 와 저장소 이름과 changelog 접미사로 이루어집니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">상태 저장소와 changelog — 로컬 상태는 항상 Kafka 에 백업됩니다</text>
+
+  <!-- ===== 쓰기 경로 ===== -->
+  <rect class="dg-panel" x="12" y="30" width="696" height="110" rx="6"/>
+  <text class="dg-fs-sm dg-bold" x="24" y="46">쓰기 경로 — 처리할 때마다 두 곳에 씁니다</text>
+
+  <rect class="dg-node" x="24" y="54" width="180" height="76" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="114" y="76" text-anchor="middle">스트림 스레드</text>
+  <text class="dg-fs-sm dg-mono dg-muted" x="114" y="94" text-anchor="middle">task 0_0</text>
+  <text class="dg-fs-sm dg-muted" x="114" y="112" text-anchor="middle">count · aggregate 처리</text>
+  <line class="dg-edge dg-edge--accent" x1="204" y1="92" x2="221" y2="92"/>
+  <path class="dg-marker--accent" d="M220,87 L228,92 L220,97 Z"/>
+
+  <rect class="dg-node dg-node--accent" x="228" y="54" width="180" height="76" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="318" y="76" text-anchor="middle">로컬 상태 저장소</text>
+  <text class="dg-fs-sm dg-mono" x="318" y="94" text-anchor="middle">RocksDB (디스크)</text>
+  <text class="dg-fs-sm dg-muted" x="318" y="112" text-anchor="middle">태스크 전용 · 공유 안 함</text>
+  <line class="dg-edge dg-edge--accent" x1="408" y1="92" x2="425" y2="92"/>
+  <path class="dg-marker--accent" d="M424,87 L432,92 L424,97 Z"/>
+
+  <rect class="dg-node dg-node--accent" x="432" y="54" width="264" height="76" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="564" y="74" text-anchor="middle">changelog 토픽 (내부)</text>
+  <text class="dg-fs-sm dg-mono" x="564" y="92" text-anchor="middle">{application.id}-{store}-changelog</text>
+  <text class="dg-fs-sm" x="564" y="110" text-anchor="middle">태스크마다 자기 파티션 하나</text>
+  <text class="dg-fs-sm dg-mono dg-muted" x="564" y="126" text-anchor="middle">cleanup.policy=compact</text>
+
+  <!-- ===== 복구 경로 ===== -->
+  <text x="12" y="164" class="dg-fs-sm dg-bold">인스턴스가 죽었을 때 — standby 가 있는지로 복구 시간이 갈립니다</text>
+
+  <rect class="dg-node dg-node--danger" x="12" y="172" width="340" height="88" rx="4"/>
+  <text class="dg-fs-sm dg-mono dg-bold" x="22" y="190">num.standby.replicas = 0</text>
+  <text class="dg-fs-sm dg-bold" x="242" y="190">기본값</text>
+  <text class="dg-fs-sm" x="22" y="208">태스크가 다른 인스턴스로 옮겨간 뒤</text>
+  <text class="dg-fs-sm" x="22" y="226">changelog 를 <tspan class="dg-bold">처음부터 재생</tspan>해 상태를 만듭니다.</text>
+  <text class="dg-fs-sm dg-bold" x="22" y="244">상태가 크면 복구가 오래 걸립니다.</text>
+  <text class="dg-fs-sm dg-muted" x="22" y="257">그동안 그 파티션은 처리되지 않습니다.</text>
+
+  <rect class="dg-node dg-node--ok" x="368" y="172" width="340" height="88" rx="4"/>
+  <text class="dg-fs-sm dg-mono dg-bold" x="378" y="190">num.standby.replicas ≥ 1</text>
+  <text class="dg-fs-sm" x="378" y="208">다른 인스턴스가 changelog 를 <tspan class="dg-bold">미리 따라</tspan></text>
+  <text class="dg-fs-sm" x="378" y="226"><tspan class="dg-bold">읽어</tspan> 거의 최신 상태를 들고 있습니다.</text>
+  <text class="dg-fs-sm dg-bold" x="378" y="244">거의 즉시 처리를 재개합니다.</text>
+  <text class="dg-fs-sm dg-muted" x="378" y="257">대신 디스크·네트워크를 더 씁니다.</text>
+
+  <!-- 설정 -->
+  <rect class="dg-node dg-node--alt" x="12" y="270" width="696" height="62" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="288">알아 둘 것</text>
+  <text class="dg-fs-sm" x="22" y="306">changelog 는 compact 라서 <tspan class="dg-bold">키별 최신값만</tspan> 남습니다 — 그래서 재생하면 상태가 그대로 복원됩니다.</text>
+  <text class="dg-fs-sm" x="22" y="324">윈도우 저장소의 changelog 는 <tspan class="dg-mono">cleanup.policy=delete,compact</tspan> 이고 보관 기간은 윈도우 크기 + 24시간입니다.</text>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="344" x2="708" y2="344"/>
+  <text class="dg-fs-sm dg-muted" x="12" y="362">changelog 토픽을 사람이 지우면 상태 복구가 불가능해집니다. 내부 토픽은 손대지 마세요.</text>
+</svg>

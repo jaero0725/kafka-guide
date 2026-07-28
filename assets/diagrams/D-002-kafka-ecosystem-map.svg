@@ -76,5 +76,5 @@
 <text class="dg-fs-sm" x="576" y="358.6" text-anchor="middle">REST Proxy</text>
 <text class="dg-fs-sm" x="576" y="374.6" text-anchor="middle">HTTP 로 produce · consume</text>
 </g>
-<text class="dg-fs-sm dg-bold" x="8" y="424">시험 주의: Schema Registry · ksqlDB · REST Proxy 는 Confluent 계열 컴포넌트이며 Apache Kafka 자체 기능이 아닙니다.</text>
+<text class="dg-fs-sm dg-bold" x="8" y="424">시험 주의: Schema Registry · ksqlDB · REST Proxy 는 Apache Kafka 기능이 아닙니다.</text>
 </svg>

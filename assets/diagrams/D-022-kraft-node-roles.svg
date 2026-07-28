@@ -1,7 +1,7 @@
-<svg viewBox="0 0 720 338" role="img" class="kg-diagram"
+<svg viewBox="0 0 720 404" role="img" class="kg-diagram"
      aria-labelledby="d022-title d022-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d022-title">KRaft 노드 롤 조합 — broker, controller, combined</title>
-  <desc id="d022-desc">process.roles 를 broker 로 두면 토픽 데이터를 저장하고 클라이언트 요청을 처리합니다. listeners 에는 클라이언트용 리스너만 두고 컨트롤러 리스너는 노출하지 않지만 controller.listener.names 와 그 보안 설정은 필요하며 controller.quorum.bootstrap.servers 로 컨트롤러를 찾습니다. controller 로 두면 메타데이터만 담당하고 토픽 데이터를 저장하지 않으며 controller.listener.names 를 inter.broker.listener.name 과 같은 값으로 둘 수 없고 클라이언트는 여기에 붙지 않습니다. broker 와 controller 를 함께 두는 combined 모드는 한 프로세스가 두 역할을 겸하므로 리스너를 모두 노출해야 하고 컨트롤러를 따로 재시작하거나 확장할 수 없으며 컨트롤러가 브로커 부하로부터 격리되지 않아 공식 문서는 중요한 운영 환경에 권장하지 않습니다. 어느 조합이든 controller 롤 노드가 반드시 있어야 하며 3대 또는 5대의 홀수를 권장합니다.</desc>
+  <desc id="d022-desc">process.roles 를 broker 로 두면 토픽 데이터를 저장하고 클라이언트 요청을 처리합니다. listeners 에는 클라이언트용 리스너만 두고, controller.listener.names 와 그 보안 설정은 필요하지만 listeners 에는 넣지 않으며 controller.quorum.bootstrap.servers 로 컨트롤러 쿼럼을 찾습니다. controller 로 두면 메타데이터만 담당하고 토픽 데이터를 저장하지 않으며, controller.listener.names 는 inter.broker.listener.name 과 같은 값일 수 없고 클라이언트는 여기에 접속하지 않습니다. 권장 대수는 3대 또는 5대입니다. broker 와 controller 를 함께 두는 combined 모드는 한 프로세스가 두 역할을 겸해 리스너를 모두 두어야 하고, 컨트롤러를 브로커와 따로 재시작하거나 확장할 수 없으며 브로커 부하로부터 격리되지 않으므로 공식 문서는 중요한 운영 환경에 권장하지 않습니다. 롤은 kafka-storage.sh format 으로 포맷할 때 정해집니다.</desc>
 
 <defs>
 <marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
@@ -12,30 +12,25 @@
 <marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
 </defs>
 <text class="dg-fs-md dg-bold" x="8" y="20">process.roles 조합 3가지 — broker · controller · combined</text>
-<rect class="dg-node dg-node--ok" x="8" y="34" width="228" height="250" rx="4"/>
-<text class="dg-fs-sm dg-bold dg-mono" x="20" y="54">process.roles=broker</text>
-<text class="dg-fs-sm dg-bold" x="20" y="74">대규모 · 운영 환경 기본</text>
-<text class="dg-fs-sm" x="20" y="100">토픽 데이터를 저장하고 클라이언트 요청을 처리합니다.</text>
-<text class="dg-fs-sm" x="20" y="134">listeners 에 클라이언트용 리스너를 둡니다.</text>
-<text class="dg-fs-sm" x="20" y="168">controller.listener.names 와 그 보안 설정도 필요하지만</text>
-<text class="dg-fs-sm" x="20" y="202">listeners 에는 넣지 않습니다 (컨트롤러 리스너를 노출하지 않음).</text>
-<text class="dg-fs-sm" x="20" y="236">controller.quorum.bootstrap.servers 로 컨트롤러를 찾습니다.</text>
-<rect class="dg-node dg-node--accent" x="244" y="34" width="228" height="250" rx="4"/>
-<text class="dg-fs-sm dg-bold dg-mono" x="256" y="54">process.roles=controller</text>
-<text class="dg-fs-sm dg-bold" x="256" y="74">3대 또는 5대</text>
-<text class="dg-fs-sm" x="256" y="100">메타데이터만 담당합니다. 토픽 데이터를 저장하지 않습니다.</text>
-<text class="dg-fs-sm" x="256" y="134">listeners 에 컨트롤러 리스너를 둡니다.</text>
-<text class="dg-fs-sm" x="256" y="168">controller.listener.names 는 inter.broker.listener.name 과</text>
-<text class="dg-fs-sm" x="256" y="202">같은 값일 수 없습니다.</text>
-<text class="dg-fs-sm" x="256" y="236">클라이언트는 여기에 붙지 않습니다.</text>
-<rect class="dg-node dg-node--warn" x="480" y="34" width="228" height="250" rx="4"/>
-<text class="dg-fs-sm dg-bold dg-mono" x="492" y="54">process.roles=broker,controller</text>
-<text class="dg-fs-sm dg-bold" x="492" y="74">개발 · 소규모 전용</text>
-<text class="dg-fs-sm" x="492" y="100">한 프로세스가 두 역할을 겸합니다 (combined).</text>
-<text class="dg-fs-sm" x="492" y="134">listeners 에 클라이언트용 + 컨트롤러용 리스너를 모두 둡니다.</text>
-<text class="dg-fs-sm" x="492" y="168">컨트롤러를 브로커와 따로 재시작하거나 확장할 수 없습니다.</text>
-<text class="dg-fs-sm" x="492" y="202">컨트롤러가 브로커 부하로부터 격리되지 않습니다.</text>
-<text class="dg-fs-sm" x="492" y="236">공식 문서는 중요한 운영 환경에는 권장하지 않습니다.</text>
-<text class="dg-fs-sm dg-bold" x="8" y="306">어느 조합이든 클러스터에는 controller 롤 노드가 반드시 있어야 하고, 그 수는 홀수(3 또는 5)를 권장합니다.</text>
-<text class="dg-fs-sm dg-mono dg-muted" x="8" y="326">롤은 노드를 포맷할 때부터 정해집니다: bin/kafka-storage.sh format --standalone -c config/server.properties</text>
+<rect class="dg-node dg-node--ok" x="8" y="34" width="704" height="94" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="55">process.roles=broker</text>
+<text class="dg-fs-sm dg-bold" x="700" y="55" text-anchor="end">운영 환경 기본</text>
+<text class="dg-fs-sm" x="20" y="76">· 토픽 데이터를 저장하고 클라이언트 요청을 처리합니다. listeners 에는 클라이언트용 리스너만 둡니다.</text>
+<text class="dg-fs-sm" x="20" y="96">· controller.listener.names 와 그 보안 설정은 필요하지만 listeners 에는 넣지 않습니다.</text>
+<text class="dg-fs-sm" x="20" y="116">· controller.quorum.bootstrap.servers 로 컨트롤러 쿼럼을 찾아갑니다.</text>
+<rect class="dg-node dg-node--accent" x="8" y="142" width="704" height="94" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="163">process.roles=controller</text>
+<text class="dg-fs-sm dg-bold" x="700" y="163" text-anchor="end">3대 또는 5대</text>
+<text class="dg-fs-sm" x="20" y="184">· 메타데이터만 담당하고 토픽 데이터는 저장하지 않습니다. listeners 에 컨트롤러 리스너를 둡니다.</text>
+<text class="dg-fs-sm" x="20" y="204">· controller.listener.names 는 inter.broker.listener.name 과 같은 값일 수 없습니다.</text>
+<text class="dg-fs-sm" x="20" y="224">· 클라이언트는 컨트롤러에 접속하지 않습니다 — 붙어도 데이터를 읽을 수 없습니다.</text>
+<rect class="dg-node dg-node--warn" x="8" y="250" width="704" height="94" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="20" y="271">process.roles=broker,controller</text>
+<text class="dg-fs-sm dg-bold" x="700" y="271" text-anchor="end">개발 · 소규모 전용</text>
+<text class="dg-fs-sm" x="20" y="292">· 한 프로세스가 두 역할을 겸합니다. listeners 에 클라이언트용과 컨트롤러용을 모두 둡니다.</text>
+<text class="dg-fs-sm" x="20" y="312">· 컨트롤러를 브로커와 따로 재시작하거나 확장할 수 없고, 브로커 부하로부터 격리되지 않습니다.</text>
+<text class="dg-fs-sm" x="20" y="332">· 공식 문서는 중요한 운영 환경에는 권장하지 않습니다.</text>
+<text class="dg-fs-sm dg-bold" x="8" y="372">어느 조합이든 클러스터에는 controller 롤 노드가 반드시 있어야 하고, 그 수는 홀수(3 또는 5)를 권장합니다.</text>
+<text class="dg-fs-sm" x="8" y="392">롤은 포맷 시점에 정해집니다</text>
+<text class="dg-fs-sm dg-mono dg-muted" x="178" y="392">bin/kafka-storage.sh format --standalone -c config/server.properties</text>
 </svg>

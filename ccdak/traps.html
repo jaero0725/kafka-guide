@@ -1,0 +1,1104 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>함정 사전 · 헷갈리는 40쌍 — Kafka Guide</title>
+  <meta name="description" content="CCDAK에서 헷갈리는 개념 쌍 40개를 무엇인가·어디 설정인가·언제 발동하는가·혼동 시 결과·출제 형태 5축으로 비교한 함정 사전. 오답 유도 패턴 분석 포함. Apache Kafka 4.3 기준.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccdak" data-page="traps"></div>
+
+  <main id="main" class="page" data-page-id="ccdak/traps">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCDAK</a></li>
+        <li><span aria-current="page">함정 사전</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCDAK 학습 도구</p>
+      <h1>함정 사전 — 헷갈리는 40쌍</h1>
+      <p class="page__lead">
+        CCDAK에서 실점은 "모르는 것" 때문보다 <strong>"비슷한 두 개를 뒤바꾼 것"</strong> 때문에 생깁니다.
+        <code>session.timeout.ms</code>와 <code>max.poll.interval.ms</code>,
+        <code>acks</code>와 <code>min.insync.replicas</code>,
+        <code>map</code>과 <code>mapValues</code> —
+        각각은 알아도 시험장에서 어느 쪽인지 헷갈립니다.
+        이 페이지는 그 40쌍을 <strong>같은 5축</strong>으로 비교해 정리합니다.
+        시험 3일 전부터 이 페이지만 반복해도 됩니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">읽는 방법</h2>
+      <ul>
+        <li>모든 표가 <strong>같은 5개 행</strong>으로 되어 있습니다 —
+          <strong>무엇인가 / 어디 설정인가 / 언제 발동하는가 / 혼동 시 결과 / 시험에서의 출제 형태</strong>.</li>
+        <li><strong>"어디 설정인가" 행을 가장 먼저 보세요.</strong>
+          출제에서 가장 많이 바꿔치기되는 정보가 소속(프로듀서·컨슈머·브로커·토픽)입니다.</li>
+        <li>1회독은 전체를, 2회독부터는 <strong>"혼동 시 결과" 행만</strong> 훑으면 5분에 끝납니다.</li>
+        <li>마지막에 <a href="#distractor-analysis">오답 유도 패턴 분석</a>이 있습니다.
+          선택지 문장의 형태만 보고 함정을 배제하는 방법입니다.</li>
+      </ul>
+    </section>
+
+    <figure class="diagram" data-diagram="D-134">
+      <figcaption>
+        헷갈리는 설정 쌍 비교 — <code>session.timeout.ms</code> vs <code>max.poll.interval.ms</code>,
+        <code>acks</code> vs <code>min.insync.replicas</code>, retention vs compaction 등 대표 6쌍을
+        소속(프로듀서·컨슈머·브로커·토픽)과 발동 시점으로 갈라 배치한 그림입니다.
+      </figcaption>
+    </figure>
+
+    <aside class="note" data-label="전체 목록">
+      <p>
+        <strong>컨슈머 1–9</strong> · <strong>프로듀서 10–16</strong> ·
+        <strong>전달 보장 17–21</strong> · <strong>크기·스토리지 22–26</strong> ·
+        <strong>스키마 27–29</strong> · <strong>Connect 30–33</strong> ·
+        <strong>Streams 34–38</strong> · <strong>보안 39–40</strong>
+      </p>
+      <p>
+        도메인별 심화 설명은
+        <a href="domain-app-development.html">Application Development</a> ·
+        <a href="domain-fundamentals.html">Fundamentals</a> ·
+        <a href="domain-connect.html">Kafka Connect</a> ·
+        <a href="domain-observability.html">Observability</a> ·
+        <a href="domain-streams.html">Kafka Streams</a> ·
+        <a href="domain-testing.html">Testing</a> 페이지에 있습니다.
+      </p>
+    </aside>
+
+    <!-- ============================================================== -->
+    <!-- 컨슈머 1-9                                                      -->
+    <!-- ============================================================== -->
+    <section aria-labelledby="group-consumer">
+      <h2 id="group-consumer">컨슈머 — 1번부터 9번</h2>
+
+      <h3 id="trap-01">1. <code>session.timeout.ms</code> vs <code>max.poll.interval.ms</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>가장 많이 출제되고 가장 많이 틀리는 쌍</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>session.timeout.ms</code></th><th scope="col"><code>max.poll.interval.ms</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>하트비트가 끊긴 뒤 코디네이터가 기다리는 시간. 기본 <strong>45000</strong></td><td>두 <code>poll()</code> 호출 사이 허용 시간. 기본 <strong>300000</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>컨슈머</td><td>컨슈머</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td><strong>백그라운드 하트비트 스레드</strong>가 멈췄을 때</td><td><strong>애플리케이션 스레드</strong>의 처리가 길어졌을 때</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">처리 지연 문제에 <code>session.timeout.ms</code>를 올려 <strong>증상은 안 잡히고 장애 감지만 늦어집니다</strong></td></tr>
+            <tr><th scope="row">출제 형태</th><td>"프로세스가 죽은 것을 감지하는 설정은?"</td><td>"프로세스는 살아 있는데 그룹에서 빠지는 이유는?" → 1차 처방은 <code>max.poll.records</code> 축소</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-02">2. <code>heartbeat.interval.ms</code> vs <code>session.timeout.ms</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>같은 축에 있지만 하나는 주기, 하나는 인내 한계</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>heartbeat.interval.ms</code></th><th scope="col"><code>session.timeout.ms</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>하트비트를 <strong>보내는 주기</strong>. 기본 <strong>3000</strong></td><td>하트비트를 <strong>기다리는 한계</strong>. 기본 <strong>45000</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>컨슈머</td><td>컨슈머 (브로커의 <code>group.min/max.session.timeout.ms</code> 범위 안이어야 함)</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>주기적으로 계속</td><td>마지막 하트비트로부터 이 시간이 지나면</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">권장 관계는 <strong>heartbeat ≤ session ÷ 3</strong>입니다. 이를 어기면 하트비트 한 번만 놓쳐도 사망 판정이 납니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"<code>session.timeout.ms=9000</code>일 때 <code>heartbeat.interval.ms</code> 권장값은?" → 3000 이하</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-03">3. <code>assign()</code> vs <code>subscribe()</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>그룹 조정에 참여하는가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>subscribe(topics)</code></th><th scope="col"><code>assign(partitions)</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>토픽을 구독하고 <strong>할당을 받음</strong></td><td>파티션을 <strong>직접 지정</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>컨슈머 코드 (API)</td><td>컨슈머 코드 (API)</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>리밸런스 시 파티션이 재배정됨</td><td>호출 즉시 고정. <strong>리밸런스 없음</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">둘을 <strong>같은 인스턴스에서 섞으면 <code>IllegalStateException</code></strong>. <code>assign()</code>은 <strong>파티션 증가를 감지하지 않아</strong> 새 파티션이 조용히 방치됩니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"<code>group.id</code> 없이 동작하는 것은?" → <code>assign()</code> / "리밸런스를 피하려면?" → <code>assign()</code>(단 확장성 포기)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-04">4. <code>auto.offset.reset</code> — <code>earliest</code> vs <code>latest</code> vs <code>none</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>세 값의 분기와 발동 조건</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>earliest</code></th><th scope="col"><code>latest</code> (기본값)</th><th scope="col"><code>none</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>로그의 처음부터 읽음</td><td>지금 이후에 오는 것만 읽음</td><td><strong>예외를 던짐</strong> (<code>NoOffsetForPartitionException</code>)</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="3">컨슈머</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td colspan="3"><strong>커밋된 오프셋이 없을 때, 또는 커밋된 오프셋이 로그 범위를 벗어났을 때만.</strong> 정상 커밋이 있으면 아무 일도 하지 않습니다</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>재시작마다 전량 재처리한다고 오해</td><td><code>offsets.retention.minutes</code>(7일) 경과로 커밋이 만료되면 <strong>그 사이 데이터를 조용히 건너뜁니다</strong></td><td>운영 중 새 파티션이 생겼을 때 애플리케이션이 죽음</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="3">"기존 그룹에서 <code>earliest</code>로 바꾸면 처음부터 읽는가?" → <strong>아니오</strong>. 새 <code>group.id</code>나 오프셋 리셋이 필요합니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-05">5. <code>enable.auto.commit</code> vs 수동 커밋</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>커밋 시점을 누가 결정하는가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>enable.auto.commit=true</code> (기본값)</th><th scope="col">수동 커밋</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td><code>auto.commit.interval.ms</code>(5000)마다 자동 커밋</td><td><code>commitSync()</code> / <code>commitAsync()</code>를 직접 호출</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>컨슈머 설정</td><td>컨슈머 코드 (설정은 <code>false</code>로)</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td><strong><code>poll()</code>이 호출될 때</strong> 직전 반환분을 커밋</td><td>개발자가 정한 시점</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">자동 커밋은 <strong>처리 완료를 기다리지 않습니다.</strong> 처리 중 크래시하면 이미 커밋된 레코드가 유실됩니다. 트랜잭션을 쓸 때 자동 커밋이 켜져 있으면 <strong>원자성이 깨집니다</strong></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"at-least-once를 보장하려면?" → 자동 커밋 끄고 <strong>처리 후</strong> 커밋</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-06">6. <code>commitSync()</code> vs <code>commitAsync()</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>블로킹과 재시도의 차이</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>commitSync()</code></th><th scope="col"><code>commitAsync()</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>커밋 응답을 <strong>기다림</strong></td><td>커밋을 보내고 <strong>즉시 반환</strong> (콜백으로 결과 수신)</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2">컨슈머 코드 (API)</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>호출 시 블로킹. 실패하면 <strong>자동 재시도</strong></td><td>호출 시 논블로킹. <strong>자동 재시도 없음</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>루프마다 호출하면 처리량이 떨어짐</td><td>실패가 조용히 넘어가 <strong>재시작 시 중복 처리</strong>가 늘어남</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">권장 패턴: <strong>루프에서는 <code>commitAsync()</code>, 종료 직전 <code>finally</code>에서 <code>commitSync()</code></strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-07">7. eager 리밸런스 vs cooperative 리밸런스</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>전부 반납하는가, 필요한 것만 옮기는가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">eager</th><th scope="col">cooperative (incremental)</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>리밸런스 시작 시 <strong>모든 파티션 반납</strong> (stop-the-world)</td><td>옮겨야 할 파티션만 <strong>두 라운드에 걸쳐</strong> 회수·재할당</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2">컨슈머 <code>partition.assignment.strategy</code> (classic 프로토콜)</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>멤버 변경 시 전체 중단 후 재할당</td><td>멤버 변경 시 영향 없는 파티션은 <strong>계속 소비</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">eager에서 cooperative로 옮길 때 <strong>두 단계 롤링 배포</strong>가 필요합니다. 한 번에 바꾸면 프로토콜 협상이 실패합니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"리밸런스 중에도 일부 파티션을 계속 소비하는 방식은?" → cooperative. KIP-848(<code>group.protocol=consumer</code>)은 전면 증분 설계입니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-08">8. Range vs RoundRobin vs Sticky vs CooperativeSticky</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>할당 전략 4종</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>RangeAssignor</code></th><th scope="col"><code>RoundRobinAssignor</code></th><th scope="col"><code>StickyAssignor</code></th><th scope="col"><code>CooperativeStickyAssignor</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>토픽별로 연속 구간 분배</td><td>전체 토픽-파티션을 돌려 담기</td><td>균등 + 기존 할당 유지</td><td>Sticky + 증분 재할당</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="4">컨슈머 <code>partition.assignment.strategy</code>. 기본값은 <code>[RangeAssignor, CooperativeStickyAssignor]</code></td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td colspan="4">리밸런스 시. 그룹 멤버 전원이 <strong>공통으로 지원하는 전략</strong>이 협상으로 선택됩니다</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>토픽이 여러 개일 때 <strong>불균등</strong>해질 수 있음</td><td>토픽 간 균등하지만 기존 할당이 다 바뀜</td><td>여전히 eager라 stop-the-world 발생</td><td>기본값 목록의 <strong>첫 항목이 Range</strong>이므로, 쓰려면 이것만 단독 지정</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="4">"리밸런스 영향을 최소화하는 전략은?" → <code>CooperativeStickyAssignor</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-09">9. <code>group.protocol=classic</code> vs <code>consumer</code> (KIP-848)</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>4.0 GA이지만 기본값이 아닙니다</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>classic</code> (기본값)</th><th scope="col"><code>consumer</code> (KIP-848)</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>클라이언트가 할당을 계산하는 기존 프로토콜</td><td><strong>브로커가 할당을 계산</strong>하는 새 프로토콜</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2">컨슈머 <code>group.protocol</code>. <strong>서버 쪽은 4.0부터 자동 활성</strong></td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>기본값이므로 명시하지 않으면 이것</td><td><code>consumer</code>로 <strong>명시해야</strong> 활성</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2"><code>consumer</code>에서는 <code>session.timeout.ms</code>·<code>heartbeat.interval.ms</code>·<code>partition.assignment.strategy</code>가 <strong>클라이언트에서 무시</strong>됩니다. 이 설정으로 튜닝하려다 아무 효과를 못 봅니다 (할당자는 <code>group.remote.assignor</code>)</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"KIP-848은 4.0 GA다. 컨슈머 기본값은?" → <strong><code>classic</code></strong>. 시중 자료가 가장 많이 틀리는 지점</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- 프로듀서 10-16                                                  -->
+    <!-- ============================================================== -->
+    <section aria-labelledby="group-producer">
+      <h2 id="group-producer">프로듀서 — 10번부터 16번</h2>
+
+      <h3 id="trap-10">10. <code>acks</code> vs <code>min.insync.replicas</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>소속이 다르고, 한쪽 조건에서만 상호작용합니다</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>acks</code></th><th scope="col"><code>min.insync.replicas</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>응답을 몇 곳에서 받을지. 기본 <strong><code>all</code></strong></td><td>쓰기를 성립시키는 최소 ISR 수. 기본 <strong>1</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td><strong>프로듀서</strong></td><td><strong>브로커 · 토픽</strong></td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>매 전송</td><td><strong><code>acks=all</code>일 때만.</strong> <code>acks=0</code>/<code>1</code>이면 검사되지 않음</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2"><code>min.insync.replicas=2</code>를 걸어도 프로듀서가 <code>acks=1</code>이면 <strong>아무 보호가 없습니다.</strong> 반대로 <code>acks=all</code>이어도 <code>min.insync.replicas=1</code>이면 ISR이 1로 줄었을 때 유실됩니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"RF=3, <code>min.insync.replicas=2</code>일 때 브로커 몇 대까지 죽어도 쓰기가 되는가?" → <strong>1대</strong> (RF − minISR)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-11">11. <code>batch.size</code> vs <code>linger.ms</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>배치 전송을 유발하는 두 조건</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>batch.size</code></th><th scope="col"><code>linger.ms</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>파티션별 배치의 <strong>크기</strong> 상한. 기본 <strong>16384</strong> 바이트</td><td>배치를 더 모으기 위해 <strong>기다리는 시간</strong>. 기본 <strong>5</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>프로듀서</td><td>프로듀서</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td colspan="2"><strong>둘 중 먼저 충족되는 쪽</strong>에 전송됩니다. AND가 아니라 OR입니다</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td><code>batch.size</code>만 올려도 트래픽이 적으면 배치가 안 참</td><td><strong>기본값이 <code>0</code>이라고 외우면 틀립니다.</strong> 4.0에서 <code>0</code>→<code>5</code>로 변경되었습니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"지연을 최소화하려면?" → <code>linger.ms=0</code> 명시. "처리량을 올리려면?" → 둘 다 상향 + 압축</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-12">12. <code>buffer.memory</code> vs <code>max.block.ms</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>버퍼가 가득 찼을 때 무슨 일이 일어나는가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>buffer.memory</code></th><th scope="col"><code>max.block.ms</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>전송 대기 레코드를 담는 전체 메모리. 기본 <strong>33554432</strong>(32MB)</td><td>버퍼·메타데이터 대기의 <strong>블로킹 상한</strong>. 기본 <strong>60000</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>프로듀서</td><td>프로듀서</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>브로커가 느려 배치가 쌓이면 소진됨</td><td>버퍼가 소진되어 <code>send()</code>가 <strong>블로킹될 때부터</strong> 카운트</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">버퍼가 가득 차면 <strong><code>send()</code>가 블로킹</strong>되고, <code>max.block.ms</code>를 넘기면 <code>TimeoutException</code>이 발생합니다. "비동기니까 절대 블로킹되지 않는다"는 오해가 여기서 깨집니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"<code>send()</code>가 블로킹될 수 있는가?" → <strong>예</strong>, 버퍼 고갈과 메타데이터 미확보 시</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-13">13. <code>request.timeout.ms</code> vs <code>delivery.timeout.ms</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>요청 단위 시간과 전체 예산</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>request.timeout.ms</code></th><th scope="col"><code>delivery.timeout.ms</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td><strong>한 번의 요청</strong>에 대한 응답 대기. 기본 <strong>30000</strong></td><td><code>send()</code>부터 성공/실패 확정까지 <strong>전체</strong>. 기본 <strong>120000</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>프로듀서 (컨슈머·Admin에도 동명 설정 존재)</td><td>프로듀서</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>매 요청마다. 초과하면 <strong>재시도 대상</strong></td><td>배치 대기 + 모든 재시도의 합이 이 값을 넘으면 <strong>최종 실패</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2"><code>linger.ms</code> + <code>request.timeout.ms</code> ≤ <code>delivery.timeout.ms</code>가 성립해야 합니다. 어기면 설정 검증에서 걸립니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"전송이 최대 얼마나 걸릴 수 있는가?" → <code>delivery.timeout.ms</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-14">14. <code>retries</code> vs <code>delivery.timeout.ms</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>4.x에서 실질 상한은 무엇인가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>retries</code></th><th scope="col"><code>delivery.timeout.ms</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>재시도 <strong>횟수</strong>. 기본 <strong>2147483647</strong></td><td>재시도에 쓸 수 있는 <strong>시간</strong>. 기본 <strong>120000</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>프로듀서</td><td>프로듀서</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>기본값이 사실상 무한이라 <strong>거의 발동하지 않음</strong></td><td><strong>실질적인 재시도 종료 조건</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2"><code>retries=0</code>으로 두면 중복이 사라진다고 오해합니다. 실제로는 <strong>멱등성이 중복을 막고, <code>retries=0</code>은 유실 위험만 늘립니다</strong>. 멱등성을 켜면 <code>retries&gt;0</code>이 강제됩니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"재시도 동작을 제어하는 4.x 권장 방법은?" → <strong>시간 예산</strong>(<code>delivery.timeout.ms</code>) 조절</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-15">15. retriable 예외 vs non-retriable 예외</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>기준은 <code>RetriableException</code> 상속 여부입니다</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">retriable</th><th scope="col">non-retriable</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">무엇인가</th>
+              <td><code>LeaderNotAvailableException</code>, <code>NotLeaderOrFollowerException</code>,
+                <code>NotEnoughReplicasException</code>, <code>NetworkException</code>,
+                <code>TimeoutException</code>, <code>CoordinatorNotAvailableException</code></td>
+              <td><code>RecordTooLargeException</code>, <code>SerializationException</code>,
+                <code>AuthorizationException</code>, <code>InvalidTopicException</code></td>
+            </tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2">설정이 아니라 <strong>예외 계층</strong>. 프로듀서가 자동 판별</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>클러스터 상태가 일시적으로 나쁠 때</td><td>데이터·설정·권한이 잘못되었을 때</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">non-retriable을 재시도로 해결하려 하면 <strong>영구히 실패하는 레코드가 파티션을 막습니다</strong>. 코드·설정·권한을 고쳐야 합니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">matching 유형(예외 ↔ 원인)의 단골. <code>RecordTooLargeException</code>은 <strong>재시도해도 안 됩니다</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-16">16. 키 있는 메시지 vs 키 없는 메시지</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>파티션 결정 방식과 순서 보장의 근거</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">키 있음</th><th scope="col">키 없음 (<code>null</code>)</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td><code>murmur2(key) % numPartitions</code> — <strong>결정적</strong></td><td>기본 파티셔너의 <strong>sticky batching</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2"><code>ProducerRecord</code>의 key 인자. 파티셔너는 <code>partitioner.class</code>(기본 <code>null</code> = 내장 로직)</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>매 전송 시 해시 계산</td><td>배치가 마감되면 다음 파티션으로 전환</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>파티션 수를 늘리면 <strong>같은 키가 다른 파티션으로 가 순서가 깨집니다</strong></td><td>같은 엔티티의 이벤트가 여러 파티션에 흩어져 <strong>순서 보장이 사라집니다</strong></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"키 없는 메시지는 어떻게 분배되는가?" — 큰 그림은 "여러 파티션에 나눠 담김"이 맞고, 세부는 <strong>레코드 단위 라운드로빈이 아니라 배치 단위 sticky</strong>입니다 (2.4 이전 <code>DefaultPartitioner</code>는 라운드로빈)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- 전달 보장 17-21                                                 -->
+    <!-- ============================================================== -->
+    <section aria-labelledby="group-delivery">
+      <h2 id="group-delivery">전달 보장 — 17번부터 21번</h2>
+
+      <h3 id="trap-17">17. 멱등 프로듀서 vs 트랜잭션</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>둘 다 중복을 다루지만 범위가 다릅니다</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">멱등 프로듀서</th><th scope="col">트랜잭션</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>PID + 파티션별 시퀀스 번호로 <strong>재시도 중복 제거</strong></td><td>여러 파티션·토픽 쓰기와 오프셋 커밋의 <strong>원자성</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>프로듀서 <code>enable.idempotence=true</code> (기본값)</td><td>프로듀서 <code>transactional.id</code> + API 호출. <strong>컨슈머 <code>isolation.level</code>도 필요</strong></td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>재시도로 같은 배치가 다시 도착할 때 브로커가 폐기</td><td><code>commitTransaction()</code> 시점에 일괄 가시화</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">멱등성만으로 EOS가 된다고 오해합니다. 멱등성은 <strong>한 세션 × 한 파티션</strong>만 커버하고, 애플리케이션이 두 번 <code>send()</code>한 것이나 프로듀서 재시작은 막지 못합니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"EOS에 필요한 것을 모두 고르시오" — 멱등성만 고르면 오답</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-18">18. at-least-once vs exactly-once</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>설정 조합과 실제 결과</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">at-least-once (기본 동작)</th><th scope="col">exactly-once</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>유실 없음, <strong>중복 가능</strong></td><td>Kafka 경계 안에서 <strong>정확히 한 번</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>프로듀서 <code>acks=all</code> + 컨슈머 <strong>처리 후 커밋</strong></td><td>프로듀서 <code>transactional.id</code> + 컨슈머 <code>read_committed</code> + <code>sendOffsetsToTransaction</code>. Streams는 <code>processing.guarantee=exactly_once_v2</code></td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>재시도·리밸런스 시 중복이 발생할 수 있음</td><td>트랜잭션 커밋 단위로</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">EOS를 켰다고 <strong>컨슈머 멱등성을 생략</strong>하면, 외부 시스템에는 여전히 중복이 갑니다. 그리고 EOS는 <strong>처리량·지연 비용</strong>이 있습니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"기본 설정에서 얻는 보장은?" → <strong>at-least-once</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-19">19. <code>read_uncommitted</code> vs <code>read_committed</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>isolation.level</code>은 컨슈머 설정입니다</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>read_uncommitted</code> (기본값)</th><th scope="col"><code>read_committed</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>high watermark까지 전부 읽음 (중단된 트랜잭션 포함)</td><td><strong>LSO(Last Stable Offset)</strong>까지, 커밋된 것만</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2"><strong>컨슈머</strong> <code>isolation.level</code>. 프로듀서 설정이 아닙니다</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>항상</td><td>진행 중 트랜잭션이 있으면 <strong>그 뒤에 커밋된 메시지까지 대기</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">프로듀서만 트랜잭션을 쓰고 컨슈머를 기본값으로 두면 <strong>abort된 데이터가 하위 시스템으로 갑니다.</strong> 반대로 <code>read_committed</code>에서 긴 트랜잭션이 열려 있으면 <strong>지연이 폭증</strong>합니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"트랜잭션을 썼는데 취소된 데이터가 들어갔다" → 컨슈머 설정 누락. "컨트롤 레코드는 애플리케이션에 보이는가?" → <strong>아니오</strong>(오프셋은 소비)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-20">20. Kafka 내부 EOS vs 외부 시스템</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>가장 흔한 오해 — 보장의 경계</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">Kafka → Kafka</th><th scope="col">Kafka → 외부 DB · API</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>consume-transform-produce가 <strong>한 트랜잭션</strong></td><td>외부 호출은 <strong>트랜잭션 밖</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>프로듀서·컨슈머·Streams 설정으로 달성</td><td><strong>설정으로 해결 불가.</strong> 애플리케이션 코드가 멱등해야 함</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>커밋 시점에 원자적으로 가시화</td><td>재시도할 때마다 <strong>외부에 다시 호출</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">"EOS를 켰으니 결제가 두 번 되지 않는다"고 믿고 멱등 키를 넣지 않아 <strong>이중 결제</strong>가 발생합니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"Kafka EOS로 막을 수 없는 것은?" → 외부 시스템 중복. 대응은 <strong>멱등 키 · UPSERT · dedup 저장소</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-21">21. high watermark vs LEO vs committed offset</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>세 지점을 섞으면 lag 계산이 전부 틀립니다</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">committed offset</th><th scope="col">high watermark</th><th scope="col">LEO</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>컨슈머 그룹이 커밋한 위치</td><td><strong>ISR 전원이 복제를 마친 상한</strong></td><td>리더가 기록한 마지막 다음 위치</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>설정 아님 — <code>__consumer_offsets</code>에 저장</td><td>설정 아님 — 리더가 ISR 최소 LEO로 계산</td><td>설정 아님 — 로그의 끝</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>커밋할 때 갱신</td><td>ISR 복제가 진행될 때 전진</td><td>리더가 append할 때 전진</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="3"><strong>lag = high watermark − committed offset</strong>입니다. LEO로 계산하면 <strong>아직 복제 중이라 읽을 수도 없는 레코드</strong>를 lag에 포함시켜 과대 계산합니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="3">"컨슈머가 읽을 수 있는 상한은?" → high watermark. HW와 LEO 사이 구간은 <strong>컨슈머에게 보이지 않습니다</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- 크기·스토리지 22-26                                             -->
+    <!-- ============================================================== -->
+    <section aria-labelledby="group-storage">
+      <h2 id="group-storage">크기와 스토리지 — 22번부터 26번</h2>
+
+      <h3 id="trap-22">22. <code>max.request.size</code> vs <code>message.max.bytes</code> vs <code>fetch.max.bytes</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>이름이 비슷하고 소속이 전부 다릅니다</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>max.request.size</code></th><th scope="col"><code>message.max.bytes</code></th><th scope="col"><code>fetch.max.bytes</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>프로듀서 요청 크기 상한. <strong>1048576</strong></td><td>브로커가 허용하는 배치 크기. <strong>1048588</strong></td><td>컨슈머 fetch 응답 상한. <strong>52428800</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td><strong>프로듀서</strong></td><td><strong>브로커</strong> (토픽은 <code>max.message.bytes</code>)</td><td><strong>컨슈머</strong></td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>전송 직전, <strong>클라이언트에서</strong></td><td>브로커가 배치를 받을 때 (<strong>압축 후</strong> 기준)</td><td>fetch 요청 크기 산정 시</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="3">큰 메시지를 허용하려면 <strong>4곳을 모두</strong> 올려야 합니다 — 토픽 <code>max.message.bytes</code>, 프로듀서 <code>max.request.size</code>, 컨슈머 <code>max.partition.fetch.bytes</code>, 브로커 <code>replica.fetch.max.bytes</code>. 마지막을 빼먹으면 쓰기는 되지만 <strong>복제가 실패해 ISR이 줄어듭니다</strong></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="3">matching(설정↔소속)과 "1.5MB를 보내려면 무엇을 바꿔야 하는가(모두 고르시오)". <strong>1048576과 1048588의 12바이트 차이</strong>도 출제 대상</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-23">23. retention vs compaction (<code>cleanup.policy</code>)</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>무엇이 남는가가 다릅니다</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>delete</code> (기본값)</th><th scope="col"><code>compact</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>기간·크기를 넘긴 <strong>세그먼트를 삭제</strong></td><td>키별 <strong>최신 값만 유지</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2">토픽 <code>cleanup.policy</code> (브로커 기본값도 존재). <code>compact,delete</code> 조합 가능</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td><code>retention.ms</code>/<code>retention.bytes</code> 초과 + <strong>세그먼트 마감</strong> 후</td><td>dirty ratio가 <code>min.cleanable.dirty.ratio</code>(0.5)를 넘으면 백그라운드 클리너가. <strong>활성 세그먼트는 제외</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>상태 토픽에 <code>delete</code>가 남아 <strong>상태가 사라집니다</strong></td><td>이벤트 토픽에 <code>compact</code>를 걸어 <strong>이력이 사라집니다.</strong> 그리고 <strong>키가 없으면 컴팩션이 동작하지 않습니다</strong></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"컴팩션 토픽인데 같은 키의 옛 값이 보인다" → 활성 세그먼트 + 백그라운드 동작. "즉시 하나만 남는다"는 <strong>오답</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-24">24. <code>retention.ms</code> vs <code>segment.ms</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>보관 기간을 줄였는데 디스크가 안 줄어드는 이유</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>retention.ms</code></th><th scope="col"><code>segment.ms</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>보관 기간. 기본 <strong>604800000</strong>(7일)</td><td>세그먼트를 마감하는 주기. 기본 <strong>604800000</strong>(7일)</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>토픽</td><td>토픽 (<code>segment.bytes</code>는 1GiB)</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td><strong>마감된 세그먼트</strong>에 대해서만 판정</td><td>이 시간이 지나면 활성 세그먼트를 닫고 새로 만듦</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2"><code>retention.ms=3600000</code>(1시간)으로 줄여도 <code>segment.ms</code>가 7일이면 <strong>최대 7일치가 남습니다.</strong> 삭제 단위가 세그먼트이기 때문입니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"짧은 보관을 실제로 적용하려면?" → <code>segment.ms</code>(또는 <code>segment.bytes</code>)도 함께 줄여야 합니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-25">25. <code>retention.ms</code> vs <code>delete.retention.ms</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>둘 다 "retention"이지만 대상이 다릅니다</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>retention.ms</code></th><th scope="col"><code>delete.retention.ms</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>일반 레코드의 보관 기간. <strong>604800000</strong></td><td><strong>tombstone(value=null)</strong>의 보관 기간. <strong>86400000</strong>(1일)</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>토픽 (<code>cleanup.policy=delete</code>에서 의미)</td><td>토픽 (<code>cleanup.policy=compact</code>에서 의미)</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>세그먼트 마감 후 기간 초과 시</td><td>컴팩션이 tombstone을 만난 뒤 이 시간이 지나면 <strong>tombstone도 제거</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">tombstone이 너무 빨리 사라지면, <strong>오래 멈췄던 컨슈머가 삭제 사실을 보지 못하고</strong> 옛 값을 계속 유지합니다 (삭제가 하위로 전파되지 않음)</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"컴팩션 토픽에서 삭제가 반영되지 않은 컨슈머가 있다" → tombstone 수명 문제</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-26">26. 컨슈머 그룹 vs Share Group (KIP-932)</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>4.2에서 production-ready가 된 새 그룹 종류</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">컨슈머 그룹</th><th scope="col">Share Group (Queues)</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>파티션을 <strong>배타적으로</strong> 나눠 소비</td><td>한 파티션을 <strong>여러 컨슈머가 함께</strong> 소비</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>컨슈머 <code>group.id</code> + <code>subscribe()</code></td><td>share consumer API (별도 그룹 종류)</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>컨슈머 수 ≤ 파티션 수까지만 병렬성 증가</td><td><strong>컨슈머 수가 파티션 수를 넘어도</strong> 병렬 처리</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">Share Group은 <strong>레코드 단위 ack</strong>(ACCEPT / RELEASE / REJECT)과 전달 시도 카운트를 쓰며, <strong>파티션 단위 순서 보장을 제공하지 않습니다.</strong> 순서가 필요한 스트림을 Share Group으로 옮기면 순서가 깨집니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"처리 시간 편차가 큰 작업 큐에 적합한 것은?" → Share Group. 버전 사실: <strong>4.1 preview → 4.2 production-ready</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- 스키마 27-29                                                    -->
+    <!-- ============================================================== -->
+    <section aria-labelledby="group-schema">
+      <h2 id="group-schema">스키마 — 27번부터 29번</h2>
+
+      <h3 id="trap-27">27. BACKWARD vs FORWARD 호환성 (배포 순서)</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>어느 쪽을 먼저 배포하는가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">BACKWARD (기본값)</th><th scope="col">FORWARD</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>새 스키마로 <strong>옛 데이터</strong>를 읽을 수 있다</td><td>옛 스키마로 <strong>새 데이터</strong>를 읽을 수 있다</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2">Schema Registry의 <strong>subject 단위 호환성 설정</strong> (전역 기본값도 존재)</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>새 스키마 등록 시 검사</td><td>새 스키마 등록 시 검사</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td><strong>컨슈머 먼저</strong> 배포. 순서를 뒤바꾸면 컨슈머가 모르는 스키마를 받아 <strong>전량 실패</strong></td><td><strong>프로듀서 먼저</strong> 배포</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"BACKWARD에서 필드를 추가하려면?" → <strong><code>default</code>가 있어야</strong> 허용. FORWARD는 default 없는 필드 추가도 허용, 대신 <strong>default 없는 필드 삭제는 거부</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-28">28. TRANSITIVE vs 비-TRANSITIVE</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>차이는 비교 대상 하나뿐입니다</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">BACKWARD / FORWARD / FULL</th><th scope="col">*_TRANSITIVE</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td><strong>직전 버전</strong>과만 대조</td><td><strong>등록된 모든 이전 버전</strong>과 대조</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2">Schema Registry subject 호환성 설정</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>v3 등록 시 v2만 검사</td><td>v3 등록 시 v2, v1 모두 검사</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">비-TRANSITIVE에서 v1→v2→v3로 조금씩 바꾸면 <strong>v1과 v3가 호환되지 않을 수 있습니다.</strong> 오래된 데이터를 재처리할 때 터집니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"v1 데이터를 v3 컨슈머로 재처리해야 한다. 어느 모드가 필요한가?" → <code>BACKWARD_TRANSITIVE</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-29">29. TopicNameStrategy vs RecordNameStrategy</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>subject 이름을 무엇으로 만드는가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">TopicNameStrategy (기본값)</th><th scope="col">RecordNameStrategy</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>subject = <code>{topic}-key</code> / <code>{topic}-value</code></td><td>subject = <strong>레코드 풀네임</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2">직렬화기 설정 (<code>key.subject.name.strategy</code> / <code>value.subject.name.strategy</code>)</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>스키마 등록·조회 시 subject 계산</td><td>같음</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>한 토픽에 <strong>여러 종류의 레코드</strong>를 넣으면 호환성 검사가 매번 실패합니다</td><td>같은 레코드 타입이 <strong>토픽을 넘어 스키마를 공유</strong>하므로, 한 토픽만 바꾸려 해도 전체가 영향받습니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"한 토픽에 여러 이벤트 타입을 담으려면?" → RecordName 또는 TopicRecordName 전략. 절충안이 <strong>TopicRecordNameStrategy</strong>(<code>{topic}-{레코드 풀네임}</code>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- Connect 30-33                                                   -->
+    <!-- ============================================================== -->
+    <section aria-labelledby="group-connect">
+      <h2 id="group-connect">Kafka Connect — 30번부터 33번</h2>
+
+      <h3 id="trap-30">30. source 커넥터 vs sink 커넥터의 오프셋 저장 위치</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Connect 도메인 최다 출제 사실</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">Source</th><th scope="col">Sink</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>외부 시스템 → Kafka. <strong>소스 시스템의 위치</strong>를 기록</td><td>Kafka → 외부 시스템. <strong>Kafka 컨슈머 오프셋</strong>을 기록</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>워커 <code>offset.storage.topic</code> (standalone은 <code>offset.storage.file.filename</code>)</td><td><strong><code>__consumer_offsets</code></strong> — 일반 컨슈머와 동일. 그룹 이름은 <code>connect-{커넥터 이름}</code></td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td colspan="2"><code>offset.flush.interval.ms</code> 기본 <strong>60000</strong>(1분)마다</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">복구 시 <strong>엉뚱한 곳을 초기화</strong>해 전량 재수집 또는 재적재가 일어납니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">matching(커넥터 종류 ↔ 저장 위치). "sink 커넥터의 lag을 보는 명령은?" → <code>kafka-consumer-groups --describe --group connect-{name}</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-31">31. standalone vs distributed Connect</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>설정을 어떻게 전달하고 상태를 어디에 두는가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">standalone</th><th scope="col">distributed</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>단일 프로세스, 로컬 상태</td><td>워커 클러스터, Kafka 토픽에 상태 저장</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>워커 properties + <strong>커넥터 properties 파일</strong></td><td>워커 properties + <strong>REST API</strong>. <code>group.id</code>가 클러스터 이름</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>기동 시 커넥터가 즉시 시작</td><td>REST로 등록할 때 시작. 워커 변경 시 태스크 재분배</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">distributed에 커넥터 properties를 커맨드라인으로 주면 <strong>무시</strong>됩니다. standalone은 프로세스가 죽으면 <strong>오프셋 파일 외에 모든 상태가 사라집니다</strong></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"워커를 재시작하니 커넥터가 사라졌다" → standalone. 내부 토픽 3종은 모두 <strong><code>cleanup.policy=compact</code></strong>이고 <code>config.storage.topic</code>은 <strong>파티션 1개</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-32">32. SMT vs Kafka Streams</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>어디까지 SMT로 할 것인가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">SMT (Single Message Transform)</th><th scope="col">Kafka Streams</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>레코드 <strong>1건</strong> 단위의 stateless 변환</td><td>상태를 갖는 스트림 처리 애플리케이션</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>커넥터 설정 <code>transforms=…</code> (체인, <strong>순서가 결과를 바꿈</strong>)</td><td>별도 애플리케이션 코드</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>source는 converter <strong>앞</strong>, sink는 converter <strong>뒤</strong></td><td>토폴로지 실행 시</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">SMT로 집계·조인을 하려다 막힙니다 — <strong>stateless라서 불가능</strong>합니다. 반대로 필드 하나 바꾸려고 Streams 앱을 띄우는 것은 과잉입니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"두 토픽을 조인해 적재하려면?" → Streams(또는 ksqlDB). 대표 SMT: <code>InsertField</code>, <code>MaskField</code>, <code>ValueToKey</code>, <code>RegexRouter</code>, <code>Cast</code>, <code>TimestampConverter</code>, <code>Filter</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-33">33. <code>errors.tolerance</code> vs <code>errors.retry.timeout</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>건너뛰는 것과 다시 시도하는 것</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>errors.tolerance</code></th><th scope="col"><code>errors.retry.timeout</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>실패 레코드를 건너뛸지 여부. 기본 <strong><code>none</code></strong></td><td>재시도에 쓸 시간 예산. 기본 <strong><code>0</code></strong>(재시도 없음), <code>-1</code>은 무한</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2">커넥터 설정</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>변환·컨버터·sink 쓰기 실패 시</td><td>재시도 가능한 실패 시 (지수 백오프, 상한은 <code>errors.retry.delay.max.ms</code> 60000)</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2"><code>all</code>만 켜면 일시 장애로도 <strong>데이터가 조용히 버려집니다.</strong> DLQ는 <strong>세 조건</strong>이 필요합니다 — <code>errors.tolerance=all</code> + <code>errors.deadletterqueue.topic.name</code> 지정 + <strong>sink 커넥터</strong>. <code>errors.deadletterqueue.context.headers.enable=true</code>가 없으면 원인 헤더가 없습니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"일시 장애는 재시도, 영구 불량은 격리하려면?" → 둘을 함께 설정 + <code>total-records-skipped</code> 알림</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- Streams 34-38                                                   -->
+    <!-- ============================================================== -->
+    <section aria-labelledby="group-streams">
+      <h2 id="group-streams">Kafka Streams — 34번부터 38번</h2>
+
+      <h3 id="trap-34">34. KStream vs KTable</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>같은 토픽을 어떻게 해석하는가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">KStream</th><th scope="col">KTable</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>레코드 스트림 — <strong>append-only 사실의 연속</strong></td><td>changelog 스트림 — <strong>키별 최신 상태(upsert)</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td><code>builder.stream("topic")</code></td><td><code>builder.table("topic")</code></td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>같은 키가 또 오면 <strong>별개 이벤트</strong></td><td>같은 키가 또 오면 <strong>갱신</strong>, value=null이면 <strong>삭제</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>상태를 스트림으로 읽어 <strong>중복 집계</strong></td><td>이벤트를 테이블로 읽어 <strong>이벤트 유실</strong> (합계가 실제보다 작아짐)</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">판단 기준: <strong>"같은 키가 반복될 때 두 값이 모두 의미가 있는가"</strong>. 결제·클릭·센서 = KStream, 프로필·재고·잔액 = KTable</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-35">35. KTable vs GlobalKTable</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>분산인가 전체 복제인가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">KTable</th><th scope="col">GlobalKTable</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>파티션 단위로 <strong>인스턴스에 분산</strong>된 테이블</td><td>모든 인스턴스가 <strong>전체 사본</strong>을 가진 테이블</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td><code>builder.table(...)</code></td><td><code>builder.globalTable(...)</code></td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>조인 시 <strong>co-partitioning 필요</strong></td><td>조인 시 <strong>co-partitioning 불필요.</strong> <code>KeyValueMapper</code>로 키가 아닌 값으로도 조인 가능</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">큰 테이블을 GlobalKTable로 만들면 <strong>인스턴스마다 전체를 적재</strong>해 메모리와 시작 시간이 폭증합니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"파티션 수가 다른 참조 데이터와 조인하려면?" → GlobalKTable. 적합한 데이터는 <strong>작고 자주 안 바뀌는 마스터</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-36">36. <code>map</code> vs <code>mapValues</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Streams에서 가장 자주 나오는 쌍</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>map</code></th><th scope="col"><code>mapValues</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>키와 값을 모두 바꿀 수 있는 stateless 변환</td><td><strong>값만</strong> 바꾸는 stateless 변환</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2">Streams DSL 토폴로지 코드</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>키가 바뀔 수 있으므로 스트림을 <strong>"리파티션 필요"로 표시.</strong> 실제 리파티션 토픽은 뒤에 키 기반 연산(집계·조인)이 올 때 생성</td><td>표시하지 않음 → <strong>리파티션 없음</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">값만 바꾸면 되는데 <code>map</code>을 쓰면 불필요한 리파티션 토픽이 생겨 <strong>네트워크·디스크·지연이 증가</strong>합니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"리파티션을 유발하는 연산을 모두 고르시오" → <code>map</code>, <code>flatMap</code>, <code>selectKey</code>, <code>groupBy</code>, <code>repartition</code>. <strong><code>mapValues</code>·<code>flatMapValues</code>·<code>filter</code>·<code>groupByKey</code>는 아닙니다</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-37">37. tumbling vs hopping vs sliding vs session 윈도우</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>겹치는가, 크기가 고정인가</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">Tumbling</th><th scope="col">Hopping</th><th scope="col">Sliding</th><th scope="col">Session</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>고정 크기, 겹치지 않음</td><td>고정 크기, <strong>advance 간격으로 겹침</strong></td><td>레코드 기준 고정 간격 구간</td><td><strong>비활성 gap</strong>으로 구분, 크기 가변</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td><code>TimeWindows.ofSizeWithNoGrace</code></td><td><code>TimeWindows…advanceBy(…)</code></td><td><code>SlidingWindows.ofTimeDifferenceAndGrace</code></td><td><code>SessionWindows.ofInactivityGap…</code></td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>한 레코드가 <strong>1개</strong> 윈도우에</td><td>한 레코드가 <strong>size÷advance 개</strong> 윈도우에</td><td>데이터가 있는 구간만</td><td>gap 안에 이벤트가 오면 세션이 계속 늘어나고, <strong>세션 병합</strong>도 일어남</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="4">Hopping을 Tumbling으로 착각하면 집계가 <strong>중복 계산</strong>됩니다. <code>…WithNoGrace</code>를 쓰면 <strong>지연 도착 레코드가 버려집니다</strong></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="4">"10분 크기, 5분 advance면 한 레코드는 몇 개 윈도우에?" → <strong>2개</strong>. "사용자 활동 구간을 묶으려면?" → session</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-38">38. co-partitioning vs <code>repartition()</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>요구사항과 그것을 만족시키는 수단</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">co-partitioning</th><th scope="col"><code>repartition()</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>조인의 <strong>전제 조건</strong> — ① 키 동일 ② <strong>파티션 수 동일</strong> ③ 파티셔너 동일</td><td>키 기준으로 <strong>다시 분배하는 연산</strong> (리파티션 토픽 생성)</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>토픽 설계 · 프로듀서 <code>partitioner.class</code> · <code>StreamPartitioner</code></td><td>토폴로지 코드</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>런타임 파티션 할당 단계에서 <strong>파티션 수만 검증</strong></td><td>호출 즉시</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">파티션 수가 다르면 <strong><code>TopologyBuilderException</code></strong>이 나지만, <strong>파티셔너가 다른 것은 감지되지 않아 조인이 조용히 누락</strong>됩니다. KStream-GlobalKTable 조인과 KTable-KTable <strong>외래키 조인</strong>은 co-partitioning이 필요하지 않습니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"파티션 3개와 6개 토픽을 조인하려면?" → <strong>적은 쪽을 6으로</strong> 리파티션. KStream-KTable이면 <strong>KStream을 리파티션</strong>하는 편이 낫습니다(KTable은 상태 저장소가 하나 더 생김)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- 보안 39-40                                                      -->
+    <!-- ============================================================== -->
+    <section aria-labelledby="group-security">
+      <h2 id="group-security">보안 — 39번과 40번</h2>
+
+      <h3 id="trap-39">39. <code>SASL_PLAINTEXT</code> vs <code>SASL_SSL</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>이름의 <em>PLAINTEXT</em>는 전송 계층을 가리킵니다</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col"><code>SASL_PLAINTEXT</code></th><th scope="col"><code>SASL_SSL</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>SASL 인증 + <strong>암호화 없음</strong></td><td>SASL 인증 + <strong>TLS 암호화</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td colspan="2">클라이언트 <code>security.protocol</code> · 브로커 <code>listeners</code> / <code>listener.security.protocol.map</code></td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td colspan="2">연결 수립 시. 나머지 두 값은 <code>PLAINTEXT</code>(둘 다 없음)와 <code>SSL</code>(암호화 + 선택적 mTLS 인증)</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">SASL 메커니즘 이름 <code>PLAIN</code>과 헷갈려 <strong>비밀번호를 평문으로 네트워크에 흘립니다.</strong> <code>SASL_PLAINTEXT</code> + <code>PLAIN</code> 조합이 가장 위험합니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"프로덕션에서 인증과 암호화를 모두 원하면?" → <strong><code>SASL_SSL</code></strong>. SASL 메커니즘: <code>PLAIN</code>, <code>SCRAM-SHA-256/512</code>, <code>GSSAPI</code>, <code>OAUTHBEARER</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-40">40. 인증(authentication) vs 인가(authorization / ACL)</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>"누구인가"와 "무엇을 할 수 있는가"</caption>
+          <thead>
+            <tr><th scope="col">축</th><th scope="col">인증 (authentication)</th><th scope="col">인가 (authorization / ACL)</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>연결한 주체가 <strong>누구인지</strong> 확인</td><td>그 주체가 <strong>무엇을 할 수 있는지</strong> 결정</td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>브로커 <code>listeners</code> · <code>sasl.mechanism</code> · SSL 설정 / 클라이언트 <code>security.protocol</code></td><td>브로커 authorizer 설정 + <strong><code>kafka-acls</code></strong>로 부여하는 ACL. <code>super.users</code>는 우회</td></tr>
+            <tr><th scope="row">언제 발동하는가</th><td>연결 수립 시</td><td><strong>매 요청마다</strong> (읽기·쓰기·토픽 생성·그룹 참여 각각)</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">인증만 설정하고 ACL을 빠뜨리면 <strong><code>TopicAuthorizationException</code></strong>이 발생합니다. 반대로 인증 없이 ACL만 걸면 주체를 특정할 수 없어 의미가 없습니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"로그인은 되는데 읽기가 거부된다" → <strong>인가(ACL) 문제.</strong> 컨슈머는 <strong>Topic Read + Group Read</strong> 두 ACL이 모두 필요합니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- 오답 유도 패턴 분석                                              -->
+    <!-- ============================================================== -->
+    <section aria-labelledby="distractor-analysis">
+      <h2 id="distractor-analysis">오답 유도 패턴 분석</h2>
+
+      <p>
+        위 40쌍은 <strong>지식</strong>입니다. 이 절은 <strong>기술</strong>입니다 —
+        내용을 모르는 상태에서도 선택지의 <strong>형태</strong>만 보고 함정을 배제하는 방법입니다.
+        <a href="exam-tips.html#distractor-patterns">시험 당일 전략</a>의 요약판을 여기서 확장합니다.
+      </p>
+
+      <h3 id="pattern-absolute">패턴 1 — 절대적 표현이 들어간 선택지</h3>
+      <p>
+        <strong>"항상", "절대", "모든 경우에", "무조건", "완전히 보장한다", "결코 ~하지 않는다"</strong>가
+        들어간 선택지는 <strong>대개 오답</strong>입니다.
+        Kafka에는 조건 없는 보장이 거의 없기 때문입니다.
+      </p>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>절대적 표현이 붙은 오답 예시와 실제 조건</caption>
+          <thead>
+            <tr><th scope="col">함정 선택지</th><th scope="col">빠진 조건</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">"<code>acks=all</code>이면 <strong>절대</strong> 유실되지 않는다"</th><td><code>min.insync.replicas</code>가 1이면 ISR이 1로 줄었을 때 유실됩니다</td></tr>
+            <tr><th scope="row">"Kafka는 <strong>항상</strong> 순서를 보장한다"</th><td>순서 보장은 <strong>파티션 단위</strong>이며 키가 있어야 합니다</td></tr>
+            <tr><th scope="row">"EOS를 켜면 <strong>모든</strong> 중복이 사라진다"</th><td>Kafka 경계 안에서만. 외부 시스템은 별개입니다</td></tr>
+            <tr><th scope="row">"컴팩션 토픽에는 키당 레코드가 <strong>항상</strong> 하나다"</th><td>활성 세그먼트 제외 + 백그라운드 동작이므로 옛 값이 남습니다</td></tr>
+            <tr><th scope="row">"파티션을 늘리면 <strong>무조건</strong> 빨라진다"</th><td>컨슈머 수·파일 핸들·리밸런스 비용·키 분포가 함께 작용합니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <aside class="note note--warn" data-label="예외 — 단정이 정답인 경우">
+        <p>
+          <strong>범위를 한정하는 단정</strong>은 정답일 수 있습니다.
+          "오프셋은 <strong>파티션 안에서만</strong> 의미가 있다",
+          "파티션 수는 <strong>줄일 수 없다</strong>",
+          "<code>assign()</code>과 <code>subscribe()</code>를 함께 쓰면 <strong>예외가 발생한다</strong>" —
+          이들은 사실입니다. 단정 자체가 아니라
+          <strong>"조건을 지운 단정"</strong>이 함정 신호입니다.
+        </p>
+      </aside>
+
+      <h3 id="pattern-ownership">패턴 2 — 설정의 소속을 바꿔치기</h3>
+      <p>
+        <strong>이 사이트 전체에서 가장 강조하는 패턴입니다.</strong>
+        설정 이름은 정확한데 소속만 틀려 놓습니다. 아는 이름이 나오면 안심하게 되므로 잘 걸립니다.
+      </p>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>소속 바꿔치기 사전 — 왼쪽이 진짜입니다</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">진짜 소속</th><th scope="col">함정으로 붙이는 소속</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>acks</code></th><td>프로듀서</td><td>브로커 · 토픽</td></tr>
+            <tr><th scope="row"><code>min.insync.replicas</code></th><td>브로커 · 토픽</td><td>프로듀서</td></tr>
+            <tr><th scope="row"><code>isolation.level</code></th><td><strong>컨슈머</strong></td><td>프로듀서 · 브로커</td></tr>
+            <tr><th scope="row"><code>transactional.id</code></th><td>프로듀서</td><td>컨슈머</td></tr>
+            <tr><th scope="row"><code>max.request.size</code></th><td>프로듀서</td><td>브로커</td></tr>
+            <tr><th scope="row"><code>message.max.bytes</code></th><td>브로커</td><td>프로듀서</td></tr>
+            <tr><th scope="row"><code>max.message.bytes</code></th><td>토픽</td><td>프로듀서</td></tr>
+            <tr><th scope="row"><code>fetch.max.bytes</code> · <code>max.partition.fetch.bytes</code></th><td>컨슈머</td><td>브로커</td></tr>
+            <tr><th scope="row"><code>replica.fetch.max.bytes</code></th><td>브로커</td><td>컨슈머</td></tr>
+            <tr><th scope="row"><code>cleanup.policy</code> · <code>retention.ms</code></th><td>토픽</td><td>컨슈머</td></tr>
+            <tr><th scope="row"><code>max.poll.interval.ms</code> · <code>max.poll.records</code></th><td>컨슈머</td><td>브로커</td></tr>
+            <tr><th scope="row"><code>offsets.retention.minutes</code></th><td>브로커</td><td>컨슈머</td></tr>
+            <tr><th scope="row"><code>errors.tolerance</code> · DLQ 설정</th><td>Connect 커넥터 (<strong>sink 전용</strong>)</td><td>브로커 · source 커넥터</td></tr>
+            <tr><th scope="row"><code>processing.guarantee</code></th><td>Kafka Streams</td><td>프로듀서</td></tr>
+            <tr><th scope="row"><code>transaction.state.log.min.isr</code></th><td>브로커</td><td>Streams · 프로듀서</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="pattern-default">패턴 3 — 기본값을 미묘하게 변형</h3>
+      <p>
+        <strong>3.x 기준 값</strong>이거나 <strong>몇 바이트만 다른 값</strong>을 섞습니다.
+        시중 자료 대부분이 3.x 기준이라 이 함정이 특히 잘 통합니다.
+      </p>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>4.3 실제 값과 함정 값</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">4.3 실제</th><th scope="col">함정으로 나오는 값</th><th scope="col">함정의 출처</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>linger.ms</code></th><td><strong>5</strong></td><td><code>0</code></td><td>3.x 기본값</td></tr>
+            <tr><th scope="row"><code>acks</code></th><td><code>all</code></td><td><code>1</code></td><td>2.x 기본값</td></tr>
+            <tr><th scope="row"><code>enable.idempotence</code></th><td><code>true</code></td><td><code>false</code></td><td>2.x 기본값</td></tr>
+            <tr><th scope="row"><code>session.timeout.ms</code></th><td><strong>45000</strong></td><td><code>10000</code></td><td>예전 기본값</td></tr>
+            <tr><th scope="row"><code>group.protocol</code></th><td><strong><code>classic</code></strong></td><td><code>consumer</code></td><td>"KIP-848이 GA니까"라는 오추론</td></tr>
+            <tr><th scope="row"><code>message.max.bytes</code></th><td><strong>1048588</strong></td><td><code>1048576</code></td><td>"1MB"로 반올림</td></tr>
+            <tr><th scope="row"><code>isolation.level</code></th><td><code>read_uncommitted</code></td><td><code>read_committed</code></td><td>"트랜잭션이 기본이니까"라는 오추론</td></tr>
+            <tr><th scope="row"><code>processing.guarantee</code></th><td><code>at_least_once</code></td><td><code>exactly_once_v2</code></td><td>같은 오추론</td></tr>
+            <tr><th scope="row"><code>num.stream.threads</code></th><td><strong>1</strong></td><td>CPU 코어 수</td><td>"당연히 코어만큼"이라는 추측</td></tr>
+            <tr><th scope="row"><code>num.standby.replicas</code></th><td><strong>0</strong></td><td><code>1</code></td><td>"기본적으로 대비되어 있겠지"</td></tr>
+            <tr><th scope="row"><code>errors.retry.timeout</code></th><td><strong>0</strong></td><td>양수</td><td>"재시도가 기본이겠지"</td></tr>
+            <tr><th scope="row"><code>unclean.leader.election.enable</code></th><td><code>false</code></td><td><code>true</code></td><td>아주 오래된 기본값</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="pattern-true-but-irrelevant">패턴 4 — 사실이지만 질문에 답하지 않는 선택지</h3>
+      <p>
+        "가장 적절한(BEST/MOST appropriate)"류 문항에 주로 나옵니다.
+        선택지 문장 자체는 옳아서 지우기 어렵습니다.
+        <strong>질문의 목적어를 다시 읽는 것</strong>이 해법입니다.
+      </p>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>예시</caption>
+          <thead>
+            <tr><th scope="col">질문</th><th scope="col">"옳지만 답이 아닌" 선택지</th><th scope="col">정답 방향</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">"같은 주문의 상태 변화 순서를 보장하려면?"</th>
+              <td>"<code>acks=all</code>과 멱등성을 켠다" (내구성·중복에 대한 사실)</td>
+              <td><strong>주문 ID를 키로 지정</strong>한다</td>
+            </tr>
+            <tr>
+              <th scope="row">"컨슈머가 계속 그룹에서 빠진다. 1차 처방은?"</th>
+              <td>"<code>session.timeout.ms</code>를 올린다" (하트비트 축의 사실)</td>
+              <td><strong><code>max.poll.records</code>를 줄인다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">"sink 커넥터의 처리량을 올리려면?"</th>
+              <td>"워커를 추가한다" (확장 방법 중 하나)</td>
+              <td><strong><code>tasks.max</code>와 입력 파티션 수</strong>를 먼저 본다</td>
+            </tr>
+            <tr>
+              <th scope="row">"값만 변환하는데 리파티션을 피하려면?"</th>
+              <td>"<code>topology.optimization=all</code>로 켠다" (도움은 됨)</td>
+              <td><strong><code>mapValues</code>를 쓴다</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="pattern-overkill">패턴 5 — 과잉 조치 선택지</h3>
+      <p>
+        증상은 사라지지만 <strong>데이터 유실이나 큰 부작용</strong>이 따르는 선택지입니다.
+        시험은 대체로 <strong>최소 변경으로 원인을 제거하는 답</strong>을 정답으로 둡니다.
+      </p>
+      <ul>
+        <li><strong>"토픽을 삭제하고 다시 만든다"</strong> — 데이터 전량 유실. 거의 항상 오답</li>
+        <li><strong>"커넥터를 지우고 재생성한다"</strong> — 오프셋이 초기화되어 재적재 위험. 409는 <strong>기다리면</strong> 됩니다</li>
+        <li><strong>"<code>unclean.leader.election.enable=true</code>로 켠다"</strong> — 가용성을 얻고 <strong>데이터를 잃습니다</strong></li>
+        <li><strong>"<code>errors.tolerance=all</code>로 두고 넘어간다"</strong> — DLQ와 skipped 알림 없이는 <strong>조용한 유실</strong></li>
+        <li><strong>"<code>max.poll.interval.ms</code>를 아주 크게 올린다"</strong> — 진짜로 죽은 컨슈머를 감지하지 못하게 됩니다</li>
+        <li><strong>"<code>retries=0</code>으로 중복을 막는다"</strong> — 중복은 멱등성이 막고, 이건 <strong>유실만 늘립니다</strong></li>
+      </ul>
+
+      <h3 id="pattern-scope">패턴 6 — 보장의 경계나 동작 시점을 넓혀 놓은 선택지</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>"어디까지"와 "언제"를 확인하면 걸러집니다</caption>
+          <thead>
+            <tr><th scope="col">함정 선택지</th><th scope="col">실제 경계</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">"EOS를 켜면 외부 DB 중복도 막힌다"</th><td>Kafka 토픽 경계 안에서만</td></tr>
+            <tr><th scope="row">"멱등 프로듀서는 애플리케이션의 이중 <code>send()</code>도 걸러낸다"</th><td>재시도 중복만. 서로 다른 레코드로 봅니다</td></tr>
+            <tr><th scope="row">"컴팩션은 중복을 즉시 제거한다"</th><td>백그라운드 + dirty ratio 조건 + 활성 세그먼트 제외</td></tr>
+            <tr><th scope="row">"<code>cleanup.policy</code>를 바꾸면 이미 지워진 데이터가 돌아온다"</th><td>돌아오지 않습니다</td></tr>
+            <tr><th scope="row">"<code>tasks.max</code>를 올리면 항상 빨라진다"</th><td>sink는 입력 파티션 수가, source는 커넥터 구현이 상한</td></tr>
+            <tr><th scope="row">"오프셋은 토픽 전체에서 유일하다"</th><td>파티션 안에서만 의미가 있습니다</td></tr>
+            <tr><th scope="row">"<code>auto.offset.reset</code>은 재시작할 때마다 적용된다"</th><td>커밋 오프셋이 <strong>없거나 범위를 벗어났을 때만</strong></td></tr>
+            <tr><th scope="row">"<code>records-lag-max</code>가 0이면 안전하다"</th><td>컨슈머가 죽으면 메트릭이 <strong>사라져</strong> 0처럼 보입니다</td></tr>
+            <tr><th scope="row">"<code>TopologyTestDriver</code>로 리밸런스도 테스트할 수 있다"</th><td>브로커가 없으므로 불가</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="pattern-version">패턴 7 — 버전에 따라 답이 달라지는 문항 식별법</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>선택지 조합으로 버전 문항을 알아채는 방법</caption>
+          <thead>
+            <tr><th scope="col">선택지에 함께 등장하면</th><th scope="col">묻는 것</th><th scope="col">4.3 기준 정답</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>0</code>과 <code>5</code></th><td><code>linger.ms</code>의 버전 차이</td><td><strong>5</strong></td></tr>
+            <tr><th scope="row"><code>1</code>과 <code>all</code></th><td><code>acks</code>의 버전 차이</td><td><strong><code>all</code></strong></td></tr>
+            <tr><th scope="row"><code>10000</code>과 <code>45000</code></th><td><code>session.timeout.ms</code></td><td><strong>45000</strong></td></tr>
+            <tr><th scope="row">ZooKeeper와 KRaft</th><td>메타데이터 저장소</td><td><strong>KRaft 전용</strong> (ZK는 4.0에서 제거)</td></tr>
+            <tr><th scope="row"><code>--zookeeper</code>와 <code>--bootstrap-server</code></th><td>CLI 옵션</td><td><strong><code>--bootstrap-server</code></strong> (<code>--zookeeper</code>는 없는 옵션)</td></tr>
+            <tr><th scope="row"><code>exactly_once</code>와 <code>exactly_once_v2</code></th><td>Streams 보장 값</td><td><strong><code>exactly_once_v2</code></strong></td></tr>
+            <tr><th scope="row">"2.13"이 Kafka 버전으로 서술</th><td>버전 표기 이해</td><td><strong>오답</strong> — 2.13은 <a href="../basics/appendix-legacy.html">Scala 버전</a>입니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <aside class="note note--exam" data-label="정리 — 4.x에서 바뀐 것만 따로 외우세요">
+        <p>
+          버전 함정의 대부분은 다섯 항목에서 나옵니다.
+          <strong><code>linger.ms</code> 0→5</strong>,
+          <strong><code>acks</code> 1→all</strong>,
+          <strong><code>enable.idempotence</code> false→true</strong>,
+          <strong>ZooKeeper 제거(4.0)</strong>,
+          <strong>Share Groups production-ready(4.2)</strong>.
+          그리고 <strong>KIP-848은 GA이지만 <code>group.protocol</code> 기본값은 <code>classic</code></strong>이라는 점이
+          "바뀌지 않은 것"으로서 가장 자주 틀립니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="cram.html">
+          <span class="card__title">벼락치기 요약</span>
+          <span class="card__desc">함정 사전과 짝을 이루는 D-1용 단일 페이지. 인쇄 대응.</span>
+          <span class="card__meta">CCDAK 도구</span>
+        </a></li>
+        <li><a class="card" href="flashcards.html">
+          <span class="card__title">플래시카드</span>
+          <span class="card__desc">여기서 본 40쌍을 카드로 반복 노출합니다.</span>
+          <span class="card__meta">CCDAK 도구</span>
+        </a></li>
+        <li><a class="card" href="exam-tips.html">
+          <span class="card__title">시험 당일 전략</span>
+          <span class="card__desc">유형별 접근법과 90분 시간 배분.</span>
+          <span class="card__meta">CCDAK 도구</span>
+        </a></li>
+        <li><a class="card" href="../quiz/review.html">
+          <span class="card__title">오답 노트</span>
+          <span class="card__desc">틀린 문항만 재출제. 여기서 본 함정이 실제로 걸러지는지 확인.</span>
+          <span class="card__meta">문제 풀이</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc">전체 설정 표와 프리셋 3종.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="index.html">
+          <span class="card__title">CCDAK 개요</span>
+          <span class="card__desc">도메인 매핑과 4주 학습 플랜으로 돌아가기.</span>
+          <span class="card__meta">CCDAK</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>
+        40쌍의 설정 이름·기본값·소속은 모두 Apache Kafka 4.3 공식 문서에서 확인했습니다.
+        오답 유도 패턴 절은 <strong>문항 형태에 대한 분석이며 공식 문서의 서술이 아닙니다.</strong>
+      </p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs" rel="noopener noreferrer">Producer Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#consumerconfigs" rel="noopener noreferrer">Consumer Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs" rel="noopener noreferrer">Topic Configs</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#connectconfigs" rel="noopener noreferrer">Connect Configs</a> · <a href="https://kafka.apache.org/documentation/#connect_errorreporting" rel="noopener noreferrer">Error Reporting in Connect</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#streamsconfigs" rel="noopener noreferrer">Streams Configs</a> · <a href="https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" rel="noopener noreferrer">Streams DSL</a> (리파티션, co-partitioning, 윈도우)</li>
+        <li><a href="https://kafka.apache.org/documentation/#semantics" rel="noopener noreferrer">Message Delivery Semantics</a> · <a href="https://kafka.apache.org/documentation/#design_transactions" rel="noopener noreferrer">Transactions</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#compaction" rel="noopener noreferrer">Log Compaction</a> · <a href="https://kafka.apache.org/documentation/#replication" rel="noopener noreferrer">Replication</a></li>
+        <li><a href="https://kafka.apache.org/documentation/#security_overview" rel="noopener noreferrer">Security</a> (<code>security.protocol</code> 4종, ACL)</li>
+        <li><a href="https://kafka.apache.org/documentation/#upgrade" rel="noopener noreferrer">Upgrading Apache Kafka</a> (4.x 변경 사항, Share Groups 4.2 production-ready)</li>
+      </ul>
+      <aside class="note note--warn" data-label="Confluent 컴포넌트 범위">
+        <p>
+          27~29번(스키마 호환성·subject 전략)은 <strong>Confluent Schema Registry</strong>의 기능입니다.
+          이 사이트를 만든 환경에서는 <code>docs.confluent.io</code>에 접근할 수 없어
+          Avro 스키마 해상 규칙과 널리 알려진 모드 정의를 근거로 정리했습니다.
+          응시 전에 Confluent 공식 문서로 매트릭스를 대조하는 것을 권합니다.
+        </p>
+      </aside>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

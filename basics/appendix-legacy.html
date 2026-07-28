@@ -121,6 +121,28 @@
         </p>
       </aside>
 
+      <aside class="note note--exam" data-label="시험 포인트 · CCDAK Fundamentals">
+        <p>
+          이 내용은 <strong>문제은행과 실제 시험 양쪽에서 직접 출제되는 지점</strong>입니다.
+          출제 형태는 대략 셋입니다.
+        </p>
+        <ul>
+          <li>
+            "<code>kafka_2.13-4.3.1.tgz</code>에서 <code>2.13</code>은 무엇인가?" →
+            <strong>Scala 버전</strong>입니다. <em>Kafka 마이너 버전</em>·<em>프로토콜 버전</em>·<em>Java 버전</em>은 모두 오답 선택지입니다.
+          </li>
+          <li>
+            "Kafka 2.8 다음 릴리스는?" → <strong>3.0</strong>입니다.
+            <strong>2.9 · 2.13 같은 버전은 존재하지 않습니다.</strong>
+          </li>
+          <li>
+            "Java 애플리케이션에서 Kafka를 쓰려면 어떤 아티팩트가 필요한가?" →
+            <code>kafka-clients</code>이며 <strong>Scala 접두어가 붙지 않습니다.</strong>
+            Scala 접두어가 필요한 것은 <code>kafka-streams-scala_2.13</code>처럼 Scala API를 쓰는 경우뿐입니다.
+          </li>
+        </ul>
+      </aside>
+
       <h3 id="which-artifact">무엇을 내려받아야 하는가</h3>
 
       <div class="table-scroll">
@@ -728,6 +750,26 @@ bin/kafka-features.sh --bootstrap-server localhost:9092 describe
             공식 문서는 <strong>4.1.1로 직행할 것을 권고</strong>합니다.
           </li>
         </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Deployment Architecture">
+        <p>업그레이드 경로에서 출제되는 숫자는 네 개입니다. 이것만 정확히 외우면 됩니다.</p>
+        <div class="table-scroll">
+          <table class="config-table config-table--plain">
+            <tbody>
+              <tr><th scope="row">3.3</th><td><strong>KRaft가 production-ready가 된 첫 버전.</strong> 그래서 4.x 업그레이드의 <strong>메타데이터·소프트웨어 최소 버전</strong>입니다</td></tr>
+              <tr><th scope="row">3.5</th><td>ZooKeeper → KRaft 마이그레이션의 <strong>bridge release</strong>. ZooKeeper 모드가 deprecated로 표시된 버전</td></tr>
+              <tr><th scope="row">3.9</th><td><strong>ZooKeeper 모드를 지원하는 마지막 버전.</strong> 모든 레거시 클러스터의 <strong>경유지</strong>입니다</td></tr>
+              <tr><th scope="row">4.0</th><td><strong>ZooKeeper 모드 제거.</strong> 이후 버전에는 마이그레이션 경로 자체가 없습니다</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          자주 나오는 함정: <strong>"ZooKeeper 클러스터를 4.x로 바로 업그레이드한 뒤 KRaft로 마이그레이션한다"</strong>는
+          선택지입니다. <strong>순서가 반대</strong>입니다 —
+          <strong>KRaft 마이그레이션을 3.9에서 먼저 끝낸 뒤</strong> 4.x로 올립니다.
+          그리고 <strong>클라이언트는 4.0 이전에 2.1 이상</strong>이어야 합니다(KIP-896).
+        </p>
       </aside>
     </section>
 

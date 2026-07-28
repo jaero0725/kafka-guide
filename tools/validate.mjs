@@ -377,10 +377,21 @@ function checkDiagrams(htmlFiles) {
     const f = 'assets/diagrams/' + name;
     const text = read(p);
 
-    /* 하드코딩 색 — 치명 */
+    /* 하드코딩 색 — 치명
+       주의: SVG 내부 참조(url(#d030-arrow), href="#d047-lane")는 색이 아니다.
+       `#d030` 같은 조각 ID는 4자 hex 패턴과 겹쳐서 이전 구현이 오탐을 냈다.
+       그래서 hex 색은 "색을 받는 자리"에서만 찾는다. */
+    const COLOR_PROPS = 'fill|stroke|stop-color|color|flood-color|lighting-color';
+    const NAMED = 'black|white|red|blue|green|yellow|orange|purple|gray|grey|silver'
+                + '|navy|teal|lime|aqua|fuchsia|maroon|olive';
     const colorRes = [
-      /#[0-9a-fA-F]{3,8}\b/g,
-      /\b(?:fill|stroke|stop-color|color|flood-color|lighting-color)\s*[:=]\s*["']?\s*(?:black|white|red|blue|green|yellow|orange|purple|gray|grey|silver|navy|teal|lime|aqua|fuchsia|maroon|olive)\b/gi,
+      /* 속성값으로 직접 지정한 hex: fill="#3b82f6" / stroke:'#fff' */
+      new RegExp(`\\b(?:${COLOR_PROPS})\\s*[:=]\\s*["']?\\s*#[0-9a-fA-F]{3,8}\\b`, 'gi'),
+      /* style="…: #hex" / <style> 안의 선언 */
+      new RegExp(`(?:${COLOR_PROPS})\\s*:\\s*#[0-9a-fA-F]{3,8}\\b`, 'gi'),
+      /* 명명 색 */
+      new RegExp(`\\b(?:${COLOR_PROPS})\\s*[:=]\\s*["']?\\s*(?:${NAMED})\\b`, 'gi'),
+      /* 함수형 색 */
       /\brgba?\s*\(/gi,
       /\bhsla?\s*\(/gi
     ];

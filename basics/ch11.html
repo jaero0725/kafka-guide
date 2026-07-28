@@ -1313,7 +1313,7 @@ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \
             <tr>
               <th scope="row"><code>share.partition.max.record.locks</code></th>
               <td><strong>2000</strong></td>
-              <td>share-partition당 락 상한. 도달하면 <strong>락이 자연히 만료될 때까지 fetch가 일시적으로 아무 레코드도 반환하지 않습니다</strong>. 브로커 설정 <code>group.share.partition.max.record.locks</code>가 유효 범위(100~10000)를 정합니다</td>
+              <td>share-partition당 락 상한. 도달하면 <strong>락이 자연히 만료될 때까지 fetch가 일시적으로 아무 레코드도 반환하지 않습니다</strong>. 브로커 쪽 대응 설정은 <code>group.share.partition.max.record.locks</code>(기본 2000, 유효 범위 100~10000)입니다</td>
             </tr>
             <tr>
               <th scope="row"><code>share.auto.offset.reset</code></th>

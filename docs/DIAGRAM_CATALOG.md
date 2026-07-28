@@ -125,6 +125,8 @@ Wave 0이 `assets/css/viz.css`에 다이어그램 디자인 토큰을 정의한�
 | D-035 | 압축 트레이드오프 | ★★ | gzip/snappy/lz4/zstd — 압축률 vs CPU vs 지연 |
 | D-036 | **`onCompletion()` 호출 시점** | ★★★ | send() 즉시 반환 → 배치 → 브로커 응답 → **Sender 스레드에서** 콜백. 어느 시점에 호출되는지 타임라인 |
 | D-037 | 재시도와 `delivery.timeout.ms` 예산 | ★★★ | `request.timeout.ms` × 재시도 ≤ `delivery.timeout.ms` 포함 관계 |
+| D-038 | 프로듀서 핵심 메트릭 지도 | ★★ | `record-send-rate`, `record-error-rate`, `request-latency-avg`, `buffer-available-bytes`가 D-030 파이프라인의 어느 단계를 관측하는지 겹쳐 표시 (CCDAK Observability 13%) |
+| D-039 | 프로듀서 지연 분해 | ★★ | 배치 대기 / 전송 / 브로커 처리 / 응답 각 구간 |
 
 ### ch05 — Consumer (CCDAK 최우선 도메인)
 
@@ -138,6 +140,8 @@ Wave 0이 `assets/css/viz.css`에 다이어그램 디자인 토큰을 정의한�
 | D-045 | 커밋 시점별 유실/중복 | ★★★ | 처리 전 커밋(유실) vs 처리 후 커밋(중복) |
 | D-046 🖱 | 파티션 할당 전략 4종 비교 | ★★★ | 같은 조건에서 4개 전략의 할당 결과를 나란히. 컨슈머/파티션 수 조절 |
 | D-047 | static membership | ★★ | `group.instance.id`로 재시작 시 리밸런스 회피 |
+| D-048 | 컨슈머 lag의 정확한 정의 | ★★ | LEO − committed offset. 어디를 재는지 (CCDAK Observability 13%) |
+| D-049 | lag 측정 3가지 방법 비교 | ★★ | CLI / 클라이언트 메트릭 / 브로커 메트릭 — 각각 무엇을 측정하고 어떤 함정이 있는지 |
 
 ### ch06 — 전달 보장·트랜잭션 (CCDAK)
 
@@ -243,10 +247,13 @@ Wave 0이 `assets/css/viz.css`에 다이어그램 디자인 토큰을 정의한�
 | 구분 | 개수 |
 |---|---:|
 | ★★★ CCDAK 최우선 | 38 |
-| ★★ CCDAK 중요 | 24 |
+| ★★ CCDAK 중요 | 28 |
 | ★ 보조 | 21 |
 | 🖱 인터랙티브 | 8 |
-| **합계** | **83** |
+| **합계** | **87** |
+
+> V1이 CCDAK Observability(13%) 도메인 보강용으로 D-038·D-039·D-048·D-049 4개를
+> 추가했다 (2026-07-28 반영). 원 계획 83개 + 4개 = 87개.
 
 ### 시각화 에이전트 배분 (Wave 1과 병렬)
 

@@ -212,6 +212,26 @@ java.io.FileNotFoundException: /var/lib/kafka/data/page-view-843/000000000000000
     <section aria-labelledby="root-cause">
       <h2 id="root-cause">원인 분석</h2>
 
+      <aside class="note note--version" data-label="버전 노트 — 널리 인용되는 파티션 한계 수치는 ZooKeeper 시대 값입니다">
+        <p>
+          이 케이스를 조사하다 보면 <strong>"브로커당 약 4,000 파티션", "클러스터당 200,000 파티션"</strong> 같은
+          수치를 만나게 됩니다. 이 숫자들은 <strong>ZooKeeper 기반(Kafka 3.x 이전) 기준</strong>이며,
+          <strong>ZooKeeper의 메타데이터 처리 특성에서 나온 제약</strong>입니다.
+        </p>
+        <p>
+          KRaft(4.0 이후)에서는 메타데이터가 Kafka 자체 로그(<code>__cluster_metadata</code>)에 저장되고
+          컨트롤러가 변경을 배치로 처리하므로 <strong>이 제약은 그대로 적용되지 않습니다.</strong>
+          따라서 이 페이지는 <strong>"파티션 몇 개까지"라는 숫자 한계를 제시하지 않습니다.</strong>
+        </p>
+        <p>
+          <strong>그러나 아래 비용 6가지는 KRaft에서도 그대로 유효합니다.</strong>
+          이 사고에서 실제로 문제가 된 것도 클러스터 메타데이터 한계가 아니라
+          <strong>클라이언트 메모리와 배치 효율, OS 자원</strong>이었습니다.
+          파티션 수는 "한계까지 몇 개인가"가 아니라
+          <strong>"이 비용을 감당할 만큼 필요한가"</strong>로 결정하세요.
+        </p>
+      </aside>
+
       <h3 id="cost1-fd">비용 1 — 파일 디스크립터</h3>
       <p>
         공식 하드웨어·OS 문서는 파일 디스크립터 소요량을 다음 식으로 제시합니다.
@@ -373,22 +393,48 @@ java.io.FileNotFoundException: /var/lib/kafka/data/page-view-843/000000000000000
         </p>
       </aside>
 
-      <p>
-        프로듀서 메모리도 문제입니다. <code>buffer.memory</code> 기본값은 <strong>33554432</strong>(32MiB)인데,
-        1000개 파티션이 각각 <code>batch.size</code>(16384) 하나씩만 잡아도 약 16MiB입니다.
-        재시도 중인 배치까지 겹치면 버퍼가 고갈되고, 그러면 <code>send()</code>가
-        <code>max.block.ms</code>(기본 60000) 동안 블로킹된 뒤 예외로 실패합니다.
-      </p>
+      <aside class="note note--danger" data-label="비용 3-2 — buffer.memory 를 파티션 수로 나눠 쓴다">
+        <p>
+          <code>buffer.memory</code> 기본값은 <strong>33554432</strong>(32MiB)입니다.
+          이 버퍼는 <strong>모든 파티션이 공유</strong>하므로,
+          파티션이 많아지면 <strong>파티션 하나가 쓸 수 있는 버퍼가 그만큼 줄어듭니다.</strong>
+        </p>
+        <ul>
+          <li>파티션 24개: 파티션당 약 1.4MiB — <code>batch.size</code>(16384)를 여유 있게 채우고 여러 배치를 대기시킬 수 있습니다.</li>
+          <li>파티션 1000개: 파티션당 약 33KiB — <code>batch.size</code> 두 개를 겨우 담습니다.
+            재시도 중인 배치까지 겹치면 버퍼가 고갈되고,
+            <code>send()</code>가 <code>max.block.ms</code>(기본 60000) 동안 블로킹된 뒤 예외로 실패합니다.</li>
+        </ul>
+        <p>
+          <strong>이것이 "파티션을 늘렸는데 처리량이 떨어졌다"의 가장 직접적인 원인입니다.</strong>
+          브로커의 메타데이터 한계는 이 사고에서 아무 역할도 하지 않았습니다.
+          파티션이 늘어날수록 <code>batch.size</code>를 채우기 전에
+          <code>linger.ms</code>(기본 5)로 전송되는 비율이 올라가고, 그만큼 요청 수가 늘어납니다.
+        </p>
+      </aside>
 
-      <h3 id="cost4-consumer">비용 4 — 컨슈머 메모리와 fetch</h3>
+      <h3 id="cost4-consumer">비용 4 — 컨슈머 메모리와 fetch 응답 크기</h3>
       <p>
         컨슈머의 <code>max.partition.fetch.bytes</code> 기본값은 <strong>1048576</strong>(1MiB),
         <code>fetch.max.bytes</code> 기본값은 <strong>52428800</strong>(50MiB)입니다.
-        파티션 200개를 할당받은 컨슈머는 이론상 200MiB를 요청할 수 있지만
-        <code>fetch.max.bytes</code>가 상한을 잡습니다.
-        문제는 그 반대 방향입니다 — <strong>파티션이 많으면 파티션당 실제로 받는 양이 줄어들어</strong>
-        같은 데이터를 더 많은 fetch 요청으로 나눠 받습니다.
+        <strong><code>max.partition.fetch.bytes</code> × 할당된 파티션 수</strong>가
+        fetch 응답 크기를 키우는 방향으로 작동하고,
+        <code>fetch.max.bytes</code>가 그 상한을 잡습니다.
+      </p>
+      <p>
+        그래서 파티션 200개를 할당받은 컨슈머는 이론상 200MiB를 요청하지만 실제로는 50MiB에서 잘립니다.
+        결과는 두 가지입니다 — <strong>fetch 응답 하나에 담기는 파티션당 데이터가 줄어들어</strong>
+        같은 데이터를 더 많은 fetch 요청으로 나눠 받게 되고,
+        파티션이 아주 많으면 <strong>일부 파티션이 한 fetch 라운드에서 아무 데이터도 못 받는</strong> 상황도 생깁니다.
         이 설정들의 상호작용은 <a href="case10.html">케이스 10</a>에서 자세히 다룹니다.
+      </p>
+      <p>
+        브로커 쪽에도 대응하는 비용이 있습니다.
+        <code>replica.fetch.max.bytes</code>(기본 <strong>1048576</strong>)와
+        <code>replica.fetch.response.max.bytes</code>(기본 <strong>10485760</strong>)가
+        복제 fetch에 같은 구조로 적용되고, <code>num.replica.fetchers</code> 기본값은 <strong>1</strong>입니다.
+        레플리카가 브로커당 1,600개면 이 스레드 하나가 훨씬 많은 파티션을 나눠 처리하게 되어
+        <strong>복제 지연과 end-to-end 지연이 함께 늘어납니다.</strong>
       </p>
 
       <h3 id="cost5-rebalance">비용 5 — 리밸런스 시간</h3>
@@ -419,13 +465,28 @@ java.io.FileNotFoundException: /var/lib/kafka/data/page-view-843/000000000000000
         파티션 수가 그만큼 늘어납니다. KRaft 아키텍처는 <a href="../basics/ch03.html">3장</a>에서 다룹니다.
       </p>
 
-      <aside class="note note--warn" data-label="공식 문서가 전제하는 상한">
+      <h3 id="cost7-irreversible">비용 7 — 되돌릴 수 없다</h3>
+      <p>
+        위 여섯 가지는 튜닝으로 완화할 수 있습니다. 이것만은 완화할 수 없습니다.
+        <strong>Kafka는 토픽의 파티션 수 축소를 지원하지 않습니다.</strong>
+        잘못 늘렸다면 남는 방법은 새 토픽으로 이관하는 것뿐이고,
+        그 과정에서 키 배치·순서 보장·컨슈머 전환 문제가 전부 따라옵니다.
+        <strong>이 케이스의 진짜 교훈은 여기입니다</strong> —
+        파티션 증설은 <strong>되돌릴 수 없는 결정</strong>이므로, 늘리기 전에 계산하세요.
+      </p>
+
+      <aside class="note" data-label="숫자 상한 대신 무엇을 볼까">
         <p>
-          공식 운영 문서는 토픽 이름 길이 제약을 설명하면서
-          <strong>"파티션 수가 100,000을 넘지 않는다고 가정한다"</strong>고 명시합니다
-          (디렉터리 이름이 <code>{topic}-{partitionId}</code>이고 255자 제한이 있어 토픽 이름이 249자로 제한되는 이유).
-          이것은 클러스터 전체 파티션 수의 <strong>구조적 상한</strong>이며 권장치가 아닙니다.
-          실제 권장 규모는 브로커 사양과 워크로드에 따라 훨씬 작습니다.
+          공식 운영 문서에 등장하는 유일한 파티션 관련 수치는 <strong>경로 이름 제약</strong>에서 나옵니다.
+          파티션 디렉터리 이름이 <code>{topic}-{partitionId}</code>이고 파일시스템 경로가 255자로 제한되므로,
+          문서는 <strong>"파티션 수가 100,000을 넘지 않는다고 가정한다"</strong>고 전제하며
+          그로부터 토픽 이름을 249자로 제한합니다.
+          <strong>이것은 용량 권장치가 아니라 이름 길이 계산의 전제</strong>입니다.
+        </p>
+        <p>
+          즉 공식 문서는 <strong>"브로커당 몇 개까지"라는 권장 수치를 제시하지 않습니다.</strong>
+          대신 위 비용 7가지를 <strong>여러분의 하드웨어·워크로드에 대입해 계산</strong>하는 것이
+          이 문서가 요구하는 접근입니다. 그 계산 절차는 아래 해결 섹션에 있습니다.
         </p>
       </aside>
     </section>
@@ -702,6 +763,7 @@ kafka-topics.sh --bootstrap-server kafka-1:9092 --delete --topic page-view</code
         <li><label><input type="checkbox"> 증설이 <strong>키 배치 변경</strong>과 <code>auto.offset.reset=latest</code> 컨슈머 누락을 유발할지 검토했다</label></li>
         <li><label><input type="checkbox"> 브로커 재시작 시간을 <strong>변경 후에 실제로 측정</strong>할 계획이 있다</label></li>
         <li><label><input type="checkbox"> <strong>파티션은 줄일 수 없다</strong>는 것을 의사결정에 참여한 모두가 알고 있다</label></li>
+        <li><label><input type="checkbox"> 근거로 인용한 파티션 한계 수치가 <strong>ZooKeeper 시대 값이 아닌지</strong> 확인했다 (KRaft에서는 적용되지 않습니다)</label></li>
       </ul>
     </section>
 
@@ -751,7 +813,22 @@ kafka-topics.sh --bootstrap-server kafka-1:9092 --delete --topic page-view</code
             <code>segment.ms</code> 기본값 <strong>604800000</strong>(7일).
             삭제·컴팩션은 <strong>세그먼트 단위</strong>로 일어납니다.
           </li>
+          <li>
+            <code>num.replica.fetchers</code> 기본값 <strong>1</strong>,
+            <code>replica.fetch.max.bytes</code> 기본값 <strong>1048576</strong>,
+            <code>replica.fetch.response.max.bytes</code> 기본값 <strong>10485760</strong>.
+          </li>
         </ul>
+      </aside>
+
+      <aside class="note note--version" data-label="버전 노트 — 시험에서도 ZK 시대 수치에 주의">
+        <p>
+          "브로커당 최대 파티션 수는?" 같은 문항에 <strong>4,000</strong>이나
+          "클러스터당 <strong>200,000</strong>"이 선택지로 나오면 그것은 <strong>ZooKeeper 기반 기준</strong>입니다.
+          Apache Kafka 4.x는 KRaft 전용이고, 공식 문서는 <strong>파티션 수 권장 상한을 제시하지 않습니다.</strong>
+          시험이 4.x 기준이라면 <strong>"OS·클라이언트 자원과 워크로드에 따라 달라진다"</strong>가 정답 방향이고,
+          구체적 숫자를 단정하는 선택지는 의심하세요.
+        </p>
       </aside>
 
       <aside class="note note--exam" data-label="시험 포인트 · Application Development (배치)">

@@ -1,0 +1,92 @@
+<svg viewBox="0 0 720 378" role="img" class="kg-diagram"
+     aria-labelledby="d094-title d094-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d094-title">stateless · stateful · 리파티션 유발 연산 — map 과 mapValues 의 차이</title>
+  <desc id="d094-desc">Kafka Streams DSL 연산을 세 갈래로 분류한 그림입니다.
+    첫째 열 stateless 는 상태 저장소가 필요 없는 연산입니다.
+    filter, filterNot, map, mapValues, flatMap, flatMapValues, selectKey, branch 또는 split, merge,
+    peek, foreach, print, to, groupByKey, groupBy 가 여기에 속합니다.
+    둘째 열 stateful 은 상태 저장소가 필요한 연산입니다.
+    aggregate, reduce, count, 윈도우 집계, KStream-KStream 조인, KStream-KTable 조인, KTable-KTable 조인,
+    suppress, 상태 저장소를 연결한 process 가 여기에 속합니다.
+    셋째 열은 리파티션을 유발하는지에 따른 분류입니다.
+    groupBy 와 repartition 은 항상 리파티션을 유발합니다.
+    map, flatMap, selectKey 는 키를 바꿀 수 있으므로 스트림에 리파티션 표시를 남기고,
+    그 뒤에 그룹화나 조인이 오면 실제로 리파티션이 일어납니다.
+    mapValues, flatMapValues, filter, peek 은 키를 건드리지 않으므로 리파티션을 유발하지 않습니다.
+    groupByKey 는 앞에서 표시가 붙지 않았다면 리파티션을 하지 않습니다.
+    핵심 대비는 map 과 mapValues 입니다.
+    map 은 키를 바꿀 수 있으므로 리파티션 토픽을 거쳐 네트워크 왕복이 생기고,
+    mapValues 는 값만 바꾸므로 그대로 로컬에서 처리됩니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">stateless · stateful · 리파티션 유발 — 세 축으로 나눠 외웁니다</text>
+
+  <!-- ===== stateless ===== -->
+  <rect class="dg-node" x="12" y="30" width="224" height="250" rx="4"/>
+  <rect class="dg-node dg-node--alt" x="12" y="30" width="224" height="26" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="48">stateless — 저장소 없음</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="74">filter · filterNot</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="92">map · mapValues</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="110">flatMap · flatMapValues</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="128">selectKey</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="146">branch (split)</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="164">merge</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="182">peek · foreach · print</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="200">to · through</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="218">groupByKey · groupBy</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="236">toStream · repartition</text>
+  <line class="dg-grid" x1="22" y1="246" x2="226" y2="246"/>
+  <text class="dg-fs-sm dg-muted" x="22" y="262">그룹화는 stateless 입니다 —</text>
+  <text class="dg-fs-sm dg-muted" x="22" y="276">상태는 그 뒤 집계에서 생깁니다.</text>
+
+  <!-- ===== stateful ===== -->
+  <rect class="dg-node" x="248" y="30" width="224" height="250" rx="4"/>
+  <rect class="dg-node dg-node--alt" x="248" y="30" width="224" height="26" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="258" y="48">stateful — 저장소 필요</text>
+  <text class="dg-fs-sm dg-mono" x="258" y="74">aggregate</text>
+  <text class="dg-fs-sm dg-mono" x="258" y="92">reduce</text>
+  <text class="dg-fs-sm dg-mono" x="258" y="110">count</text>
+  <text class="dg-fs-sm dg-mono" x="258" y="128">windowedBy(…) + 집계</text>
+  <text class="dg-fs-sm dg-mono" x="258" y="146">join / leftJoin / outerJoin</text>
+  <text class="dg-fs-sm dg-mono" x="258" y="164">suppress</text>
+  <text class="dg-fs-sm dg-mono" x="258" y="182">process (저장소 연결 시)</text>
+  <line class="dg-grid" x1="258" y1="196" x2="462" y2="196"/>
+  <text class="dg-fs-sm" x="258" y="212">상태 저장소에는 <tspan class="dg-bold">changelog</tspan></text>
+  <text class="dg-fs-sm" x="258" y="228">토픽이 따라옵니다 (D-095).</text>
+  <text class="dg-fs-sm dg-muted" x="258" y="252">KStream-GlobalKTable 조인은</text>
+  <text class="dg-fs-sm dg-muted" x="258" y="266">전체 복제본을 조회하는 형태라</text>
+  <text class="dg-fs-sm dg-muted" x="258" y="276">리파티션이 필요 없습니다.</text>
+
+  <!-- ===== 리파티션 ===== -->
+  <rect class="dg-node dg-node--accent" x="484" y="30" width="224" height="250" rx="4"/>
+  <rect class="dg-node dg-node--accent" x="484" y="30" width="224" height="26" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="494" y="48">리파티션 유발 여부</text>
+
+  <text class="dg-fs-sm dg-bold" x="494" y="74">항상 유발</text>
+  <text class="dg-fs-sm dg-mono" x="494" y="92">groupBy</text>
+  <text class="dg-fs-sm dg-mono" x="494" y="110">repartition</text>
+
+  <text class="dg-fs-sm dg-bold" x="494" y="136">키를 바꿔 “표시”만 남김</text>
+  <text class="dg-fs-sm dg-mono dg-bold" x="494" y="154">map</text>
+  <text class="dg-fs-sm dg-mono" x="494" y="172">flatMap</text>
+  <text class="dg-fs-sm dg-mono" x="494" y="190">selectKey</text>
+  <text class="dg-fs-sm dg-muted" x="494" y="206">→ 뒤에 그룹화·조인이 오면 발생</text>
+
+  <text class="dg-fs-sm dg-bold" x="494" y="232">유발하지 않음</text>
+  <text class="dg-fs-sm dg-mono dg-bold" x="494" y="250">mapValues · flatMapValues</text>
+  <text class="dg-fs-sm dg-mono" x="494" y="268">filter · peek · groupByKey</text>
+
+  <!-- 핵심 대비 -->
+  <rect class="dg-node dg-node--danger" x="12" y="290" width="340" height="62" rx="4"/>
+  <text class="dg-fs-sm dg-mono dg-bold" x="22" y="308">map</text>
+  <text class="dg-fs-sm dg-bold" x="70" y="308">키를 바꿀 수 있음 → 리파티션 유발</text>
+  <text class="dg-fs-sm" x="22" y="326">리파티션 <tspan class="dg-bold">토픽에 쓰고 다시 읽습니다</tspan>.</text>
+  <text class="dg-fs-sm" x="22" y="344">네트워크·디스크 왕복 + sub-topology 분리.</text>
+
+  <rect class="dg-node dg-node--ok" x="368" y="290" width="340" height="62" rx="4"/>
+  <text class="dg-fs-sm dg-mono dg-bold" x="378" y="308">mapValues</text>
+  <text class="dg-fs-sm dg-bold" x="462" y="308">값만 바꿈 → 유발 안 함</text>
+  <text class="dg-fs-sm" x="378" y="326">키가 그대로이므로 <tspan class="dg-bold">로컬에서 끝납니다</tspan>.</text>
+  <text class="dg-fs-sm" x="378" y="344">값만 바꿀 때는 항상 mapValues 를 쓰세요.</text>
+
+  <text class="dg-fs-sm dg-muted" x="12" y="372">Streams 는 키가 실제로 바뀌었는지 보지 않고 <tspan class="dg-bold">키를 바꿀 수 있는 연산인지</tspan>로 판단합니다 — 키를 그대로 반환하는 map 도 표시가 붙습니다.</text>
+</svg>

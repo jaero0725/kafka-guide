@@ -1124,6 +1124,7 @@ KStream&lt;String, Settlement&gt; settled = orders.join(
       <figure class="code">
         <figcaption>TopologyTestDriver 기본 사용법</figcaption>
         <pre><code class="lang-java">import java.time.Duration;
+import java.util.Properties;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.*;
 import org.apache.kafka.streams.state.KeyValueStore;

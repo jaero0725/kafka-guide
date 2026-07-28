@@ -358,3 +358,24 @@ Wave 3 C3는 이 항목을 **"검증 불가"로 보고**하면 된다.
 | 5 | `--strict` 미통과 (경고 56건) | Wave 1·2가 예정 경로를 채우면 해소. Wave 4가 `--strict`로 게이트 |
 | 6 | 툴 실행 순서 | §D에 명시. `npm run build` 사용 |
 | 7 | ch01에 D-012가 이미 정적 인라인됨 | 멱등하므로 Wave 4가 다시 돌려도 안전 |
+
+---
+
+## F. Wave 4가 반드시 해야 할 일 (에이전트 보고 누적)
+
+| 출처 | 항목 |
+|---|---|
+| A8 | **`data/toc.json`의 `ccaak` 섹션에 `domain-*.html` 7개가 없다.** 등록하지 않으면 사이드바·pager에 안 나타난다. 순서: fundamentals → security → connect → deployment → cluster-config → observability → troubleshooting |
+| A1 | ch03이 `ccaak/index.html`만 링크했다 (`domain-*`는 toc 미등록이라 회피). toc 등록 후 링크 보강 가능 |
+| V1 | 신규 ID **D-038·D-039·D-048·D-049** — 카탈로그 반영 완료. **ch04·ch05에 플레이스홀더 추가 필요** |
+| A8 | CCAAK 전용 신규 다이어그램 6개 요청 (범위 관계도, 섹션↔챕터 매핑, 쿼럼 사이징, 재할당 3단계, ISR 3지표 경계, MM2 4패턴) |
+| A4 | practice 전용 다이어그램 요청 (반환 리포트 참조) |
+| 공통 | `npm run build` = `inline-diagrams` → `build-index` → `validate --all --strict --deploy` 순서 준수 |
+
+## G. 검증기 오탐 수정 이력
+
+- **2026-07-28**: `validate --diagrams`의 하드코딩 색 검사가 SVG 내부 참조
+  `url(#d030-arrow)` / `href="#d047-lane"` 를 hex 색으로 오인해 **54건 오탐**을 냈다.
+  (`#d030` 이 4자 hex 패턴과 겹침) → hex 색을 **색을 받는 자리에서만** 찾도록 수정.
+  `fill=` / `stroke=` / `style` 선언 안에서만 매칭한다. 진짜 하드코딩 색 검출은 유지.
+  → 에이전트가 정상 파일을 "고치려" 하는 낭비를 막기 위한 수정이므로 되돌리지 말 것.
