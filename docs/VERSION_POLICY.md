@@ -68,10 +68,10 @@ kafka_2.13-4.3.0.tgz
 | `acks` 기본값 | 1 | 3.0부터 all | all |
 | 컨슈머 리밸런스 프로토콜 | eager 중심 | cooperative 도입 | **KIP-848 GA** |
 | `--zookeeper` CLI 옵션 | 사용 | deprecated | **제거됨** |
-| 파티션 할당 기본 전략 | Range | Range/Cooperative | 확인 필요 |
+| 파티션 할당 기본 전략 | Range | Range/Cooperative | **`[RangeAssignor, CooperativeStickyAssignor]`** ✔확인 |
 | Queues / Share Groups | 없음 | 없음 | **4.2 GA** |
 | Tiered Storage | 없음 | 3.6 EA → 3.9 GA | 지원 |
-| Java 최소 버전 | 8 | 8/11 | **브로커 17+** |
+| Java 최소 버전 | 8 | 8/11 | **17·21·25 완전 지원. 8은 4.0에서 제거** ✔확인 |
 | Scala 배포판 | 2.12 / 2.13 | 2.12 / 2.13 | **2.13 전용** |
 
 > ⚠️ 위 표의 값들도 **에이전트가 공식 문서로 재확인**한 뒤 쓴다.

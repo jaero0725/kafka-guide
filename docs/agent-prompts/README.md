@@ -32,7 +32,9 @@ Application Development(28%) + Fundamentals(23%) = 51%에 자원이 집중된다
 4. docs/CCDAK_TOPIC_CHECKLIST.md  — 필수 출제 토픽 24개 + 태그 규약
 5. docs/DIAGRAM_CATALOG.md        — 다이어그램 83개 카탈로그·작성 규칙·분리 구조
 6. docs/FACT_SOURCES.md           — ★ 사실 확인 경로 (공식 문서 웹사이트가 차단됨)
-7. docs/QUESTION_SCHEMA.md        — 문제 JSON 스키마 (문제 생성 에이전트만)
+7. docs/WAVE0_CONTRACT.md         — ★★ Wave 0이 만든 기반의 실제 API·클래스·규약.
+                                     여기와 다르게 쓰면 동작하지 않습니다. 반드시 읽으세요
+8. docs/QUESTION_SCHEMA.md        — 문제 JSON 스키마 (문제 생성 에이전트만)
 
 절대 규칙:
 - 기준 버전은 Apache Kafka 4.3.x. ZooKeeper는 4.0에서 제거되었으므로

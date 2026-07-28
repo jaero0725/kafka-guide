@@ -484,6 +484,29 @@ const REF_HOSTS = ['kafka.apache.org', 'cwiki.apache.org', 'docs.confluent.io',
                    'developer.confluent.io', 'github.com/apache/kafka',
                    'issues.apache.org', 'archive.apache.org'];
 const EXAMS = new Set(['CCDAK', 'CCAAK', 'BASICS']);
+
+/* 혼합 세트(모의고사·진단)의 문항별 domain 검사용 공식 도메인 목록.
+   진단 모드의 도메인 집계와 학습 순서 생성이 이 문자열과 정확히 일치해야 동작한다.
+   CCAAK 가중치는 공식 확인 불가지만 섹션 이름 자체는 확정된 값이다. */
+const EXAM_DOMAINS = {
+  CCDAK: [
+    'Application Development',
+    'Fundamentals',
+    'Kafka Connect',
+    'Application Observability',
+    'Kafka Streams',
+    'Application Testing'
+  ],
+  CCAAK: [
+    'Kafka Fundamentals',
+    'Kafka Security',
+    'Kafka Connect',
+    'Deployment Architecture',
+    'Cluster Configuration',
+    'Observability',
+    'Troubleshooting'
+  ]
+};
 const DIFFS = new Set(['easy', 'medium', 'hard']);
 const TYPES = new Set(['single', 'multiple', 'matching', 'ordering']);
 const CHOICE_IDS = new Set(['A', 'B', 'C', 'D', 'E']);
@@ -533,8 +556,17 @@ function checkQuestions() {
       continue;
     }
 
+    /* 혼합 세트: 모의고사·진단 테스트는 한 세트 안에 여러 도메인의 문항이 섞인다.
+       세트 domain 은 "Mixed" 같은 대표값이고, 도메인별 집계는 문항별 domain 으로 한다. */
+    const mixedSet = set.mock === true || set.diagnostic === true ||
+                     /^(mixed|혼합)$/i.test(String(set.domain || '').trim()) ||
+                     /(?:-mock-\d+|-diagnostic)$/.test(setId);
+    if (mixedSet && !set.mock && !set.diagnostic && !/^(mixed|혼합)$/i.test(String(set.domain || '').trim())) {
+      warn(f, 1, `혼합 세트로 판단했습니다(setId 규칙). 명시적으로 mock:true 또는 diagnostic:true 를 넣어 주세요`);
+    }
+
     const stats = {
-      file: f, setId, exam: set.exam, domain: set.domain,
+      file: f, setId, exam: set.exam, domain: set.domain, mixed: mixedSet,
       total: set.questions.length,
       diff: { easy: 0, medium: 0, hard: 0 },
       type: { single: 0, multiple: 0, matching: 0, ordering: 0 },
@@ -557,6 +589,15 @@ function checkQuestions() {
       else if (set.exam && q.exam !== set.exam) E(`exam("${q.exam}") 이 세트("${set.exam}") 와 다릅니다`);
 
       if (!q.domain) E('domain 누락');
+      else if (mixedSet) {
+        /* 혼합 세트(모의고사·진단): 문항별 domain 이 서로 다른 것이 정상이다.
+           대신 시험의 공식 도메인 목록에 있는 값인지 검사한다.
+           진단 모드의 도메인별 집계와 결과 리포트가 이 문자열에 의존한다. */
+        const known = EXAM_DOMAINS[q.exam];
+        if (known && !known.includes(q.domain)) {
+          E(`domain("${q.domain}") 이 ${q.exam} 공식 도메인 목록에 없습니다 — ${known.join(' / ')}`);
+        }
+      }
       else if (set.domain && q.domain !== set.domain) E(`domain("${q.domain}") 이 세트("${set.domain}") 와 다릅니다`);
 
       if (!q.chapter) E('chapter 누락 — 결과 리포트의 복습 링크가 이 값에 의존합니다');

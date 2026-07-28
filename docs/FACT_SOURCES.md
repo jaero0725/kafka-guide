@@ -26,9 +26,27 @@ cwiki.apache.org         ✗ 403   (KIP 페이지)
 
 | 소스 | 상태 | 용도 |
 |---|:--:|---|
-| `raw.githubusercontent.com` | ✅ | **Apache Kafka 소스 코드 — 1차 권威 소스** |
+| **`archive.apache.org`** | ✅ | **공식 site-docs 타르볼 — kafka.apache.org가 서빙하는 문서 전문** |
+| `raw.githubusercontent.com` | ✅ | Apache Kafka 소스 코드 — ConfigDef 기본값의 최종 근거 |
 | `github.com` | ✅ | 저장소 탐색 |
 | WebSearch | ✅ | 릴리스 노트·KIP 내용·서술형 정보 (스니펫으로 반환) |
+
+### ★ 최선의 경로: 공식 site-docs 타르볼
+
+`kafka.apache.org`가 차단되어 있지만, **그 사이트가 서빙하는 문서 전문이 릴리스
+타르볼로 배포된다.** `archive.apache.org`는 열려 있다.
+
+```bash
+curl -sO https://archive.apache.org/dist/kafka/4.3.1/kafka_2.13-4.3.1-site-docs.tgz
+tar xzf kafka_2.13-4.3.1-site-docs.tgz
+# → configuration/*.html, getting-started/upgrade.md, operations/*, streams/*, connect/* …
+```
+
+이것이 **가장 신뢰할 수 있는 경로**다. 생성된 문서라서 설정 표·기본값·설명이
+웹사이트와 완전히 동일하다. 설정 기본값을 대량으로 확인해야 하는 에이전트
+(A6 치트시트, B2 문제은행)는 **소스 코드를 파일별로 뒤지지 말고 이 타르볼을 받아라.**
+
+교차 확인이 필요하면 소스 코드의 ConfigDef를 함께 본다.
 
 **핵심**: 공식 문서 웹사이트는 이 소스 코드로부터 생성된다.
 즉 소스 코드가 웹사이트보다 **더 권위 있는 1차 소스**다. 우회가 아니라 상위 소스다.
@@ -103,6 +121,27 @@ Kafka **4.3** 소스에서 직접 확인했다.
 
 > `group.protocol` 기본값이 `classic`이라는 점에 주의. KIP-848 새 프로토콜은 4.0에서 GA지만
 > **기본값은 아니다.** `consumer`로 명시해야 활성화된다. 흔한 오해이므로 본문·문항에 반영할 것.
+
+### Broker / Topic (site-docs 확인)
+| 설정 | 기본값 | 비고 |
+|---|---|---|
+| `message.max.bytes` | **1048588** | 압축 후 배치 기준. "약 1MB"이지만 정확히는 1MB가 아니다 |
+| `retention.ms` | `604800000` | 7일 |
+| `cleanup.policy` | `delete` | |
+| `num.partitions` | `1` | |
+| `default.replication.factor` | `1` | |
+| `auto.create.topics.enable` | `true` | |
+
+### 환경 요구사항 (site-docs `operations/java-version.md`)
+| 항목 | 값 |
+|---|---|
+| Java | **17 · 21 · 25 완전 지원.** 11은 clients/streams 등 일부만. **8은 4.0에서 제거** |
+| Scala 배포판 | `kafka_2.13-4.3.1.tgz` **단일** (2.12 배포 없음) |
+| 4.3 업그레이드 | KRaft 필수. 소프트웨어·메타데이터 **최소 3.3.x**. ZK는 사전 마이그레이션 필수 |
+| Share Groups (KIP-932) | **4.2에서 production-ready** (4.1은 preview) — `getting-started/upgrade.md` |
+
+> `VERSION_POLICY.md` §2 표의 "파티션 할당 기본 전략 — 확인 필요" 칸이 해소되었다:
+> **`[RangeAssignor, CooperativeStickyAssignor]`** (site-docs 확인).
 
 ---
 
