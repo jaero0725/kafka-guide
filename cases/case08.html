@@ -435,13 +435,13 @@ K=/opt/kafka/bin
 # 1. delete 정책 토픽 (기본값). 세그먼트를 8KiB, 리텐션을 20초로 줍니다.
 docker exec -it broker $K/kafka-topics.sh --create --topic snap-delete \
   --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092 \
-  --config segment.bytes=8192 --config retention.ms=20000 \
+  --config segment.bytes=1048576 --config retention.ms=20000 \
   --config segment.ms=10000
 
 # 2. compact 정책 토픽. 컴팩션이 바로 돌게 dirty ratio 를 낮춥니다.
 docker exec -it broker $K/kafka-topics.sh --create --topic snap-compact \
   --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092 \
-  --config cleanup.policy=compact --config segment.bytes=8192 \
+  --config cleanup.policy=compact --config segment.bytes=1048576 \
   --config segment.ms=10000 --config min.cleanable.dirty.ratio=0.01 \
   --config delete.retention.ms=1000
 

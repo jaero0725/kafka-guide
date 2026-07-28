@@ -236,6 +236,41 @@ A3와 A7이 같은 대상을 다르게 셌다 (SMT 16 vs 15, Connect REST 26 vs 
 세는 기준(predicate 포함 여부, 내부 엔드포인트 포함 여부)이 달라서 생긴 차이다.
 **본문·문항에 개수를 쓰지 말고 목록만 실어라.** "SMT는 몇 종인가" 같은 문항도 만들지 말 것.
 
+### 배치 분할 재시도 — 재시도 예산을 소모하지 않는다 (A5·V3 충돌을 소스로 판정)
+
+`Sender.java:676` (Kafka 4.3):
+```java
+if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 && !batch.isDone() &&
+        (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 || batch.isCompressed())) {
+    // If the batch is too large, we split the batch and send the split batches again.
+    // We do not decrement the retry attempts in this case.
+```
+
+**두 경로를 구분해야 한다. 이 구분이 시험 가치가 높다.**
+
+| 경로 | 동작 |
+|---|---|
+| 클라이언트 `max.request.size` 초과 | `RecordTooLargeException` **즉시 실패**. `ApiException` 상속 = 비재시도 |
+| 브로커 `message.max.bytes` 초과 | `MESSAGE_TOO_LARGE` → **Sender가 배치를 쪼개 재전송. 재시도 횟수를 소모하지 않음** |
+
+- 분할 조건: `recordCount > 1` 이고 (magic ≥ V2 **또는** 압축된 배치)
+- **단일 레코드 배치는 더 쪼갤 수 없어 최종 실패**한다
+- 재시도 예산을 안 쓰므로 사실상 멈추지 않고, 요청 수가 폭증해 버퍼가 고갈된다
+  → "무한 재시도"처럼 보이는 것은 **애플리케이션 루프가 아니라 클라이언트 내부 동작**이다
+
+> V3가 D-119에 "무한 재시도로 보이는 증상은 대개 애플리케이션 자체 루프"라고 적었으나
+> **틀렸다.** A5가 소스로 확인한 내용이 맞아 D-119를 정정했다 (2026-07-28).
+
+### fetch 3종은 하드 상한이 아니다 (V3·A5 공통 확인)
+`replica.fetch.max.bytes` / `max.partition.fetch.bytes` / `fetch.max.bytes`는 절대 상한이 아니다.
+**첫 배치가 이 값보다 커도 그대로 반환**해 복제·소비가 멈추지 않도록 보장한다 (문서 명시).
+→ "큰 레코드가 컨슈머를 멈춘다"는 4.x에서 **오답**이다. 좋은 오답 선택지 소재.
+
+### 하드 게이트는 둘뿐이다
+`max.request.size`(프로듀서) 와 `message.max.bytes`/`max.message.bytes`(브로커·토픽).
+`message.max.bytes`는 **압축 후 배치 크기** 기준이다.
+브로커 `message.max.bytes` ↔ 토픽 `max.message.bytes` — **어순이 반전**되어 있어 자주 틀린다.
+
 ### ⚠️ 공식 문서에 없어서 쓰면 안 되는 것
 - **압축 코덱별 압축률·CPU·지연의 구체적 수치.** 공식 문서에 없다.
   상대 비교로만 서술하고, 필요하면 실측을 안내한다.
