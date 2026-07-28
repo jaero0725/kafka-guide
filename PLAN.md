@@ -341,6 +341,39 @@ kafka-guide/
 
 가중치가 큰 도메인(App Development, Fundamentals)이 약하면 학습 순서 최상단에 배치한다.
 
+### 3-1-B. ⚠️ 문항 유형은 3가지다 (객관식만이 아니다)
+
+Confluent 공식 자료:
+> Certification exams are 90 minute proctored exams.
+> **Question types vary, and include multiple-choice, matching, list order.**
+
+실제 CCDAK/CCAAK 시험에는 **연결형(matching)** 과 **순서 배열형(list order)** 이 나온다.
+객관식만 연습하면 세 유형 중 둘을 시험장에서 처음 보게 된다. 1순위 목표가 CCDAK 합격이므로
+퀴즈 엔진이 네 가지 `type`을 모두 지원한다.
+
+| `type` | 대응 시험 유형 | 채점 | 연습 비중 |
+|---|---|---|---:|
+| `single` | multiple-choice (단일) | 정답 1개 일치 | 60% |
+| `multiple` | multiple-choice (복수) | 전부 일치 | 15~20% |
+| **`matching`** | **matching** | 모든 쌍 일치 | 12~15% |
+| **`ordering`** | **list order** | 순서 완전 일치 | 8~10% |
+
+`matching`에 잘 맞는 소재: 설정명↔기본값, 설정명↔소속(프로듀서/컨슈머/브로커/토픽),
+예외 클래스↔원인, SMT↔용도, 호환성 모드↔배포 순서, Streams 연산↔stateless/stateful,
+JMX 메트릭↔의미.
+
+`ordering`에 잘 맞는 소재: 트랜잭션 API 호출 순서, Producer 전송 파이프라인 단계,
+`kafka-reassign-partitions` 워크플로(`--generate`→`--execute`→`--verify`),
+KRaft 부트스트랩 절차, 2.x→3.9→4.x 업그레이드 단계, 스키마 진화 배포 순서.
+
+**접근성 요건**: 드래그 앤 드롭을 유일한 조작 수단으로 만들지 않는다.
+`matching`은 `<select>`, `ordering`은 위/아래 이동 `<button>` 기반으로 **키보드만으로 완주 가능**해야 한다.
+
+> ⚠️ 실제 시험의 유형 비율은 Confluent가 공개하지 않는다. 위 "연습 비중"은 세 유형을
+> 충분히 훈련시키기 위한 값이며, 사이트에 실제 시험 비율로 표기하지 않는다.
+
+상세 스키마는 `docs/QUESTION_SCHEMA.md` §matching / §ordering 참조.
+
 ### 3-2. 문제 JSON 스키마
 
 `docs/QUESTION_SCHEMA.md`에 정식 정의. 요약:
@@ -532,6 +565,8 @@ Wave 4 · 통합                 [단독, 순차]        1 agent
 - [ ] Application Development(90) + Fundamentals(74) = 164문항이 확보되었다
 - [ ] CCDAK 모의고사 4세트가 서로 중복 없이 각 60문항이다
 - [ ] 진단 테스트 30문항이 6개 도메인 × 5문항이고, 결과가 학습 순서를 생성한다
+- [ ] **네 가지 문항 유형(single/multiple/matching/ordering)이 모두 구현·출제되었다**
+- [ ] matching/ordering을 키보드만으로 완주할 수 있다 (드래그 의존 0)
 - [ ] 플래시카드·벼락치기·함정 사전이 동작한다
 - [ ] CCDAK ★★★ 다이어그램 38개가 전부 완성되었다
 

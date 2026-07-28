@@ -2,6 +2,63 @@
 
 모든 문제은행 파일은 이 스키마를 따른다. `tools/validate.mjs`가 강제 검증한다.
 
+---
+
+## ⚠️ 문항 유형은 3가지다 (객관식만이 아니다)
+
+Confluent 공식 자료:
+> Certification exams are 90 minute proctored exams.
+> **Question types vary, and include multiple-choice, matching, list order.**
+
+즉 실제 시험에는 **연결형(matching)** 과 **순서 배열형(list order)** 이 나온다.
+객관식만 연습하면 세 유형 중 둘을 처음 보는 상태로 시험장에 들어간다.
+
+| `type` | 대응 시험 유형 | 채점 |
+|---|---|---|
+| `single` | multiple-choice (단일 정답) | 정답 1개 일치 |
+| `multiple` | multiple-choice (복수 정답) | 전부 일치 (부분 점수 없음) |
+| **`matching`** | **matching** | 모든 쌍 일치 |
+| **`ordering`** | **list order** | 순서 완전 일치 |
+
+### 유형 배분 목표 (세트별)
+
+| 유형 | 도메인 연습 | 모의고사 |
+|---|---:|---:|
+| `single` | 60% | 60% |
+| `multiple` | 20% | 15% |
+| `matching` | 12% | 15% |
+| `ordering` | 8% | 10% |
+
+> 실제 시험의 유형 비율은 Confluent가 공개하지 않는다. 위 값은 "세 유형 모두
+> 충분히 연습된다"를 보장하기 위한 **연습용 배분**이며, 사이트에 실제 시험 비율로
+> 표기하지 않는다.
+
+### Kafka 내용에 잘 맞는 유형 매칭
+
+**`matching`이 자연스러운 소재**
+- 설정명 ↔ 기본값 (`acks` ↔ `all`, `message.max.bytes` ↔ 1MB)
+- 설정명 ↔ 소속 (프로듀서/컨슈머/브로커/토픽)
+- 예외 클래스 ↔ 원인 (또는 재시도 가능 여부)
+- SMT 이름 ↔ 용도
+- 호환성 모드 ↔ 배포 순서 (BACKWARD ↔ 컨슈머 먼저)
+- Streams 연산 ↔ stateless/stateful/리파티션 유발
+- JMX 메트릭 ↔ 의미
+- 커넥터 종류 ↔ 오프셋 저장 위치
+- 윈도우 타입 ↔ 특성
+
+**`ordering`이 자연스러운 소재**
+- 트랜잭션 API 호출 순서 (`initTransactions` → `beginTransaction` → … → `commit`)
+- Producer 전송 파이프라인 단계 순서
+- 리밸런스 진행 단계
+- `kafka-reassign-partitions` 워크플로 (`--generate` → `--execute` → `--verify`)
+- KRaft 클러스터 부트스트랩 절차 (`random-uuid` → `format` → 기동)
+- 2.x → 3.9 → 4.x 업그레이드 단계
+- 스키마 진화 배포 순서
+- Connect source의 SMT/converter 적용 순서
+- 장애 대응 우선순위 (무엇을 먼저 확인하는가)
+
+---
+
 ## 파일 구조
 
 `data/questions/*.json`
@@ -68,15 +125,114 @@
 | `domain` | string | ✅ | 세트의 `domain`과 일치 |
 | `chapter` | string | ✅ | 연계 학습 챕터 `ch01`~`ch11`. 결과 리포트가 이 값으로 복습 링크를 만든다 |
 | `difficulty` | enum | ✅ | `easy` \| `medium` \| `hard` — 세트 내 비율 **3 : 5 : 2** |
-| `type` | enum | ✅ | `single` \| `multiple` |
+| `type` | enum | ✅ | `single` \| `multiple` \| `matching` \| `ordering` |
 | `question` | string | ✅ | 200자 이내 권장. `multiple`이면 끝에 `(2개 선택)` 명시 |
 | `code` | object \| null | — | `{ lang, body }`. 코드/설정이 필요할 때만 |
-| `choices` | array | ✅ | **정확히 4개** (`multiple`은 5개 허용). `id`는 `A`,`B`,`C`,`D`,`E` |
-| `answer` | string[] | ✅ | `single`이면 1개, `multiple`이면 2개 이상 |
+| `choices` | array | `single`/`multiple`만 | **정확히 4개** (`multiple`은 5개 허용). `id`는 `A`,`B`,`C`,`D`,`E` |
+| `answer` | string[] | `single`/`multiple`/`ordering` | `single` 1개 / `multiple` 2개 이상 / `ordering`은 정답 순서의 item id 배열 |
+| `pairs` | array | `matching`만 | 아래 §matching 참조 |
+| `items` | array | `ordering`만 | 아래 §ordering 참조 |
 | `explanation` | string | ✅ | **3~6문장.** 정답을 원리로 설명. 문제문 반복 금지 |
 | `distractorNotes` | object | ✅ | **모든 오답 선택지**에 대해 1~2문장 |
 | `refs` | array | ✅ | 최소 1개. **공식 문서 URL만** (kafka.apache.org / cwiki.apache.org / docs.confluent.io) |
 | `tags` | string[] | ✅ | 2~5개. 소문자, 설정명은 원문 그대로 |
+
+## `matching` 유형 상세
+
+```json
+{
+  "id": "ccdak-fundamentals-071",
+  "exam": "CCDAK",
+  "domain": "Fundamentals",
+  "chapter": "ch04",
+  "difficulty": "medium",
+  "type": "matching",
+  "question": "각 설정을 Kafka 4.x 기준 기본값과 연결하세요.",
+  "pairs": [
+    { "id": "p1", "left": "acks", "right": "all" },
+    { "id": "p2", "left": "enable.idempotence", "right": "true" },
+    { "id": "p3", "left": "message.max.bytes", "right": "1048588 (약 1MB)" },
+    { "id": "p4", "left": "max.poll.interval.ms", "right": "300000" }
+  ],
+  "extraRights": ["1", "false", "60000"],
+  "explanation": "…",
+  "distractorNotes": {
+    "p1": "acks 기본값은 3.0부터 all입니다. 2.x에서는 1이었습니다.",
+    "p3": "정확히는 1048588 bytes입니다. 1MB(1048576)보다 약간 큽니다."
+  },
+  "refs": [ … ],
+  "tags": ["defaults", "acks", "idempotence"]
+}
+```
+
+| 필드 | 규칙 |
+|---|---|
+| `pairs` | **3~6개.** 각 항목에 `id`(`p1`…), `left`(고정 항목), `right`(정답 대응값) |
+| `left` | 화면 왼쪽에 고정 표시. 순서 그대로 노출 |
+| `right` | 정답 대응값. **엔진이 셔플해서 선택지 풀을 만든다** |
+| `extraRights` | 선택. 정답이 아닌 미끼 값. 넣으면 난이도가 크게 올라간다 (권장) |
+| `distractorNotes` | 키를 `pairs[].id`로. **혼동하기 쉬운 쌍에만** 작성 (전부 아님) |
+
+**작성 규칙**
+- `left` 항목끼리 **같은 범주**여야 한다. 설정명과 예외명을 섞지 말 것
+- `right` 값이 서로 명확히 구별되어야 한다. 두 `left`가 같은 `right`를 가질 수 있으면 안 됨
+- `extraRights`를 1~3개 넣어 "남는 것 없이 1:1 대응"으로 답을 역추론하는 것을 막을 것
+- 채점은 **전부 맞아야 정답** (부분 점수 없음). 시험과 동일
+
+**UI 요구사항 (Wave 0 quiz.js)**
+- 각 `left` 항목마다 `<select>` 하나. 옵션은 셔플된 `right` + `extraRights`
+- **드래그 앤 드롭을 유일한 조작 수단으로 만들지 말 것** — 접근성 차단
+- 키보드만으로 완주 가능
+- 채점 후 틀린 쌍만 표시하고 정답 쌍을 병기
+
+---
+
+## `ordering` 유형 상세
+
+```json
+{
+  "id": "ccdak-app-development-088",
+  "exam": "CCDAK",
+  "domain": "Application Development",
+  "chapter": "ch06",
+  "difficulty": "medium",
+  "type": "ordering",
+  "question": "트랜잭션 프로듀서의 API 호출을 올바른 순서로 배열하세요.",
+  "items": [
+    { "id": "i1", "text": "initTransactions()" },
+    { "id": "i2", "text": "beginTransaction()" },
+    { "id": "i3", "text": "send() — 레코드 전송" },
+    { "id": "i4", "text": "sendOffsetsToTransaction()" },
+    { "id": "i5", "text": "commitTransaction()" }
+  ],
+  "answer": ["i1", "i2", "i3", "i4", "i5"],
+  "explanation": "initTransactions()는 프로듀서 생애에 한 번만 호출하며 …",
+  "distractorNotes": {
+    "i1": "initTransactions()를 트랜잭션마다 호출하는 것으로 착각하기 쉽습니다. 초기화 시 1회입니다."
+  },
+  "refs": [ … ],
+  "tags": ["transactions", "eos"]
+}
+```
+
+| 필드 | 규칙 |
+|---|---|
+| `items` | **4~6개.** 각 항목에 `id`(`i1`…), `text` |
+| `answer` | 정답 순서의 `id` 배열. `items`와 개수가 같아야 함 |
+| `items` 배열 순서 | **정답 순서로 쓰지 말 것.** 엔진이 셔플하지만, 데이터 자체가 정답 순이면 유출 위험 |
+
+**작성 규칙**
+- 순서가 **객관적으로 하나로 확정**되어야 한다. "보통 이렇게 한다" 수준은 금지
+- 병렬 가능한 단계(순서가 바뀌어도 되는 것)를 넣지 말 것
+- 각 항목이 명확히 구별되는 단계여야 한다
+- 채점은 **완전 일치**
+
+**UI 요구사항 (Wave 0 quiz.js)**
+- 항목마다 위/아래 이동 `<button>` 제공 (키보드 접근 가능)
+- 또는 각 항목에 순번 `<select>` — 어느 쪽이든 **드래그 없이 완주 가능**해야 함
+- 채점 후 제출 순서와 정답 순서를 나란히 표시
+
+---
 
 ## 품질 규칙
 

@@ -42,8 +42,32 @@
    (예: https://kafka.apache.org/documentation/#producerconfigs_acks)
 10. chapter 필드 필수 — 결과 리포트의 복습 링크가 이 값에 의존합니다.
 
-### 문항 유형을 섞으세요
-| 유형 | 비율 | 예 |
+### ⚠️ 문항 유형은 4가지입니다 — 객관식만 만들지 마세요
+
+Confluent 공식 자료:
+> Question types vary, and include multiple-choice, **matching, list order**.
+
+실제 시험에 **연결형(matching)** 과 **순서 배열형(ordering)** 이 나옵니다.
+객관식만 연습하면 세 유형 중 둘을 시험장에서 처음 보게 됩니다.
+`docs/QUESTION_SCHEMA.md`의 §matching 유형 상세 / §ordering 유형 상세를 반드시 읽으세요.
+
+**유형 배분 (당신 세트에서 지켜야 하는 비율)**
+| type | 도메인 연습 | 모의고사 |
+|---|---:|---:|
+| `single` | 60% | 60% |
+| `multiple` | 20% | 15% |
+| `matching` | 12% | 15% |
+| `ordering` | 8% | 10% |
+
+matching/ordering이 자연스러운 소재는 QUESTION_SCHEMA.md에 목록으로 정리되어 있습니다.
+(설정명↔기본값, 예외↔원인, SMT↔용도, 호환성모드↔배포순서, 연산↔stateless/stateful /
+ 트랜잭션 API 순서, reassign 워크플로, KRaft 부트스트랩 절차, 업그레이드 단계 등)
+
+**억지로 만들지 마세요.** 순서가 객관적으로 확정되지 않는 것을 ordering으로,
+범주가 섞인 것을 matching으로 만들면 나쁜 문항이 됩니다. 위 소재 목록에서 고르세요.
+
+### 출제 각도도 섞으세요 (위 type과는 별개 축)
+| 각도 | 비율 | 예 |
 |---|---|---|
 | 개념 판별 | 30% | "다음 중 cooperative 리밸런스의 특징은?" |
 | 설정값·기본값 | 20% | "Kafka 3.0 이상 acks 기본값은?" |
@@ -54,7 +78,8 @@
 ### 완료 전 자가 검증
 `node tools/validate.mjs --questions` 를 실행해 당신 파일의 오류를 0으로 만드세요.
 그 후 다음을 직접 세어 리포트에 넣으세요:
-- 총 문항 수 / 난이도 분포 / 정답 분포(A,B,C,D) / 커버한 체크리스트 태그 목록
+- 총 문항 수 / 난이도 분포 / **유형 분포(single/multiple/matching/ordering)** /
+  정답 분포(A,B,C,D) / 커버한 체크리스트 태그 목록
 ```
 
 ---
@@ -191,7 +216,8 @@
 5. **4세트의 난이도가 서로 비슷해야 합니다.** 한 세트만 어려우면 진단이 왜곡됩니다.
    작성 후 각 세트의 hard 비율과 코드 판독 문항 수를 세어 균형을 맞추세요.
 6. 문항 순서를 도메인별로 뭉치지 말고 **섞으세요** (실제 시험처럼).
-7. `multiple` 타입(복수 정답)을 세트당 6~10문항.
+7. 유형 배분 준수: `single` 36 / `multiple` 9 / `matching` 9 / `ordering` 6 (= 60).
+   네 유형이 모두 들어가야 합니다.
 8. **코드 판독 문항을 세트당 최소 12개.** CCDAK는 Java 스니펫 판독이 자주 나옵니다.
 
 ### 세트별 성격 차별화 (중복 방지 + 훈련 효과)
@@ -349,7 +375,7 @@ Wave 0의 반환 리포트나 flashcard.js 코드에서 실제 스키마를 읽�
 - **시나리오·장애 대응 문항 비중 50% 이상**
 - CLI 출력 판독 문항 최소 8개
 - easy:medium:hard = 2:5:3
-- multiple 타입 6~10문항
+- 유형 배분: single 36 / multiple 9 / matching 9 / ordering 6
 
 세트 메타: setId="ccaak-mock-1", exam="CCAAK", domain="Mixed", mock=true
 ```

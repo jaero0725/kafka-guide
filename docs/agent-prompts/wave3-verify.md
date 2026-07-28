@@ -141,6 +141,10 @@ docs/CCDAK_TOPIC_CHECKLIST.md 의 A1~I1 **전 항목**에 대해:
 - distractorNotes 누락 (오답 중 하나라도 빠지면)
 - refs가 비었거나 비공식 도메인
 - 정답 분포 편중 (한 선택지가 세트 내 35% 초과)
+- **유형 분포**: single/multiple/matching/ordering 비율이 계획(60/15~20/12~15/8~10)에서
+  크게 벗어난 세트 → matching/ordering이 0개인 세트는 MAJOR
+- `matching`: pairs 3~6개, id 유일, right 값 중복, extraRights와 정답 겹침
+- `ordering`: items 4~6개, answer 길이 일치, answer의 id가 전부 items에 존재
 - 선택지 길이 편향 (정답이 항상 최장이면 경고)
 - explanation이 60자 미만 (성의 없음)
 - chapter 필드 누락 또는 존재하지 않는 챕터 참조
@@ -150,6 +154,12 @@ docs/CCDAK_TOPIC_CHECKLIST.md 의 A1~I1 **전 항목**에 대해:
 - `difficulty: "hard"` 문항 전부
 - 설정 기본값을 묻는 문항 전부 (공식 문서 대조)
 - `type: "multiple"` 문항 전부 (복수 정답 문제는 오류율이 높습니다)
+- **`type: "matching"` 문항 전부** — 쌍 대응이 실제로 1:1로 확정되는가,
+  두 left가 같은 right를 가질 수 있으면 애매한 문항(MAJOR),
+  extraRights가 실제로는 정답이 될 수 있으면 CRITICAL
+- **`type: "ordering"` 문항 전부** — 순서가 객관적으로 하나로 확정되는가,
+  병렬 가능한(순서가 바뀌어도 되는) 단계가 섞여 있으면 CRITICAL,
+  items 배열이 정답 순서로 저장되어 있으면 유출 위험(MINOR)
 - CCDAK_TOPIC_CHECKLIST 태그가 달린 문항 전부
 
 나머지 문항은 세트별 20% 무작위 표본.
