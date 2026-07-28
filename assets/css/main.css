@@ -938,6 +938,112 @@ a.card:hover { border-color: var(--c-accent-border); background: var(--c-accent-
 .quiz--graded .quiz__choice { cursor: default; }
 .quiz--graded .quiz__choice:hover { background: inherit; }
 
+/* ---------- matching 유형 ------------------------------------------------ */
+.qm { display: grid; gap: var(--space-2); margin: 0 0 var(--space-4); }
+.qm__row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 14rem) auto minmax(8rem, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-2);
+  background: var(--c-surface);
+  font-size: var(--fs-sm);
+  min-width: 0;
+}
+.qm__left { font-weight: var(--fw-medium); min-width: 0; overflow-wrap: break-word; cursor: pointer; }
+.qm__left code { white-space: normal; }
+.qm__arrow { color: var(--c-text-muted); }
+.qm__select { min-width: 0; width: 100%; }
+.qm__mark { font-weight: var(--fw-bold); }
+.qm__answer {
+  grid-column: 1 / -1;
+  font-size: var(--fs-xs);
+  color: var(--c-success-text);
+}
+.qm__answer b { font-family: var(--font-mono); }
+.qm__row[data-verdict="correct"] { border-color: var(--c-success-border); background: var(--c-success-bg); }
+.qm__row[data-verdict="correct"] .qm__mark { color: var(--c-success-text); }
+.qm__row[data-verdict="wrong"] { border-color: var(--c-danger-border); background: var(--c-danger-bg); }
+.qm__row[data-verdict="wrong"] .qm__mark { color: var(--c-danger-text); }
+
+@media (max-width: 560px) {
+  .qm__row { grid-template-columns: 1fr auto; }
+  .qm__arrow { display: none; }
+  .qm__select { grid-column: 1 / -1; }
+}
+
+/* ---------- ordering 유형 ----------------------------------------------- */
+.qo-wrap { margin: 0 0 var(--space-4); }
+.qo { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); counter-reset: qo; }
+.qo > li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-2);
+  background: var(--c-surface);
+  font-size: var(--fs-sm);
+  min-width: 0;
+}
+.qo__pos {
+  flex: 0 0 auto;
+  width: 1.6rem; height: 1.6rem;
+  display: grid; place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--c-surface-sunken);
+  border: 1px solid var(--c-border);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: var(--c-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.qo__text { min-width: 0; overflow-wrap: break-word; }
+.qo__ctrl { display: flex; gap: var(--space-1); flex: 0 0 auto; }
+.qo__btn {
+  width: 2rem; height: 2rem;
+  display: grid; place-items: center;
+  padding: 0;
+  border: 1px solid var(--c-control-border);
+  border-radius: var(--radius-1);
+  background: var(--c-control-bg);
+  color: var(--c-text-secondary);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  line-height: 1;
+}
+.qo__btn:hover:not(:disabled) { background: var(--c-control-hover-bg); color: var(--c-text); }
+.qo__btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.qo__mark { font-weight: var(--fw-bold); }
+.qo > li[data-verdict="correct"] { border-color: var(--c-success-border); background: var(--c-success-bg); }
+.qo > li[data-verdict="correct"] .qo__mark { color: var(--c-success-text); }
+.qo > li[data-verdict="wrong"] { border-color: var(--c-danger-border); background: var(--c-danger-bg); }
+.qo > li[data-verdict="wrong"] .qo__mark { color: var(--c-danger-text); }
+
+.qo__compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.qo__compare > div { min-width: 0; }
+.qo__compare h4 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--c-text-muted);
+}
+.qo__mini { margin: 0; padding-left: 1.4em; font-size: var(--fs-sm); }
+.qo__mini > li { margin-bottom: var(--space-1); }
+.qo__mini--ok > li { color: var(--c-success-text); }
+
 .quiz__feedback { margin: 0 0 var(--space-4); }
 .quiz__verdict {
   display: flex;
