@@ -75,6 +75,16 @@ const SECTIONS = [
   ]},
   { id: 'ccaak', title: 'CCAAK', pages: [
     { id: 'index', title: '개요 · 학습 플랜' },
+    /* 섹션 이름은 Confluent 블루프린트 확정값이며 validate.mjs 의
+       EXAM_DOMAINS.CCAAK 와 문자 단위로 일치해야 한다. 가중치는 공식 확인이
+       불가해 표기하지 않는다 (docs/FACT_SOURCES.md §7). */
+    { id: 'domain-fundamentals',    title: 'Kafka Fundamentals' },
+    { id: 'domain-security',        title: 'Kafka Security' },
+    { id: 'domain-connect',         title: 'Kafka Connect' },
+    { id: 'domain-deployment',      title: 'Deployment Architecture' },
+    { id: 'domain-cluster-config',  title: 'Cluster Configuration' },
+    { id: 'domain-observability',   title: 'Observability' },
+    { id: 'domain-troubleshooting', title: 'Troubleshooting' },
     { id: 'exam-tips', title: '시험 당일 전략' }
   ]},
   { id: 'practice', title: '실무 예제', pages: [

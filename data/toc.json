@@ -1,8 +1,8 @@
 {
   "generatedAt": "2026-07-28",
   "kafkaVersion": "4.3",
-  "total": 59,
-  "built": 58,
+  "total": 66,
+  "built": 66,
   "sections": [
     {
       "id": "home",
@@ -265,6 +265,62 @@
           "exists": true
         },
         {
+          "id": "domain-fundamentals",
+          "path": "ccaak/domain-fundamentals.html",
+          "title": "Kafka Fundamentals",
+          "pageTitle": "CCAAK · Kafka Fundamentals",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-security",
+          "path": "ccaak/domain-security.html",
+          "title": "Kafka Security",
+          "pageTitle": "CCAAK · Kafka Security",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-connect",
+          "path": "ccaak/domain-connect.html",
+          "title": "Kafka Connect",
+          "pageTitle": "CCAAK · Kafka Connect",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-deployment",
+          "path": "ccaak/domain-deployment.html",
+          "title": "Deployment Architecture",
+          "pageTitle": "CCAAK · Deployment Architecture",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-cluster-config",
+          "path": "ccaak/domain-cluster-config.html",
+          "title": "Cluster Configuration",
+          "pageTitle": "CCAAK · Cluster Configuration",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-observability",
+          "path": "ccaak/domain-observability.html",
+          "title": "Observability",
+          "pageTitle": "CCAAK · Observability",
+          "num": null,
+          "exists": true
+        },
+        {
+          "id": "domain-troubleshooting",
+          "path": "ccaak/domain-troubleshooting.html",
+          "title": "Troubleshooting",
+          "pageTitle": "CCAAK · Troubleshooting",
+          "num": null,
+          "exists": true
+        },
+        {
           "id": "exam-tips",
           "path": "ccaak/exam-tips.html",
           "title": "시험 당일 전략",
@@ -370,9 +426,9 @@
           "id": "ex12",
           "path": "practice/ex12.html",
           "title": "Python / Node 클라이언트",
-          "pageTitle": null,
+          "pageTitle": "예제 12 · Python / Node.js 클라이언트",
           "num": "12",
-          "exists": false
+          "exists": true
         }
       ]
     },

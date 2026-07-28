@@ -271,6 +271,45 @@ if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 && !batch.isDone(
 `message.max.bytes`는 **압축 후 배치 크기** 기준이다.
 브로커 `message.max.bytes` ↔ 토픽 `max.message.bytes` — **어순이 반전**되어 있어 자주 틀린다.
 
+### Kafka 4.3 API 변경 — 출제 가치가 높다 (A4 확인)
+
+| 항목 | 4.3 상태 |
+|---|---|
+| `Consumer.close(Duration)` | **@Deprecated** → `close(CloseOptions)` |
+| `sendOffsetsToTransaction(Map, String)` | **오버로드 제거.** `ConsumerGroupMetadata` 변형만 존재 |
+| `ConsumerRecords#nextOffsets()` | 신규. **리더 에포크 포함** 커밋 오프셋 제공 |
+| Connect `rest.port` | **4.x에 없다.** `listeners=http://:8083` 를 쓴다 |
+| 4.0 제거 클래스 | `DefaultPartitioner`, `UniformStickyPartitioner`, `NotLeaderForPartitionException` |
+
+### A4가 확인한 추가 기본값
+```
+group.coordinator.rebalance.protocols=classic,consumer,streams
+num.io.threads=8            num.network.threads=3
+transaction.max.timeout.ms=900000
+transactional.id.expiration.ms=604800000
+transaction.state.log.replication.factor=3   transaction.state.log.min.isr=2
+Connect: listeners=http://:8083  plugin.discovery=hybrid_warn
+         offset.storage.partitions=25  status.storage.partitions=5
+         errors.tolerance=none  errors.deadletterqueue.context.headers.enable=false
+MM2:     replication.factor=2  (3이 아니다)   sync.group.offsets.enabled=false
+```
+
+### 차단된 추가 호스트
+`packages.confluent.io` (CONNECT 403), `quay.io` API, `api.github.com` (403).
+→ Confluent Maven 아티팩트 버전은 **GitHub 태그의 `pom.xml`** 로 교차 확인한다
+  (예: `raw.githubusercontent.com/confluentinc/schema-registry/v8.2.2/pom.xml`).
+→ Debezium 커넥터는 이미지 대신 **Maven Central 플러그인 tarball**을 쓴다.
+
+### Maven/PyPI/npm 확인값 (A4)
+```
+spring-boot 4.1.0 / spring-kafka 4.1.0 (kafka-clients 4.2.1 관리)
+  ⚠️ Spring Boot 4 는 스타터가 spring-boot-starter-kafka,
+     자동설정 패키지가 org.springframework.boot.kafka.autoconfigure
+avro 1.12.1 / debezium 3.6.0.Final / jmx_prometheus_javaagent 1.0.1
+confluent-kafka(python) 2.15.0 / kafkajs 2.2.4
+Schema Registry 8.2.2 (Docker Hub 최신 태그 + GitHub v8.2.2 pom.xml 교차 확인)
+```
+
 ### ⚠️ 공식 문서에 없어서 쓰면 안 되는 것
 - **압축 코덱별 압축률·CPU·지연의 구체적 수치.** 공식 문서에 없다.
   상대 비교로만 서술하고, 필요하면 실측을 안내한다.

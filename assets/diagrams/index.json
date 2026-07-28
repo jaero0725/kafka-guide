@@ -693,9 +693,9 @@
       "file": "D-119-case10-message-size-mismatch.svg",
       "slug": "case10-message-size-mismatch",
       "title": "case10 — 메시지 크기 설정 5종의 소속과 막히는 지점",
-      "desc": "왼쪽에서 오른쪽으로 프로듀서 앱, 프로듀서 버퍼, 브로커 수신, 토픽 override, 팔로워 복제, 컨슈머 fetch 순서로 레코드가 지나가는 경로를 그리고 각 지점에 관련 설정과 기본값, 소속을 표시했습니다. 프로듀서의 max.request.size 1048576, 브로커의 message.max.bytes 1048588, 토픽의 max.message.bytes 1048588 은 넘으면 거부하는 하드 게이트입니다. 프로듀서 쪽은 전송 전에 RecordTooLargeException 으로 실패하고 브로커 쪽은 MESSAGE_TOO_LARGE 로 거부합니다. 반면 브로커의 replica.fetch.max.bytes 1048576, 컨슈머의 max.partition.fetch.bytes 1048576, fetch.max.bytes 52428800 은 절대 상한이 아니며 첫 배치가 더 커도 그대로 반환해 복제와 소비가 멈추지 않도록 보장합니다. 토픽만 올리면 프로듀서에서 막히고 프로듀서만 올리면 브로커가 거부하므로 두 곳을 함께 올려야 합니다. RecordTooLargeException 은 재시도 가능한 오류가 아니라 즉시 실패하며, 무한 재시도로 보이는 증상은 대개 애플리케이션 자체의 재전송 루프입니다.",
+      "desc": "왼쪽에서 오른쪽으로 프로듀서 앱, 프로듀서 버퍼, 브로커 수신, 토픽 override, 팔로워 복제, 컨슈머 fetch 순서로 레코드가 지나가는 경로를 그리고 각 지점에 관련 설정과 기본값, 소속을 표시했습니다. 프로듀서의 max.request.size 1048576, 브로커의 message.max.bytes 1048588, 토픽의 max.message.bytes 1048588 은 넘으면 거부하는 하드 게이트입니다. 프로듀서 쪽은 전송 전에 RecordTooLargeException 으로 실패하고 브로커 쪽은 MESSAGE_TOO_LARGE 로 거부합니다. 반면 브로커의 replica.fetch.max.bytes 1048576, 컨슈머의 max.partition.fetch.bytes 1048576, fetch.max.bytes 52428800 은 절대 상한이 아니며 첫 배치가 더 커도 그대로 반환해 복제와 소비가 멈추지 않도록 보장합니다. 토픽만 올리면 프로듀서에서 막히고 프로듀서만 올리면 브로커가 거부하므로 두 곳을 함께 올려야 합니다. 프로듀서 쪽 초과는 RecordTooLargeException 으로 즉시 실패합니다. 반면 브로커가 MESSAGE_TOO_LARGE 를 반환하면 Sender 가 배치를 쪼개 다시 보내며, 이때 재시도 횟수를 소모하지 않습니다 (Sender.java 소스 주석 명시). 그래서 요청 수가 폭증하고 버퍼가 고갈되어 무한 재시도처럼 보입니다. 레코드가 1건인 배치는 더 쪼갤 수 없어 최종 실패합니다.",
       "interactive": false,
-      "bytes": 9084
+      "bytes": 9329
     },
     "D-120": {
       "file": "D-120-tree-consumer-not-consuming.svg",
@@ -711,7 +711,7 @@
       "title": "트러블슈팅 결정 트리 — 프로듀서 전송이 실패할 때",
       "desc": "프로듀서 전송 실패를 예외 유형에서 출발해 좁혀 가는 결정 트리입니다. 마름모는 판단, 사각형은 조치입니다. RecordTooLargeException 이면 프로듀서 max.request.size 와 브로커·토픽 쪽 상한을 함께 확인합니다. NotEnoughReplicas 계열이면 ISR 이 min.insync.replicas 보다 적은 것이므로 --under-min-isr-partitions 로 확인합니다. TimeoutException 이면 delivery.timeout.ms 예산 안에서 전송을 마치지 못한 것이므로 메타데이터 조회 경로와 브로커 응답 지연을 봅니다. send 호출 자체가 블록되면 buffer.memory 가 고갈되어 max.block.ms 를 기다리는 상황입니다. TOPIC_AUTHORIZATION_FAILED 면 쓰기 권한을, UnknownTopicOrPartitionException 이면 토픽 존재 여부와 auto.create.topics.enable 을 확인합니다. 마지막으로 순서가 어긋나면 멱등성 설정과 max.in.flight.requests.per.connection 을 점검합니다.",
       "interactive": false,
-      "bytes": 9230
+      "bytes": 9219
     },
     "D-122": {
       "file": "D-122-tree-broker-slow.svg",

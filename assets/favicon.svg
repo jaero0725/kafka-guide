@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Kafka Guide">
+  <rect width="32" height="32" rx="6" fill="#1f6feb"/>
+  <!-- 파티션 3개를 나타내는 가로 로그 막대 -->
+  <rect x="7"  y="8"  width="18" height="3.4" rx="1.7" fill="#fff" opacity=".95"/>
+  <rect x="7"  y="14.3" width="13" height="3.4" rx="1.7" fill="#fff" opacity=".8"/>
+  <rect x="7"  y="20.6" width="16" height="3.4" rx="1.7" fill="#fff" opacity=".65"/>
+</svg>
