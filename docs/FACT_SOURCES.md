@@ -310,6 +310,50 @@ confluent-kafka(python) 2.15.0 / kafkajs 2.2.4
 Schema Registry 8.2.2 (Docker Hub 최신 태그 + GitHub v8.2.2 pom.xml 교차 확인)
 ```
 
+### 콜백 실패 시 `metadata` — javadoc과 소스가 다르다 (B2a 발견)
+
+`Callback` javadoc과 본문은 실패 시 `metadata`의 **모든 필드가 `-1`**이라고 서술한다.
+그런데 4.3 소스(`KafkaProducer.java` 1590·1613행, `AppendCallbacks.topicPartition()`)는
+**파티션이 이미 결정된 경우 실제 파티션 번호를 담은 `TopicPartition`** 으로
+`RecordMetadata`를 만든다. 즉 `partition()`은 `-1`이 아닐 수 있다.
+
+**판정**: javadoc이 단순화된 서술이고 소스가 더 정확하다.
+- **시험 정답은 javadoc 쪽**을 따른다 (공식 문서 표현)
+- 문항을 만들 때는 **`offset()`이 `-1`임만 묻는다** (B2a가 이렇게 처리했다)
+- `partition()`을 근거로 하는 문항은 만들지 않는다
+
+### Streams Rebalance Protocol — 브로커 활성 ≠ 클라이언트 기본값 (B2b 발견)
+
+KIP-1071은 4.1 EA → **4.2 production-ready**이고
+`streams/developer-guide/streams-rebalance-protocol.md:80`이
+"enabled by default on new clusters starting with Apache Kafka 4.2"라고 명시한다.
+
+**그런데 이것은 브로커 쪽 그룹 타입 활성화를 뜻한다.**
+`generated/streams_config.html`의 클라이언트 `group.protocol` 기본값은 **여전히 `classic`** 이고,
+새 프로토콜을 쓰려면 `group.protocol=streams`로 **명시적으로 옵트인**해야 한다.
+"4.2부터 기본 활성"을 클라이언트 기본값이 바뀐 것으로 읽으면 틀린다 — 좋은 함정 소재다.
+
+### fetch 3종이 "절대 상한이 아니다"의 공식 원문 (B1이 본문 오류를 잡은 근거)
+```
+replica.fetch.max.bytes:
+  "This is not an absolute maximum, if the first record batch in the first
+   non-empty partition of the fetch is larger than this value, the record batch
+   will still be returned to ensure that progress can be made."
+max.partition.fetch.bytes:
+  "If the first record batch in the first non-empty partition of the fetch is
+   larger than this limit, the batch will still be returned to ensure that the
+   consumer can make progress."
+```
+→ **"큰 레코드가 복제나 소비를 영구히 막는다"는 서술은 틀린 선택지다.**
+
+### B5가 확인 실패로 남긴 것
+- **SASL/OAUTHBEARER 도입 버전** — 4.3 site-docs의 "From Kafka version 2.0 onwards"는
+  PLAIN/SCRAM 콜백 핸들러 문맥에만 있다. OAUTHBEARER 도입 버전은 명시가 없고
+  cwiki 차단으로 KIP-255 교차 확인이 불가하다. **버전을 묻는 문항을 만들지 말 것.**
+- `connect.protocol` 기본값 — `cfg.json`(생성 설정표)은 `sessioned`, 산문 문서는 `compatible`.
+  `ccaak/domain-connect.html`이 `sessioned`로 단정하고 있으나 문서 내부 불일치가
+  해소되지 않았다. **정답 근거로 쓰지 말 것.**
+
 ### ⚠️ 공식 문서에 없어서 쓰면 안 되는 것
 - **압축 코덱별 압축률·CPU·지연의 구체적 수치.** 공식 문서에 없다.
   상대 비교로만 서술하고, 필요하면 실측을 안내한다.

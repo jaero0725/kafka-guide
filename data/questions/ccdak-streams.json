@@ -1037,7 +1037,7 @@
         "D": "그룹 레벨로 옮겨가는 것은 `session.timeout.ms`·`heartbeat.interval.ms`·`num.standby.replicas` 입니다. 스레드 수는 여전히 클라이언트 설정입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams Rebalance Protocol", "url": "https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" },
+        { "title": "Apache Kafka — Streams Rebalance Protocol", "url": "https://kafka.apache.org/documentation/streams/developer-guide/streams-rebalance-protocol.html" },
         { "title": "Apache Kafka — Upgrading Apache Kafka", "url": "https://kafka.apache.org/documentation/#upgrade" }
       ],
       "tags": ["kip-1071", "group.protocol", "rebalance-triggers"]

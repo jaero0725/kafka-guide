@@ -15,12 +15,26 @@
       "question": "네 가지 보안 프로토콜 중, 클라이언트 자격증명이 네트워크에 평문으로 흐를 수 있는 구성은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`SSL` — 서버 인증서만 검증하고 클라이언트 인증을 하지 않는 경우" },
-        { "id": "B", "text": "`SASL_PLAINTEXT` — 인증은 하지만 전송 구간을 암호화하지 않는다" },
-        { "id": "C", "text": "`SASL_SSL` — SASL 핸드셰이크가 TLS 수립보다 먼저 일어난다" },
-        { "id": "D", "text": "`PLAINTEXT` — 인증 정보를 그대로 전송한다" }
+        {
+          "id": "A",
+          "text": "`SSL` — 서버 인증서만 검증하고 클라이언트 인증을 하지 않는 경우"
+        },
+        {
+          "id": "B",
+          "text": "`SASL_PLAINTEXT` — 인증은 하지만 전송 구간을 암호화하지 않는다"
+        },
+        {
+          "id": "C",
+          "text": "`SASL_SSL` — SASL 핸드셰이크가 TLS 수립보다 먼저 일어난다"
+        },
+        {
+          "id": "D",
+          "text": "`PLAINTEXT` — 인증 정보를 그대로 전송한다"
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "프로토콜 이름은 두 축의 조합으로, 앞부분이 인증 방식이고 뒷부분이 전송 암호화입니다. `SASL_PLAINTEXT` 는 SASL로 인증하지만 전송을 암호화하지 않으므로 PLAIN 메커니즘과 함께 쓰면 사용자명과 비밀번호가 그대로 흐릅니다. 공식 문서도 SCRAM을 TLS와 함께 쓰라고 명시하며, 프로덕션 표준은 `SASL_SSL` 입니다. 이 프로토콜은 신뢰된 사설망 내부에서만 쓸 수 있고 외부 클라이언트에 노출해서는 안 됩니다.",
       "distractorNotes": {
         "A": "`SSL` 은 전송을 암호화하며 자격증명 대신 인증서를 씁니다. 클라이언트 인증을 켜지 않았다면 인증이 없는 것이지 자격증명이 노출되는 것은 아닙니다.",
@@ -28,10 +42,20 @@
         "D": "`PLAINTEXT` 는 인증 자체를 하지 않으므로 전송할 자격증명이 없습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Security Overview", "url": "https://kafka.apache.org/documentation/#security" },
-        { "title": "Apache Kafka — Authentication using SASL", "url": "https://kafka.apache.org/documentation/#security_sasl" }
+        {
+          "title": "Apache Kafka — Security Overview",
+          "url": "https://kafka.apache.org/documentation/#security"
+        },
+        {
+          "title": "Apache Kafka — Authentication using SASL",
+          "url": "https://kafka.apache.org/documentation/#security_sasl"
+        }
       ],
-      "tags": ["security.protocol", "sasl", "encryption"]
+      "tags": [
+        "security.protocol",
+        "sasl",
+        "encryption"
+      ]
     },
     {
       "id": "ccaak-security-002",
@@ -47,12 +71,26 @@
         "body": "listeners=EXTERNAL://0.0.0.0:9094\nlistener.security.protocol.map=EXTERNAL:SASL_SSL,CONTROLLER:SASL_SSL\ncontroller.listener.names=CONTROLLER\n# advertised.listeners 는 설정되지 않았다"
       },
       "choices": [
-        { "id": "A", "text": "`advertised.listeners` 가 없어 `0.0.0.0:9094` 가 그대로 광고되고, 클라이언트가 그 주소로 재접속을 시도한다." },
-        { "id": "B", "text": "`EXTERNAL` 이라는 이름이 보안 프로토콜명이 아니어서 리스너 바인딩이 실패한다." },
-        { "id": "C", "text": "`controller.listener.names` 가 선언되어 있어 브로커가 컨트롤러 포트로만 응답한다." },
-        { "id": "D", "text": "`SASL_SSL` 리스너에서는 부트스트랩만 허용되고 메타데이터 요청은 별도 리스너가 필요하다." }
+        {
+          "id": "A",
+          "text": "`advertised.listeners` 가 없어 `0.0.0.0:9094` 가 그대로 광고되고, 클라이언트가 그 주소로 재접속을 시도한다."
+        },
+        {
+          "id": "B",
+          "text": "`EXTERNAL` 이라는 이름이 보안 프로토콜명이 아니어서 리스너 바인딩이 실패한다."
+        },
+        {
+          "id": "C",
+          "text": "`controller.listener.names` 가 선언되어 있어 브로커가 컨트롤러 포트로만 응답한다."
+        },
+        {
+          "id": "D",
+          "text": "`SASL_SSL` 리스너에서는 부트스트랩만 허용되고 메타데이터 요청은 별도 리스너가 필요하다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "클라이언트는 부트스트랩 주소로 붙어 메타데이터를 받고, 그 뒤부터는 메타데이터에 실린 주소로 각 파티션 리더에 직접 연결합니다. `advertised.listeners` 를 설정하지 않으면 `listeners` 값이 그대로 광고되므로 클라이언트는 `0.0.0.0` 이나 컨테이너 내부 호스트명을 받아 연결에 실패합니다. 그래서 증상이 「부트스트랩은 되는데 그 다음이 안 된다」로 나타납니다. `advertised.listeners` 에는 `0.0.0.0` 을 쓸 수 없고 외부에서 실제 도달 가능한 주소를 넣어야 하며, read-only 설정이라 변경에는 롤링 재시작이 필요합니다.",
       "distractorNotes": {
         "B": "이름이 프로토콜명이 아니어도 `listener.security.protocol.map` 에 매핑이 있으면 정상 동작합니다. 여기서는 매핑이 선언되어 있습니다.",
@@ -60,10 +98,20 @@
         "D": "보안 프로토콜과 요청 종류에 따라 리스너가 갈리는 구조는 없습니다. 한 리스너가 모든 요청을 처리합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Listener Configuration", "url": "https://kafka.apache.org/documentation/#listener_configuration" },
-        { "title": "Apache Kafka — Broker Configs: advertised.listeners", "url": "https://kafka.apache.org/documentation/#brokerconfigs_advertised.listeners" }
+        {
+          "title": "Apache Kafka — Listener Configuration",
+          "url": "https://kafka.apache.org/documentation/#listener_configuration"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs: advertised.listeners",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_advertised.listeners"
+        }
       ],
-      "tags": ["advertised.listeners", "listeners", "config-reading"]
+      "tags": [
+        "advertised.listeners",
+        "listeners",
+        "config-reading"
+      ]
     },
     {
       "id": "ccaak-security-003",
@@ -79,12 +127,26 @@
         "body": "listeners=INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094\nadvertised.listeners=INTERNAL://kafka-1.internal:9092,EXTERNAL://kafka-1.example.com:9094\nlistener.security.protocol.map=INTERNAL:SASL_PLAINTEXT,EXTERNAL:SASL_SSL,CONTROLLER:SASL_SSL\ninter.broker.listener.name=INTERNAL\nsasl.enabled.mechanisms=SCRAM-SHA-512"
       },
       "choices": [
-        { "id": "A", "text": "TLS로 암호화된 채널 위에서 SCRAM-SHA-512 인증이 이루어진다." },
-        { "id": "B", "text": "인증 없이 접속되며 브로커 간 통신만 SCRAM으로 보호된다." },
-        { "id": "C", "text": "SCRAM-SHA-512로 인증하지만 전송은 암호화되지 않는다." },
-        { "id": "D", "text": "`EXTERNAL` 이 우선하므로 실제로는 9094로 리다이렉트되어 `SASL_SSL` 이 적용된다." }
+        {
+          "id": "A",
+          "text": "TLS로 암호화된 채널 위에서 SCRAM-SHA-512 인증이 이루어진다."
+        },
+        {
+          "id": "B",
+          "text": "인증 없이 접속되며 브로커 간 통신만 SCRAM으로 보호된다."
+        },
+        {
+          "id": "C",
+          "text": "SCRAM-SHA-512로 인증하지만 전송은 암호화되지 않는다."
+        },
+        {
+          "id": "D",
+          "text": "`EXTERNAL` 이 우선하므로 실제로는 9094로 리다이렉트되어 `SASL_SSL` 이 적용된다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "리스너 이름은 임의의 라벨이고 실제 보안 방식은 `listener.security.protocol.map` 이 결정합니다. 여기서 `INTERNAL` 은 `SASL_PLAINTEXT` 로 매핑되어 있으므로 SCRAM 인증은 수행되지만 전송 구간은 평문입니다. 즉 SCRAM 챌린지-리스폰스 자체는 비밀번호를 그대로 보내지 않지만 이후 모든 데이터가 평문으로 흐릅니다. 브로커 간 통신도 `inter.broker.listener.name=INTERNAL` 이므로 같은 평문 채널을 씁니다.",
       "distractorNotes": {
         "A": "`INTERNAL` 의 매핑은 `SASL_PLAINTEXT` 이므로 TLS가 적용되지 않습니다. TLS가 붙는 것은 `EXTERNAL` 입니다.",
@@ -92,10 +154,20 @@
         "D": "브로커가 다른 리스너로 리다이렉트하는 동작은 없습니다. 접속한 포트의 리스너 설정이 그대로 적용됩니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Listener Configuration", "url": "https://kafka.apache.org/documentation/#listener_configuration" },
-        { "title": "Apache Kafka — SASL/SCRAM", "url": "https://kafka.apache.org/documentation/#security_sasl_scram" }
+        {
+          "title": "Apache Kafka — Listener Configuration",
+          "url": "https://kafka.apache.org/documentation/#listener_configuration"
+        },
+        {
+          "title": "Apache Kafka — SASL/SCRAM",
+          "url": "https://kafka.apache.org/documentation/#security_sasl_scram"
+        }
       ],
-      "tags": ["listener.security.protocol.map", "sasl", "config-reading"]
+      "tags": [
+        "listener.security.protocol.map",
+        "sasl",
+        "config-reading"
+      ]
     },
     {
       "id": "ccaak-security-004",
@@ -107,12 +179,26 @@
       "question": "`StandardAuthorizer` 를 활성화한 클러스터에서 ACL이 하나도 정의되지 않은 토픽에 인증된 사용자가 접근하면?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "인증된 사용자이므로 허용된다. ACL은 거부 규칙을 추가할 때만 의미가 있다." },
-        { "id": "B", "text": "거부된다. super user만 접근할 수 있고, `allow.everyone.if.no.acl.found=true` 로 이 동작을 바꿀 수 있다." },
-        { "id": "C", "text": "거부되지만 `super.users` 를 지정하지 않았다면 아무도 접근할 수 없어 클러스터가 잠긴다." },
-        { "id": "D", "text": "토픽 레벨에는 ACL이 없으므로 클러스터 레벨 ACL이 자동으로 상속되어 판정된다." }
+        {
+          "id": "A",
+          "text": "인증된 사용자이므로 허용된다. ACL은 거부 규칙을 추가할 때만 의미가 있다."
+        },
+        {
+          "id": "B",
+          "text": "거부된다. super user만 접근할 수 있고, `allow.everyone.if.no.acl.found=true` 로 이 동작을 바꿀 수 있다."
+        },
+        {
+          "id": "C",
+          "text": "거부되지만 `super.users` 를 지정하지 않았다면 아무도 접근할 수 없어 클러스터가 잠긴다."
+        },
+        {
+          "id": "D",
+          "text": "토픽 레벨에는 ACL이 없으므로 클러스터 레벨 ACL이 자동으로 상속되어 판정된다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "공식 문서는 리소스에 매칭되는 ACL이 하나도 없으면 Kafka가 그 리소스 접근을 제한하고 super user만 허용한다고 명시합니다. 이 기본 동작을 뒤집는 설정이 `allow.everyone.if.no.acl.found=true` 이며, 이 값을 켜도 ACL이 하나라도 걸린 리소스에는 그 ACL이 그대로 적용됩니다. `super.users` 를 지정하지 않으면 super user 집합이 비어 있어 실제로 아무도 접근할 수 없는 상태가 되므로, 인가를 켤 때는 관리 계정을 함께 등록해야 합니다. 구분자는 콤마가 아니라 세미콜론이고 프린시펄 타입 문자열 `User` 는 대소문자를 구분합니다.",
       "distractorNotes": {
         "A": "인증과 인가는 별개의 스위치입니다. authorizer가 켜진 상태에서 ACL이 없으면 기본은 거부입니다.",
@@ -120,9 +206,17 @@
         "D": "리소스 타입 간 자동 상속은 없습니다. Topic과 Cluster는 별개의 리소스 타입입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Authorization and ACLs", "url": "https://kafka.apache.org/documentation/#security_authz" }
+        {
+          "title": "Apache Kafka — Authorization and ACLs",
+          "url": "https://kafka.apache.org/documentation/#security_authz"
+        }
       ],
-      "tags": ["acl", "authorizer.class.name", "super.users", "allow.everyone.if.no.acl.found"]
+      "tags": [
+        "acl",
+        "authorizer.class.name",
+        "super.users",
+        "allow.everyone.if.no.acl.found"
+      ]
     },
     {
       "id": "ccaak-security-005",
@@ -131,15 +225,33 @@
       "chapter": "ch11",
       "difficulty": "medium",
       "type": "single",
-      "question": "같은 프린시펄로 프로듀서는 정상 동작하는데 컨슈머만 `GROUP_AUTHORIZATION_FAILED` 를 받는다. 조치로 옳은 것은?",
-      "code": null,
+      "question": "아래 로그를 남기고 컨슈머만 실패한다. 같은 프린시펄의 프로듀서는 정상이다. 조치로 옳은 것은?",
+      "code": {
+        "lang": "text",
+        "caption": "컨슈머 애플리케이션 로그 (발췌)",
+        "body": "org.apache.kafka.common.errors.GroupAuthorizationException: Not authorized to access group: order-workers\n  (프로듀서는 같은 프린시펄로 orders 토픽에 정상 전송 중)"
+      },
       "choices": [
-        { "id": "A", "text": "토픽 ACL을 `--resource-pattern-type prefixed` 로 다시 부여한다." },
-        { "id": "B", "text": "클라이언트의 `security.protocol` 을 브로커 리스너와 일치시킨다." },
-        { "id": "C", "text": "Cluster 리소스에 `IdempotentWrite` 를 부여한다." },
-        { "id": "D", "text": "`kafka-acls.sh --add --consumer --topic X --group Y` 로 토픽과 그룹 권한을 함께 부여한다." }
+        {
+          "id": "A",
+          "text": "토픽 ACL을 `--resource-pattern-type prefixed` 로 다시 부여한다."
+        },
+        {
+          "id": "B",
+          "text": "클라이언트의 `security.protocol` 을 브로커 리스너와 일치시킨다."
+        },
+        {
+          "id": "C",
+          "text": "Cluster 리소스에 `IdempotentWrite` 를 부여한다."
+        },
+        {
+          "id": "D",
+          "text": "`kafka-acls.sh --add --consumer --topic X --group Y` 로 토픽과 그룹 권한을 함께 부여한다."
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "오류 이름이 어느 리소스 타입에서 인가가 실패했는지를 알려 줍니다. `GROUP_AUTHORIZATION_FAILED` 는 Group 리소스 권한이 없다는 뜻이므로 토픽 ACL을 아무리 손봐도 해결되지 않습니다. 컨슈머는 토픽 Read 외에 컨슈머 그룹 참여와 오프셋 커밋을 위한 Group 권한이 필요하고, `--consumer` 편의 옵션은 그래서 `--group` 지정을 필수로 요구합니다. 토픽 권한 실패라면 오류 이름이 `TOPIC_AUTHORIZATION_FAILED` 로 다르게 나타납니다.",
       "distractorNotes": {
         "A": "패턴 타입을 바꿔도 대상은 여전히 Topic 리소스입니다. 실패한 리소스 타입이 Group이므로 효과가 없습니다.",
@@ -147,10 +259,21 @@
         "C": "이것은 멱등 프로듀서가 `CLUSTER_AUTHORIZATION_FAILED` 를 받을 때의 조치입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Authorization and ACLs", "url": "https://kafka.apache.org/documentation/#security_authz" },
-        { "title": "Apache Kafka — Protocol Error Codes", "url": "https://kafka.apache.org/protocol#protocol_error_codes" }
+        {
+          "title": "Apache Kafka — Authorization and ACLs",
+          "url": "https://kafka.apache.org/documentation/#security_authz"
+        },
+        {
+          "title": "Apache Kafka — Protocol Error Codes",
+          "url": "https://kafka.apache.org/protocol#protocol_error_codes"
+        }
       ],
-      "tags": ["acl", "kafka-acls", "consumer-group", "troubleshooting"]
+      "tags": [
+        "acl",
+        "kafka-acls",
+        "consumer-group",
+        "cli-output"
+      ]
     },
     {
       "id": "ccaak-security-006",
@@ -162,12 +285,26 @@
       "question": "브로커에 키스토어와 트러스트스토어를 모두 설정하고 `SSL` 리스너를 열었는데 클라이언트 프린시펄이 `ANONYMOUS` 로 기록된다. 원인은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`ssl.client.auth` 기본값이 `none` 이라 클라이언트 인증을 요구하지 않았다." },
-        { "id": "B", "text": "`ssl.endpoint.identification.algorithm` 이 `https` 로 남아 호스트명 검증이 프린시펄 추출을 막았다." },
-        { "id": "C", "text": "`ssl.protocol` 기본값이 `TLSv1.3` 이어서 클라이언트 인증서 전송이 생략되었다." },
-        { "id": "D", "text": "`authorizer.class.name` 이 비어 있으면 프린시펄이 생성되지 않는다." }
+        {
+          "id": "A",
+          "text": "`ssl.client.auth` 기본값이 `none` 이라 클라이언트 인증을 요구하지 않았다."
+        },
+        {
+          "id": "B",
+          "text": "`ssl.endpoint.identification.algorithm` 이 `https` 로 남아 호스트명 검증이 프린시펄 추출을 막았다."
+        },
+        {
+          "id": "C",
+          "text": "`ssl.protocol` 기본값이 `TLSv1.3` 이어서 클라이언트 인증서 전송이 생략되었다."
+        },
+        {
+          "id": "D",
+          "text": "`authorizer.class.name` 이 비어 있으면 프린시펄이 생성되지 않는다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "mTLS는 브로커가 클라이언트 인증서를 요구해야 성립하고, 그 스위치가 `ssl.client.auth` 입니다. 기본값이 `none` 이므로 스토어를 모두 설정해도 클라이언트 인증은 일어나지 않고 프린시펄이 확정되지 않습니다. `required` 로 바꿔야 인증으로 동작하며, `requested` 는 제출을 요청하지만 없어도 접속을 허용하는 중간 단계입니다. 프린시펄이 정해지지 않으면 ACL도 의도대로 걸리지 않으므로 인가 설계 전에 반드시 확인해야 합니다.",
       "distractorNotes": {
         "B": "이 설정은 클라이언트가 서버 인증서의 호스트명을 검증하는 방식이며 서버 쪽 프린시펄 추출과 무관합니다.",
@@ -175,10 +312,20 @@
         "D": "authorizer가 없으면 인가 검사가 없을 뿐이며 인증된 프린시펄은 그대로 만들어집니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Encryption and Authentication using SSL", "url": "https://kafka.apache.org/documentation/#security_ssl" },
-        { "title": "Apache Kafka — Broker Configs: ssl.client.auth", "url": "https://kafka.apache.org/documentation/#brokerconfigs_ssl.client.auth" }
+        {
+          "title": "Apache Kafka — Encryption and Authentication using SSL",
+          "url": "https://kafka.apache.org/documentation/#security_ssl"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs: ssl.client.auth",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_ssl.client.auth"
+        }
       ],
-      "tags": ["ssl.client.auth", "mtls", "defaults"]
+      "tags": [
+        "ssl.client.auth",
+        "mtls",
+        "defaults"
+      ]
     },
     {
       "id": "ccaak-security-007",
@@ -194,12 +341,26 @@
         "body": "listeners=INTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093\nadvertised.listeners=INTERNAL://kafka-1.internal:9092\nlistener.security.protocol.map=INTERNAL:SASL_SSL,CONTROLLER:SASL_SSL\ninter.broker.listener.name=INTERNAL\nsecurity.inter.broker.protocol=SASL_SSL\ncontroller.listener.names=CONTROLLER"
       },
       "choices": [
-        { "id": "A", "text": "`advertised.listeners` 에 `CONTROLLER` 가 빠져 있어 컨트롤러 통신이 불가능하다." },
-        { "id": "B", "text": "`inter.broker.listener.name` 과 `security.inter.broker.protocol` 을 동시에 설정했다." },
-        { "id": "C", "text": "`controller.listener.names` 의 값이 `listeners` 에 포함되어 있으면 안 된다." },
-        { "id": "D", "text": "`listener.security.protocol.map` 에서 두 리스너가 같은 보안 프로토콜을 쓰고 있다." }
+        {
+          "id": "A",
+          "text": "`advertised.listeners` 에 `CONTROLLER` 가 빠져 있어 컨트롤러 통신이 불가능하다."
+        },
+        {
+          "id": "B",
+          "text": "`inter.broker.listener.name` 과 `security.inter.broker.protocol` 을 동시에 설정했다."
+        },
+        {
+          "id": "C",
+          "text": "`controller.listener.names` 의 값이 `listeners` 에 포함되어 있으면 안 된다."
+        },
+        {
+          "id": "D",
+          "text": "`listener.security.protocol.map` 에서 두 리스너가 같은 보안 프로토콜을 쓰고 있다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "브로커 간 통신 리스너는 이름으로 지정하거나 프로토콜로 지정하거나 하나만 골라야 하며, 두 설정을 함께 주면 구성 오류로 기동이 실패합니다. 이름을 쓰는 방식이 커스텀 리스너 이름과 함께 쓸 수 있으므로 현행 구성에서는 `inter.broker.listener.name` 만 남기는 것이 맞습니다. 컨트롤러 리스너는 브로커 간 리스너와 같은 이름일 수 없다는 제약이 따로 있으며 여기서는 이름이 달라 문제가 되지 않습니다. 결합 노드가 아니라 브로커 전용 노드라면 컨트롤러 리스너를 `listeners` 에 넣지 않는다는 점도 함께 확인해야 합니다.",
       "distractorNotes": {
         "A": "컨트롤러 리스너는 광고 대상이 아니며 `advertised.listeners` 에 넣지 않는 것이 정상입니다.",
@@ -207,10 +368,21 @@
         "D": "여러 리스너가 같은 프로토콜을 쓰는 것은 허용됩니다. 그래서 이름으로 갈라 주는 것입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Listener Configuration", "url": "https://kafka.apache.org/documentation/#listener_configuration" },
-        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" }
+        {
+          "title": "Apache Kafka — Listener Configuration",
+          "url": "https://kafka.apache.org/documentation/#listener_configuration"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs"
+        }
       ],
-      "tags": ["inter.broker.listener.name", "security.inter.broker.protocol", "listeners", "config-reading"]
+      "tags": [
+        "inter.broker.listener.name",
+        "security.inter.broker.protocol",
+        "listeners",
+        "config-reading"
+      ]
     },
     {
       "id": "ccaak-security-008",
@@ -222,12 +394,26 @@
       "question": "SASL_SSL 리스너를 열고 클라이언트에 `sasl.mechanism=SCRAM-SHA-512` 를 지정했는데 인증이 실패한다. 브로커 쪽에서 가장 먼저 확인할 설정은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`ssl.client.auth` 가 `required` 로 설정되어 있는지" },
-        { "id": "B", "text": "`allow.everyone.if.no.acl.found` 가 `true` 인지" },
-        { "id": "C", "text": "`sasl.enabled.mechanisms` 에 `SCRAM-SHA-512` 가 포함되어 있는지" },
-        { "id": "D", "text": "`super.users` 에 해당 사용자가 등록되어 있는지" }
+        {
+          "id": "A",
+          "text": "`ssl.client.auth` 가 `required` 로 설정되어 있는지"
+        },
+        {
+          "id": "B",
+          "text": "`allow.everyone.if.no.acl.found` 가 `true` 인지"
+        },
+        {
+          "id": "C",
+          "text": "`sasl.enabled.mechanisms` 에 `SCRAM-SHA-512` 가 포함되어 있는지"
+        },
+        {
+          "id": "D",
+          "text": "`super.users` 에 해당 사용자가 등록되어 있는지"
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "브로커가 허용하는 SASL 메커니즘 목록은 `sasl.enabled.mechanisms` 이고 기본값은 `GSSAPI` 하나뿐입니다. 즉 SCRAM을 쓰려면 반드시 명시해야 하며, 그러지 않으면 클라이언트가 요청한 메커니즘이 거부됩니다. 인증 실패 진단은 프로토콜 일치 → 메커니즘 허용 여부 → 자격증명 존재 → JAAS 로그인 모듈 일치 순으로 좁히는 것이 정석입니다. SCRAM-SHA-256과 SHA-512는 별개 자격증명이므로 메커니즘을 열었더라도 해당 메커니즘으로 등록된 자격증명이 있어야 합니다.",
       "distractorNotes": {
         "A": "SASL 인증을 쓰는 리스너에서는 클라이언트 인증서를 요구하지 않습니다. 이 값은 mTLS 경로의 설정입니다.",
@@ -235,10 +421,21 @@
         "D": "super user는 ACL을 우회하는 인가 개념이며 인증 성공 여부와 무관합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Authentication using SASL", "url": "https://kafka.apache.org/documentation/#security_sasl" },
-        { "title": "Apache Kafka — SASL/SCRAM", "url": "https://kafka.apache.org/documentation/#security_sasl_scram" }
+        {
+          "title": "Apache Kafka — Authentication using SASL",
+          "url": "https://kafka.apache.org/documentation/#security_sasl"
+        },
+        {
+          "title": "Apache Kafka — SASL/SCRAM",
+          "url": "https://kafka.apache.org/documentation/#security_sasl_scram"
+        }
       ],
-      "tags": ["sasl.enabled.mechanisms", "scram", "defaults", "troubleshooting"]
+      "tags": [
+        "sasl.enabled.mechanisms",
+        "scram",
+        "defaults",
+        "troubleshooting"
+      ]
     },
     {
       "id": "ccaak-security-009",
@@ -250,13 +447,31 @@
       "question": "KRaft 클러스터의 SCRAM 자격증명 관리에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "브로커 간 통신용 자격증명은 `kafka-storage.sh format --add-scram` 으로 기동 전에 심을 수 있다." },
-        { "id": "B", "text": "SCRAM-SHA-256과 SCRAM-SHA-512는 별개 자격증명이므로 각각 등록해야 한다." },
-        { "id": "C", "text": "자격증명은 각 브로커의 로컬 JAAS 파일에 저장되므로 노드마다 파일을 배포해야 한다." },
-        { "id": "D", "text": "반복 횟수를 지정하지 않으면 기본값 1024가 쓰이고 최소 허용값은 512다." },
-        { "id": "E", "text": "클라이언트 자격증명을 추가하려면 전체 브로커의 롤링 재시작이 필요하다." }
+        {
+          "id": "A",
+          "text": "브로커 간 통신용 자격증명은 `kafka-storage.sh format --add-scram` 으로 기동 전에 심을 수 있다."
+        },
+        {
+          "id": "B",
+          "text": "SCRAM-SHA-256과 SCRAM-SHA-512는 별개 자격증명이므로 각각 등록해야 한다."
+        },
+        {
+          "id": "C",
+          "text": "자격증명은 각 브로커의 로컬 JAAS 파일에 저장되므로 노드마다 파일을 배포해야 한다."
+        },
+        {
+          "id": "D",
+          "text": "반복 횟수를 지정하지 않으면 기본값 1024가 쓰이고 최소 허용값은 512다."
+        },
+        {
+          "id": "E",
+          "text": "클라이언트 자격증명을 추가하려면 전체 브로커의 롤링 재시작이 필요하다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "SCRAM 자격증명은 클러스터 메타데이터 로그에 저장되므로 브로커 간 통신용 자격증명은 브로커가 뜨기 전에 존재해야 하고, 그 수단이 포맷 단계의 `--add-scram` 입니다. 클라이언트 자격증명은 클러스터가 뜬 뒤 `kafka-configs.sh` 로 동적으로 추가·변경할 수 있고 새 연결부터 적용됩니다. 두 SCRAM 메커니즘은 해시 강도만 다른 별개 자격증명이라 마이그레이션 중 한쪽만 등록해 인증이 깨지는 사고가 흔합니다. 반복 횟수는 지정하지 않으면 4096이 쓰이고 최소 허용값도 4096입니다.",
       "distractorNotes": {
         "C": "SCRAM 자격증명은 `__cluster_metadata` 에 저장됩니다. JAAS 파일에 평문으로 두는 것은 PLAIN 메커니즘의 기본 구현입니다.",
@@ -264,9 +479,17 @@
         "E": "동적으로 추가되고 새 연결부터 적용되므로 재시작이 필요하지 않습니다. 재시작이 필요한 것은 PLAIN 기본 구현의 사용자 추가입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — SASL/SCRAM", "url": "https://kafka.apache.org/documentation/#security_sasl_scram" }
+        {
+          "title": "Apache Kafka — SASL/SCRAM",
+          "url": "https://kafka.apache.org/documentation/#security_sasl_scram"
+        }
       ],
-      "tags": ["scram", "kafka-storage", "kafka-configs", "kraft"]
+      "tags": [
+        "scram",
+        "kafka-storage",
+        "kafka-configs",
+        "kraft"
+      ]
     },
     {
       "id": "ccaak-security-010",
@@ -278,13 +501,31 @@
       "question": "`super.users` 와 `allow.everyone.if.no.acl.found` 에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`super.users` 의 구분자는 세미콜론이며 프린시펄 타입 문자열 `User` 는 대소문자를 구분한다." },
-        { "id": "B", "text": "`allow.everyone.if.no.acl.found=true` 여도 ACL이 하나라도 걸린 리소스에는 그 ACL이 그대로 적용된다." },
-        { "id": "C", "text": "`super.users` 에 등록된 프린시펄도 DENY ACL이 있으면 접근이 거부된다." },
-        { "id": "D", "text": "`allow.everyone.if.no.acl.found` 의 기본값은 `true` 이므로 인가를 켜도 기존 클라이언트가 계속 동작한다." },
-        { "id": "E", "text": "두 설정 모두 `kafka-configs.sh` 로 동적으로 변경할 수 있어 장애 중 즉시 적용된다." }
+        {
+          "id": "A",
+          "text": "`super.users` 의 구분자는 세미콜론이며 프린시펄 타입 문자열 `User` 는 대소문자를 구분한다."
+        },
+        {
+          "id": "B",
+          "text": "`allow.everyone.if.no.acl.found=true` 여도 ACL이 하나라도 걸린 리소스에는 그 ACL이 그대로 적용된다."
+        },
+        {
+          "id": "C",
+          "text": "`super.users` 에 등록된 프린시펄도 DENY ACL이 있으면 접근이 거부된다."
+        },
+        {
+          "id": "D",
+          "text": "`allow.everyone.if.no.acl.found` 의 기본값은 `true` 이므로 인가를 켜도 기존 클라이언트가 계속 동작한다."
+        },
+        {
+          "id": "E",
+          "text": "두 설정 모두 `kafka-configs.sh` 로 동적으로 변경할 수 있어 장애 중 즉시 적용된다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "구분자가 세미콜론인 이유는 SSL 사용자명에 콤마가 들어갈 수 있기 때문이며, `User:Bob;User:Alice` 형태가 올바릅니다. `allow.everyone.if.no.acl.found` 는 매칭되는 ACL이 전혀 없는 리소스의 기본 동작만 바꾸고, ACL이 하나라도 있으면 평소대로 그 규칙이 강제됩니다. 기본값은 `false` 이므로 인가를 켜는 순간 ACL이 없는 리소스는 super user 외 전부 거부되며, 그래서 마이그레이션 중에만 한시적으로 켜는 설정입니다. super user는 ACL 검사를 우회하므로 DENY 규칙에도 영향을 받지 않습니다.",
       "distractorNotes": {
         "C": "super user는 ACL 판정을 건너뜁니다. DENY가 ALLOW보다 우선한다는 규칙은 super user가 아닌 일반 프린시펄에 적용됩니다.",
@@ -292,9 +533,16 @@
         "E": "둘 다 브로커 설정 파일로 관리되는 항목이며 즉시 반영되는 동적 설정으로 다룰 대상이 아닙니다. ACL 자체는 `kafka-acls.sh` 로 즉시 바꿀 수 있습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Authorization and ACLs", "url": "https://kafka.apache.org/documentation/#security_authz" }
+        {
+          "title": "Apache Kafka — Authorization and ACLs",
+          "url": "https://kafka.apache.org/documentation/#security_authz"
+        }
       ],
-      "tags": ["super.users", "allow.everyone.if.no.acl.found", "acl"]
+      "tags": [
+        "super.users",
+        "allow.everyone.if.no.acl.found",
+        "acl"
+      ]
     },
     {
       "id": "ccaak-security-011",
@@ -303,16 +551,38 @@
       "chapter": "ch11",
       "difficulty": "easy",
       "type": "multiple",
-      "question": "`kafka-acls.sh` 로 특정 토픽의 권한을 조사할 때 알아야 할 사실로 옳은 것을 모두 고르세요. (2개 선택)",
-      "code": null,
+      "question": "아래 두 조회 결과가 다른 이유에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
+      "code": {
+        "lang": "bash",
+        "caption": "kafka-acls.sh 조회 결과 비교",
+        "body": "$ kafka-acls.sh --bootstrap-server localhost:9092 --list --topic orders\n(출력 없음)\n\n$ kafka-acls.sh --bootstrap-server localhost:9092 --list --topic orders \\\n    --resource-pattern-type match\nCurrent ACLs for resource `ResourcePattern(resourceType=TOPIC, name=orders-, patternType=PREFIXED)`:\n \t(principal=User:Jane, host=*, operation=WRITE, permissionType=ALLOW)"
+      },
       "choices": [
-        { "id": "A", "text": "`--list --topic orders` 는 이름이 정확히 일치하는 literal 패턴 ACL만 보여 준다." },
-        { "id": "B", "text": "와일드카드와 prefixed 패턴까지 포함해 보려면 `--resource-pattern-type match` 를 쓴다." },
-        { "id": "C", "text": "`--list` 는 항상 그 토픽에 영향을 주는 모든 패턴의 ACL을 함께 출력한다." },
-        { "id": "D", "text": "`--allow-host` 와 `--deny-host` 에는 호스트명을 쓸 수 있고 IP는 허용되지 않는다." },
-        { "id": "E", "text": "브로커에 접근할 수 없을 때는 `--bootstrap-server` 와 `--bootstrap-controller` 를 함께 지정한다." }
+        {
+          "id": "A",
+          "text": "`--list --topic orders` 는 이름이 정확히 일치하는 literal 패턴 ACL만 보여 준다."
+        },
+        {
+          "id": "B",
+          "text": "와일드카드와 prefixed 패턴까지 포함해 보려면 `--resource-pattern-type match` 를 쓴다."
+        },
+        {
+          "id": "C",
+          "text": "`--list` 는 항상 그 토픽에 영향을 주는 모든 패턴의 ACL을 함께 출력한다."
+        },
+        {
+          "id": "D",
+          "text": "`--allow-host` 와 `--deny-host` 에는 호스트명을 쓸 수 있고 IP는 허용되지 않는다."
+        },
+        {
+          "id": "E",
+          "text": "브로커에 접근할 수 없을 때는 `--bootstrap-server` 와 `--bootstrap-controller` 를 함께 지정한다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "기본 조회는 literal 패턴만 대상으로 하므로, 와일드카드나 prefixed 패턴으로 걸린 권한이 목록에 나타나지 않습니다. 「ACL이 없는데 왜 접근이 되는가」라는 의문의 대부분이 여기서 나오고, 해결은 `--resource-pattern-type match` 로 실제 적용 ACL을 확인하는 것입니다. 단 `--remove` 와 `match` 를 함께 쓰면 매칭되는 ACL이 모두 삭제되므로 조회 전용으로 쓰는 것이 안전합니다. 브로커가 응답하지 않으면 `--bootstrap-controller` 로 컨트롤러에 직접 붙지만 두 옵션을 동시에 쓸 수는 없습니다.",
       "distractorNotes": {
         "C": "기본 동작은 literal 패턴만입니다. 이 오해가 권한 조사 실패의 주된 원인입니다.",
@@ -320,9 +590,16 @@
         "E": "두 옵션은 상호 배타적이므로 하나만 지정합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Authorization and ACLs", "url": "https://kafka.apache.org/documentation/#security_authz" }
+        {
+          "title": "Apache Kafka — Authorization and ACLs",
+          "url": "https://kafka.apache.org/documentation/#security_authz"
+        }
       ],
-      "tags": ["kafka-acls", "acl", "cli"]
+      "tags": [
+        "kafka-acls",
+        "acl",
+        "cli-output"
+      ]
     },
     {
       "id": "ccaak-security-012",
@@ -334,22 +611,52 @@
       "question": "각 SASL 메커니즘을 자격증명이 저장되는 위치와 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "GSSAPI", "right": "Kerberos KDC (Active Directory 등)" },
-        { "id": "p2", "left": "PLAIN (기본 구현)", "right": "브로커의 JAAS 설정 또는 `sasl.jaas.config`" },
-        { "id": "p3", "left": "SCRAM-SHA-512", "right": "클러스터 메타데이터 로그" },
-        { "id": "p4", "left": "OAUTHBEARER", "right": "외부 OAuth 2.0 인가 서버" }
+        {
+          "id": "p1",
+          "left": "GSSAPI",
+          "right": "Kerberos KDC (Active Directory 등)"
+        },
+        {
+          "id": "p2",
+          "left": "PLAIN (기본 구현)",
+          "right": "브로커의 JAAS 설정 또는 `sasl.jaas.config`"
+        },
+        {
+          "id": "p3",
+          "left": "SCRAM-SHA-512",
+          "right": "클러스터 메타데이터 로그"
+        },
+        {
+          "id": "p4",
+          "left": "OAUTHBEARER",
+          "right": "외부 OAuth 2.0 인가 서버"
+        }
       ],
-      "extraRights": ["브로커의 키스토어 파일", "`__consumer_offsets` 토픽", "각 클라이언트의 트러스트스토어"],
+      "extraRights": [
+        "브로커의 키스토어 파일",
+        "`__consumer_offsets` 토픽",
+        "각 클라이언트의 트러스트스토어"
+      ],
       "explanation": "메커니즘을 고르는 실제 기준은 자격증명을 어디서 관리하느냐입니다. GSSAPI는 조직의 KDC를 그대로 쓰고, PLAIN 기본 구현은 브로커 쪽 JAAS 설정에 사용자 목록을 두므로 사용자를 추가하려면 브로커 재시작이 필요합니다. SCRAM은 메타데이터 로그에 저장되어 `kafka-configs.sh` 로 동적 추가·변경이 가능하다는 점이 운영상 가장 큰 차이입니다. OAUTHBEARER는 검증만 브로커가 하고 발급은 외부 인가 서버가 담당합니다.",
       "distractorNotes": {
         "p2": "PLAIN을 SCRAM처럼 동적 관리가 된다고 착각하기 쉽습니다. 기본 구현에서는 사용자 추가에 재시작이 필요합니다.",
         "p3": "SCRAM 자격증명을 별도 토픽이나 외부 저장소에 두는 것으로 오해하기 쉽습니다. `__cluster_metadata` 에 저장됩니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Authentication using SASL", "url": "https://kafka.apache.org/documentation/#security_sasl" },
-        { "title": "Apache Kafka — SASL/PLAIN", "url": "https://kafka.apache.org/documentation/#security_sasl_plain" }
+        {
+          "title": "Apache Kafka — Authentication using SASL",
+          "url": "https://kafka.apache.org/documentation/#security_sasl"
+        },
+        {
+          "title": "Apache Kafka — SASL/PLAIN",
+          "url": "https://kafka.apache.org/documentation/#security_sasl_plain"
+        }
       ],
-      "tags": ["sasl", "scram", "credentials"]
+      "tags": [
+        "sasl",
+        "scram",
+        "credentials"
+      ]
     },
     {
       "id": "ccaak-security-013",
@@ -361,22 +668,52 @@
       "question": "각 ACL 리소스 타입을 인가 실패 시 반환되는 오류 이름과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "Topic", "right": "TOPIC_AUTHORIZATION_FAILED" },
-        { "id": "p2", "left": "Group", "right": "GROUP_AUTHORIZATION_FAILED" },
-        { "id": "p3", "left": "Cluster", "right": "CLUSTER_AUTHORIZATION_FAILED" },
-        { "id": "p4", "left": "TransactionalId", "right": "TRANSACTIONAL_ID_AUTHORIZATION_FAILED" }
+        {
+          "id": "p1",
+          "left": "Topic",
+          "right": "TOPIC_AUTHORIZATION_FAILED"
+        },
+        {
+          "id": "p2",
+          "left": "Group",
+          "right": "GROUP_AUTHORIZATION_FAILED"
+        },
+        {
+          "id": "p3",
+          "left": "Cluster",
+          "right": "CLUSTER_AUTHORIZATION_FAILED"
+        },
+        {
+          "id": "p4",
+          "left": "TransactionalId",
+          "right": "TRANSACTIONAL_ID_AUTHORIZATION_FAILED"
+        }
       ],
-      "extraRights": ["SASL_AUTHENTICATION_FAILED", "UNKNOWN_TOPIC_OR_PARTITION", "INVALID_GROUP_ID"],
+      "extraRights": [
+        "SASL_AUTHENTICATION_FAILED",
+        "UNKNOWN_TOPIC_OR_PARTITION",
+        "INVALID_GROUP_ID"
+      ],
       "explanation": "인가 실패는 리소스 타입별로 서로 다른 오류 이름을 돌려주므로, 오류 이름을 읽는 것이 곧 어느 ACL이 빠졌는지를 특정하는 가장 빠른 방법입니다. 컨슈머가 그룹 권한 없이 붙으면 Group 오류가 나고, 멱등 프로듀서가 Cluster 리소스의 `IdempotentWrite` 없이 붙으면 Cluster 오류가 납니다. `enable.idempotence` 기본값이 `true` 라 의도하지 않아도 Cluster 오류를 만나는 경우가 있습니다. 미끼로 제시된 이름들은 인증 실패나 메타데이터 오류이므로 인가 문제와 구분해야 합니다.",
       "distractorNotes": {
         "p3": "멱등 프로듀서 관련 실패를 토픽 권한 문제로 오해하기 쉽습니다. `IdempotentWrite` 는 Cluster 리소스입니다.",
         "p4": "트랜잭션 프로듀서 실패를 토픽 오류로 착각하기 쉽습니다. TransactionalId는 별도 리소스 타입입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Authorization and ACLs", "url": "https://kafka.apache.org/documentation/#security_authz" },
-        { "title": "Apache Kafka — Protocol Error Codes", "url": "https://kafka.apache.org/protocol#protocol_error_codes" }
+        {
+          "title": "Apache Kafka — Authorization and ACLs",
+          "url": "https://kafka.apache.org/documentation/#security_authz"
+        },
+        {
+          "title": "Apache Kafka — Protocol Error Codes",
+          "url": "https://kafka.apache.org/protocol#protocol_error_codes"
+        }
       ],
-      "tags": ["acl", "error-codes", "authorization"]
+      "tags": [
+        "acl",
+        "error-codes",
+        "authorization"
+      ]
     },
     {
       "id": "ccaak-security-014",
@@ -388,21 +725,45 @@
       "question": "운영 중인 PLAINTEXT 클러스터에 중단 없이 `SASL_SSL` 을 도입하는 절차를 올바른 순서로 배열하세요.",
       "code": null,
       "items": [
-        { "id": "i3", "text": "브로커 간 통신을 새 보안 리스너로 전환하고 다시 롤링 재시작" },
-        { "id": "i1", "text": "기존 PLAINTEXT 리스너를 유지한 채 보안 리스너를 추가하고 롤링 재시작" },
-        { "id": "i4", "text": "기존 PLAINTEXT 리스너를 제거하고 마지막 롤링 재시작" },
-        { "id": "i2", "text": "클라이언트를 새 보안 리스너로 하나씩 이전" }
+        {
+          "id": "i3",
+          "text": "브로커 간 통신을 새 보안 리스너로 전환하고 다시 롤링 재시작"
+        },
+        {
+          "id": "i1",
+          "text": "기존 PLAINTEXT 리스너를 유지한 채 보안 리스너를 추가하고 롤링 재시작"
+        },
+        {
+          "id": "i4",
+          "text": "기존 PLAINTEXT 리스너를 제거하고 마지막 롤링 재시작"
+        },
+        {
+          "id": "i2",
+          "text": "클라이언트를 새 보안 리스너로 하나씩 이전"
+        }
       ],
-      "answer": ["i1", "i2", "i3", "i4"],
+      "answer": [
+        "i1",
+        "i2",
+        "i3",
+        "i4"
+      ],
       "explanation": "무중단의 핵심은 새 경로를 먼저 열고 옛 경로를 마지막에 닫는 것입니다. 보안 리스너를 추가한 상태에서는 두 경로가 함께 열려 있으므로 클라이언트를 원하는 속도로 옮길 수 있습니다. 클라이언트 이전이 끝난 뒤에 브로커 간 통신을 전환하는데, 이 단계에도 롤링 재시작이 필요하므로 총 세 번 이상의 롤링이 발생합니다. 순서를 뒤집어 기존 리스너를 먼저 제거하거나 브로커 간 통신을 먼저 전환하면 반드시 중단이 생깁니다.",
       "distractorNotes": {
         "i3": "브로커 간 통신 전환을 첫 단계로 놓기 쉽습니다. 클라이언트 이전이 끝나기 전에 바꾸면 두 번의 중단 위험을 동시에 안게 됩니다.",
         "i4": "기존 리스너 제거를 서두르면 아직 옮기지 못한 클라이언트가 즉시 끊깁니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Incorporating Security Features in a Running Cluster", "url": "https://kafka.apache.org/documentation/#security_rolling_upgrade" }
+        {
+          "title": "Apache Kafka — Incorporating Security Features in a Running Cluster",
+          "url": "https://kafka.apache.org/documentation/#security_rolling_upgrade"
+        }
       ],
-      "tags": ["security_rolling_upgrade", "listeners", "operations"]
+      "tags": [
+        "security_rolling_upgrade",
+        "listeners",
+        "operations"
+      ]
     }
   ]
 }
