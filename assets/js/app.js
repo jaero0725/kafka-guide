@@ -193,7 +193,10 @@
         '<button type="button" class="icon-btn" data-act="fontsize" aria-label="글자 크기 변경">' + SVG.text + '</button>' +
         '<button type="button" class="icon-btn" data-act="theme" aria-label="테마 변경">' + SVG.auto + '</button>' +
       '</div>';
-    doc.body.insertBefore(bar, doc.body.firstChild);
+    /* skip-link 뒤에 넣습니다. body.firstChild 앞에 넣으면 '본문 바로가기' 가
+       자기가 건너뛰라고 만든 네비게이션 뒤로 밀립니다 (WCAG 2.4.1). */
+    var skip = doc.querySelector('.skip-link');
+    doc.body.insertBefore(bar, skip ? skip.nextSibling : doc.body.firstChild);
     return bar;
   }
 
@@ -707,15 +710,19 @@
   }
 
   function openSearch() {
+    var d = buildSearchPanel();
+    d.setAttribute('data-open', 'true');
+    var input = d.querySelector('input');
+    input.value = '';
+    var results = d.querySelector('.search-results');
+    results.innerHTML = '<li><p class="search-panel__foot">인덱스를 불러오는 중…</p></li>';
+    input.focus();
     ensureSearchIndex().then(function (docs) {
-      if (!docs) return;
-      var d = buildSearchPanel();
-      d.setAttribute('data-open', 'true');
-      var input = d.querySelector('input');
-      input.value = '';
-      d.querySelector('.search-results').innerHTML =
-        '<li><p class="search-panel__foot">' + docs.length + '개 페이지를 검색합니다.</p></li>';
-      input.focus();
+      if (d.getAttribute('data-open') !== 'true') return;
+      results.innerHTML = docs && docs.length
+        ? '<li><p class="search-panel__foot">' + docs.length + '개 페이지를 검색합니다.</p></li>'
+        : '<li><p class="search-panel__foot">검색 인덱스를 불러오지 못했습니다. ' +
+          'file:// 로 열었다면 로컬 서버로 띄워 주세요.</p></li>';
     });
   }
   function closeSearch() {
@@ -813,7 +820,7 @@
       });
 
       var status = doc.createElement('p');
-      status.className = 'gal-none cheat-filter__status';
+      status.className = 'cheat-filter__status';
       status.setAttribute('aria-live', 'polite');
       status.hidden = true;
       if (table.parentNode) table.parentNode.insertBefore(status, table.nextSibling);
@@ -839,7 +846,7 @@
           status.hidden = false;
           status.textContent = shown
             ? shown + '개 항목이 일치합니다.'
-            : '일치하는 항목이 없습니다. 설정명의 일부만 입력해 보세요.';
+            : '일치하는 항목이 없습니다. 검색어 일부만 입력해 보세요.';
         }
       }
 
@@ -950,11 +957,10 @@
       initCheatFilters(state.main);
     }
 
-    // 검색 인덱스가 있으면 검색 UI 노출
-    ensureSearchIndex().then(function (docs) {
-      var trigger = doc.querySelector('[data-act="search"]');
-      if (trigger && docs && docs.length) trigger.hidden = false;
-    });
+    // 검색 UI 는 바로 노출하고, 인덱스는 실제로 열 때 받습니다.
+    // 부팅 때 받으면 모든 페이지가 인덱스 크기만큼의 비용을 뭅니다.
+    var searchTrigger = doc.querySelector('[data-act="search"]');
+    if (searchTrigger) searchTrigger.hidden = false;
 
     // 다이어그램 주입 (fetch 실패는 조용히 흡수)
     injectDiagrams(doc).catch(function () {});

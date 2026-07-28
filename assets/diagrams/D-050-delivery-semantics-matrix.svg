@@ -11,7 +11,8 @@
     오프셋 커밋을 트랜잭션 안에 포함시킵니다. 결과는 유실도 중복도 없지만
     그 보장은 Kafka 토픽에서 Kafka 토픽으로 처리하는 범위 안에서만 성립합니다.
     retries 를 0 으로 두려면 enable.idempotence 를 false 로 함께 내려야 합니다.
-    멱등 프로듀서에서 retries 가 0 이면 ConfigException 이 발생합니다.</desc>
+    enable.idempotence 를 true 로 명시한 상태에서 retries 가 0 이면 ConfigException 이 발생하고,
+    명시하지 않았다면 예외 없이 멱등성이 조용히 꺼집니다.</desc>
 
   <text x="12" y="20" class="dg-fs-md dg-bold">3가지 전달 보장 — 설정 조합이 결과를 결정합니다</text>
 
@@ -89,6 +90,6 @@
   <!-- 각주 -->
   <line class="dg-grid" x1="12" y1="312" x2="708" y2="312"/>
   <text class="dg-fs-sm" x="12" y="330"><tspan class="dg-mono">retries=0</tspan> 은 <tspan class="dg-mono">enable.idempotence=false</tspan> 와 함께여야 합니다.</text>
-  <text class="dg-fs-sm" x="12" y="348">멱등 프로듀서(기본값)에서 <tspan class="dg-mono">retries</tspan> 가 0 이면 <tspan class="dg-bold">ConfigException</tspan> 이 발생합니다.</text>
+  <text class="dg-fs-sm" x="12" y="348"><tspan class="dg-mono">enable.idempotence=true</tspan> 를 <tspan class="dg-bold">명시</tspan>했을 때만 <tspan class="dg-bold">ConfigException</tspan> · 안 썼으면 조용히 꺼집니다.</text>
   <text class="dg-fs-sm dg-muted" x="12" y="366">exactly-once 는 외부 DB·HTTP 호출까지 보장하지 않습니다 (D-054). 기준: Apache Kafka 4.3.</text>
 </svg>

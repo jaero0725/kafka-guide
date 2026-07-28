@@ -15,12 +15,26 @@
       "question": "프로듀서 메트릭 `record-send-rate` 가 갑자기 0으로 떨어졌다. 이 지표가 직접 알려 주는 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "브로커가 응답하는 데 걸리는 평균 시간" },
-        { "id": "B", "text": "초당 브로커로 전송된 레코드 수 — 애플리케이션이 더 이상 쓰지 않거나 전송이 막혔다" },
-        { "id": "C", "text": "전송이 실패한 레코드 수" },
-        { "id": "D", "text": "아직 쓰이지 않은 프로듀서 버퍼 메모리 양" }
+        {
+          "id": "A",
+          "text": "브로커가 응답하는 데 걸리는 평균 시간"
+        },
+        {
+          "id": "B",
+          "text": "초당 브로커로 전송된 레코드 수 — 애플리케이션이 더 이상 쓰지 않거나 전송이 막혔다"
+        },
+        {
+          "id": "C",
+          "text": "전송이 실패한 레코드 수"
+        },
+        {
+          "id": "D",
+          "text": "아직 쓰이지 않은 프로듀서 버퍼 메모리 양"
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "`record-send-rate` 는 프로듀서가 초당 몇 건을 실제로 보냈는지를 나타내는 처리량 지표입니다. 0이 되었다는 것은 애플리케이션이 `send()` 를 호출하지 않고 있거나, 버퍼가 고갈되어 `send()` 가 블로킹되었거나, 메타데이터를 얻지 못해 전송이 진행되지 않는 상태를 뜻합니다. 어느 쪽인지 가르는 것은 이 지표 하나가 아니라 `buffer-available-bytes`·`record-error-rate`·`request-latency-avg` 를 함께 보는 조합입니다. 즉 처리량 지표는 \"무엇이 멈췄다\"를 알려 주고 원인은 다른 지표가 알려 줍니다.",
       "distractorNotes": {
         "A": "그것은 `request-latency-avg` 입니다. 지연이 늘어도 전송 속도가 0이 되지는 않습니다.",
@@ -28,10 +42,20 @@
         "D": "그것은 `buffer-available-bytes` 입니다. 버퍼 고갈은 전송 속도 0의 원인 중 하나일 뿐입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Monitoring", "url": "https://kafka.apache.org/documentation/#producer_monitoring" },
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" }
+        {
+          "title": "Apache Kafka — Producer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#producer_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
       ],
-      "tags": ["producer-metrics", "record-send-rate", "monitoring"]
+      "tags": [
+        "producer-metrics",
+        "record-send-rate",
+        "monitoring"
+      ]
     },
     {
       "id": "ccdak-observability-002",
@@ -43,12 +67,26 @@
       "question": "프로듀서 파이프라인에서 \"전송에 실패한 레코드가 있다\"를 가장 직접적으로 알려 주는 메트릭은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`records-per-request-avg`" },
-        { "id": "B", "text": "`batch-size-avg`" },
-        { "id": "C", "text": "`compression-rate-avg`" },
-        { "id": "D", "text": "`record-error-rate`" }
+        {
+          "id": "A",
+          "text": "`records-per-request-avg`"
+        },
+        {
+          "id": "B",
+          "text": "`batch-size-avg`"
+        },
+        {
+          "id": "C",
+          "text": "`compression-rate-avg`"
+        },
+        {
+          "id": "D",
+          "text": "`record-error-rate`"
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "`record-error-rate` 는 초당 전송이 실패한 레코드 수이므로 값이 0이 아니면 이미 데이터가 유실되었거나 재시도 예산을 소진한 상태입니다. 그래서 프로듀서 쪽 알림에서 가장 먼저 걸어야 하는 지표입니다. 재시도 중인 실패는 `record-retry-rate` 로 따로 보이며, 이 값이 오르는 것은 리더 이동·ISR 부족·네트워크 불안정의 신호입니다. 나머지 세 지표는 배치와 압축 효율을 보는 튜닝 지표여서 실패 여부와 무관합니다.",
       "distractorNotes": {
         "A": "요청당 평균 레코드 수로, 배치가 되고 있는지 보는 지표입니다. 실패와 무관합니다.",
@@ -56,9 +94,16 @@
         "C": "평균 압축률로 압축 효과를 확인하는 지표입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Monitoring", "url": "https://kafka.apache.org/documentation/#producer_monitoring" }
+        {
+          "title": "Apache Kafka — Producer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#producer_monitoring"
+        }
       ],
-      "tags": ["producer-metrics", "record-error-rate", "monitoring"]
+      "tags": [
+        "producer-metrics",
+        "record-error-rate",
+        "monitoring"
+      ]
     },
     {
       "id": "ccdak-observability-003",
@@ -70,12 +115,26 @@
       "question": "프로듀서의 `request-latency-avg` 가 평소의 5배로 올랐다. 이 지표가 관측하는 구간은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "요청을 브로커에 보낸 뒤 응답을 받기까지의 구간" },
-        { "id": "B", "text": "`send()` 호출부터 배치가 accumulator 를 떠날 때까지의 구간" },
-        { "id": "C", "text": "레코드가 브로커 로그에 기록된 뒤 컨슈머가 읽기까지의 구간" },
-        { "id": "D", "text": "직렬화와 파티션 계산에 걸리는 구간" }
+        {
+          "id": "A",
+          "text": "요청을 브로커에 보낸 뒤 응답을 받기까지의 구간"
+        },
+        {
+          "id": "B",
+          "text": "`send()` 호출부터 배치가 accumulator 를 떠날 때까지의 구간"
+        },
+        {
+          "id": "C",
+          "text": "레코드가 브로커 로그에 기록된 뒤 컨슈머가 읽기까지의 구간"
+        },
+        {
+          "id": "D",
+          "text": "직렬화와 파티션 계산에 걸리는 구간"
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "프로듀서의 전송 경로는 크게 두 구간으로 나뉩니다. 배치가 accumulator 에서 대기하는 구간은 `record-queue-time-avg` 로 보고, 요청을 보내고 브로커 응답을 기다리는 구간은 `request-latency-avg` 로 봅니다. 따라서 `request-latency-avg` 상승은 클라이언트 쪽 병목이 아니라 브로커 부하, 느린 팔로워 복제(`acks=all`), 또는 네트워크를 가리킵니다. 두 지표를 함께 보면 지연이 애플리케이션 안에서 생긴 것인지 밖에서 생긴 것인지 바로 갈립니다.",
       "distractorNotes": {
         "B": "그 구간은 `record-queue-time-avg` 가 담당합니다. 배치 대기가 길면 `linger.ms`·`batch.size`·버퍼를 봅니다.",
@@ -83,9 +142,16 @@
         "D": "직렬화·파티셔닝은 `send()` 호출 스레드에서 즉시 수행되며 이 지표에 포함되지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Monitoring", "url": "https://kafka.apache.org/documentation/#producer_monitoring" }
+        {
+          "title": "Apache Kafka — Producer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#producer_monitoring"
+        }
       ],
-      "tags": ["producer-metrics", "request-latency-avg", "monitoring"]
+      "tags": [
+        "producer-metrics",
+        "request-latency-avg",
+        "monitoring"
+      ]
     },
     {
       "id": "ccdak-observability-004",
@@ -97,24 +163,52 @@
       "question": "`send()` 가 간헐적으로 오래 블로킹된다는 신고를 받았다. 원인 확인에 직접 도움이 되는 지표를 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`buffer-available-bytes` — 0 에 가까우면 버퍼 공간을 기다리며 블로킹된다." },
-        { "id": "B", "text": "`record-send-rate` — 전송 속도가 높으면 블로킹된다." },
-        { "id": "C", "text": "`compression-rate-avg` — 압축률이 낮으면 블로킹된다." },
-        { "id": "D", "text": "`records-per-request-avg` — 요청당 레코드가 적으면 블로킹된다." },
-        { "id": "E", "text": "`request-latency-avg` — 브로커 응답이 느려 배치가 빠져나가지 못하는지 본다." }
+        {
+          "id": "A",
+          "text": "`records-per-request-avg` — 요청당 레코드가 적으면 블로킹된다."
+        },
+        {
+          "id": "B",
+          "text": "`buffer-available-bytes` — 0 에 가까우면 버퍼 공간을 기다리며 블로킹된다."
+        },
+        {
+          "id": "C",
+          "text": "`compression-rate-avg` — 압축률이 낮으면 블로킹된다."
+        },
+        {
+          "id": "D",
+          "text": "`record-send-rate` — 전송 속도가 높으면 블로킹된다."
+        },
+        {
+          "id": "E",
+          "text": "`request-latency-avg` — 브로커 응답이 느려 배치가 빠져나가지 못하는지 본다."
+        }
       ],
-      "answer": ["A", "E"],
+      "answer": [
+        "B",
+        "E"
+      ],
       "explanation": "`send()` 는 비동기지만 완전히 논블로킹은 아닙니다. 레코드를 담을 버퍼 공간이 없거나 대상 토픽의 메타데이터가 아직 없으면 `max.block.ms`(기본 60000) 까지 호출 스레드를 붙잡습니다. 따라서 남은 버퍼 메모리와 브로커 응답 지연을 함께 봐야 원인이 완성됩니다. 브로커 응답이 느려지면 배치가 accumulator 를 떠나지 못해 버퍼가 차고, 그 결과 호출 스레드가 막히는 연쇄가 만들어집니다.",
       "distractorNotes": {
-        "B": "전송 속도가 높은 것 자체는 건강한 신호입니다. 블로킹은 오히려 전송이 막혀 버퍼가 찰 때 생깁니다.",
+        "A": "요청당 레코드 수는 배치 효율 지표입니다. 값이 작으면 처리량이 낮아질 뿐 블로킹의 원인은 아닙니다.",
         "C": "압축률은 네트워크·디스크 효율 지표이며 호출 블로킹과 인과관계가 없습니다.",
-        "D": "요청당 레코드 수는 배치 효율 지표입니다. 값이 작으면 처리량이 낮아질 뿐 블로킹의 원인은 아닙니다."
+        "D": "전송 속도가 높은 것 자체는 건강한 신호입니다. 블로킹은 오히려 전송이 막혀 버퍼가 찰 때 생깁니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Monitoring", "url": "https://kafka.apache.org/documentation/#producer_monitoring" },
-        { "title": "Apache Kafka — Producer Configs: max.block.ms", "url": "https://kafka.apache.org/documentation/#producerconfigs_max.block.ms" }
+        {
+          "title": "Apache Kafka — Producer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#producer_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs: max.block.ms",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_max.block.ms"
+        }
       ],
-      "tags": ["producer-metrics", "buffer-available-bytes", "max.block.ms"]
+      "tags": [
+        "producer-metrics",
+        "buffer-available-bytes",
+        "max.block.ms"
+      ]
     },
     {
       "id": "ccdak-observability-005",
@@ -126,11 +220,31 @@
       "question": "프로듀서 메트릭을 그 의미와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`record-send-rate`", "right": "초당 전송된 레코드 수" },
-        { "id": "p2", "left": "`record-error-rate`", "right": "초당 전송이 실패한 레코드 수" },
-        { "id": "p3", "left": "`record-queue-time-avg`", "right": "배치가 accumulator 에서 전송을 기다린 평균 시간" },
-        { "id": "p4", "left": "`request-latency-avg`", "right": "요청을 보내고 브로커 응답을 받기까지의 평균 시간" },
-        { "id": "p5", "left": "`buffer-available-bytes`", "right": "아직 쓰이지 않은 프로듀서 버퍼 메모리 총량" }
+        {
+          "id": "p1",
+          "left": "`record-send-rate`",
+          "right": "초당 전송된 레코드 수"
+        },
+        {
+          "id": "p2",
+          "left": "`record-error-rate`",
+          "right": "초당 전송이 실패한 레코드 수"
+        },
+        {
+          "id": "p3",
+          "left": "`record-queue-time-avg`",
+          "right": "배치가 accumulator 에서 전송을 기다린 평균 시간"
+        },
+        {
+          "id": "p4",
+          "left": "`request-latency-avg`",
+          "right": "요청을 보내고 브로커 응답을 받기까지의 평균 시간"
+        },
+        {
+          "id": "p5",
+          "left": "`buffer-available-bytes`",
+          "right": "아직 쓰이지 않은 프로듀서 버퍼 메모리 총량"
+        }
       ],
       "extraRights": [
         "요청 하나에 담긴 평균 레코드 수",
@@ -143,9 +257,16 @@
         "p2": "`record-retry-rate` 와 구별해야 합니다. 재시도는 아직 실패로 확정되지 않은 상태입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Monitoring", "url": "https://kafka.apache.org/documentation/#producer_monitoring" }
+        {
+          "title": "Apache Kafka — Producer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#producer_monitoring"
+        }
       ],
-      "tags": ["producer-metrics", "monitoring", "record-error-rate"]
+      "tags": [
+        "producer-metrics",
+        "monitoring",
+        "record-error-rate"
+      ]
     },
     {
       "id": "ccdak-observability-006",
@@ -157,24 +278,52 @@
       "question": "프로듀서에서 `record-error-rate` 가 0이 아닐 때 원인을 좁히기 위해 함께 봐야 할 지표를 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`record-retry-rate` — 재시도 가능한 실패가 누적되고 있는지 확인한다." },
-        { "id": "B", "text": "`compression-rate-avg` — 압축 효율이 실패율을 좌우한다." },
-        { "id": "C", "text": "브로커의 `UnderMinIsrPartitionCount` — `acks=all` 쓰기가 거부되는 상태인지 확인한다." },
-        { "id": "D", "text": "컨슈머의 `records-lag-max` — 소비가 밀리면 전송이 실패한다." },
-        { "id": "E", "text": "`records-consumed-rate` — 소비 속도가 낮으면 프로듀서가 실패한다." }
+        {
+          "id": "A",
+          "text": "`records-consumed-rate` — 소비 속도가 낮으면 프로듀서가 실패한다."
+        },
+        {
+          "id": "B",
+          "text": "브로커의 `UnderMinIsrPartitionCount` — `acks=all` 쓰기가 거부되는 상태인지 확인한다."
+        },
+        {
+          "id": "C",
+          "text": "`record-retry-rate` — 재시도 가능한 실패가 누적되고 있는지 확인한다."
+        },
+        {
+          "id": "D",
+          "text": "컨슈머의 `records-lag-max` — 소비가 밀리면 전송이 실패한다."
+        },
+        {
+          "id": "E",
+          "text": "`compression-rate-avg` — 압축 효율이 실패율을 좌우한다."
+        }
       ],
-      "answer": ["A", "C"],
+      "answer": [
+        "B",
+        "C"
+      ],
       "explanation": "전송 실패의 원인은 크게 재시도 가능한 일시 장애와 재시도 불가능한 영구 오류로 갈립니다. `record-retry-rate` 가 함께 오르고 있으면 리더 이동·ISR 부족·네트워크 같은 일시 장애 계열이고, 브로커의 `UnderMinIsrPartitionCount` 가 0이 아니면 `acks=all` 요청이 이미 거부되는 상태입니다. 반대로 재시도 없이 곧바로 실패가 쌓이면 레코드 크기 초과나 직렬화·인가 오류처럼 재시도해도 소용없는 원인입니다. 컨슈머 쪽 지표는 프로듀서 실패와 인과관계가 없습니다.",
       "distractorNotes": {
-        "B": "압축은 전송 크기와 CPU에 영향을 주지만 실패율의 원인 지표는 아닙니다.",
+        "A": "같은 이유로 무관합니다. 컨슈머 처리량은 프로듀서 실패와 연결되지 않습니다.",
         "D": "Kafka는 소비와 생산을 분리합니다. 소비가 밀려도 프로듀서 전송은 실패하지 않습니다.",
-        "E": "같은 이유로 무관합니다. 컨슈머 처리량은 프로듀서 실패와 연결되지 않습니다."
+        "E": "압축은 전송 크기와 CPU에 영향을 주지만 실패율의 원인 지표는 아닙니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Monitoring", "url": "https://kafka.apache.org/documentation/#producer_monitoring" },
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" }
+        {
+          "title": "Apache Kafka — Producer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#producer_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
       ],
-      "tags": ["producer-metrics", "record-error-rate", "min.insync.replicas"]
+      "tags": [
+        "producer-metrics",
+        "record-error-rate",
+        "min.insync.replicas"
+      ]
     },
     {
       "id": "ccdak-observability-007",
@@ -186,12 +335,26 @@
       "question": "컨슈머 lag 의 정의로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "리더 파티션의 LEO 에서 컨슈머의 커밋 오프셋을 뺀 값" },
-        { "id": "B", "text": "log-start-offset 에서 컨슈머의 커밋 오프셋을 뺀 값" },
-        { "id": "C", "text": "파티션의 high watermark 에서 컨슈머의 커밋 오프셋을 뺀 값" },
-        { "id": "D", "text": "프로듀서가 보낸 레코드 수에서 컨슈머가 받은 레코드 수를 뺀 값" }
+        {
+          "id": "A",
+          "text": "리더 파티션의 LEO 에서 컨슈머의 커밋 오프셋을 뺀 값"
+        },
+        {
+          "id": "B",
+          "text": "log-start-offset 에서 컨슈머의 커밋 오프셋을 뺀 값"
+        },
+        {
+          "id": "C",
+          "text": "파티션의 high watermark 에서 컨슈머의 커밋 오프셋을 뺀 값"
+        },
+        {
+          "id": "D",
+          "text": "프로듀서가 보낸 레코드 수에서 컨슈머가 받은 레코드 수를 뺀 값"
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "컨슈머가 읽을 수 있는 마지막 지점은 high watermark 이며 LEO 는 아직 복제가 완료되지 않은 구간까지 포함합니다. 따라서 \"앞으로 읽어야 남은 양\"인 lag 은 high watermark 를 기준으로 계산합니다. `kafka-consumer-groups --describe` 의 `LOG-END-OFFSET` 컬럼도 이 high watermark 를 보여 주며, 컬럼 이름 때문에 리더 LEO 로 오해하기 쉽습니다. log-start-offset 은 보관 정책으로 삭제된 앞부분의 경계이므로 lag 계산과 무관합니다.",
       "distractorNotes": {
         "A": "LEO 와 high watermark 사이 구간은 컨슈머에게 노출되지 않습니다. 이 구간을 포함하면 lag 이 과대 계산됩니다.",
@@ -199,10 +362,20 @@
         "D": "Kafka는 그런 카운터를 유지하지 않습니다. lag 은 오프셋 좌표의 차이로 정의됩니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Managing Consumer Groups", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" },
-        { "title": "Apache Kafka — Consumer Monitoring", "url": "https://kafka.apache.org/documentation/#consumer_monitoring" }
+        {
+          "title": "Apache Kafka — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        },
+        {
+          "title": "Apache Kafka — Consumer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+        }
       ],
-      "tags": ["consumer-lag", "high-watermark", "offsets"]
+      "tags": [
+        "consumer-lag",
+        "high-watermark",
+        "offsets"
+      ]
     },
     {
       "id": "ccdak-observability-008",
@@ -214,12 +387,26 @@
       "question": "`kafka-consumer-groups --describe` 로 본 LAG 값이 실제 처리 지연보다 항상 조금 크게 나온다. 구조적인 이유는?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "이 명령의 LAG 은 커밋된 오프셋 기준이므로 커밋 주기만큼 뒤처져 보인다." },
-        { "id": "B", "text": "이 명령은 컨슈머 프로세스의 JMX 를 읽으므로 스크레이프 주기만큼 늦다." },
-        { "id": "C", "text": "이 명령은 LEO 를 기준으로 계산하므로 아직 복제되지 않은 구간이 포함된다." },
-        { "id": "D", "text": "이 명령은 파티션별 값을 평균하므로 편차가 큰 경우 값이 왜곡된다." }
+        {
+          "id": "A",
+          "text": "이 명령의 LAG 은 커밋된 오프셋 기준이므로 커밋 주기만큼 뒤처져 보인다."
+        },
+        {
+          "id": "B",
+          "text": "이 명령은 컨슈머 프로세스의 JMX 를 읽으므로 스크레이프 주기만큼 늦다."
+        },
+        {
+          "id": "C",
+          "text": "이 명령은 LEO 를 기준으로 계산하므로 아직 복제되지 않은 구간이 포함된다."
+        },
+        {
+          "id": "D",
+          "text": "이 명령은 파티션별 값을 평균하므로 편차가 큰 경우 값이 왜곡된다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "CLI가 보는 CURRENT-OFFSET 은 컨슈머가 **커밋한** 위치이며, 컨슈머가 이미 처리했지만 아직 커밋하지 않은 부분은 반영되지 않습니다. 따라서 자동 커밋 주기(또는 수동 커밋 간격)만큼 lag 이 크게 보입니다. 반대로 클라이언트 JMX 의 `records-lag-max` 는 컨슈머의 fetch 위치를 기준으로 계산하므로 실시간에 가깝지만, 컨슈머 프로세스가 죽으면 메트릭 자체가 사라집니다. 두 방법의 기준이 다르다는 점이 이 주제의 핵심이며 실무에서는 둘을 함께 둡니다.",
       "distractorNotes": {
         "B": "이 명령은 브로커에 저장된 커밋 오프셋을 조회합니다. 컨슈머의 JMX 를 읽지 않습니다.",
@@ -227,10 +414,20 @@
         "D": "이 명령은 파티션별 행을 그대로 출력합니다. 평균을 내지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Managing Consumer Groups", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" },
-        { "title": "Apache Kafka — Consumer Monitoring", "url": "https://kafka.apache.org/documentation/#consumer_monitoring" }
+        {
+          "title": "Apache Kafka — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        },
+        {
+          "title": "Apache Kafka — Consumer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+        }
       ],
-      "tags": ["consumer-lag", "cli", "offset-commit"]
+      "tags": [
+        "consumer-lag",
+        "cli",
+        "offset-commit"
+      ]
     },
     {
       "id": "ccdak-observability-009",
@@ -242,12 +439,26 @@
       "question": "메트릭 `records-lag-max` 를 노출하는 주체는?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "브로커 — 파티션별 컨슈머 위치를 집계해 노출한다." },
-        { "id": "B", "text": "컨트롤러 — 클러스터 전체 컨슈머 그룹의 lag 을 노출한다." },
-        { "id": "C", "text": "그룹 코디네이터 브로커 — `__consumer_offsets` 를 읽어 노출한다." },
-        { "id": "D", "text": "컨슈머 클라이언트 — `kafka.consumer:type=consumer-fetch-manager-metrics` 아래로 노출한다." }
+        {
+          "id": "A",
+          "text": "브로커 — 파티션별 컨슈머 위치를 집계해 노출한다."
+        },
+        {
+          "id": "B",
+          "text": "컨트롤러 — 클러스터 전체 컨슈머 그룹의 lag 을 노출한다."
+        },
+        {
+          "id": "C",
+          "text": "그룹 코디네이터 브로커 — `__consumer_offsets` 를 읽어 노출한다."
+        },
+        {
+          "id": "D",
+          "text": "컨슈머 클라이언트 — `kafka.consumer:type=consumer-fetch-manager-metrics` 아래로 노출한다."
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "공식 모니터링 문서는 이 지표를 \"컨슈머가 프로듀서에 비해 뒤처진 메시지 수, **브로커가 아니라 컨슈머가 발행한다**\"라고 명시합니다. MBean 은 `kafka.consumer:type=consumer-fetch-manager-metrics,client-id={client-id}` 이며 fetch 응답에 담긴 로그 끝 위치와 자기 위치를 비교해 계산합니다. 그래서 컨슈머 프로세스가 죽으면 이 메트릭이 사라져 대시보드가 \"No data\" 가 되고, 임계값 초과 조건이 성립하지 않아 알림이 울리지 않습니다. 이 구조가 \"lag 알림은 조용한데 데이터가 밀렸다\" 사고의 원인입니다.",
       "distractorNotes": {
         "A": "브로커는 컨슈머의 fetch 위치를 지속적으로 추적해 노출하지 않습니다. 이 지표는 클라이언트 지표입니다.",
@@ -255,10 +466,20 @@
         "C": "코디네이터는 커밋 오프셋을 보관하지만 `records-lag-max` 라는 이름의 메트릭을 노출하지는 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Consumer Monitoring", "url": "https://kafka.apache.org/documentation/#consumer_monitoring" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Consumer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+        }
       ],
-      "tags": ["consumer-lag", "records-lag-max", "jmx"]
+      "tags": [
+        "consumer-lag",
+        "records-lag-max",
+        "jmx"
+      ]
     },
     {
       "id": "ccdak-observability-010",
@@ -270,12 +491,26 @@
       "question": "컨슈머 파드 3개가 모두 OOMKilled 되었는데 `records-lag-max` 기반 알림이 발동하지 않았다. 근본 원인은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "OOMKilled 직전에 컨슈머가 오프셋을 강제 커밋해 lag 이 0으로 기록되었다." },
-        { "id": "B", "text": "메트릭을 노출하던 프로세스가 사라져 값 자체가 없어졌고, \"임계값 초과\" 조건이 성립하지 않았다." },
-        { "id": "C", "text": "리밸런스가 진행되는 동안 브로커가 lag 계산을 중단했다." },
-        { "id": "D", "text": "`records-lag-max` 는 파티션 단위 지표라서 그룹 전체가 죽으면 집계에서 제외된다." }
+        {
+          "id": "A",
+          "text": "OOMKilled 직전에 컨슈머가 오프셋을 강제 커밋해 lag 이 0으로 기록되었다."
+        },
+        {
+          "id": "B",
+          "text": "메트릭을 노출하던 프로세스가 사라져 값 자체가 없어졌고, \"임계값 초과\" 조건이 성립하지 않았다."
+        },
+        {
+          "id": "C",
+          "text": "리밸런스가 진행되는 동안 브로커가 lag 계산을 중단했다."
+        },
+        {
+          "id": "D",
+          "text": "`records-lag-max` 는 파티션 단위 지표라서 그룹 전체가 죽으면 집계에서 제외된다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "클라이언트 JMX 지표는 그 프로세스가 살아 있는 동안만 존재합니다. 컨슈머가 전부 죽으면 시계열이 끊기고, `records-lag-max > N` 같은 조건은 데이터가 없으므로 참이 될 수 없습니다. 그래서 lag 알림에는 임계값 조건과 함께 \"메트릭 부재(absent)\" 조건을 반드시 넣어야 하고, 브로커 쪽 커밋 오프셋 기반 관측을 병행해야 합니다. `assigned-partitions == 0` 알림을 추가하면 살아 있지만 아무것도 읽지 않는 상태까지 잡을 수 있습니다.",
       "distractorNotes": {
         "A": "OOMKill 은 프로세스를 즉시 종료하므로 강제 커밋 같은 정리 동작이 실행되지 않습니다.",
@@ -283,10 +518,20 @@
         "D": "지표가 제외된 것이 아니라 지표를 만들던 주체가 없어진 것입니다. 파티션 단위라는 성질과는 무관합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Consumer Monitoring", "url": "https://kafka.apache.org/documentation/#consumer_monitoring" },
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" }
+        {
+          "title": "Apache Kafka — Consumer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
       ],
-      "tags": ["consumer-lag", "records-lag-max", "alerting"]
+      "tags": [
+        "consumer-lag",
+        "records-lag-max",
+        "alerting"
+      ]
     },
     {
       "id": "ccdak-observability-011",
@@ -298,12 +543,26 @@
       "question": "브로커 MBean `kafka.server:type=FetcherLagMetrics,name=ConsumerLag` 이 실제로 측정하는 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "컨슈머 그룹별 커밋 오프셋과 high watermark 의 차이" },
-        { "id": "B", "text": "가장 느린 컨슈머가 뒤처진 메시지 수" },
-        { "id": "C", "text": "팔로워 레플리카가 리더를 따라잡지 못한 메시지 수(복제 lag)" },
-        { "id": "D", "text": "브로커가 처리하지 못하고 큐에 쌓아 둔 fetch 요청 수" }
+        {
+          "id": "A",
+          "text": "컨슈머 그룹별 커밋 오프셋과 high watermark 의 차이"
+        },
+        {
+          "id": "B",
+          "text": "가장 느린 컨슈머가 뒤처진 메시지 수"
+        },
+        {
+          "id": "C",
+          "text": "팔로워 레플리카가 리더를 따라잡지 못한 메시지 수(복제 lag)"
+        },
+        {
+          "id": "D",
+          "text": "브로커가 처리하지 못하고 큐에 쌓아 둔 fetch 요청 수"
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "이름에 `ConsumerLag` 이 들어 있지만 이 지표는 팔로워 레플리카당 복제 지연을 나타냅니다. 팔로워도 리더에게 fetch 요청을 보내는 \"소비자\"이기 때문에 붙은 이름이며, 공식 문서는 이를 \"follower replica 당 메시지 lag\" 으로 설명합니다. 파티션 재할당 시 복제 진행을 확인하는 지표로 안내되어 있고, 값이 줄지 않으면 스로틀을 올려야 한다는 운영 지침이 함께 나옵니다. 애플리케이션 컨슈머의 lag 은 클라이언트 `records-lag-max` 나 `kafka-consumer-groups --describe` 로 봐야 합니다.",
       "distractorNotes": {
         "A": "그것은 `kafka-consumer-groups --describe` 가 계산하는 값입니다. 브로커 JMX 지표로 노출되지 않습니다.",
@@ -311,10 +570,20 @@
         "D": "요청 큐 적체는 `RequestQueueSize`·`RequestHandlerAvgIdlePercent` 계열로 봅니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Basic Kafka Operations", "url": "https://kafka.apache.org/documentation/#basic_ops_cluster_expansion" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Basic Kafka Operations",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_cluster_expansion"
+        }
       ],
-      "tags": ["consumer-lag", "broker-metrics", "replication"]
+      "tags": [
+        "consumer-lag",
+        "broker-metrics",
+        "replication"
+      ]
     },
     {
       "id": "ccdak-observability-012",
@@ -326,12 +595,26 @@
       "question": "`kafka-consumer-groups --describe` 출력의 `LOG-END-OFFSET` 컬럼이 나타내는 값은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "리더 레플리카의 LEO — 아직 복제되지 않은 레코드까지 포함한다." },
-        { "id": "B", "text": "파티션의 high watermark — 컨슈머가 읽을 수 있는 마지막 지점이다." },
-        { "id": "C", "text": "가장 느린 팔로워의 LEO" },
-        { "id": "D", "text": "로그 세그먼트가 실제로 디스크에 flush 된 마지막 오프셋" }
+        {
+          "id": "A",
+          "text": "리더 레플리카의 LEO — 아직 복제되지 않은 레코드까지 포함한다."
+        },
+        {
+          "id": "B",
+          "text": "파티션의 high watermark — 컨슈머가 읽을 수 있는 마지막 지점이다."
+        },
+        {
+          "id": "C",
+          "text": "가장 느린 팔로워의 LEO"
+        },
+        {
+          "id": "D",
+          "text": "로그 세그먼트가 실제로 디스크에 flush 된 마지막 오프셋"
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "컬럼 이름이 `LOG-END-OFFSET` 이라서 리더 LEO 로 읽히지만, 실제로 반환되는 값은 컨슈머에게 노출되는 상한인 high watermark 입니다. 같은 이유로 `kafka-get-offsets` 계열에서 `--time -1` 도 LEO 가 아니라 high watermark 를 반환합니다. LEO 와 high watermark 사이 구간은 아직 ISR 전체에 복제되지 않아 읽을 수 없으므로, 이 구간을 lag 에 포함하면 실제로 소비 가능한 양보다 크게 계산됩니다. 컬럼 이름과 의미가 어긋나는 대표적 함정입니다.",
       "distractorNotes": {
         "A": "리더 LEO 는 복제가 끝나지 않은 부분을 포함하므로 컨슈머에게 노출되지 않습니다.",
@@ -339,9 +622,16 @@
         "D": "flush 시점은 OS·`log.flush.*` 설정에 좌우되며 오프셋 컬럼으로 노출되지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Managing Consumer Groups", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" }
+        {
+          "title": "Apache Kafka — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        }
       ],
-      "tags": ["consumer-lag", "high-watermark", "cli"]
+      "tags": [
+        "consumer-lag",
+        "high-watermark",
+        "cli"
+      ]
     },
     {
       "id": "ccdak-observability-013",
@@ -353,10 +643,26 @@
       "question": "각 lag 측정 방법을 그 기준과 대표적 함정에 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`kafka-consumer-groups --describe` 의 LAG", "right": "커밋 오프셋 기준. 커밋 주기만큼 늦게 보인다" },
-        { "id": "p2", "left": "컨슈머 JMX `records-lag-max`", "right": "컨슈머의 fetch 위치 기준. 컨슈머가 죽으면 메트릭이 사라진다" },
-        { "id": "p3", "left": "브로커 JMX `FetcherLagMetrics` 의 `ConsumerLag`", "right": "이름과 달리 팔로워 복제 lag 이다" },
-        { "id": "p4", "left": "`__consumer_offsets` 를 읽는 외부 익스포터", "right": "커밋 오프셋 기준이지만 컨슈머가 죽어도 계산된다" }
+        {
+          "id": "p1",
+          "left": "`kafka-consumer-groups --describe` 의 LAG",
+          "right": "커밋 오프셋 기준. 커밋 주기만큼 늦게 보인다"
+        },
+        {
+          "id": "p2",
+          "left": "컨슈머 JMX `records-lag-max`",
+          "right": "컨슈머의 fetch 위치 기준. 컨슈머가 죽으면 메트릭이 사라진다"
+        },
+        {
+          "id": "p3",
+          "left": "브로커 JMX `FetcherLagMetrics` 의 `ConsumerLag`",
+          "right": "이름과 달리 팔로워 복제 lag 이다"
+        },
+        {
+          "id": "p4",
+          "left": "`__consumer_offsets` 를 읽는 외부 익스포터",
+          "right": "커밋 오프셋 기준이지만 컨슈머가 죽어도 계산된다"
+        }
       ],
       "extraRights": [
         "리더 LEO 와 컨슈머 위치의 차이를 브로커가 실시간으로 계산한다",
@@ -368,10 +674,20 @@
         "p2": "\"실시간이라 가장 신뢰할 수 있다\"고 생각하기 쉽지만, 컨슈머 사망을 감지할 수 없다는 치명적 한계가 있습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Managing Consumer Groups", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        }
       ],
-      "tags": ["consumer-lag", "records-lag-max", "broker-metrics"]
+      "tags": [
+        "consumer-lag",
+        "records-lag-max",
+        "broker-metrics"
+      ]
     },
     {
       "id": "ccdak-observability-014",
@@ -383,24 +699,52 @@
       "question": "consumer lag 측정에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "클라이언트 JMX `records-lag-max` 만으로 감시하면 컨슈머 사망을 감지할 수 없다." },
-        { "id": "B", "text": "`kafka-consumer-groups --describe` 는 컨슈머 프로세스에 붙어 실시간 위치를 읽는다." },
-        { "id": "C", "text": "CLI 출력에서 `CONSUMER-ID` 가 `-` 인 파티션은 현재 할당된 컨슈머가 없는 상태다." },
-        { "id": "D", "text": "브로커의 `FetcherLagMetrics` 값을 애플리케이션 lag 알림 기준으로 쓰면 된다." },
-        { "id": "E", "text": "lag 알림 임계값은 Kafka 공식 문서가 권장 수치를 제시하므로 그대로 쓰면 된다." }
+        {
+          "id": "A",
+          "text": "`kafka-consumer-groups --describe` 는 컨슈머 프로세스에 붙어 실시간 위치를 읽는다."
+        },
+        {
+          "id": "B",
+          "text": "브로커의 `FetcherLagMetrics` 값을 애플리케이션 lag 알림 기준으로 쓰면 된다."
+        },
+        {
+          "id": "C",
+          "text": "lag 알림 임계값은 Kafka 공식 문서가 권장 수치를 제시하므로 그대로 쓰면 된다."
+        },
+        {
+          "id": "D",
+          "text": "클라이언트 JMX `records-lag-max` 만으로 감시하면 컨슈머 사망을 감지할 수 없다."
+        },
+        {
+          "id": "E",
+          "text": "CLI 출력에서 `CONSUMER-ID` 가 `-` 인 파티션은 현재 할당된 컨슈머가 없는 상태다."
+        }
       ],
-      "answer": ["A", "C"],
+      "answer": [
+        "D",
+        "E"
+      ],
       "explanation": "클라이언트 JMX 기반 감시의 구조적 한계는 프로세스가 사라지면 지표도 사라진다는 점이며, 그래서 커밋 오프셋 기반 관측을 반드시 병행합니다. CLI 출력에서 `CONSUMER-ID` 가 비어 있는 행은 그 파티션을 맡은 멤버가 없다는 뜻이므로 리밸런스 중이거나 컨슈머 수가 부족한 상태를 나타냅니다. `FetcherLagMetrics` 는 복제 지연 지표이므로 애플리케이션 lag 알림 기준이 될 수 없습니다. 그리고 공식 문서는 URP 처럼 \"0이어야 한다\" 수준의 방향성만 제시하고 lag 의 구체적 임계 수치는 제시하지 않습니다.",
       "distractorNotes": {
-        "B": "이 명령은 브로커에 저장된 커밋 오프셋과 로그 끝 위치를 조회합니다. 컨슈머 프로세스에 붙지 않습니다.",
-        "D": "이름만 `ConsumerLag` 이고 실제로는 팔로워 복제 지연입니다.",
-        "E": "lag 임계값에 대한 공식 권장 수치는 없습니다. 서비스의 처리 속도와 SLA 로부터 직접 정해야 합니다."
+        "A": "이 명령은 브로커에 저장된 커밋 오프셋과 로그 끝 위치를 조회합니다. 컨슈머 프로세스에 붙지 않습니다.",
+        "B": "이름만 `ConsumerLag` 이고 실제로는 팔로워 복제 지연입니다.",
+        "C": "lag 임계값에 대한 공식 권장 수치는 없습니다. 서비스의 처리 속도와 SLA 로부터 직접 정해야 합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Managing Consumer Groups", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" },
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" }
+        {
+          "title": "Apache Kafka — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        },
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
       ],
-      "tags": ["consumer-lag", "alerting", "cli"]
+      "tags": [
+        "consumer-lag",
+        "alerting",
+        "cli"
+      ]
     },
     {
       "id": "ccdak-observability-015",
@@ -416,12 +760,26 @@
         "body": "TOPIC     PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG      CONSUMER-ID          HOST         CLIENT-ID\npayments  0          854144          855809          1665     consumer1-3fc8...    /10.0.1.21   consumer1\npayments  1          460537          803290          342753   consumer1-3fc8...    /10.0.1.21   consumer1\npayments  2          243655          398812          155157   -                    -            -"
       },
       "choices": [
-        { "id": "A", "text": "파티션 2의 데이터가 보관 기간을 넘겨 삭제되었다." },
-        { "id": "B", "text": "파티션 2의 리더가 오프라인이어서 읽기가 불가능하다." },
-        { "id": "C", "text": "파티션 2를 할당받은 컨슈머가 현재 없다 — 리밸런스 중이거나 멤버 수가 부족하다." },
-        { "id": "D", "text": "파티션 2에는 커밋 오프셋이 없어 `auto.offset.reset` 이 적용될 것이다." }
+        {
+          "id": "A",
+          "text": "파티션 2의 데이터가 보관 기간을 넘겨 삭제되었다."
+        },
+        {
+          "id": "B",
+          "text": "파티션 2의 리더가 오프라인이어서 읽기가 불가능하다."
+        },
+        {
+          "id": "C",
+          "text": "파티션 2를 할당받은 컨슈머가 현재 없다 — 리밸런스 중이거나 멤버 수가 부족하다."
+        },
+        {
+          "id": "D",
+          "text": "파티션 2에는 커밋 오프셋이 없어 `auto.offset.reset` 이 적용될 것이다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "`CONSUMER-ID`·`HOST`·`CLIENT-ID` 가 모두 `-` 인 행은 그 파티션에 현재 배정된 그룹 멤버가 없다는 뜻입니다. 커밋 오프셋과 LAG 은 남아 있으므로 과거에는 소비되었고 지금 멈춘 상태입니다. 함께 볼 신호는 파티션 1의 lag 이 파티션 0의 200배라는 점인데, 파티션별 편차가 크면 키 분포가 치우친 hot partition 이므로 컨슈머를 늘려도 해결되지 않습니다. 이런 출력에서는 \"멤버 수와 파티션 수의 관계\"와 \"키 분포\"를 각각 따로 판단해야 합니다.",
       "distractorNotes": {
         "A": "보관 삭제는 CURRENT-OFFSET 이 범위를 벗어나는 형태로 드러납니다. 여기서는 오프셋이 정상 범위 안에 있습니다.",
@@ -429,9 +787,16 @@
         "D": "CURRENT-OFFSET 값이 존재하므로 커밋 오프셋이 있습니다. `auto.offset.reset` 은 커밋이 없을 때 적용됩니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Managing Consumer Groups", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" }
+        {
+          "title": "Apache Kafka — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        }
       ],
-      "tags": ["consumer-lag", "cli", "rebalance-triggers"]
+      "tags": [
+        "consumer-lag",
+        "cli",
+        "rebalance-triggers"
+      ]
     },
     {
       "id": "ccdak-observability-016",
@@ -443,12 +808,26 @@
       "question": "컨슈머가 그룹에서 반복적으로 제거되는 사고를 \"터지기 전에\" 감지하려면 어느 메트릭을 봐야 하는가?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`time-between-poll-max` — `max.poll.interval.ms` 에 접근하는지 본다." },
-        { "id": "B", "text": "`records-lag-max` — lag 이 커지는지 본다." },
-        { "id": "C", "text": "`rebalance-rate-per-hour` — 리밸런스가 실제로 몇 번 났는지 본다." },
-        { "id": "D", "text": "`bytes-consumed-rate` — 소비 바이트가 줄어드는지 본다." }
+        {
+          "id": "A",
+          "text": "`time-between-poll-max` — `max.poll.interval.ms` 에 접근하는지 본다."
+        },
+        {
+          "id": "B",
+          "text": "`records-lag-max` — lag 이 커지는지 본다."
+        },
+        {
+          "id": "C",
+          "text": "`rebalance-rate-per-hour` — 리밸런스가 실제로 몇 번 났는지 본다."
+        },
+        {
+          "id": "D",
+          "text": "`bytes-consumed-rate` — 소비 바이트가 줄어드는지 본다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "poll 간격이 `max.poll.interval.ms`(기본 300000)를 넘기면 컨슈머는 그룹에서 제거되고 리밸런스가 일어납니다. 따라서 아직 넘지 않았지만 접근하고 있는 상태를 보여 주는 `time-between-poll-max` 가 선행 지표입니다. `poll-idle-ratio-avg` 가 낮게 유지되면 처리에 시간을 다 쓰고 있다는 보강 근거가 되고, 이때 1차 처방은 `max.poll.records` 를 줄이는 것입니다. 반면 lag 이나 리밸런스 횟수는 사고가 이미 일어난 뒤에 올라가는 결과 지표입니다.",
       "distractorNotes": {
         "B": "lag 은 결과 지표입니다. 이미 밀린 뒤에야 올라가므로 예방에 쓸 수 없습니다.",
@@ -456,10 +835,20 @@
         "D": "소비 바이트 감소는 여러 원인이 겹치므로 poll 간격 초과를 특정하지 못합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Consumer Monitoring", "url": "https://kafka.apache.org/documentation/#consumer_monitoring" },
-        { "title": "Apache Kafka — Consumer Configs: max.poll.interval.ms", "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms" }
+        {
+          "title": "Apache Kafka — Consumer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Consumer Configs: max.poll.interval.ms",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms"
+        }
       ],
-      "tags": ["consumer-metrics", "max-poll-interval", "rebalance-triggers"]
+      "tags": [
+        "consumer-metrics",
+        "max-poll-interval",
+        "rebalance-triggers"
+      ]
     },
     {
       "id": "ccdak-observability-017",
@@ -471,12 +860,26 @@
       "question": "컨슈머 프로세스는 살아 있는데 `assigned-partitions` 가 계속 0이다. 가능한 원인으로 가장 적절한 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`auto.offset.reset` 이 `none` 이라 오프셋을 찾지 못했다." },
-        { "id": "B", "text": "구독한 토픽의 보관 기간이 지나 데이터가 모두 삭제되었다." },
-        { "id": "C", "text": "그룹의 컨슈머 수가 파티션 수보다 많아 남는 멤버가 되었거나, 리밸런스가 끝나지 않았다." },
-        { "id": "D", "text": "`isolation.level=read_committed` 라서 커밋된 트랜잭션이 없으면 파티션이 할당되지 않는다." }
+        {
+          "id": "A",
+          "text": "`auto.offset.reset` 이 `none` 이라 오프셋을 찾지 못했다."
+        },
+        {
+          "id": "B",
+          "text": "구독한 토픽의 보관 기간이 지나 데이터가 모두 삭제되었다."
+        },
+        {
+          "id": "C",
+          "text": "그룹의 컨슈머 수가 파티션 수보다 많아 남는 멤버가 되었거나, 리밸런스가 끝나지 않았다."
+        },
+        {
+          "id": "D",
+          "text": "`isolation.level=read_committed` 라서 커밋된 트랜잭션이 없으면 파티션이 할당되지 않는다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "파티션 하나는 그룹 안에서 한 멤버에게만 할당되므로 멤버 수가 파티션 수보다 많으면 남는 멤버는 아무것도 받지 못합니다. 또한 리밸런스가 완료되지 않은 과도 상태에서도 할당이 비어 있습니다. 이 지표가 0인 채로 유지되면 프로세스는 정상인데 처리량이 전혀 오르지 않는 상태이므로 알림 대상으로 두는 것이 좋습니다. \"컨슈머를 늘렸는데 처리량이 그대로다\"의 정량적 근거가 바로 이 지표입니다.",
       "distractorNotes": {
         "A": "`auto.offset.reset=none` 은 파티션이 이미 할당된 상태에서 예외를 던집니다. 할당 자체를 막지 않습니다.",
@@ -484,9 +887,16 @@
         "D": "격리 수준은 어떤 레코드를 반환할지만 결정합니다. 파티션 할당과 무관합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Consumer Monitoring", "url": "https://kafka.apache.org/documentation/#consumer_monitoring" }
+        {
+          "title": "Apache Kafka — Consumer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+        }
       ],
-      "tags": ["consumer-metrics", "assigned-partitions", "consumer-group"]
+      "tags": [
+        "consumer-metrics",
+        "assigned-partitions",
+        "consumer-group"
+      ]
     },
     {
       "id": "ccdak-observability-018",
@@ -502,12 +912,26 @@
         "body": "assigned-partitions      = 4\nrecords-lag-max          = 1240000\npoll-idle-ratio-avg      = 0.02\ntime-between-poll-max    = 268000   (ms)\nrebalance-rate-per-hour  = 0\ncommit-rate              = 0.19  (/s)"
       },
       "choices": [
-        { "id": "A", "text": "리밸런스 스톰이 진행 중이므로 `session.timeout.ms` 를 올려야 한다." },
-        { "id": "B", "text": "처리에 시간을 거의 다 쓰고 있어 poll 간격이 한계에 근접했다 — `max.poll.records` 축소나 처리 최적화가 필요하다." },
-        { "id": "C", "text": "파티션 할당이 되지 않아 아무것도 소비하지 못하는 상태다." },
-        { "id": "D", "text": "커밋 주기가 너무 짧아 브로커에 부하를 주고 있다." }
+        {
+          "id": "A",
+          "text": "리밸런스 스톰이 진행 중이므로 `session.timeout.ms` 를 올려야 한다."
+        },
+        {
+          "id": "B",
+          "text": "처리에 시간을 거의 다 쓰고 있어 poll 간격이 한계에 근접했다 — `max.poll.records` 축소나 처리 최적화가 필요하다."
+        },
+        {
+          "id": "C",
+          "text": "파티션 할당이 되지 않아 아무것도 소비하지 못하는 상태다."
+        },
+        {
+          "id": "D",
+          "text": "커밋 주기가 너무 짧아 브로커에 부하를 주고 있다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "`poll-idle-ratio-avg=0.02` 는 poll 에서 기다린 시간이 2%뿐이라는 뜻이므로 나머지 98%를 레코드 처리에 쓰고 있습니다. `time-between-poll-max=268000` 은 기본값 `max.poll.interval.ms=300000` 의 약 89%여서, 아직 리밸런스는 나지 않았지만(rate=0) 곧 임계에 닿습니다. 따라서 한 번의 poll 이 가져오는 양을 줄이거나 처리 로직을 최적화해야 하며, 파티션이 4개뿐이므로 컨슈머 증설만으로는 효과가 제한적입니다. 여기서 `session.timeout.ms` 를 올리는 것은 축을 잘못 짚은 대응입니다.",
       "distractorNotes": {
         "A": "`rebalance-rate-per-hour=0` 이므로 리밸런스는 아직 일어나지 않았습니다. 하트비트 축이 아니라 poll 축의 문제입니다.",
@@ -515,10 +939,20 @@
         "D": "`commit-rate=0.19/s` 는 약 5초에 한 번으로 낮은 편입니다. 과도한 커밋이 아닙니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Consumer Monitoring", "url": "https://kafka.apache.org/documentation/#consumer_monitoring" },
-        { "title": "Apache Kafka — Consumer Configs: max.poll.records", "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records" }
+        {
+          "title": "Apache Kafka — Consumer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Consumer Configs: max.poll.records",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.records"
+        }
       ],
-      "tags": ["consumer-metrics", "max-poll-interval", "poll-idle-ratio-avg"]
+      "tags": [
+        "consumer-metrics",
+        "max-poll-interval",
+        "poll-idle-ratio-avg"
+      ]
     },
     {
       "id": "ccdak-observability-019",
@@ -530,24 +964,52 @@
       "question": "리밸런스가 반복되는 원인을 하트비트 축과 poll 축으로 구분하려 한다. poll 축을 보는 지표를 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`heartbeat-rate`" },
-        { "id": "B", "text": "`time-between-poll-max`" },
-        { "id": "C", "text": "`last-heartbeat-seconds-ago`" },
-        { "id": "D", "text": "`poll-idle-ratio-avg`" },
-        { "id": "E", "text": "`commit-latency-avg`" }
+        {
+          "id": "A",
+          "text": "`poll-idle-ratio-avg`"
+        },
+        {
+          "id": "B",
+          "text": "`time-between-poll-max`"
+        },
+        {
+          "id": "C",
+          "text": "`commit-latency-avg`"
+        },
+        {
+          "id": "D",
+          "text": "`last-heartbeat-seconds-ago`"
+        },
+        {
+          "id": "E",
+          "text": "`heartbeat-rate`"
+        }
       ],
-      "answer": ["B", "D"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "컨슈머가 그룹에서 빠지는 경로는 두 개입니다. 하트비트가 `session.timeout.ms`(기본 45000) 안에 오지 않는 경로와, 두 poll 사이 간격이 `max.poll.interval.ms`(기본 300000)를 넘는 경로입니다. 전자는 프로세스 정지·장기 GC·네트워크 문제이고 후자는 레코드 처리가 느린 문제이므로 처방이 완전히 다릅니다. poll 축을 보는 지표가 `time-between-poll-max`·`last-poll-seconds-ago`·`poll-idle-ratio-avg` 이며, 이 축의 문제에 `session.timeout.ms` 를 올리면 장애 감지만 늦어집니다.",
       "distractorNotes": {
-        "A": "하트비트 축 지표입니다. `session.timeout.ms` 와 짝을 이룹니다.",
-        "C": "역시 하트비트 축 지표로, 마지막 하트비트 이후 경과 시간을 봅니다.",
-        "E": "커밋 지연 지표로, 두 축 어느 쪽의 제거 조건과도 직접 대응하지 않습니다."
+        "C": "커밋 지연 지표로, 두 축 어느 쪽의 제거 조건과도 직접 대응하지 않습니다.",
+        "D": "역시 하트비트 축 지표로, 마지막 하트비트 이후 경과 시간을 봅니다.",
+        "E": "하트비트 축 지표입니다. `session.timeout.ms` 와 짝을 이룹니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Consumer Monitoring", "url": "https://kafka.apache.org/documentation/#consumer_monitoring" },
-        { "title": "Apache Kafka — Consumer Configs: max.poll.interval.ms", "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms" }
+        {
+          "title": "Apache Kafka — Consumer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Consumer Configs: max.poll.interval.ms",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_max.poll.interval.ms"
+        }
       ],
-      "tags": ["consumer-metrics", "max-poll-interval", "rebalance-triggers"]
+      "tags": [
+        "consumer-metrics",
+        "max-poll-interval",
+        "rebalance-triggers"
+      ]
     },
     {
       "id": "ccdak-observability-020",
@@ -559,11 +1021,31 @@
       "question": "컨슈머 메트릭을 그 의미와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`records-lag-max`", "right": "할당된 파티션 중 가장 큰 lag" },
-        { "id": "p2", "left": "`last-poll-seconds-ago`", "right": "마지막 `poll()` 호출 이후 경과한 초" },
-        { "id": "p3", "left": "`poll-idle-ratio-avg`", "right": "poll 에서 레코드를 기다리며 유휴 상태였던 시간의 평균 비율" },
-        { "id": "p4", "left": "`assigned-partitions`", "right": "현재 이 컨슈머에 할당된 파티션 수" },
-        { "id": "p5", "left": "`failed-rebalance-rate-per-hour`", "right": "시간당 실패한 리밸런스 횟수" }
+        {
+          "id": "p1",
+          "left": "`records-lag-max`",
+          "right": "할당된 파티션 중 가장 큰 lag"
+        },
+        {
+          "id": "p2",
+          "left": "`last-poll-seconds-ago`",
+          "right": "마지막 `poll()` 호출 이후 경과한 초"
+        },
+        {
+          "id": "p3",
+          "left": "`poll-idle-ratio-avg`",
+          "right": "poll 에서 레코드를 기다리며 유휴 상태였던 시간의 평균 비율"
+        },
+        {
+          "id": "p4",
+          "left": "`assigned-partitions`",
+          "right": "현재 이 컨슈머에 할당된 파티션 수"
+        },
+        {
+          "id": "p5",
+          "left": "`failed-rebalance-rate-per-hour`",
+          "right": "시간당 실패한 리밸런스 횟수"
+        }
       ],
       "extraRights": [
         "초당 소비한 레코드 수",
@@ -576,9 +1058,16 @@
         "p2": "`last-rebalance-seconds-ago` 와 혼동하기 쉽습니다. 이쪽은 poll 기준입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Consumer Monitoring", "url": "https://kafka.apache.org/documentation/#consumer_monitoring" }
+        {
+          "title": "Apache Kafka — Consumer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+        }
       ],
-      "tags": ["consumer-metrics", "monitoring", "consumer-lag"]
+      "tags": [
+        "consumer-metrics",
+        "monitoring",
+        "consumer-lag"
+      ]
     },
     {
       "id": "ccdak-observability-021",
@@ -590,12 +1079,26 @@
       "question": "프로듀서가 `NotEnoughReplicasException` 을 받고 있다. 이 상태를 직접 확인해 주는 브로커 메트릭은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions`" },
-        { "id": "B", "text": "`kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount`" },
-        { "id": "C", "text": "`kafka.controller:type=KafkaController,name=ActiveControllerCount`" },
-        { "id": "D", "text": "`kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent`" }
+        {
+          "id": "A",
+          "text": "`kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions`"
+        },
+        {
+          "id": "B",
+          "text": "`kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount`"
+        },
+        {
+          "id": "C",
+          "text": "`kafka.controller:type=KafkaController,name=ActiveControllerCount`"
+        },
+        {
+          "id": "D",
+          "text": "`kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent`"
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "`UnderMinIsrPartitionCount` 는 ISR 크기가 `min.insync.replicas` 보다 작은 파티션 수이며, 이 상태에서는 `acks=all` 쓰기가 충족될 수 없어 브로커가 `NotEnoughReplicasException` 을 반환합니다. 즉 이 지표가 0이 아니면 이미 쓰기가 실패하고 있는 장애 상황입니다. 반면 `UnderReplicatedPartitions` 는 레플리카 하나가 뒤처졌다는 경고 수준이며 쓰기는 아직 가능할 수 있습니다. 두 지표를 같은 것으로 보고 URP 만 감시하면 쓰기 실패를 놓칩니다.",
       "distractorNotes": {
         "A": "복제가 밀렸다는 경고입니다. `min.insync.replicas` 를 아직 만족한다면 쓰기는 성공합니다.",
@@ -603,10 +1106,20 @@
         "D": "요청 처리 스레드 포화를 보는 지표로 지연 원인 분석에 씁니다. ISR 상태와 무관합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Topic Configs: min.insync.replicas", "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs: min.insync.replicas",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas"
+        }
       ],
-      "tags": ["broker-metrics", "min.insync.replicas", "acks-isr"]
+      "tags": [
+        "broker-metrics",
+        "min.insync.replicas",
+        "acks-isr"
+      ]
     },
     {
       "id": "ccdak-observability-022",
@@ -618,24 +1131,52 @@
       "question": "RF=3, `min.insync.replicas=2` 인 토픽에서 브로커 한 대가 빠졌다. 이 순간의 상태로 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`UnderReplicatedPartitions` 가 0보다 커진다." },
-        { "id": "B", "text": "`UnderMinIsrPartitionCount` 가 0보다 커져 `acks=all` 쓰기가 이미 거부된다." },
-        { "id": "C", "text": "`AtMinIsrPartitionCount` 가 0보다 커지며, 한 대만 더 빠지면 쓰기가 실패한다." },
-        { "id": "D", "text": "`OfflinePartitionsCount` 가 0보다 커져 읽기도 불가능해진다." },
-        { "id": "E", "text": "세 ISR 관련 지표 모두 0으로 유지된다." }
+        {
+          "id": "A",
+          "text": "`UnderMinIsrPartitionCount` 가 0보다 커져 `acks=all` 쓰기가 이미 거부된다."
+        },
+        {
+          "id": "B",
+          "text": "`OfflinePartitionsCount` 가 0보다 커져 읽기도 불가능해진다."
+        },
+        {
+          "id": "C",
+          "text": "세 ISR 관련 지표 모두 0으로 유지된다."
+        },
+        {
+          "id": "D",
+          "text": "`UnderReplicatedPartitions` 가 0보다 커진다."
+        },
+        {
+          "id": "E",
+          "text": "`AtMinIsrPartitionCount` 가 0보다 커지며, 한 대만 더 빠지면 쓰기가 실패한다."
+        }
       ],
-      "answer": ["A", "C"],
+      "answer": [
+        "D",
+        "E"
+      ],
       "explanation": "ISR 이 3에서 2로 줄었으므로 복제 계수보다 작아져 `UnderReplicatedPartitions` 가 올라갑니다. 동시에 ISR 크기가 `min.insync.replicas` 와 정확히 같으므로 `AtMinIsrPartitionCount` 가 올라가고, 아직 미달은 아니므로 `UnderMinIsrPartitionCount` 는 0 입니다. 이 조합은 \"쓰기는 되지만 여유가 없다\"는 경계 상태이므로 즉시 조치가 필요합니다. 한 대가 더 빠지면 ISR 이 1이 되어 `UnderMinIsr` 이 올라가고 `acks=all` 쓰기가 거부됩니다.",
       "distractorNotes": {
-        "B": "ISR 이 2로 `min.insync.replicas` 를 만족하므로 아직 쓰기는 성공합니다. 이 지표는 0입니다.",
-        "D": "리더가 남아 있으므로 읽기는 정상입니다. 리더 부재일 때만 이 지표가 올라갑니다.",
-        "E": "ISR 이 복제 계수보다 작아지면 URP 와 AtMinIsr 이 반응합니다. 모두 0일 수 없습니다."
+        "A": "ISR 이 2로 `min.insync.replicas` 를 만족하므로 아직 쓰기는 성공합니다. 이 지표는 0입니다.",
+        "B": "리더가 남아 있으므로 읽기는 정상입니다. 리더 부재일 때만 이 지표가 올라갑니다.",
+        "C": "ISR 이 복제 계수보다 작아지면 URP 와 AtMinIsr 이 반응합니다. 모두 0일 수 없습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Topic Configs: min.insync.replicas", "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs: min.insync.replicas",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas"
+        }
       ],
-      "tags": ["broker-metrics", "isr", "min.insync.replicas"]
+      "tags": [
+        "broker-metrics",
+        "isr",
+        "min.insync.replicas"
+      ]
     },
     {
       "id": "ccdak-observability-023",
@@ -647,12 +1188,26 @@
       "question": "`OfflinePartitionsCount` 가 0보다 큰 상태의 의미는?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "리더가 없는 파티션이 있으며 그 파티션은 읽기와 쓰기가 모두 불가능하다." },
-        { "id": "B", "text": "팔로워 복제가 밀린 파티션이 있으나 서비스에는 영향이 없다." },
-        { "id": "C", "text": "보관 기간이 지나 삭제 대기 중인 파티션이 있다." },
-        { "id": "D", "text": "컨슈머 그룹이 할당받지 못한 파티션이 있다." }
+        {
+          "id": "A",
+          "text": "리더가 없는 파티션이 있으며 그 파티션은 읽기와 쓰기가 모두 불가능하다."
+        },
+        {
+          "id": "B",
+          "text": "팔로워 복제가 밀린 파티션이 있으나 서비스에는 영향이 없다."
+        },
+        {
+          "id": "C",
+          "text": "보관 기간이 지나 삭제 대기 중인 파티션이 있다."
+        },
+        {
+          "id": "D",
+          "text": "컨슈머 그룹이 할당받지 못한 파티션이 있다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "이 지표는 리더가 배정되지 않은 파티션의 수이며 정상 값은 0 입니다. 리더가 없으면 프로듀서는 쓸 곳이 없고 컨슈머도 읽을 곳이 없으므로 그 파티션은 완전히 사용 불가 상태입니다. `UnderReplicatedPartitions` 나 `UnderMinIsrPartitionCount` 가 \"내구성이 약해졌다\"를 뜻하는 것과 달리 이것은 가용성 자체가 깨진 상태이므로 긴급도가 가장 높습니다. 컨트롤러 MBean 에서 노출되며 리더 선출이 정상화되면 0으로 돌아옵니다.",
       "distractorNotes": {
         "B": "복제 지연은 `UnderReplicatedPartitions` 가 나타냅니다. 오프라인은 리더가 아예 없는 상태입니다.",
@@ -660,9 +1215,16 @@
         "D": "컨슈머 할당 상태는 클라이언트의 `assigned-partitions` 로 봅니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
       ],
-      "tags": ["broker-metrics", "OfflinePartitionsCount", "availability"]
+      "tags": [
+        "broker-metrics",
+        "OfflinePartitionsCount",
+        "availability"
+      ]
     },
     {
       "id": "ccdak-observability-024",
@@ -674,22 +1236,43 @@
       "question": "`ActiveControllerCount` 를 클러스터 전체에 걸쳐 합산했을 때 정상 값과, 값이 2인 경우의 의미는?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "정상은 노드 수와 같고, 2면 컨트롤러 노드가 2대뿐이라는 뜻이다." },
-        { "id": "B", "text": "정상은 0이고, 2면 컨트롤러 선출이 두 번 일어났다는 뜻이다." },
-        { "id": "C", "text": "정상은 3이고, 2면 쿼럼이 하나 빠졌다는 뜻이다." },
-        { "id": "D", "text": "정상은 1이고, 2면 두 노드가 동시에 활성 컨트롤러라고 주장하는 split-brain 의심 상태다." }
+        {
+          "id": "A",
+          "text": "정상은 노드 수와 같고, 2면 컨트롤러 노드가 2대뿐이라는 뜻이다."
+        },
+        {
+          "id": "B",
+          "text": "정상은 0이고, 2면 컨트롤러 선출이 두 번 일어났다는 뜻이다."
+        },
+        {
+          "id": "C",
+          "text": "정상은 3이고, 2면 쿼럼이 하나 빠졌다는 뜻이다."
+        },
+        {
+          "id": "D",
+          "text": "정상은 1이고, 2면 두 노드가 동시에 활성 컨트롤러라고 주장하는 split-brain 의심 상태다."
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "각 노드는 자신이 활성 컨트롤러일 때 1, 아니면 0을 노출하므로 클러스터 전체 합은 항상 1이어야 합니다. 합이 0이면 활성 컨트롤러가 없어 메타데이터 변경(토픽 생성, 리더 선출 등)이 전혀 진행되지 않습니다. 합이 2 이상이면 두 노드가 동시에 리더를 주장하는 상태로 메타데이터 일관성이 위험합니다. 컨트롤러 이상은 클라이언트에게 `NotLeaderOrFollowerException` 이나 메타데이터 갱신 실패로 나타납니다.",
       "distractorNotes": {
         "A": "노드마다 0 또는 1을 노출하므로 합이 노드 수가 되는 것은 모든 노드가 리더를 주장하는 비정상 상태입니다.",
-        "B": "선출 횟수는 `LeaderElectionRateAndTimeMs` 계열로 봅니다. 이 지표는 누적 카운터가 아닙니다.",
+        "B": "선출이 반복되는지는 `IsrShrinksPerSec`/`IsrExpandsPerSec` 와 `UncleanLeaderElectionsPerSec` 로 봅니다. `ActiveControllerCount` 는 누적 카운터가 아니라 현재 상태(0 또는 1)입니다.",
         "C": "컨트롤러 쿼럼 크기와 활성 컨트롤러 수는 다른 개념입니다. 쿼럼이 3이어도 활성 컨트롤러는 1입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
       ],
-      "tags": ["broker-metrics", "ActiveControllerCount", "kraft"]
+      "tags": [
+        "broker-metrics",
+        "ActiveControllerCount",
+        "kraft"
+      ]
     },
     {
       "id": "ccdak-observability-025",
@@ -701,12 +1284,26 @@
       "question": "브로커의 `RequestHandlerAvgIdlePercent` 가 0.05 로 떨어졌다. 옳은 해석과 대응은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "요청 처리 스레드가 대부분 유휴 상태이므로 `num.io.threads` 를 줄일 수 있다." },
-        { "id": "B", "text": "디스크 flush 가 지연되고 있으므로 `log.flush.interval.messages` 를 조정해야 한다." },
-        { "id": "C", "text": "요청 처리 스레드가 거의 포화 상태이므로 부하를 줄이거나 `num.io.threads` 를 늘려야 한다." },
-        { "id": "D", "text": "네트워크 스레드가 포화 상태이므로 `num.network.threads` 를 늘려야 한다." }
+        {
+          "id": "A",
+          "text": "요청 처리 스레드가 대부분 유휴 상태이므로 `num.io.threads` 를 줄일 수 있다."
+        },
+        {
+          "id": "B",
+          "text": "디스크 flush 가 지연되고 있으므로 `log.flush.interval.messages` 를 조정해야 한다."
+        },
+        {
+          "id": "C",
+          "text": "요청 처리 스레드가 거의 포화 상태이므로 부하를 줄이거나 `num.io.threads` 를 늘려야 한다."
+        },
+        {
+          "id": "D",
+          "text": "네트워크 스레드가 포화 상태이므로 `num.network.threads` 를 늘려야 한다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "이 지표는 요청 처리(I/O) 스레드가 유휴였던 시간의 평균 비율이며 0과 1 사이 값입니다. 공식 문서는 0.3 이상을 이상적인 범위로 제시하므로 0.05 는 스레드가 95% 시간 동안 일하고 있는 포화 상태입니다. 포화되면 요청이 큐에 쌓여 클라이언트의 `request-latency-avg` 가 함께 오릅니다. 대응은 부하를 줄이거나 `num.io.threads`(기본 8)를 올리는 것이며, 네트워크 스레드 포화는 `NetworkProcessorAvgIdlePercent` 로 따로 판단합니다.",
       "distractorNotes": {
         "A": "값이 낮은 것은 유휴가 적다는 뜻입니다. 방향을 반대로 읽은 해석입니다.",
@@ -714,10 +1311,20 @@
         "D": "네트워크 스레드는 `NetworkProcessorAvgIdlePercent` 로 봅니다. 두 스레드 풀은 서로 다릅니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Broker Configs: num.io.threads", "url": "https://kafka.apache.org/documentation/#brokerconfigs_num.io.threads" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs: num.io.threads",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_num.io.threads"
+        }
       ],
-      "tags": ["broker-metrics", "RequestHandlerAvgIdlePercent", "num.io.threads"]
+      "tags": [
+        "broker-metrics",
+        "RequestHandlerAvgIdlePercent",
+        "num.io.threads"
+      ]
     },
     {
       "id": "ccdak-observability-026",
@@ -729,12 +1336,26 @@
       "question": "`IsrShrinksPerSec` 이 주기적으로 튀어오른다. 함께 확인해야 하는 브로커 설정은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`min.insync.replicas` — 값이 작으면 ISR 이 자주 줄어든다." },
-        { "id": "B", "text": "`unclean.leader.election.enable` — 값이 `false` 면 ISR 이 축소된다." },
-        { "id": "C", "text": "`replica.lag.time.max.ms` — 팔로워가 이 시간 동안 따라잡지 못하면 ISR 에서 제외된다." },
-        { "id": "D", "text": "`auto.leader.rebalance.enable` — 값이 `true` 면 ISR 이 반복 축소된다." }
+        {
+          "id": "A",
+          "text": "`min.insync.replicas` — 값이 작으면 ISR 이 자주 줄어든다."
+        },
+        {
+          "id": "B",
+          "text": "`unclean.leader.election.enable` — 값이 `false` 면 ISR 이 축소된다."
+        },
+        {
+          "id": "C",
+          "text": "`replica.lag.time.max.ms` — 팔로워가 이 시간 동안 따라잡지 못하면 ISR 에서 제외된다."
+        },
+        {
+          "id": "D",
+          "text": "`auto.leader.rebalance.enable` — 값이 `true` 면 ISR 이 반복 축소된다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "ISR 축소는 팔로워가 리더를 제때 따라잡지 못했다는 판정의 결과이고, 그 판정 기준이 `replica.lag.time.max.ms`(기본 30000) 입니다. 따라서 축소·확대가 반복된다면 팔로워의 fetch 가 이 시간 안에 완료되지 못하는 원인(디스크 포화, 네트워크, 리더 쏠림, 큰 배치)을 찾아야 합니다. 이 값을 늘리면 지표는 조용해지지만 실제로는 뒤처진 레플리카를 ISR 에 더 오래 남겨 두는 것이므로 내구성 위험이 커집니다. 즉 지표를 없애는 것이 아니라 원인을 없애는 것이 대응입니다.",
       "distractorNotes": {
         "A": "`min.insync.replicas` 는 쓰기 허용 기준이며 ISR 멤버십 판정에는 관여하지 않습니다.",
@@ -742,10 +1363,20 @@
         "D": "선호 리더 재배치는 리더십 균형 작업입니다. ISR 축소 판정과 직접 관계가 없습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Broker Configs: replica.lag.time.max.ms", "url": "https://kafka.apache.org/documentation/#brokerconfigs_replica.lag.time.max.ms" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs: replica.lag.time.max.ms",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs_replica.lag.time.max.ms"
+        }
       ],
-      "tags": ["broker-metrics", "isr", "replica.lag.time.max.ms"]
+      "tags": [
+        "broker-metrics",
+        "isr",
+        "replica.lag.time.max.ms"
+      ]
     },
     {
       "id": "ccdak-observability-027",
@@ -757,11 +1388,31 @@
       "question": "브로커 JMX 메트릭을 그 의미와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`UnderReplicatedPartitions`", "right": "ISR 크기가 복제 계수보다 작은 파티션 수" },
-        { "id": "p2", "left": "`UnderMinIsrPartitionCount`", "right": "ISR 크기가 `min.insync.replicas` 보다 작은 파티션 수" },
-        { "id": "p3", "left": "`AtMinIsrPartitionCount`", "right": "ISR 크기가 `min.insync.replicas` 와 정확히 같은 파티션 수" },
-        { "id": "p4", "left": "`OfflinePartitionsCount`", "right": "리더가 없어 읽기·쓰기가 모두 불가능한 파티션 수" },
-        { "id": "p5", "left": "`ActiveControllerCount`", "right": "이 노드가 활성 컨트롤러인지 여부 (클러스터 합이 1)" }
+        {
+          "id": "p1",
+          "left": "`UnderReplicatedPartitions`",
+          "right": "ISR 크기가 복제 계수보다 작은 파티션 수"
+        },
+        {
+          "id": "p2",
+          "left": "`UnderMinIsrPartitionCount`",
+          "right": "ISR 크기가 `min.insync.replicas` 보다 작은 파티션 수"
+        },
+        {
+          "id": "p3",
+          "left": "`AtMinIsrPartitionCount`",
+          "right": "ISR 크기가 `min.insync.replicas` 와 정확히 같은 파티션 수"
+        },
+        {
+          "id": "p4",
+          "left": "`OfflinePartitionsCount`",
+          "right": "리더가 없어 읽기·쓰기가 모두 불가능한 파티션 수"
+        },
+        {
+          "id": "p5",
+          "left": "`ActiveControllerCount`",
+          "right": "이 노드가 활성 컨트롤러인지 여부 (클러스터 합이 1)"
+        }
       ],
       "extraRights": [
         "요청 처리 스레드가 유휴였던 시간의 평균 비율",
@@ -774,9 +1425,16 @@
         "p3": "\"최소치와 같다\"를 정상으로 읽기 쉽지만, 한 대만 더 빠지면 쓰기가 실패하는 경계 상태입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
       ],
-      "tags": ["broker-metrics", "isr", "min.insync.replicas"]
+      "tags": [
+        "broker-metrics",
+        "isr",
+        "min.insync.replicas"
+      ]
     },
     {
       "id": "ccdak-observability-028",
@@ -788,12 +1446,26 @@
       "question": "`ProducerInterceptor` 의 `onSend()` 에 대한 설명으로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`send()` 호출 안에서, 직렬화와 파티션 할당이 일어나기 전에 호출된다." },
-        { "id": "B", "text": "Sender 스레드에서 브로커 응답을 받은 뒤에 호출된다." },
-        { "id": "C", "text": "직렬화가 끝난 바이트 배열을 받아 수정할 수 있다." },
-        { "id": "D", "text": "여기서 예외를 던지면 `send()` 가 그 예외를 호출자에게 전파한다." }
+        {
+          "id": "A",
+          "text": "`send()` 호출 안에서, 직렬화와 파티션 할당이 일어나기 전에 호출된다."
+        },
+        {
+          "id": "B",
+          "text": "Sender 스레드에서 브로커 응답을 받은 뒤에 호출된다."
+        },
+        {
+          "id": "C",
+          "text": "직렬화가 끝난 바이트 배열을 받아 수정할 수 있다."
+        },
+        {
+          "id": "D",
+          "text": "여기서 예외를 던지면 `send()` 가 그 예외를 호출자에게 전파한다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "`onSend()` 는 `KafkaProducer.send()` 안에서 호출되며, 키·값이 직렬화되고 파티션이 결정되기 **전** 단계입니다. 그래서 레코드를 수정할 수 있고, 키를 바꾸면 파티션 할당도 수정된 키를 기준으로 이루어집니다. 다만 이 메서드에서 던진 예외는 호출자에게 전파되지 않고 잡혀서 로그로만 남으므로, 인터셉터 오류가 조용히 무시될 수 있다는 점을 알고 있어야 합니다. 전송 결과를 관측하는 쪽은 `onAcknowledgement()` 이고 이것은 백그라운드 I/O 스레드에서 실행됩니다.",
       "distractorNotes": {
         "B": "응답 후 호출되는 것은 `onAcknowledgement()` 입니다. `onSend()` 는 전송 전입니다.",
@@ -801,10 +1473,20 @@
         "D": "예외는 잡혀서 로그로만 남고 전파되지 않습니다. 이것이 인터셉터 오류를 놓치는 원인입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Configs: interceptor.classes", "url": "https://kafka.apache.org/documentation/#producerconfigs_interceptor.classes" },
-        { "title": "Apache Kafka — Producer Monitoring", "url": "https://kafka.apache.org/documentation/#producer_monitoring" }
+        {
+          "title": "Apache Kafka — Producer Configs: interceptor.classes",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_interceptor.classes"
+        },
+        {
+          "title": "Apache Kafka — Producer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#producer_monitoring"
+        }
       ],
-      "tags": ["interceptor", "producer-metrics", "interceptor.classes"]
+      "tags": [
+        "interceptor",
+        "producer-metrics",
+        "interceptor.classes"
+      ]
     },
     {
       "id": "ccdak-observability-029",
@@ -816,24 +1498,52 @@
       "question": "클라이언트 인터셉터에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`ConsumerInterceptor.onConsume()` 은 `poll()` 이 레코드를 반환하기 직전에 호출된다." },
-        { "id": "B", "text": "`interceptor.classes` 기본값은 `JmxReporter` 이므로 항상 하나가 동작한다." },
-        { "id": "C", "text": "여러 인터셉터를 등록하면 `interceptor.classes` 에 나열한 순서대로 체인처럼 호출된다." },
-        { "id": "D", "text": "인터셉터는 브로커에 설치하며 모든 클라이언트에 자동 적용된다." },
-        { "id": "E", "text": "`ConsumerInterceptor` 는 레코드를 수정하거나 걸러낼 수 없다." }
+        {
+          "id": "A",
+          "text": "여러 인터셉터를 등록하면 `interceptor.classes` 에 나열한 순서대로 체인처럼 호출된다."
+        },
+        {
+          "id": "B",
+          "text": "`ConsumerInterceptor.onConsume()` 은 `poll()` 이 레코드를 반환하기 직전에 호출된다."
+        },
+        {
+          "id": "C",
+          "text": "인터셉터는 브로커에 설치하며 모든 클라이언트에 자동 적용된다."
+        },
+        {
+          "id": "D",
+          "text": "`interceptor.classes` 기본값은 `JmxReporter` 이므로 항상 하나가 동작한다."
+        },
+        {
+          "id": "E",
+          "text": "`ConsumerInterceptor` 는 레코드를 수정하거나 걸러낼 수 없다."
+        }
       ],
-      "answer": ["A", "C"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "`ConsumerInterceptor.onConsume()` 은 `poll()` 이 결과를 돌려주기 바로 전에 호출되므로 레코드를 수정하거나 필터링할 수 있고, `onCommit()` 은 오프셋 커밋 시점에 호출됩니다. 인터셉터를 여러 개 등록하면 설정에 적은 순서대로 체인이 형성되어 앞 인터셉터의 결과가 다음 인터셉터의 입력이 됩니다. `interceptor.classes` 의 기본값은 빈 목록이므로 기본 상태에서는 인터셉터가 없고, 인터셉터는 브로커가 아니라 클라이언트 애플리케이션에 설정합니다. 이 확장점은 추적 헤더 주입이나 감사 로깅 같은 횡단 관심사에 씁니다.",
       "distractorNotes": {
-        "B": "`JmxReporter` 는 `metric.reporters` 의 기본값입니다. `interceptor.classes` 의 기본값은 빈 목록입니다.",
-        "D": "인터셉터는 클라이언트 측 설정입니다. 브로커에 설치할 수 없습니다.",
+        "C": "인터셉터는 클라이언트 측 설정입니다. 브로커에 설치할 수 없습니다.",
+        "D": "`JmxReporter` 는 `metric.reporters` 의 기본값입니다. `interceptor.classes` 의 기본값은 빈 목록입니다.",
         "E": "수정과 필터링이 모두 허용됩니다. 반환하는 레코드 수에 제한도 없습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Consumer Configs: interceptor.classes", "url": "https://kafka.apache.org/documentation/#consumerconfigs_interceptor.classes" },
-        { "title": "Apache Kafka — Producer Configs: interceptor.classes", "url": "https://kafka.apache.org/documentation/#producerconfigs_interceptor.classes" }
+        {
+          "title": "Apache Kafka — Consumer Configs: interceptor.classes",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs_interceptor.classes"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs: interceptor.classes",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_interceptor.classes"
+        }
       ],
-      "tags": ["interceptor", "interceptor.classes", "consumer-metrics"]
+      "tags": [
+        "interceptor",
+        "interceptor.classes",
+        "consumer-metrics"
+      ]
     },
     {
       "id": "ccdak-observability-030",
@@ -845,12 +1555,26 @@
       "question": "클라이언트 설정 `client.id` 를 지정하지 않으면 관측 측면에서 무엇이 문제가 되는가?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "메트릭이 아예 노출되지 않아 JMX 로 아무 값도 읽을 수 없게 된다." },
-        { "id": "B", "text": "그룹 조정에 필요한 식별자가 없어 컨슈머 그룹에 참여할 수 없다." },
-        { "id": "C", "text": "MBean 이름에 자동 생성된 식별자가 붙어 어느 서비스인지 구분할 수 없다." },
-        { "id": "D", "text": "쿼터를 적용할 대상이 없어 브로커가 요청 자체를 거부한다." }
+        {
+          "id": "A",
+          "text": "메트릭이 아예 노출되지 않아 JMX 로 아무 값도 읽을 수 없게 된다."
+        },
+        {
+          "id": "B",
+          "text": "그룹 조정에 필요한 식별자가 없어 컨슈머 그룹에 참여할 수 없다."
+        },
+        {
+          "id": "C",
+          "text": "MBean 이름에 자동 생성된 식별자가 붙어 어느 서비스인지 구분할 수 없다."
+        },
+        {
+          "id": "D",
+          "text": "쿼터를 적용할 대상이 없어 브로커가 요청 자체를 거부한다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "클라이언트 메트릭의 MBean 이름에는 `client-id` 가 들어가고 브로커 요청 로그와 쿼터 집계도 이 값을 씁니다. 지정하지 않으면 자동 생성된 이름이 붙어서 대시보드에서 어느 애플리케이션인지 구분할 수 없고, 재시작할 때마다 이름이 바뀌어 시계열이 끊깁니다. 그래서 서비스명 기반으로 명시하는 것이 관측의 기본 전제입니다. 컨슈머라면 `group.instance.id` 를 함께 고려해 재시작 리밸런스를 줄이는 것도 같은 맥락의 설정입니다.",
       "distractorNotes": {
         "A": "메트릭은 노출됩니다. 다만 식별자가 자동 생성되어 구분이 어려워집니다.",
@@ -858,10 +1582,20 @@
         "D": "쿼터는 client-id 또는 사용자 기준으로 적용되며, 지정하지 않아도 요청이 거부되지는 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Producer Configs: client.id", "url": "https://kafka.apache.org/documentation/#producerconfigs_client.id" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs: client.id",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_client.id"
+        }
       ],
-      "tags": ["client.id", "jmx", "monitoring"]
+      "tags": [
+        "client.id",
+        "jmx",
+        "monitoring"
+      ]
     },
     {
       "id": "ccdak-observability-031",
@@ -873,12 +1607,26 @@
       "question": "브로커 메트릭만 수집하는 대시보드로는 알 수 없는 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "파티션의 ISR 상태" },
-        { "id": "B", "text": "토픽별 초당 유입 바이트" },
-        { "id": "C", "text": "활성 컨트롤러의 존재 여부" },
-        { "id": "D", "text": "컨슈머 애플리케이션의 두 `poll()` 호출 사이 간격" }
+        {
+          "id": "A",
+          "text": "파티션의 ISR 상태"
+        },
+        {
+          "id": "B",
+          "text": "토픽별 초당 유입 바이트"
+        },
+        {
+          "id": "C",
+          "text": "활성 컨트롤러의 존재 여부"
+        },
+        {
+          "id": "D",
+          "text": "컨슈머 애플리케이션의 두 `poll()` 호출 사이 간격"
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "poll 간격, poll 유휴 비율, 할당된 파티션 수 같은 지표는 컨슈머 프로세스 안에서만 계산되므로 클라이언트 JVM 에서 꺼내야 합니다. 브로커는 요청이 언제 왔는지는 알지만 애플리케이션이 레코드를 처리하는 데 얼마나 걸렸는지는 알 수 없습니다. 그래서 CCDAK 의 Observability 도메인은 브로커 감시가 아니라 \"내 애플리케이션을 어떻게 들여다보는가\"에 초점이 있습니다. 클라이언트 메트릭 수집 경로를 확보하지 않으면 리밸런스 원인 분석이 불가능합니다.",
       "distractorNotes": {
         "A": "ISR 상태는 브로커의 `ReplicaManager` 계열 지표로 관측합니다.",
@@ -886,10 +1634,20 @@
         "C": "`ActiveControllerCount` 로 관측합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Consumer Monitoring", "url": "https://kafka.apache.org/documentation/#consumer_monitoring" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Consumer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+        }
       ],
-      "tags": ["jmx", "monitoring", "consumer-metrics"]
+      "tags": [
+        "jmx",
+        "monitoring",
+        "consumer-metrics"
+      ]
     },
     {
       "id": "ccdak-observability-032",
@@ -901,21 +1659,45 @@
       "question": "클라이언트 JMX 메트릭을 대시보드와 알림까지 연결하는 파이프라인 단계를 올바른 순서로 배열하세요.",
       "code": null,
       "items": [
-        { "id": "i3", "text": "수집기가 익스포터 종단점을 주기적으로 스크레이프해 시계열 DB에 저장한다" },
-        { "id": "i1", "text": "클라이언트 JVM 에 JMX 를 노출한다 (JMX 포트 또는 exporter 에이전트)" },
-        { "id": "i4", "text": "시계열 DB 위에 대시보드 패널과 알림 규칙을 구성한다" },
-        { "id": "i2", "text": "익스포터가 MBean 값을 읽어 시계열 형식으로 변환해 제공한다" }
+        {
+          "id": "i1",
+          "text": "수집기가 익스포터 종단점을 주기적으로 스크레이프해 시계열 DB에 저장한다"
+        },
+        {
+          "id": "i2",
+          "text": "클라이언트 JVM 에 JMX 를 노출한다 (JMX 포트 또는 exporter 에이전트)"
+        },
+        {
+          "id": "i4",
+          "text": "시계열 DB 위에 대시보드 패널과 알림 규칙을 구성한다"
+        },
+        {
+          "id": "i3",
+          "text": "익스포터가 MBean 값을 읽어 시계열 형식으로 변환해 제공한다"
+        }
       ],
-      "answer": ["i1", "i2", "i3", "i4"],
+      "answer": [
+        "i2",
+        "i3",
+        "i1",
+        "i4"
+      ],
       "explanation": "JMX 는 프로세스 내부 메트릭을 꺼낼 수 있게 하는 인터페이스일 뿐이므로, 노출 없이는 어떤 도구도 값을 읽을 수 없습니다. 그 다음 단계로 MBean 값을 외부 수집 형식으로 바꾸는 변환 계층이 필요하고, 수집기가 그 종단점을 스크레이프해 시계열로 저장합니다. 대시보드와 알림은 저장된 시계열 위에서만 만들 수 있으므로 마지막입니다. Kafka 클라이언트에는 `metric.reporters` 설정도 있어 커스텀 리포터로 이 경로를 대체할 수 있습니다.",
       "distractorNotes": {
-        "i1": "\"수집기를 먼저 세운다\"고 생각하기 쉽지만, 노출되지 않은 메트릭은 수집할 수 없습니다.",
+        "i2": "\"수집기를 먼저 세운다\"고 생각하기 쉽지만, 노출되지 않은 메트릭은 수집할 수 없습니다.",
         "i4": "알림 규칙을 먼저 정의해도 데이터가 없으면 평가되지 않습니다. 메트릭 부재 조건도 저장된 시계열 위에서 정의합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        }
       ],
-      "tags": ["jmx", "monitoring", "alerting"]
+      "tags": [
+        "jmx",
+        "monitoring",
+        "alerting"
+      ]
     },
     {
       "id": "ccdak-observability-033",
@@ -927,24 +1709,52 @@
       "question": "Kafka 클라이언트 메트릭 노출에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`metric.reporters` 의 기본값은 `JmxReporter` 이므로 별도 설정 없이 JMX 로 노출된다." },
-        { "id": "B", "text": "`KafkaProducer.metrics()` / `KafkaConsumer.metrics()` 로 코드에서 같은 값을 읽을 수 있다." },
-        { "id": "C", "text": "클라이언트 메트릭은 브로커의 `__consumer_offsets` 에 주기적으로 기록된다." },
-        { "id": "D", "text": "`metrics.recording.level` 기본값은 `DEBUG` 이므로 모든 세부 지표가 기본 노출된다." },
-        { "id": "E", "text": "MBean 이름에는 `client-id` 가 포함되지 않는다." }
+        {
+          "id": "A",
+          "text": "`KafkaProducer.metrics()` / `KafkaConsumer.metrics()` 로 코드에서 같은 값을 읽을 수 있다."
+        },
+        {
+          "id": "B",
+          "text": "`metrics.recording.level` 기본값은 `DEBUG` 이므로 모든 세부 지표가 기본 노출된다."
+        },
+        {
+          "id": "C",
+          "text": "MBean 이름에는 `client-id` 가 포함되지 않는다."
+        },
+        {
+          "id": "D",
+          "text": "`metric.reporters` 의 기본값은 `JmxReporter` 이므로 별도 설정 없이 JMX 로 노출된다."
+        },
+        {
+          "id": "E",
+          "text": "클라이언트 메트릭은 브로커의 `__consumer_offsets` 에 주기적으로 기록된다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "D"
+      ],
       "explanation": "클라이언트는 기본적으로 `JmxReporter` 를 등록하므로 JVM 에 JMX 접근 경로만 열어 주면 메트릭을 볼 수 있습니다. 같은 값들을 `metrics()` 메서드로 애플리케이션 코드에서 직접 읽을 수도 있어서, 자체 헬스 엔드포인트를 만들 때 유용합니다. `metrics.recording.level` 의 기본값은 `INFO` 이며 `DEBUG`·`TRACE` 로 올리면 더 세부적인 지표가 켜집니다. MBean 이름에는 `client-id` 가 포함되므로 이 값을 지정하지 않으면 대시보드에서 클라이언트를 구분할 수 없습니다.",
       "distractorNotes": {
-        "C": "`__consumer_offsets` 는 오프셋 저장 전용입니다. 클라이언트 메트릭은 여기에 기록되지 않습니다.",
-        "D": "기본값은 `INFO` 입니다. 더 세부 지표가 필요하면 명시적으로 올려야 합니다.",
-        "E": "MBean 이름에 `client-id` 가 포함됩니다. 그래서 `client.id` 지정이 중요합니다."
+        "B": "기본값은 `INFO` 입니다. 더 세부 지표가 필요하면 명시적으로 올려야 합니다.",
+        "C": "MBean 이름에 `client-id` 가 포함됩니다. 그래서 `client.id` 지정이 중요합니다.",
+        "E": "`__consumer_offsets` 는 오프셋 저장 전용입니다. 클라이언트 메트릭은 여기에 기록되지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Producer Configs: metric.reporters", "url": "https://kafka.apache.org/documentation/#producerconfigs_metric.reporters" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Producer Configs: metric.reporters",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs_metric.reporters"
+        }
       ],
-      "tags": ["jmx", "metric.reporters", "client.id"]
+      "tags": [
+        "jmx",
+        "metric.reporters",
+        "client.id"
+      ]
     },
     {
       "id": "ccdak-observability-034",
@@ -956,12 +1766,26 @@
       "question": "Connect 대시보드가 모두 초록불인데 하위 DB에 데이터가 들어오지 않는다. 감시가 빠진 지표는?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`connector-failed-task-count` — 커넥터는 RUNNING 이어도 태스크만 FAILED 일 수 있다." },
-        { "id": "B", "text": "`connector-count` — 워커가 실행 중인 커넥터 수" },
-        { "id": "C", "text": "`rebalance-avg-time-ms` — 리밸런스 평균 소요 시간" },
-        { "id": "D", "text": "`connector-startup-success-total` — 커넥터 시작 성공 누적 횟수" }
+        {
+          "id": "A",
+          "text": "`connector-failed-task-count` — 커넥터는 RUNNING 이어도 태스크만 FAILED 일 수 있다."
+        },
+        {
+          "id": "B",
+          "text": "`connector-count` — 워커가 실행 중인 커넥터 수"
+        },
+        {
+          "id": "C",
+          "text": "`rebalance-avg-time-ms` — 리밸런스 평균 소요 시간"
+        },
+        {
+          "id": "D",
+          "text": "`connector-startup-success-total` — 커넥터 시작 성공 누적 횟수"
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "커넥터 상태와 태스크 상태는 독립적이므로 커넥터가 RUNNING 인 채로 태스크 전부가 FAILED 인 상황이 실제로 자주 발생합니다. 커넥터 상태만 대시보드에 올려 두면 이 장애가 초록불로 보입니다. 그래서 실패 태스크 수를 직접 세는 `connector-failed-task-count` 에 알림을 걸어야 하며, `connector-total-task-count` 와 `connector-running-task-count` 의 차이를 보는 것도 같은 효과를 냅니다. 실패한 태스크는 자동 재시작되지 않는다는 점이 이 감시를 필수로 만듭니다.",
       "distractorNotes": {
         "B": "커넥터 수는 배포 현황을 보여 줄 뿐 태스크 실패를 알려 주지 않습니다.",
@@ -969,10 +1793,20 @@
         "D": "시작 성공 누적 횟수는 과거 이력입니다. 현재 실패 상태를 반영하지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Connect Monitoring", "url": "https://kafka.apache.org/documentation/#connect_monitoring" },
-        { "title": "Apache Kafka — Connect Administration", "url": "https://kafka.apache.org/documentation/#connect_administration" }
+        {
+          "title": "Apache Kafka — Connect Monitoring",
+          "url": "https://kafka.apache.org/documentation/#connect_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Connect Administration",
+          "url": "https://kafka.apache.org/documentation/#connect_administration"
+        }
       ],
-      "tags": ["connect-metrics", "connect-task-state", "alerting"]
+      "tags": [
+        "connect-metrics",
+        "connect-task-state",
+        "alerting"
+      ]
     },
     {
       "id": "ccdak-observability-035",
@@ -984,24 +1818,52 @@
       "question": "sink 커넥터에 `errors.tolerance=all` 을 켤 때 반드시 함께 준비해야 하는 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "DLQ 토픽 지정과 `errors.deadletterqueue.context.headers.enable=true`" },
-        { "id": "B", "text": "`total-records-skipped` 에 대한 알림" },
-        { "id": "C", "text": "`tasks.max` 를 파티션 수와 동일하게 맞추기" },
-        { "id": "D", "text": "`offset.flush.interval.ms` 를 1000 이하로 낮추기" },
-        { "id": "E", "text": "`connect.protocol` 을 `eager` 로 되돌리기" }
+        {
+          "id": "A",
+          "text": "`total-records-skipped` 에 대한 알림"
+        },
+        {
+          "id": "B",
+          "text": "DLQ 토픽 지정과 `errors.deadletterqueue.context.headers.enable=true`"
+        },
+        {
+          "id": "C",
+          "text": "`offset.flush.interval.ms` 를 1000 이하로 낮추기"
+        },
+        {
+          "id": "D",
+          "text": "`tasks.max` 를 파티션 수와 동일하게 맞추기"
+        },
+        {
+          "id": "E",
+          "text": "`connect.protocol` 을 `eager` 로 되돌리기"
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "`errors.tolerance=all` 은 태스크를 살려 두는 대신 문제 레코드를 조용히 버립니다. 따라서 버려진 레코드를 보관할 DLQ 와 원인을 담는 컨텍스트 헤더, 그리고 버려진 양을 알려 주는 `total-records-skipped` 알림이 함께 있어야 데이터 유실을 조기에 발견할 수 있습니다. 이 조합이 없으면 커넥터는 계속 초록불인데 데이터가 몇 주째 빠지고 있는 상태가 됩니다. `deadletterqueue-produce-requests` 와 `total-record-errors` 를 함께 보면 격리가 실제로 동작하는지도 확인할 수 있습니다.",
       "distractorNotes": {
-        "C": "병렬성 설정은 처리량과 관계가 있지만 에러 허용의 부작용을 막아 주지 않습니다.",
-        "D": "오프셋 커밋 주기는 source 쪽 설정이며 sink 의 레코드 유실과 무관합니다.",
+        "C": "오프셋 커밋 주기는 source 쪽 설정이며 sink 의 레코드 유실과 무관합니다.",
+        "D": "병렬성 설정은 처리량과 관계가 있지만 에러 허용의 부작용을 막아 주지 않습니다.",
         "E": "리밸런스 프로토콜은 에러 처리와 무관하고, 구 프로토콜로 되돌리는 것은 오히려 손해입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Connect Monitoring", "url": "https://kafka.apache.org/documentation/#connect_monitoring" },
-        { "title": "Apache Kafka — Kafka Connect: Error Reporting", "url": "https://kafka.apache.org/documentation/#connect_errorreporting" }
+        {
+          "title": "Apache Kafka — Connect Monitoring",
+          "url": "https://kafka.apache.org/documentation/#connect_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Kafka Connect: Error Reporting",
+          "url": "https://kafka.apache.org/documentation/#connect_errorreporting"
+        }
       ],
-      "tags": ["connect-metrics", "errors.tolerance", "connect-dlq"]
+      "tags": [
+        "connect-metrics",
+        "errors.tolerance",
+        "connect-dlq"
+      ]
     },
     {
       "id": "ccdak-observability-036",
@@ -1013,12 +1875,26 @@
       "question": "source 커넥터의 진행 지연을 보려고 `sink-record-lag-max` 를 찾았는데 값이 없다. 이유는?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`metrics.recording.level` 이 `INFO` 라서 이 지표가 꺼져 있다." },
-        { "id": "B", "text": "커넥터가 STOPPED 상태라 지표가 노출되지 않는다." },
-        { "id": "C", "text": "Connect 메트릭은 워커 리더에서만 노출되므로 다른 워커에서는 값이 비어 있다." },
-        { "id": "D", "text": "이 지표는 `sink-task-metrics` 계열이므로 source 태스크에는 존재하지 않는다." }
+        {
+          "id": "A",
+          "text": "`metrics.recording.level` 이 `INFO` 라서 이 지표가 꺼져 있다."
+        },
+        {
+          "id": "B",
+          "text": "커넥터가 STOPPED 상태라 지표가 노출되지 않는다."
+        },
+        {
+          "id": "C",
+          "text": "Connect 메트릭은 워커 리더에서만 노출되므로 다른 워커에서는 값이 비어 있다."
+        },
+        {
+          "id": "D",
+          "text": "이 지표는 `sink-task-metrics` 계열이므로 source 태스크에는 존재하지 않는다."
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "Connect 태스크 메트릭은 방향에 따라 계열이 나뉩니다. sink 태스크는 `sink-task-metrics` 아래에 `sink-record-read-rate`·`sink-record-send-rate`·`sink-record-lag-max` 를 노출하고, source 태스크는 `source-task-metrics` 아래에 `source-record-poll-rate`·`source-record-write-rate` 를 노출합니다. source 는 Kafka 컨슈머가 아니므로 컨슈머 개념의 lag 지표가 없고, 대신 읽는 속도와 쓰는 속도의 차이로 병목을 판단합니다. source 의 진행 위치 자체는 REST `GET /connectors/{name}/offsets` 로 확인합니다.",
       "distractorNotes": {
         "A": "기록 레벨은 세부 지표 노출 범위를 조정하지만, 존재하지 않는 계열의 지표를 만들어 주지는 않습니다.",
@@ -1026,9 +1902,16 @@
         "C": "각 워커는 자기가 실행하는 태스크의 지표를 노출합니다. 리더 전용이 아닙니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Connect Monitoring", "url": "https://kafka.apache.org/documentation/#connect_monitoring" }
+        {
+          "title": "Apache Kafka — Connect Monitoring",
+          "url": "https://kafka.apache.org/documentation/#connect_monitoring"
+        }
       ],
-      "tags": ["connect-metrics", "source-connector", "sink-connector"]
+      "tags": [
+        "connect-metrics",
+        "source-connector",
+        "sink-connector"
+      ]
     },
     {
       "id": "ccdak-observability-037",
@@ -1040,11 +1923,31 @@
       "question": "Connect 메트릭을 그 의미와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`connector-failed-task-count`", "right": "이 커넥터에서 FAILED 상태인 태스크 수" },
-        { "id": "p2", "left": "`total-records-skipped`", "right": "에러 허용 설정 때문에 건너뛴 레코드 누적 수" },
-        { "id": "p3", "left": "`sink-record-lag-max`", "right": "sink 태스크가 뒤처진 최대 레코드 수" },
-        { "id": "p4", "left": "`source-record-poll-rate`", "right": "source 태스크가 소스 시스템에서 읽어 온 초당 레코드 수" },
-        { "id": "p5", "left": "`offset-commit-success-percentage`", "right": "오프셋 커밋이 성공한 비율" }
+        {
+          "id": "p1",
+          "left": "`connector-failed-task-count`",
+          "right": "이 커넥터에서 FAILED 상태인 태스크 수"
+        },
+        {
+          "id": "p2",
+          "left": "`total-records-skipped`",
+          "right": "에러 허용 설정 때문에 건너뛴 레코드 누적 수"
+        },
+        {
+          "id": "p3",
+          "left": "`sink-record-lag-max`",
+          "right": "sink 태스크가 뒤처진 최대 레코드 수"
+        },
+        {
+          "id": "p4",
+          "left": "`source-record-poll-rate`",
+          "right": "source 태스크가 소스 시스템에서 읽어 온 초당 레코드 수"
+        },
+        {
+          "id": "p5",
+          "left": "`offset-commit-success-percentage`",
+          "right": "오프셋 커밋이 성공한 비율"
+        }
       ],
       "extraRights": [
         "워커가 현재 리밸런스 중인지 여부",
@@ -1057,9 +1960,16 @@
         "p2": "`deadletterqueue-produce-requests` 와 혼동하기 쉽습니다. 건너뛴 레코드가 반드시 DLQ 로 가는 것은 아닙니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Connect Monitoring", "url": "https://kafka.apache.org/documentation/#connect_monitoring" }
+        {
+          "title": "Apache Kafka — Connect Monitoring",
+          "url": "https://kafka.apache.org/documentation/#connect_monitoring"
+        }
       ],
-      "tags": ["connect-metrics", "errors.tolerance", "connect-dlq"]
+      "tags": [
+        "connect-metrics",
+        "errors.tolerance",
+        "connect-dlq"
+      ]
     },
     {
       "id": "ccdak-observability-038",
@@ -1071,23 +1981,54 @@
       "question": "`connector-failed-task-count` 알림이 발동한 뒤 원인을 조사하는 절차를 올바른 순서로 배열하세요.",
       "code": null,
       "items": [
-        { "id": "i4", "text": "그 워커 노드의 로컬 로그 파일에서 전체 스택트레이스를 확인한다" },
-        { "id": "i2", "text": "`GET /connectors/{name}/status` 로 어느 태스크가 FAILED 인지와 `worker_id` 를 확인한다" },
-        { "id": "i5", "text": "조사가 끝나면 로그 레벨을 원래 값으로 되돌린다" },
-        { "id": "i1", "text": "알림에서 문제 커넥터 이름을 확인한다" },
-        { "id": "i3", "text": "해당 워커의 `PUT /admin/loggers/{logger}` 로 로그 레벨을 DEBUG 로 올린다" }
+        {
+          "id": "i1",
+          "text": "그 워커 노드의 로컬 로그 파일에서 전체 스택트레이스를 확인한다"
+        },
+        {
+          "id": "i2",
+          "text": "`GET /connectors/{name}/status` 로 어느 태스크가 FAILED 인지와 `worker_id` 를 확인한다"
+        },
+        {
+          "id": "i4",
+          "text": "조사가 끝나면 로그 레벨을 원래 값으로 되돌린다"
+        },
+        {
+          "id": "i5",
+          "text": "알림에서 문제 커넥터 이름을 확인한다"
+        },
+        {
+          "id": "i3",
+          "text": "해당 워커의 `PUT /admin/loggers/{logger}` 로 로그 레벨을 DEBUG 로 올린다"
+        }
       ],
-      "answer": ["i1", "i2", "i3", "i4", "i5"],
+      "answer": [
+        "i5",
+        "i2",
+        "i3",
+        "i1",
+        "i4"
+      ],
       "explanation": "메트릭 알림은 \"어느 커넥터가 아프다\"까지만 알려 주므로 다음 단계는 REST 상태 조회로 태스크와 워커를 특정하는 것입니다. Connect의 로그는 노드 로컬이므로 `worker_id` 를 알기 전에는 어느 파일을 열어야 할지 알 수 없습니다. 세부 정보가 부족하면 그 워커의 로그 레벨을 런타임에 올려 재현 로그를 확보하고, 조사가 끝나면 반드시 원래 레벨로 되돌려 로그 폭증을 막습니다. 이 절차가 관측(메트릭) → 조회(REST) → 심층(로그)의 표준 흐름입니다.",
       "distractorNotes": {
-        "i4": "먼저 아무 워커의 로그를 뒤지는 것이 가장 흔한 시간 낭비입니다. `worker_id` 확인이 선행되어야 합니다.",
-        "i5": "되돌리기를 잊는 것이 실제 사고로 이어집니다. DEBUG 를 남겨 두면 디스크와 로그 비용이 폭증합니다."
+        "i1": "먼저 아무 워커의 로그를 뒤지는 것이 가장 흔한 시간 낭비입니다. `worker_id` 확인이 선행되어야 합니다.",
+        "i4": "되돌리기를 잊는 것이 실제 사고로 이어집니다. DEBUG 를 남겨 두면 디스크와 로그 비용이 폭증합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Connect Monitoring", "url": "https://kafka.apache.org/documentation/#connect_monitoring" },
-        { "title": "Apache Kafka — Connect Administration", "url": "https://kafka.apache.org/documentation/#connect_administration" }
+        {
+          "title": "Apache Kafka — Connect Monitoring",
+          "url": "https://kafka.apache.org/documentation/#connect_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Connect Administration",
+          "url": "https://kafka.apache.org/documentation/#connect_administration"
+        }
       ],
-      "tags": ["connect-logging", "connect-metrics", "admin-loggers"]
+      "tags": [
+        "connect-logging",
+        "connect-metrics",
+        "admin-loggers"
+      ]
     },
     {
       "id": "ccdak-observability-039",
@@ -1103,12 +2044,26 @@
         "body": "{\n  \"name\": \"orders-sink\",\n  \"connector\": { \"state\": \"RUNNING\", \"worker_id\": \"connect-1:8083\" },\n  \"tasks\": [\n    { \"id\": 0, \"state\": \"RUNNING\", \"worker_id\": \"connect-1:8083\" },\n    { \"id\": 1, \"state\": \"FAILED\", \"worker_id\": \"connect-3:8083\",\n      \"trace\": \"org.apache.kafka.connect.errors.DataException: Failed to deserialize...\" },\n    { \"id\": 2, \"state\": \"RUNNING\", \"worker_id\": \"connect-2:8083\" }\n  ]\n}"
       },
       "choices": [
-        { "id": "A", "text": "`connect-3` 노드의 로그에서 전체 스택트레이스를 확인하고 컨버터 설정 불일치를 점검한다." },
-        { "id": "B", "text": "커넥터 상태가 RUNNING 이므로 정상으로 판단하고 종료한다." },
-        { "id": "C", "text": "`connect-1`(커넥터의 worker_id) 로그를 확인한다." },
-        { "id": "D", "text": "`status.storage.topic` 을 콘솔 컨슈머로 읽어 전체 스택트레이스를 찾는다." }
+        {
+          "id": "A",
+          "text": "`connect-3` 노드의 로그에서 전체 스택트레이스를 확인하고 컨버터 설정 불일치를 점검한다."
+        },
+        {
+          "id": "B",
+          "text": "커넥터 상태가 RUNNING 이므로 정상으로 판단하고 종료한다."
+        },
+        {
+          "id": "C",
+          "text": "`connect-1`(커넥터의 worker_id) 로그를 확인한다."
+        },
+        {
+          "id": "D",
+          "text": "`status.storage.topic` 을 콘솔 컨슈머로 읽어 전체 스택트레이스를 찾는다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "태스크 1의 `worker_id` 가 `connect-3:8083` 이므로 그 태스크의 전체 스택트레이스는 그 노드의 로그에만 있습니다. 커넥터의 `worker_id` 는 커넥터 객체를 관리하는 워커일 뿐이며 태스크가 실행된 노드와 다를 수 있습니다. `DataException: Failed to deserialize` 는 컨버터가 실제 데이터 형식과 맞지 않을 때 나오는 전형적 신호이므로 `key.converter`·`value.converter` 를 함께 점검해야 합니다. 같은 레코드가 계속 문제를 만들면 `errors.tolerance=all` 과 DLQ 로 격리하고 실패한 태스크만 재시작합니다.",
       "distractorNotes": {
         "B": "커넥터 상태와 태스크 상태는 별개입니다. 태스크가 죽으면 그 파티션의 데이터는 흐르지 않습니다.",
@@ -1116,10 +2071,20 @@
         "D": "상태 토픽에는 요약 trace 만 들어갑니다. 전체 스택트레이스는 워커 로그에만 있습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Connect Administration", "url": "https://kafka.apache.org/documentation/#connect_administration" },
-        { "title": "Apache Kafka — Connect REST Interface", "url": "https://kafka.apache.org/documentation/#connect_rest" }
+        {
+          "title": "Apache Kafka — Connect Administration",
+          "url": "https://kafka.apache.org/documentation/#connect_administration"
+        },
+        {
+          "title": "Apache Kafka — Connect REST Interface",
+          "url": "https://kafka.apache.org/documentation/#connect_rest"
+        }
       ],
-      "tags": ["connect-logging", "converter", "connect-task-state"]
+      "tags": [
+        "connect-logging",
+        "converter",
+        "connect-task-state"
+      ]
     },
     {
       "id": "ccdak-observability-040",
@@ -1131,12 +2096,26 @@
       "question": "Kafka Streams 애플리케이션의 lag 을 CLI로 확인하려 한다. 사용할 컨슈머 그룹 이름은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`streams-{application.id}`" },
-        { "id": "B", "text": "`application.id` 값 그대로" },
-        { "id": "C", "text": "`{application.id}-changelog`" },
-        { "id": "D", "text": "`connect-{application.id}`" }
+        {
+          "id": "A",
+          "text": "`streams-{application.id}`"
+        },
+        {
+          "id": "B",
+          "text": "`application.id` 값 그대로"
+        },
+        {
+          "id": "C",
+          "text": "`{application.id}-changelog`"
+        },
+        {
+          "id": "D",
+          "text": "`connect-{application.id}`"
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "Streams 는 내부적으로 컨슈머 그룹을 사용하고 그 그룹 ID 가 `application.id` 입니다. 따라서 `kafka-consumer-groups --describe --group {application.id}` 로 입력 토픽의 lag 을 볼 수 있습니다. 같은 값이 내부 토픽 이름의 접두어와 client-id 접두어로도 쓰이기 때문에, `application.id` 를 바꾸면 새 그룹이 되어 처음부터 다시 읽습니다. 실시간 관측은 Streams 내부 컨슈머의 `records-lag-max` 로 하고, 스레드·태스크·노드별 병목은 `kafka.streams:type=stream-*-metrics` 계열로 봅니다.",
       "distractorNotes": {
         "A": "그런 접두어 규칙은 없습니다. 그룹 ID 는 `application.id` 자체입니다.",
@@ -1144,10 +2123,20 @@
         "D": "`connect-` 접두어는 Connect sink 커넥터의 컨슈머 그룹 규칙입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Kafka Streams Monitoring", "url": "https://kafka.apache.org/documentation/#kafka_streams_monitoring" },
-        { "title": "Apache Kafka — Managing Consumer Groups", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" }
+        {
+          "title": "Apache Kafka — Kafka Streams Monitoring",
+          "url": "https://kafka.apache.org/documentation/#kafka_streams_monitoring"
+        },
+        {
+          "title": "Apache Kafka — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        }
       ],
-      "tags": ["streams-metrics", "application.id", "consumer-lag"]
+      "tags": [
+        "streams-metrics",
+        "application.id",
+        "consumer-lag"
+      ]
     },
     {
       "id": "ccdak-observability-041",
@@ -1159,10 +2148,26 @@
       "question": "Kafka Streams 의 각 MBean type 을 그것으로 확인하는 대상과 연결하세요. 정답이 아닌 미끼가 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`stream-thread-metrics`", "right": "스레드별 처리율과 commit·poll·process 지연" },
-        { "id": "p2", "left": "`stream-task-metrics`", "right": "태스크별 처리율과 지연 — 특정 파티션 편중 탐색" },
-        { "id": "p3", "left": "`stream-processor-node-metrics`", "right": "토폴로지 노드별 처리율 — 어느 연산이 느린지" },
-        { "id": "p4", "left": "`stream-state-metrics`", "right": "상태 저장소(RocksDB) 지표와 복구 추적" }
+        {
+          "id": "p1",
+          "left": "`stream-thread-metrics`",
+          "right": "스레드별 처리율과 commit·poll·process 지연"
+        },
+        {
+          "id": "p2",
+          "left": "`stream-task-metrics`",
+          "right": "태스크별 처리율과 지연 — 특정 파티션 편중 탐색"
+        },
+        {
+          "id": "p3",
+          "left": "`stream-processor-node-metrics`",
+          "right": "토폴로지 노드별 처리율 — 어느 연산이 느린지"
+        },
+        {
+          "id": "p4",
+          "left": "`stream-state-metrics`",
+          "right": "상태 저장소(RocksDB) 지표와 복구 추적"
+        }
       ],
       "extraRights": [
         "레코드 캐시 히트율",
@@ -1174,9 +2179,16 @@
         "p4": "레코드 캐시 지표(`stream-record-cache-metrics`)와 구별해야 합니다. 이쪽은 저장소 자체의 지표입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Kafka Streams Monitoring", "url": "https://kafka.apache.org/documentation/#kafka_streams_monitoring" }
+        {
+          "title": "Apache Kafka — Kafka Streams Monitoring",
+          "url": "https://kafka.apache.org/documentation/#kafka_streams_monitoring"
+        }
       ],
-      "tags": ["streams-metrics", "monitoring", "state-store"]
+      "tags": [
+        "streams-metrics",
+        "monitoring",
+        "state-store"
+      ]
     },
     {
       "id": "ccdak-observability-042",
@@ -1188,23 +2200,54 @@
       "question": "컨슈머 lag 이 급증했다는 알림을 받았을 때 원인을 좁히는 순서를 올바르게 배열하세요.",
       "code": null,
       "items": [
-        { "id": "i3", "text": "특정 파티션에만 lag 이 몰렸는지(키 편중) 전체가 균등하게 밀렸는지 판단한다" },
-        { "id": "i1", "text": "컨슈머 인스턴스가 살아 있고 `assigned-partitions` 가 0이 아닌지 확인한다" },
-        { "id": "i5", "text": "판단된 원인에 맞춰 `max.poll.records` 축소 또는 파티션·컨슈머 증설을 적용한다" },
-        { "id": "i2", "text": "`kafka-consumer-groups --describe` 로 파티션별 LAG 분포를 확인한다" },
-        { "id": "i4", "text": "전체가 밀렸다면 `poll-idle-ratio-avg` 와 `time-between-poll-max` 로 처리 병목을 확인한다" }
+        {
+          "id": "i1",
+          "text": "특정 파티션에만 lag 이 몰렸는지(키 편중) 전체가 균등하게 밀렸는지 판단한다"
+        },
+        {
+          "id": "i3",
+          "text": "컨슈머 인스턴스가 살아 있고 `assigned-partitions` 가 0이 아닌지 확인한다"
+        },
+        {
+          "id": "i2",
+          "text": "판단된 원인에 맞춰 `max.poll.records` 축소 또는 파티션·컨슈머 증설을 적용한다"
+        },
+        {
+          "id": "i5",
+          "text": "`kafka-consumer-groups --describe` 로 파티션별 LAG 분포를 확인한다"
+        },
+        {
+          "id": "i4",
+          "text": "전체가 밀렸다면 `poll-idle-ratio-avg` 와 `time-between-poll-max` 로 처리 병목을 확인한다"
+        }
       ],
-      "answer": ["i1", "i2", "i3", "i4", "i5"],
+      "answer": [
+        "i3",
+        "i5",
+        "i1",
+        "i4",
+        "i2"
+      ],
       "explanation": "가장 먼저 확인할 것은 소비 주체가 존재하는지입니다. 컨슈머가 죽었거나 파티션을 하나도 할당받지 못한 상태라면 이후의 처리 성능 분석이 모두 무의미합니다. 그 다음 파티션별 분포를 봐야 hot partition 문제와 전반적 처리 지연을 구분할 수 있고, 전반적 지연으로 판단된 경우에만 poll 관련 지표로 병목을 좁힙니다. 처방은 원인 판단이 끝난 뒤에 적용해야 하는데, 편중 문제에 컨슈머를 늘리면 아무 효과가 없기 때문입니다.",
       "distractorNotes": {
-        "i5": "증설을 먼저 시도하는 것이 가장 흔한 실수입니다. hot partition 이거나 처리 병목이면 효과가 없습니다.",
-        "i3": "분포 확인 없이 전체 지연으로 단정하면 편중 문제를 놓칩니다. 파티션별 LAG 을 먼저 봐야 합니다."
+        "i2": "증설을 먼저 시도하는 것이 가장 흔한 실수입니다. hot partition 이거나 처리 병목이면 효과가 없습니다.",
+        "i1": "분포 확인 없이 전체 지연으로 단정하면 편중 문제를 놓칩니다. 파티션별 LAG 을 먼저 봐야 합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Managing Consumer Groups", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" },
-        { "title": "Apache Kafka — Consumer Monitoring", "url": "https://kafka.apache.org/documentation/#consumer_monitoring" }
+        {
+          "title": "Apache Kafka — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        },
+        {
+          "title": "Apache Kafka — Consumer Monitoring",
+          "url": "https://kafka.apache.org/documentation/#consumer_monitoring"
+        }
       ],
-      "tags": ["consumer-lag", "consumer-metrics", "alerting"]
+      "tags": [
+        "consumer-lag",
+        "consumer-metrics",
+        "alerting"
+      ]
     }
   ]
 }

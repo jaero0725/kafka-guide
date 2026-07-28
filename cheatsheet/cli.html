@@ -66,7 +66,7 @@
 
       <aside class="note note--version" data-label="버전 노트">
         <p>
-          <code>--zookeeper</code> 옵션은 <strong>Kafka 4.0에서 제거</strong>되었습니다.
+          <code>--zookeeper</code> 옵션은 <strong>Kafka 3.0에서 제거</strong>되었습니다(KIP-604, 2.5에서 deprecated). <code>kafka-configs.sh</code>만 ZooKeeper 모드에서 브로커가 내려간 상태의 SCRAM 자격증명·동적 설정 처리용으로 3.9까지 남겨 두었고 4.0에서 사라졌습니다. <strong>4.x에는 어떤 도구에도 없습니다.</strong>
           3.x 이전 문서·블로그의 명령을 그대로 붙이면 동작하지 않습니다.
           모든 CLI는 <code>--bootstrap-server</code>(브로커 엔드포인트) 또는
           <code>--bootstrap-controller</code>(컨트롤러 엔드포인트)를 씁니다.

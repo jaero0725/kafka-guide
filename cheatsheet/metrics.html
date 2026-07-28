@@ -194,10 +194,11 @@ bin/kafka-server-start.sh config/server.properties</code></pre>
               <td><code>unclean.leader.election.enable=false</code>인지 확인. <code>true</code>였다면 왜 켜져 있는지 추적</td>
             </tr>
             <tr>
-              <th scope="row"><code>kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTimeMs</code></th>
-              <td>리더 선거 발생 비율과 소요 시간</td>
-              <td>브로커 장애가 있을 때만 <strong>0이 아님</strong></td>
-              <td>장애가 없는데 값이 있으면 브로커가 조용히 흔들리고 있습니다(GC, 네트워크)</td>
+              <th scope="row"><code>kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec</code></th>
+              <td>ISR 밖 레플리카가 리더가 된 횟수 (데이터 유실 동반)</td>
+              <td><strong>항상 0</strong></td>
+              <td>0이 아니면 이미 유실이 일어난 것입니다. 리더 교체 빈도 자체는 <code>IsrShrinksPerSec</code>/<code>IsrExpandsPerSec</code>로 봅니다.
+                  <strong><code>LeaderElectionRateAndTimeMs</code>는 KRaft에서 제거되었습니다</strong></td>
               <td>브로커 GC 로그와 <code>broker.session.timeout.ms</code> 확인</td>
             </tr>
             <tr>

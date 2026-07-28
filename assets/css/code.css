@@ -39,7 +39,7 @@ figure.code pre, pre { color: var(--c-text); }
 
 /* ---- 라이트 ------------------------------------------------------------- */
 :root {
-  --hl-com:  #6a7480;
+  --hl-com:  #5d6773;
   --hl-str:  #0a6640;
   --hl-key:  #8a2c8f;
   --hl-num:  #9b4b0e;
@@ -80,7 +80,7 @@ figure.code pre, pre { color: var(--c-text); }
 
 /* ---- 명시적 라이트 (미디어쿼리를 이김) ---------------------------------- */
 :root[data-theme="light"] {
-  --hl-com:  #6a7480;
+  --hl-com:  #5d6773;
   --hl-str:  #0a6640;
   --hl-key:  #8a2c8f;
   --hl-num:  #9b4b0e;

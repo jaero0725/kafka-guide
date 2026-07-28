@@ -157,7 +157,7 @@
             <code>fetch.max.bytes</code>(컨슈머) / <code>replica.fetch.max.bytes</code>(브로커)</li>
           <li><strong>예외 클래스 ↔ 원인</strong> — <code>RecordTooLargeException</code>,
             <code>NotEnoughReplicasException</code>, <code>IllegalStateException</code>(assign+subscribe),
-            <code>ConfigException</code>(멱등성+in-flight&gt;5), <code>TopologyBuilderException</code>(파티션 수 불일치)</li>
+            <code>ConfigException</code>(멱등성+in-flight&gt;5), <code>TopologyException</code>(파티션 수 불일치)</li>
           <li><strong>SMT ↔ 용도</strong> — <code>ValueToKey</code>, <code>MaskField</code>,
             <code>RegexRouter</code>, <code>TimestampConverter</code> …</li>
           <li><strong>호환성 모드 ↔ 배포 순서</strong> — BACKWARD=컨슈머 먼저 / FORWARD=프로듀서 먼저</li>

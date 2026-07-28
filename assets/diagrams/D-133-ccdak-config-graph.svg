@@ -1,7 +1,7 @@
 <svg viewBox="0 0 720 1020" role="img" class="kg-diagram"
      aria-labelledby="d133-title d133-desc" preserveAspectRatio="xMidYMid meet">
   <title id="d133-title">CCDAK 설정값 관계도 — 내구성 · 재시도 · 배치 · 메시지 크기 · 컨슈머 생존 5개 클러스터</title>
-  <desc id="d133-desc">프로듀서 · 브로커 · 토픽 · 컨슈머 설정 23개를 다섯 묶음으로 나누고, 공식 문서에 명시된 의존 관계만 화살표로 이은 관계도입니다. 소속은 색과 기호로 구분하며 세모는 프로듀서, 네모는 브로커, 동그라미는 토픽, 마름모는 컨슈머입니다. 내구성 묶음에서는 acks=all 일 때만 min.insync.replicas 를 검사하고, min.insync.replicas 는 replication.factor 이하여야 하며, unclean.leader.election.enable 이 true 면 ISR 밖 레플리카가 리더가 되어 그 보장이 깨집니다. 재시도 예산 묶음에서는 delivery.timeout.ms 가 request.timeout.ms 와 linger.ms 의 합 이상이어야 하고, enable.idempotence 는 acks=all 과 max.in.flight 5 이하를 요구합니다. 배치 묶음에서는 batch.size 도달과 linger.ms 만료 중 먼저 오는 쪽에 전송하며 압축은 배치 단위입니다. 메시지 크기 묶음에서는 max.request.size 와 message.max.bytes 만 하드 상한이고 fetch 쪽 세 설정은 첫 배치가 더 커도 반환해 진행을 보장합니다. 컨슈머 생존 묶음에서는 하트비트 축과 poll 축이 서로 달라 처리가 길어지면 max.poll.interval.ms 쪽이 먼저 터집니다.</desc>
+  <desc id="d133-desc">프로듀서 · 브로커 · 토픽 · 컨슈머 설정 23개를 다섯 묶음으로 나누고, 공식 문서에 명시된 의존 관계만 화살표로 이은 관계도입니다. 소속은 색과 기호로 구분하며 세모는 프로듀서, 네모는 브로커, 동그라미는 토픽, 마름모는 컨슈머입니다. 내구성 묶음에서는 acks=all 일 때만 min.insync.replicas 를 검사하고, min.insync.replicas 는 replication.factor 이하여야 하며, unclean.leader.election.enable 이 true 면 ISR 밖 레플리카가 리더가 되어 그 보장이 깨집니다. 재시도 예산 묶음에서는 delivery.timeout.ms 가 request.timeout.ms 와 linger.ms 의 합 이상이어야 하고, enable.idempotence 는 acks=all 과 max.in.flight 5 이하를 요구합니다. 배치 묶음에서는 batch.size 도달과 linger.ms 만료 중 먼저 오는 쪽에 전송하며 압축은 배치 단위입니다. 메시지 크기 묶음에서는 max.request.size 와 message.max.bytes(토픽 max.message.bytes 가 덮어씀) 두 계열만 하드 상한이고 fetch 쪽 세 설정은 첫 배치가 더 커도 반환해 진행을 보장합니다. 컨슈머 생존 묶음에서는 하트비트 축과 poll 축이 서로 달라 처리가 길어지면 max.poll.interval.ms 쪽이 먼저 터집니다.</desc>
 
 <defs>
 <marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
@@ -135,7 +135,7 @@
 <text class="dg-fs-sm dg-bold dg-mono" x="603" y="742" text-anchor="middle">fetch.max.bytes</text>
 <text class="dg-fs-sm dg-muted" x="603" y="764" text-anchor="middle">◆ 기본 52428800</text>
 </g>
-<text class="dg-fs-sm" x="44" y="800">하드 상한은 둘뿐입니다 — max.request.size 와 message.max.bytes · 넘으면 RecordTooLarge 로 거부</text>
+<text class="dg-fs-sm" x="44" y="800">하드 상한은 max.request.size 와 message.max.bytes(토픽 max.message.bytes 가 덮어씀) 두 계열뿐 · 넘으면 거부</text>
 <text class="dg-fs-sm" x="44" y="816">fetch 쪽 3개는 하드 상한이 아닙니다 — 첫 배치가 더 크면 그대로 반환해 진행을 보장합니다</text>
 <rect class="dg-panel" x="30" y="846" width="682" height="132" rx="4"/>
 <text class="dg-fs-sm dg-bold" x="40" y="863">5. 컨슈머 생존 — 왜 그룹에서 빠지는가</text>

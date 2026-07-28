@@ -170,7 +170,7 @@
             <tr><th scope="row"><code>auto.commit.interval.ms</code></th><td>5000</td><td></td></tr>
             <tr><th scope="row"><code>auto.offset.reset</code></th><td><code>latest</code></td><td>커밋 없거나 범위 밖일 때만</td></tr>
             <tr><th scope="row"><code>isolation.level</code></th><td><code>read_uncommitted</code></td><td><strong>컨슈머 설정</strong></td></tr>
-            <tr><th scope="row"><code>partition.assignment.strategy</code></th><td><code>[Range,<br>CooperativeSticky]</code></td><td>classic에서만 유효</td></tr>
+            <tr><th scope="row"><code>partition.assignment.strategy</code></th><td><code>[RangeAssignor,<br>CooperativeStickyAssignor]</code></td><td>classic에서만 유효</td></tr>
             <tr><th scope="row"><code>fetch.min.bytes</code></th><td>1</td><td><code>fetch.max.wait.ms</code>=500</td></tr>
             <tr><th scope="row"><code>fetch.max.bytes</code></th><td>52428800</td><td>요청 전체</td></tr>
             <tr><th scope="row"><code>max.partition.fetch.bytes</code></th><td>1048576</td><td>파티션당</td></tr>
@@ -337,7 +337,7 @@
       <ul>
         <li>상한은 <strong>압축 후 레코드 배치</strong> 기준</li>
         <li>브로커 값(1048588)만 <strong>1MiB가 아님</strong>. 12바이트 차이</li>
-        <li><code>replica.fetch.max.bytes</code>를 빼먹으면 <strong>쓰기는 되고 복제가 실패</strong> → ISR 축소</li>
+        <li>fetch 3종(<code>replica.fetch.max.bytes</code> 등)은 <strong>하드 상한이 아님</strong> — 빼먹어도 복제는 되고 <strong>처리량만 무너짐</strong>. 하드 게이트는 <code>max.request.size</code>와 <code>message.max.bytes</code> 둘뿐</li>
       </ul>
 
       <h3 id="cram-retention">리텐션 · 컴팩션</h3>
@@ -468,7 +468,7 @@
         <li><code>OfflinePartitionsCount</code> = 0 (리더 없음 = 읽기·쓰기 불가)</li>
         <li><code>ActiveControllerCount</code> — 클러스터 전체 합이 <strong>1</strong></li>
         <li><code>RequestHandlerAvgIdlePercent</code> · <code>NetworkProcessorAvgIdlePercent</code> — 낮으면 포화</li>
-        <li><code>IsrShrinksPerSec</code> · <code>LeaderElectionRateAndTimeMs</code> — 잦으면 불안정</li>
+        <li><code>IsrShrinksPerSec</code> · <code>IsrExpandsPerSec</code> — 잦으면 불안정 (<code>LeaderElectionRateAndTimeMs</code>는 KRaft에서 제거됨)</li>
       </ul>
 
       <h3 id="cram-connect-metrics">Connect · Streams 관측</h3>
@@ -519,7 +519,7 @@
       </div>
       <ul>
         <li>co-partitioning <strong>요건은 2개</strong>: <strong>파티션 수 동일 · 파티셔너 동일</strong>. &ldquo;키 동일&rdquo;은 요건이 아니라 <strong>equi-join의 전제</strong>입니다</li>
-        <li>파티션 수 불일치 → <strong><code>TopologyBuilderException</code></strong></li>
+        <li>파티션 수 불일치 → <strong><code>TopologyException</code></strong></li>
         <li><strong>파티셔너 불일치는 감지되지 않아 조인이 조용히 누락</strong></li>
         <li>맞출 때는 <strong>적은 쪽을 많은 쪽에</strong>. KStream-KTable이면 KStream을 리파티션</li>
       </ul>
@@ -620,7 +620,7 @@
 2. kafka-storage.sh format -t {UUID} -c server.properties
 3. kafka-server-start.sh server.properties
 4. kafka-topics.sh --create --bootstrap-server localhost:9092
-   ※ --zookeeper 는 4.0에서 제거되어 존재하지 않는 옵션</code></pre>
+   ※ --zookeeper 는 3.0 제거(KIP-604). kafka-configs.sh 만 3.9까지 남았고 4.x 엔 없음</code></pre>
       </figure>
 
       <figure class="code">
@@ -628,7 +628,7 @@
         <pre><code class="lang-text">1. 토픽    max.message.bytes
 2. 프로듀서 max.request.size
 3. 컨슈머  max.partition.fetch.bytes
-4. 브로커  replica.fetch.max.bytes   ← 빼먹으면 복제만 실패 (ISR 축소)</code></pre>
+4. 브로커  replica.fetch.max.bytes   ← 하드 상한 아님. 빼먹으면 복제 처리량만 급감</code></pre>
       </figure>
 
       <figure class="code">
@@ -689,7 +689,7 @@
             <tr><th scope="row"><code>NoOffsetForPartitionException</code></th><td><code>auto.offset.reset=none</code>인데 커밋 오프셋 없음</td><td class="mark-no">설정 문제</td></tr>
             <tr><th scope="row"><code>ProducerFencedException</code></th><td>같은 <code>transactional.id</code>의 새 세션이 등장</td><td class="mark-no">종료 필요</td></tr>
             <tr><th scope="row"><code>OutOfOrderSequenceException</code></th><td>멱등성 시퀀스 불일치</td><td class="mark-no">종료 필요</td></tr>
-            <tr><th scope="row"><code>TopologyBuilderException</code></th><td>Streams 조인 양쪽 <strong>파티션 수 불일치</strong></td><td class="mark-no">토폴로지 수정</td></tr>
+            <tr><th scope="row"><code>TopologyException</code></th><td>Streams 조인 양쪽 <strong>파티션 수 불일치</strong></td><td class="mark-no">토폴로지 수정</td></tr>
             <tr><th scope="row"><code>DataException</code></th><td>Connect 컨버터 변환 실패</td><td class="mark-no">DLQ 대상</td></tr>
           </tbody>
         </table>
@@ -709,7 +709,7 @@
             <tr><th scope="row">KRaft production-ready</th><td>3.3</td></tr>
             <tr><th scope="row">Tiered Storage EA</th><td>3.6</td></tr>
             <tr><th scope="row"><strong>마지막 ZooKeeper 지원 버전</strong></th><td><strong>3.9</strong></td></tr>
-            <tr><th scope="row"><strong>ZooKeeper 제거 · <code>--zookeeper</code> 제거 · Java 8 제거</strong></th><td><strong>4.0</strong></td></tr>
+            <tr><th scope="row"><strong>ZooKeeper 제거 · Java 8 제거</strong> (<code>--zookeeper</code> CLI 옵션은 <strong>3.0</strong>)</th><td><strong>4.0</strong></td></tr>
             <tr><th scope="row">KIP-848 GA (기본값은 여전히 <code>classic</code>)</th><td>4.0</td></tr>
             <tr><th scope="row"><strong><code>linger.ms</code> 0 → 5</strong></th><td><strong>4.0</strong></td></tr>
             <tr><th scope="row">Streams Rebalance Protocol Early Access</th><td>4.1</td></tr>

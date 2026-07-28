@@ -3,8 +3,9 @@
   <title id="d094-title">stateless · stateful · 리파티션 유발 연산 — map 과 mapValues 의 차이</title>
   <desc id="d094-desc">Kafka Streams DSL 연산을 세 갈래로 분류한 그림입니다.
     첫째 열 stateless 는 상태 저장소가 필요 없는 연산입니다.
-    filter, filterNot, map, mapValues, flatMap, flatMapValues, selectKey, branch 또는 split, merge,
+    filter, filterNot, map, mapValues, flatMap, flatMapValues, selectKey, split, merge,
     peek, foreach, print, to, groupByKey, groupBy 가 여기에 속합니다.
+    branch 와 through 는 4.0 에서 제거되었으므로 각각 split 과 repartition 을 씁니다.
     둘째 열 stateful 은 상태 저장소가 필요한 연산입니다.
     aggregate, reduce, count, 윈도우 집계, KStream-KStream 조인, KStream-KTable 조인, KTable-KTable 조인,
     suppress, 상태 저장소를 연결한 process 가 여기에 속합니다.
@@ -28,10 +29,10 @@
   <text class="dg-fs-sm dg-mono" x="22" y="92">map · mapValues</text>
   <text class="dg-fs-sm dg-mono" x="22" y="110">flatMap · flatMapValues</text>
   <text class="dg-fs-sm dg-mono" x="22" y="128">selectKey</text>
-  <text class="dg-fs-sm dg-mono" x="22" y="146">branch (split)</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="146">split</text>
   <text class="dg-fs-sm dg-mono" x="22" y="164">merge</text>
   <text class="dg-fs-sm dg-mono" x="22" y="182">peek · foreach · print</text>
-  <text class="dg-fs-sm dg-mono" x="22" y="200">to · through</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="200">to</text>
   <text class="dg-fs-sm dg-mono" x="22" y="218">groupByKey · groupBy</text>
   <text class="dg-fs-sm dg-mono" x="22" y="236">toStream · repartition</text>
   <line class="dg-grid" x1="22" y1="246" x2="226" y2="246"/>

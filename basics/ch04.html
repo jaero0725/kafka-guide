@@ -657,11 +657,22 @@ producer.flush();                          // 배치 경계에서 한 번</code>
         </ul>
         <p>
           두 번째가 실무에서 훨씬 위험합니다. 예를 들어 3.x 시절 자료를 보고
-          <code>max.in.flight.requests.per.connection=10</code>만 설정하면,
-          <strong>멱등성이 꺼진 상태로 아무 경고 없이 동작</strong>합니다.
+          <code>acks=1</code>만 설정하면, <strong>멱등성이 꺼진 상태로 아무 경고 없이 동작</strong>합니다.
           이는 곧 순서 보장도 함께 사라진다는 뜻입니다.
+        </p>
+        <p>
+          <strong>다만 세 충돌 설정이 같은 규칙을 따르지는 않습니다.</strong>
+          <code>max.in.flight.requests.per.connection</code>이 5를 넘는 경우만은
+          <code>enable.idempotence</code>를 명시했든 안 했든 <strong>항상 <code>ConfigException</code></strong>입니다.
+          소스에서 이 검사만 <code>userConfiguredIdempotence</code> 가드 <strong>밖</strong>에 있기 때문입니다
+          (<code>ProducerConfig.java</code>의 <code>postProcessAndValidateIdempotenceConfigs()</code>).
+          즉 <code>max.in.flight.requests.per.connection=10</code>만 설정하면 조용히 꺼지는 것이 아니라
+          <strong>프로듀서 생성 자체가 실패</strong>합니다.
+          조용히 꺼지는 것은 <code>retries=0</code>과 <code>acks≠all</code> 두 가지뿐입니다.
+        </p>
+        <p>
           <strong>멱등성에 의존한다면 <code>enable.idempotence=true</code>를 명시하세요.</strong>
-          그러면 충돌이 <code>ConfigException</code>으로 즉시 드러납니다.
+          그러면 나머지 두 충돌도 <code>ConfigException</code>으로 즉시 드러납니다.
         </p>
       </aside>
 
@@ -711,8 +722,8 @@ producer.flush();                          // 배치 경계에서 한 번</code>
         <p>
           <code>enable.idempotence</code>의 4.x 기본값은 <strong><code>true</code></strong>입니다(3.0부터 변경).
           <code>max.in.flight.requests.per.connection</code>은
-          <strong>5 이하</strong>여야 하며, 명시적으로 켠 상태에서 6 이상을 설정하면
-          <strong><code>ConfigException</code></strong>입니다.
+          <strong>5 이하</strong>여야 하며, 6 이상이면
+          <strong>명시 여부와 무관하게 언제나 <code>ConfigException</code></strong>입니다.
           "멱등성을 켜면 in-flight를 1로 둬야 한다"는 서술은 <strong>오답</strong>입니다 —
           공식 문서는 5 이하의 <strong>모든 허용 값에서 순서가 보존</strong>된다고 명시합니다.
         </p>
@@ -1886,8 +1897,8 @@ props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 10);</code></pre
         <li><a href="https://kafka.apache.org/documentation/#semantics" rel="noopener noreferrer">Design — Message Delivery Semantics</a> — 멱등 전달, PID와 시퀀스 번호로 중복 제거</li>
         <li><a href="https://kafka.apache.org/documentation/#design_ha" rel="noopener noreferrer">Design — Availability and Durability Guarantees</a> — <code>acks=all</code>이 "현재 ISR 전원" 기준이라는 서술과 예시</li>
         <li><a href="https://kafka.apache.org/documentation/#messageformat" rel="noopener noreferrer">Implementation — Record Batch</a> — <code>producerId</code> · <code>producerEpoch</code> · <code>baseSequence</code>, 중복 판별에 첫·마지막 시퀀스를 쓰는 방식</li>
-        <li><a href="https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/Callback.html" rel="noopener noreferrer">Javadoc — <code>Callback</code></a> — 백그라운드 I/O 스레드 실행, 예외 시 metadata의 <code>-1</code>, retriable / non-retriable 예외 목록</li>
-        <li><a href="https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html" rel="noopener noreferrer">Javadoc — <code>KafkaProducer.send()</code></a> — 같은 파티션 콜백의 순서 보장</li>
+        <li><a href="https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/Callback.html" rel="noopener noreferrer">Javadoc — <code>Callback</code></a> — 백그라운드 I/O 스레드 실행, 예외 시 metadata의 <code>-1</code>, retriable / non-retriable 예외 목록</li>
+        <li><a href="https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html" rel="noopener noreferrer">Javadoc — <code>KafkaProducer.send()</code></a> — 같은 파티션 콜백의 순서 보장</li>
         <li><a href="https://kafka.apache.org/documentation/#upgrade" rel="noopener noreferrer">Upgrading Apache Kafka</a> — 4.0에서 <code>DefaultPartitioner</code> · <code>UniformStickyPartitioner</code> · <code>NotLeaderForPartitionException</code> 제거, <code>Partitioner.onNewBatch</code> 제거</li>
       </ul>
     </section>

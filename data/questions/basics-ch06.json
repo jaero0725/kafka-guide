@@ -15,12 +15,26 @@
       "question": "`isolation.level` 에 대한 설명으로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "프로듀서 설정이며 기본값은 `read_committed` 다." },
-        { "id": "B", "text": "프로듀서 설정이며 기본값은 `read_uncommitted` 다." },
-        { "id": "C", "text": "컨슈머 설정이며 기본값은 `read_uncommitted` 다." },
-        { "id": "D", "text": "컨슈머 설정이며 기본값은 `read_committed` 다." }
+        {
+          "id": "A",
+          "text": "프로듀서 설정이며 기본값은 `read_committed` 다."
+        },
+        {
+          "id": "B",
+          "text": "프로듀서 설정이며 기본값은 `read_uncommitted` 다."
+        },
+        {
+          "id": "C",
+          "text": "컨슈머 설정이며 기본값은 `read_uncommitted` 다."
+        },
+        {
+          "id": "D",
+          "text": "컨슈머 설정이며 기본값은 `read_committed` 다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "`isolation.level` 은 컨슈머 설정이므로 프로듀서에 넣으면 아무 효과 없이 무시됩니다. 기본값이 `read_uncommitted` 라는 점이 함정입니다 — 아무 설정도 하지 않은 컨슈머는 중단된 트랜잭션의 메시지까지 읽습니다. 즉 프로듀서 쪽에서 트랜잭션을 완벽하게 구현해도 컨슈머가 기본 설정이면 exactly-once는 성립하지 않습니다. EOS는 프로듀서와 컨슈머 양쪽 설정이 함께 맞아야 만들어집니다.",
       "distractorNotes": {
         "A": "소속과 기본값이 모두 틀렸습니다. 프로듀서에는 이 설정이 없습니다.",
@@ -28,10 +42,20 @@
         "D": "소속은 맞지만 기본값이 틀렸습니다. `read_committed` 는 명시해야 적용됩니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" },
-        { "title": "Apache Kafka — Using Transactions", "url": "https://kafka.apache.org/documentation/#usingtransactions" }
+        {
+          "title": "Apache Kafka — Consumer Configs",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs"
+        },
+        {
+          "title": "Apache Kafka — Using Transactions",
+          "url": "https://kafka.apache.org/documentation/#usingtransactions"
+        }
       ],
-      "tags": ["isolation-level", "defaults", "transactions"]
+      "tags": [
+        "isolation-level",
+        "defaults",
+        "transactions"
+      ]
     },
     {
       "id": "basics-ch06-002",
@@ -43,12 +67,26 @@
       "question": "컨슈머가 레코드를 처리하기 **전에** 오프셋을 커밋하도록 만들면 어떤 전달 보장이 되는가?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "at-most-once — 처리 도중 크래시하면 그 레코드는 다시 읽히지 않아 유실된다." },
-        { "id": "B", "text": "at-least-once — 커밋이 먼저이므로 재시작 후 같은 레코드를 다시 처리한다." },
-        { "id": "C", "text": "exactly-once — 커밋과 처리가 한 번씩만 일어난다." },
-        { "id": "D", "text": "전달 보장은 커밋 순서와 무관하며 `acks` 설정만이 결정한다." }
+        {
+          "id": "A",
+          "text": "at-most-once — 처리 도중 크래시하면 그 레코드는 다시 읽히지 않아 유실된다."
+        },
+        {
+          "id": "B",
+          "text": "at-least-once — 커밋이 먼저이므로 재시작 후 같은 레코드를 다시 처리한다."
+        },
+        {
+          "id": "C",
+          "text": "exactly-once — 커밋과 처리가 한 번씩만 일어난다."
+        },
+        {
+          "id": "D",
+          "text": "전달 보장은 커밋 순서와 무관하며 `acks` 설정만이 결정한다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "커밋을 처리보다 앞에 두면 브로커 입장에서는 이미 처리가 끝난 것으로 기록되므로, 그 뒤에 크래시가 나면 그 레코드는 다시 읽히지 않고 유실됩니다. 반대로 처리 후 커밋은 커밋 직전에 죽었을 때 같은 레코드를 다시 읽으므로 at-least-once가 됩니다. Kafka의 기본 동작은 at-least-once이며, at-most-once는 재시도를 끄고 처리 전에 커밋해서 의도적으로 만드는 구성입니다. 어느 쪽 위험을 감당할지가 설계 선택이고, 둘 다 피하려면 트랜잭션 또는 컨슈머 쪽 멱등성이 필요합니다.",
       "distractorNotes": {
         "B": "at-least-once는 처리 후 커밋일 때의 결과입니다. 순서가 반대입니다.",
@@ -56,10 +94,20 @@
         "D": "`acks` 는 프로듀서 쪽 내구성 설정입니다. 컨슈머 쪽 유실·중복은 커밋 시점이 결정합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Design: Message Delivery Semantics", "url": "https://kafka.apache.org/documentation/#semantics" },
-        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" }
+        {
+          "title": "Apache Kafka — Design: Message Delivery Semantics",
+          "url": "https://kafka.apache.org/documentation/#semantics"
+        },
+        {
+          "title": "Apache Kafka — Consumer Configs",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs"
+        }
       ],
-      "tags": ["delivery-semantics", "offset-commit", "at-most-once"]
+      "tags": [
+        "delivery-semantics",
+        "offset-commit",
+        "at-most-once"
+      ]
     },
     {
       "id": "basics-ch06-003",
@@ -71,12 +119,26 @@
       "question": "두 애플리케이션 인스턴스가 실수로 같은 `transactional.id` 를 쓰고 있다. 어떤 일이 일어나는가?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "두 인스턴스가 하나의 트랜잭션을 공유하므로 커밋이 두 번 일어난다." },
-        { "id": "B", "text": "브로커가 두 번째 `initTransactions()` 호출을 거부하고 첫 인스턴스가 계속 동작한다." },
-        { "id": "C", "text": "아무 문제가 없다. `transactional.id` 는 로깅용 식별자이기 때문이다." },
-        { "id": "D", "text": "나중에 `initTransactions()` 를 호출한 쪽이 앞의 것을 펜싱하고, 앞의 인스턴스는 `ProducerFencedException` 을 받는다." }
+        {
+          "id": "A",
+          "text": "두 인스턴스가 하나의 트랜잭션을 공유하므로 커밋이 두 번 일어난다."
+        },
+        {
+          "id": "B",
+          "text": "브로커가 두 번째 `initTransactions()` 호출을 거부하고 첫 인스턴스가 계속 동작한다."
+        },
+        {
+          "id": "C",
+          "text": "아무 문제가 없다. `transactional.id` 는 로깅용 식별자이기 때문이다."
+        },
+        {
+          "id": "D",
+          "text": "나중에 `initTransactions()` 를 호출한 쪽이 앞의 것을 펜싱하고, 앞의 인스턴스는 `ProducerFencedException` 을 받는다."
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "`transactional.id` 의 목적은 한 프로듀서 인스턴스가 여러 세션에 걸쳐 트랜잭션을 복구할 수 있게 하는 것입니다. 그래서 같은 ID로 나중에 `initTransactions()` 를 호출하면 이전 인스턴스를 펜싱해 진행 중이던 트랜잭션을 정리합니다. 펜싱당한 쪽은 다음 트랜잭션 작업에서 `ProducerFencedException` 을 받고, 이 예외는 복구 불가이므로 프로듀서를 닫고 종료하는 것이 유일한 선택입니다. 따라서 이 값은 샤드 식별자처럼 인스턴스마다 유일하고 재시작해도 같은 값이 오도록 결정적으로 만들어야 합니다.",
       "distractorNotes": {
         "A": "하나의 프로듀서에는 열린 트랜잭션이 하나뿐이며, 인스턴스 사이에 트랜잭션이 공유되지 않습니다.",
@@ -84,10 +146,20 @@
         "C": "단순 식별자가 아니라 세션을 가로지르는 복구와 좀비 차단의 근거입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Configs", "url": "https://kafka.apache.org/documentation/#producerconfigs" },
-        { "title": "Apache Kafka — Using Transactions", "url": "https://kafka.apache.org/documentation/#usingtransactions" }
+        {
+          "title": "Apache Kafka — Producer Configs",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs"
+        },
+        {
+          "title": "Apache Kafka — Using Transactions",
+          "url": "https://kafka.apache.org/documentation/#usingtransactions"
+        }
       ],
-      "tags": ["transactions", "transactional.id", "exceptions"]
+      "tags": [
+        "transactions",
+        "transactional.id",
+        "exceptions"
+      ]
     },
     {
       "id": "basics-ch06-004",
@@ -99,12 +171,26 @@
       "question": "컨슈머를 `read_committed` 로 바꾼 뒤 lag이 커졌고, 특정 시점에 lag이 한동안 줄지 않는다. 가장 적절한 해석은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`read_committed` 는 컨슈머 성능을 떨어뜨리므로 fetch 설정을 키워야 한다." },
-        { "id": "B", "text": "진행 중인 트랜잭션이 있어 LSO가 전진하지 못하는 정상 동작이며, 트랜잭션을 짧게 유지하는 것이 처방이다." },
-        { "id": "C", "text": "중단된 트랜잭션의 레코드가 반환되지 않아 커밋 오프셋이 뒤로 밀린 것이다." },
-        { "id": "D", "text": "컨슈머 버그이므로 `read_uncommitted` 로 되돌려야 한다." }
+        {
+          "id": "A",
+          "text": "`read_committed` 는 컨슈머 성능을 떨어뜨리므로 fetch 설정을 키워야 한다."
+        },
+        {
+          "id": "B",
+          "text": "진행 중인 트랜잭션이 있어 LSO가 전진하지 못하는 정상 동작이며, 트랜잭션을 짧게 유지하는 것이 처방이다."
+        },
+        {
+          "id": "C",
+          "text": "중단된 트랜잭션의 레코드가 반환되지 않아 커밋 오프셋이 뒤로 밀린 것이다."
+        },
+        {
+          "id": "D",
+          "text": "컨슈머 버그이므로 `read_uncommitted` 로 되돌려야 한다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "`read_committed` 컨슈머는 LSO(Last Stable Offset)까지만 읽으며, LSO는 가장 처음 열려 있는 트랜잭션의 오프셋보다 1 작은 값입니다. 메시지는 항상 오프셋 순서로만 반환되므로 진행 중인 트랜잭션 뒤에 있는 메시지는 이미 커밋되었더라도 그 트랜잭션이 끝날 때까지 보류됩니다. 그래서 느린 트랜잭션 프로듀서 하나가 파티션 전체의 가시성을 붙잡을 수 있고, high watermark 기준으로 계산한 lag이 커집니다. 처방은 한 트랜잭션에 담는 레코드 수를 줄여 짧게 유지하고, `transaction.timeout.ms` 를 요구 지연에 맞게 조정하는 것입니다.",
       "distractorNotes": {
         "A": "fetch 크기와 무관합니다. 보류된 구간은 애초에 응답에 담기지 않습니다.",
@@ -112,10 +198,21 @@
         "D": "되돌리면 중단된 트랜잭션의 메시지까지 읽게 되어 EOS가 깨집니다. 증상은 버그가 아닙니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" },
-        { "title": "Apache Kafka — Using Transactions", "url": "https://kafka.apache.org/documentation/#usingtransactions" }
+        {
+          "title": "Apache Kafka — Consumer Configs",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs"
+        },
+        {
+          "title": "Apache Kafka — Using Transactions",
+          "url": "https://kafka.apache.org/documentation/#usingtransactions"
+        }
       ],
-      "tags": ["isolation-level", "lso", "consumer-lag", "transactions"]
+      "tags": [
+        "isolation-level",
+        "lso",
+        "consumer-lag",
+        "transactions"
+      ]
     },
     {
       "id": "basics-ch06-005",
@@ -127,12 +224,26 @@
       "question": "트랜잭션 프로듀서와 `read_committed` 컨슈머로 EOS를 구성했는데, 처리 중 호출하는 외부 결제 API에서 중복 결제가 발생했다. 원인은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "Kafka 트랜잭션의 원자성은 Kafka 토픽과 `__consumer_offsets` 에만 적용되므로 외부 API 호출은 롤백되지 않는다." },
-        { "id": "B", "text": "`isolation.level` 이 잘못 설정되어 중단된 트랜잭션의 레코드가 처리되었다." },
-        { "id": "C", "text": "`transactional.id` 가 인스턴스마다 달라서 트랜잭션이 분리되었다." },
-        { "id": "D", "text": "`enable.idempotence` 가 꺼져 있어 프로듀서 재시도로 중복이 생겼다." }
+        {
+          "id": "A",
+          "text": "Kafka 트랜잭션의 원자성은 Kafka 토픽과 `__consumer_offsets` 에만 적용되므로 외부 API 호출은 롤백되지 않는다."
+        },
+        {
+          "id": "B",
+          "text": "`isolation.level` 이 잘못 설정되어 중단된 트랜잭션의 레코드가 처리되었다."
+        },
+        {
+          "id": "C",
+          "text": "`transactional.id` 가 인스턴스마다 달라서 트랜잭션이 분리되었다."
+        },
+        {
+          "id": "D",
+          "text": "`enable.idempotence` 가 꺼져 있어 프로듀서 재시도로 중복이 생겼다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "Kafka의 exactly-once는 Kafka 토픽을 읽어 Kafka 토픽에 쓰는 경계 안에서만 성립합니다. 트랜잭션이 abort되면 Kafka 쪽 쓰기와 오프셋은 되돌아가지만, 이미 나간 HTTP 요청은 되돌릴 수 없습니다. 그 구간이 재처리되면 API는 두 번 호출됩니다. 공식 문서도 다른 목적지 시스템에 대한 exactly-once는 그 시스템과의 협력이 필요하다고 명시하므로, 해결책은 설정 변경이 아니라 애플리케이션 레벨의 멱등성입니다 — idempotency key, 멱등 upsert, 처리 이력 테이블 중 하나를 써야 합니다.",
       "distractorNotes": {
         "B": "`read_committed` 는 중단된 트랜잭션의 레코드를 걸러 냅니다. 문제는 Kafka 밖에서 일어났습니다.",
@@ -140,10 +251,20 @@
         "D": "`transactional.id` 를 설정하면 멱등성이 자동으로 켜집니다. 그리고 멱등성은 외부 API 호출과 무관합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Design: Message Delivery Semantics", "url": "https://kafka.apache.org/documentation/#semantics" },
-        { "title": "Apache Kafka — Using Transactions", "url": "https://kafka.apache.org/documentation/#usingtransactions" }
+        {
+          "title": "Apache Kafka — Design: Message Delivery Semantics",
+          "url": "https://kafka.apache.org/documentation/#semantics"
+        },
+        {
+          "title": "Apache Kafka — Using Transactions",
+          "url": "https://kafka.apache.org/documentation/#usingtransactions"
+        }
       ],
-      "tags": ["eos-boundary", "transactions", "idempotence-consumer"]
+      "tags": [
+        "eos-boundary",
+        "transactions",
+        "idempotence-consumer"
+      ]
     },
     {
       "id": "basics-ch06-006",
@@ -155,12 +276,26 @@
       "question": "Kafka Streams 애플리케이션에 `processing.guarantee=exactly_once_v2` 를 설정했다. 함께 일어나는 변화로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "원래 이 값이 기본값이므로 동작에 아무 변화가 없다." },
-        { "id": "B", "text": "`commit.interval.ms` 기본값이 100ms로 바뀌고, 컨슈머는 `read_committed`, 프로듀서는 멱등성이 켜진다." },
-        { "id": "C", "text": "브로커가 1대여도 동작하도록 내부 토픽이 자동으로 복제 계수 1로 생성된다." },
-        { "id": "D", "text": "외부 데이터베이스에 쓰는 처리까지 같은 트랜잭션으로 묶인다." }
+        {
+          "id": "A",
+          "text": "원래 이 값이 기본값이므로 동작에 아무 변화가 없다."
+        },
+        {
+          "id": "B",
+          "text": "`commit.interval.ms` 기본값이 100ms로 바뀌고, 컨슈머는 `read_committed`, 프로듀서는 멱등성이 켜진다."
+        },
+        {
+          "id": "C",
+          "text": "브로커가 1대여도 동작하도록 내부 토픽이 자동으로 복제 계수 1로 생성된다."
+        },
+        {
+          "id": "D",
+          "text": "외부 데이터베이스에 쓰는 처리까지 같은 트랜잭션으로 묶인다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "`processing.guarantee` 의 기본값은 `at_least_once` 이고 현행 EOS 값이 `exactly_once_v2` 입니다. 이 값을 켜면 커밋 주기 기본값이 100ms로 짧아지고, 컨슈머에 `isolation.level=read_committed`, 프로듀서에 `enable.idempotence=true` 가 자동으로 설정됩니다. 커밋이 잦아지는 만큼 처리량이 떨어질 수 있어서 \"EOS를 켰더니 느려졌다\"는 시나리오의 근거가 됩니다. 또한 트랜잭션 상태 토픽 때문에 기본적으로 브로커 3대가 필요하므로, 단일 노드 개발 환경에서는 `transaction.state.log.replication.factor` 와 `transaction.state.log.min.isr` 를 낮춰야 합니다.",
       "distractorNotes": {
         "A": "기본값은 `at_least_once` 입니다. `exactly_once` 와 `exactly_once_beta` 는 deprecated된 옛 값입니다.",
@@ -168,10 +303,20 @@
         "D": "외부 시스템은 Kafka 트랜잭션의 범위 밖입니다. Streams를 써도 마찬가지입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams Configs", "url": "https://kafka.apache.org/documentation/#streamsconfigs" },
-        { "title": "Apache Kafka — Design: Message Delivery Semantics", "url": "https://kafka.apache.org/documentation/#semantics" }
+        {
+          "title": "Apache Kafka — Streams Configs",
+          "url": "https://kafka.apache.org/documentation/#streamsconfigs"
+        },
+        {
+          "title": "Apache Kafka — Design: Message Delivery Semantics",
+          "url": "https://kafka.apache.org/documentation/#semantics"
+        }
       ],
-      "tags": ["exactly-once", "processing.guarantee", "kafka-streams"]
+      "tags": [
+        "exactly-once",
+        "processing.guarantee",
+        "kafka-streams"
+      ]
     },
     {
       "id": "basics-ch06-007",
@@ -183,24 +328,53 @@
       "question": "프로듀서와 컨슈머를 직접 써서 consume-transform-produce EOS를 만들 때 컨슈머에 필요한 설정을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`isolation.level=read_committed`" },
-        { "id": "B", "text": "`enable.auto.commit=false`" },
-        { "id": "C", "text": "`enable.idempotence=true`" },
-        { "id": "D", "text": "`acks=all`" },
-        { "id": "E", "text": "`group.protocol=consumer`" }
+        {
+          "id": "A",
+          "text": "`enable.auto.commit=false`"
+        },
+        {
+          "id": "B",
+          "text": "`acks=all`"
+        },
+        {
+          "id": "C",
+          "text": "`group.protocol=consumer`"
+        },
+        {
+          "id": "D",
+          "text": "`enable.idempotence=true`"
+        },
+        {
+          "id": "E",
+          "text": "`isolation.level=read_committed`"
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "E"
+      ],
       "explanation": "컨슈머 쪽 요구는 두 가지입니다. `read_committed` 로 두어야 중단된 트랜잭션의 레코드를 걸러 내고, 자동 커밋을 꺼야 오프셋 커밋이 트랜잭션 밖에서 따로 일어나지 않습니다. 오프셋은 `sendOffsetsToTransaction(offsets, consumer.groupMetadata())` 으로 프로듀서의 트랜잭션에 포함시켜 커밋하며, 그룹 메타데이터를 넘겨야 브로커가 제너레이션까지 검증해 좀비 컨슈머를 차단합니다. `enable.idempotence` 와 `acks` 는 프로듀서 설정이고, `transactional.id` 를 설정하면 멱등성은 자동으로 켜집니다.",
       "distractorNotes": {
-        "C": "프로듀서 설정입니다. 컨슈머에는 존재하지 않습니다.",
-        "D": "프로듀서 설정입니다. 트랜잭션 프로듀서에서는 `all` 이 강제됩니다.",
-        "E": "리밸런스 프로토콜 선택 설정이며 EOS 성립과 무관합니다."
+        "B": "프로듀서 설정입니다. 트랜잭션 프로듀서에서는 `all` 이 강제됩니다.",
+        "C": "리밸런스 프로토콜 선택 설정이며 EOS 성립과 무관합니다.",
+        "D": "프로듀서 설정입니다. 컨슈머에는 존재하지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Using Transactions", "url": "https://kafka.apache.org/documentation/#usingtransactions" },
-        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" }
+        {
+          "title": "Apache Kafka — Using Transactions",
+          "url": "https://kafka.apache.org/documentation/#usingtransactions"
+        },
+        {
+          "title": "Apache Kafka — Consumer Configs",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs"
+        }
       ],
-      "tags": ["isolation-level", "exactly-once", "transactions", "offset-commit"]
+      "tags": [
+        "isolation-level",
+        "exactly-once",
+        "transactions",
+        "offset-commit"
+      ]
     },
     {
       "id": "basics-ch06-008",
@@ -212,24 +386,53 @@
       "question": "트랜잭션이 쓰이는 토픽을 `read_committed` 로 읽을 때 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "트랜잭션 마커(컨트롤 레코드)는 애플리케이션에 반환되지 않지만 오프셋 공간은 차지한다." },
-        { "id": "B", "text": "`seekToEnd()` 는 high watermark가 아니라 LSO를 반환한다." },
-        { "id": "C", "text": "트랜잭션을 쓰지 않고 보낸 메시지는 이 모드에서 반환되지 않는다." },
-        { "id": "D", "text": "반환된 레코드의 오프셋이 건너뛰어 보이면 메시지가 유실된 것이다." },
-        { "id": "E", "text": "중단된 트랜잭션의 레코드도 컨트롤 레코드와 함께 반환된다." }
+        {
+          "id": "A",
+          "text": "반환된 레코드의 오프셋이 건너뛰어 보이면 메시지가 유실된 것이다."
+        },
+        {
+          "id": "B",
+          "text": "`seekToEnd()` 는 high watermark가 아니라 LSO를 반환한다."
+        },
+        {
+          "id": "C",
+          "text": "중단된 트랜잭션의 레코드도 컨트롤 레코드와 함께 반환된다."
+        },
+        {
+          "id": "D",
+          "text": "트랜잭션 마커(컨트롤 레코드)는 애플리케이션에 반환되지 않지만 오프셋 공간은 차지한다."
+        },
+        {
+          "id": "E",
+          "text": "트랜잭션을 쓰지 않고 보낸 메시지는 이 모드에서 반환되지 않는다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "B",
+        "D"
+      ],
       "explanation": "커밋 또는 중단 시 각 파티션에 기록되는 트랜잭션 마커는 애플리케이션에 노출되지 않지만 로그의 오프셋을 하나씩 소비합니다. 중단된 트랜잭션의 레코드도 이미 오프셋을 차지한 뒤 걸러지기 때문에, 컨슈머가 받는 레코드의 오프셋이 5, 6, 9처럼 연속하지 않을 수 있고 이것은 유실이 아닙니다. 같은 이유로 lag 숫자가 실제 미처리 건수보다 크게 나옵니다. 그리고 `read_committed` 모드에서 \"끝으로 이동\"의 의미가 달라져 `seekToEnd()` 는 LSO를 반환합니다.",
       "distractorNotes": {
-        "C": "비트랜잭션 메시지는 두 모드 모두에서 무조건 반환됩니다.",
-        "D": "오프셋 불연속은 컨트롤 레코드와 걸러진 레코드 때문입니다. 유실 신호가 아닙니다.",
-        "E": "중단된 트랜잭션의 레코드는 걸러집니다. 그것을 걸러 내는 것이 이 모드의 목적입니다."
+        "A": "오프셋 불연속은 컨트롤 레코드와 걸러진 레코드 때문입니다. 유실 신호가 아닙니다.",
+        "C": "중단된 트랜잭션의 레코드는 걸러집니다. 그것을 걸러 내는 것이 이 모드의 목적입니다.",
+        "E": "비트랜잭션 메시지는 두 모드 모두에서 무조건 반환됩니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Using Transactions", "url": "https://kafka.apache.org/documentation/#usingtransactions" },
-        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" }
+        {
+          "title": "Apache Kafka — Using Transactions",
+          "url": "https://kafka.apache.org/documentation/#usingtransactions"
+        },
+        {
+          "title": "Apache Kafka — Consumer Configs",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs"
+        }
       ],
-      "tags": ["isolation-level", "lso", "control-records", "consumer-lag"]
+      "tags": [
+        "isolation-level",
+        "lso",
+        "control-records",
+        "consumer-lag"
+      ]
     },
     {
       "id": "basics-ch06-009",
@@ -241,13 +444,38 @@
       "question": "각 트랜잭션 관련 설정을 Apache Kafka 4.3 기준 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`transactional.id` (producer)", "right": "null" },
-        { "id": "p2", "left": "`transaction.timeout.ms` (producer)", "right": "60000" },
-        { "id": "p3", "left": "`transaction.max.timeout.ms` (broker)", "right": "900000" },
-        { "id": "p4", "left": "`transaction.state.log.min.isr` (broker)", "right": "2" },
-        { "id": "p5", "left": "`isolation.level` (consumer)", "right": "read_uncommitted" }
+        {
+          "id": "p1",
+          "left": "`transactional.id` (producer)",
+          "right": "null"
+        },
+        {
+          "id": "p2",
+          "left": "`transaction.timeout.ms` (producer)",
+          "right": "60000"
+        },
+        {
+          "id": "p3",
+          "left": "`transaction.max.timeout.ms` (broker)",
+          "right": "900000"
+        },
+        {
+          "id": "p4",
+          "left": "`transaction.state.log.min.isr` (broker)",
+          "right": "2"
+        },
+        {
+          "id": "p5",
+          "left": "`isolation.level` (consumer)",
+          "right": "read_uncommitted"
+        }
       ],
-      "extraRights": ["read_committed", "3", "300000", "at_least_once"],
+      "extraRights": [
+        "read_committed",
+        "3",
+        "300000",
+        "at_least_once"
+      ],
       "explanation": "`transactional.id` 는 기본값이 없으므로 설정하지 않으면 트랜잭션을 쓸 수 없고 멱등성만 동작합니다. 프로듀서의 `transaction.timeout.ms`(60000ms)는 코디네이터가 선제적으로 abort하기까지 트랜잭션이 열려 있을 수 있는 시간이며, 브로커의 `transaction.max.timeout.ms`(900000ms)가 그 상한입니다. 이 상한의 목적은 클라이언트가 지나치게 큰 타임아웃을 잡아 그 토픽을 읽는 컨슈머를 멈춰 세우는 것을 막는 것입니다. `transaction.state.log.min.isr` 는 2, 복제 계수는 3이므로 트랜잭션은 기본적으로 브로커 3대를 요구합니다.",
       "distractorNotes": {
         "p5": "EOS를 떠올려 `read_committed` 를 고르기 쉽지만 기본값은 `read_uncommitted` 입니다.",
@@ -255,11 +483,25 @@
         "p2": "브로커 상한 900000과 뒤바꾸기 쉽습니다. 프로듀서 기본값은 1분입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Producer Configs", "url": "https://kafka.apache.org/documentation/#producerconfigs" },
-        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" },
-        { "title": "Apache Kafka — Consumer Configs", "url": "https://kafka.apache.org/documentation/#consumerconfigs" }
+        {
+          "title": "Apache Kafka — Producer Configs",
+          "url": "https://kafka.apache.org/documentation/#producerconfigs"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs"
+        },
+        {
+          "title": "Apache Kafka — Consumer Configs",
+          "url": "https://kafka.apache.org/documentation/#consumerconfigs"
+        }
       ],
-      "tags": ["isolation-level", "defaults", "transactions", "transaction.timeout.ms"]
+      "tags": [
+        "isolation-level",
+        "defaults",
+        "transactions",
+        "transaction.timeout.ms"
+      ]
     },
     {
       "id": "basics-ch06-010",
@@ -271,23 +513,54 @@
       "question": "consume-transform-produce 루프에서 트랜잭션 프로듀서의 API 호출을 올바른 순서로 배열하세요.",
       "code": null,
       "items": [
-        { "id": "i3", "text": "`send()` — 변환한 레코드를 출력 토픽으로 전송" },
-        { "id": "i5", "text": "`commitTransaction()` — 쓰기와 오프셋을 함께 확정" },
-        { "id": "i1", "text": "`initTransactions()` — PID 확보와 이전 세션 트랜잭션 정리" },
-        { "id": "i4", "text": "`sendOffsetsToTransaction(offsets, consumer.groupMetadata())`" },
-        { "id": "i2", "text": "`beginTransaction()` — 트랜잭션 시작" }
+        {
+          "id": "i1",
+          "text": "`send()` — 변환한 레코드를 출력 토픽으로 전송"
+        },
+        {
+          "id": "i4",
+          "text": "`commitTransaction()` — 쓰기와 오프셋을 함께 확정"
+        },
+        {
+          "id": "i3",
+          "text": "`initTransactions()` — PID 확보와 이전 세션 트랜잭션 정리"
+        },
+        {
+          "id": "i5",
+          "text": "`sendOffsetsToTransaction(offsets, consumer.groupMetadata())`"
+        },
+        {
+          "id": "i2",
+          "text": "`beginTransaction()` — 트랜잭션 시작"
+        }
       ],
-      "answer": ["i1", "i2", "i3", "i4", "i5"],
+      "answer": [
+        "i3",
+        "i2",
+        "i1",
+        "i5",
+        "i4"
+      ],
       "explanation": "`initTransactions()` 는 프로듀서 생성 직후 한 번만 호출하며, 여기서 PID를 받고 같은 `transactional.id` 의 진행 중 트랜잭션을 정리합니다. 그 뒤 루프마다 `beginTransaction()` 으로 트랜잭션을 열고, 출력 레코드를 `send()` 한 다음 입력 오프셋을 같은 트랜잭션에 포함시켜 `commitTransaction()` 으로 한꺼번에 확정합니다. 오프셋 전달에 `ConsumerGroupMetadata` 를 넘기는 시그니처만 4.x에 존재하는데, 이는 브로커가 그룹 제너레이션까지 검증해 좀비 컨슈머의 커밋을 차단하기 위한 것입니다. 실패 시에는 `abortTransaction()` 을 호출한 뒤 컨슈머 위치를 커밋된 오프셋으로 직접 되돌려야 재처리됩니다.",
       "distractorNotes": {
-        "i1": "트랜잭션마다 호출하는 것으로 착각하기 쉽습니다. 프로듀서 생애에 한 번입니다.",
-        "i4": "커밋 이후에 오프셋을 보내는 것으로 오해하기 쉽지만, 커밋 전에 트랜잭션 안으로 넣어야 원자성이 성립합니다."
+        "i3": "트랜잭션마다 호출하는 것으로 착각하기 쉽습니다. 프로듀서 생애에 한 번입니다.",
+        "i5": "커밋 이후에 오프셋을 보내는 것으로 오해하기 쉽지만, 커밋 전에 트랜잭션 안으로 넣어야 원자성이 성립합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Using Transactions", "url": "https://kafka.apache.org/documentation/#usingtransactions" },
-        { "title": "Apache Kafka — Javadoc: Producer", "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/Producer.html" }
+        {
+          "title": "Apache Kafka — Using Transactions",
+          "url": "https://kafka.apache.org/documentation/#usingtransactions"
+        },
+        {
+          "title": "Apache Kafka — Javadoc: Producer",
+          "url": "https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/Producer.html"
+        }
       ],
-      "tags": ["transactions", "exactly-once", "producer-api"]
+      "tags": [
+        "transactions",
+        "exactly-once",
+        "producer-api"
+      ]
     }
   ]
 }

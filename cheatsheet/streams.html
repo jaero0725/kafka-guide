@@ -578,7 +578,7 @@ SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5));</code></pre>
               <th scope="row">①</th>
               <td><strong>파티션 수가 같아야</strong> 합니다 (조인 양쪽 입력 토픽)</td>
               <td><span class="mark-ok">검증합니다</span><br>파티션 할당 단계, 즉 <strong>런타임</strong>에</td>
-              <td><code>TopologyBuilderException</code>(런타임 예외)이 발생해 <strong>즉시 실패</strong>합니다. 알아차리기 쉽습니다</td>
+              <td><code>TopologyException</code>(런타임 예외)이 발생해 <strong>즉시 실패</strong>합니다. 알아차리기 쉽습니다</td>
             </tr>
             <tr>
               <th scope="row">②</th>
@@ -939,7 +939,7 @@ rm -rf /var/lib/kafka-streams/my-streams-app</code></pre>
       <aside class="note note--exam" data-label="시험 포인트 · Kafka Streams">
         <ul>
           <li><strong>리파티션 유발</strong>: <code>map</code> · <code>flatMap</code> · <code>selectKey</code>는 마킹, <code>groupBy</code>와 <code>repartition()</code>은 항상 유발, <code>groupByKey</code>는 마킹된 경우에만.</li>
-          <li><strong>co-partitioning 요건은 2개</strong>: ① 파티션 수 동일 ② 파티셔너 동일. <strong>Streams가 런타임에 검증하는 것은 ①뿐</strong>이고 ② 위반은 예외 없이 잘못된 결과를 냅니다. ① 위반 시 예외는 <code>TopologyBuilderException</code>.</li>
+          <li><strong>co-partitioning 요건은 2개</strong>: ① 파티션 수 동일 ② 파티셔너 동일. <strong>Streams가 런타임에 검증하는 것은 ①뿐</strong>이고 ② 위반은 예외 없이 잘못된 결과를 냅니다. ① 위반 시 예외는 <code>TopologyException</code>.</li>
           <li><strong>co-partitioning 예외</strong>: KStream-GlobalKTable, KTable-KTable foreign-key 조인 <strong>2개뿐</strong>.</li>
           <li><strong>Streams Rebalance Protocol</strong>은 <strong>4.2부터 새 클러스터에서 기본 활성</strong>이지만 클라이언트 <code>group.protocol</code> 기본값은 <code>classic</code>입니다.</li>
           <li><strong>OUTER 조인</strong>: KStream-KStream과 KTable-KTable(equi)에만 존재.</li>

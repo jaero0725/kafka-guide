@@ -200,7 +200,7 @@
       "id": "fc-str-017",
       "deck": "ccdak-streams",
       "front": "조인 대상 토픽의 파티션 수가 다르면?",
-      "back": "**`TopologyBuilderException`**\n반면 파티셔너 불일치는 감지되지 않아 조인 결과가 조용히 누락됩니다.",
+      "back": "**`TopologyException`**\n반면 파티셔너 불일치는 감지되지 않아 조인 결과가 조용히 누락됩니다.",
       "tags": [
         "stream-join",
         "co-partitioning",

@@ -480,7 +480,7 @@
             <tr><th scope="row">무엇인가</th><td>프로듀서 요청 크기 상한. <strong>1048576</strong></td><td>브로커가 허용하는 배치 크기. <strong>1048588</strong></td><td>컨슈머 fetch 응답 상한. <strong>52428800</strong></td></tr>
             <tr><th scope="row">어디 설정인가</th><td><strong>프로듀서</strong></td><td><strong>브로커</strong> (토픽은 <code>max.message.bytes</code>)</td><td><strong>컨슈머</strong></td></tr>
             <tr><th scope="row">언제 발동하는가</th><td>전송 직전, <strong>클라이언트에서</strong></td><td>브로커가 배치를 받을 때 (<strong>압축 후</strong> 기준)</td><td>fetch 요청 크기 산정 시</td></tr>
-            <tr><th scope="row">혼동 시 결과</th><td colspan="3">큰 메시지를 허용하려면 <strong>4곳을 모두</strong> 올려야 합니다 — 토픽 <code>max.message.bytes</code>, 프로듀서 <code>max.request.size</code>, 컨슈머 <code>max.partition.fetch.bytes</code>, 브로커 <code>replica.fetch.max.bytes</code>. 마지막을 빼먹으면 쓰기는 되지만 <strong>복제가 실패해 ISR이 줄어듭니다</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="3">큰 메시지를 허용하려면 <strong>4곳을 모두</strong> 올려야 합니다 — 토픽 <code>max.message.bytes</code>, 프로듀서 <code>max.request.size</code>, 컨슈머 <code>max.partition.fetch.bytes</code>, 브로커 <code>replica.fetch.max.bytes</code>. 마지막을 빼먹어도 <strong>복제가 멈추거나 ISR이 줄지는 않습니다</strong> — fetch 계열은 하드 상한이 아니라 큰 배치도 진행 보장을 위해 그대로 반환되기 때문입니다. 대신 fetch 응답당 배치 1건으로 떨어져 <strong>복제 처리량이 무너집니다</strong>. 하드 게이트는 프로듀서 <code>max.request.size</code>와 브로커 <code>message.max.bytes</code>(토픽 <code>max.message.bytes</code>) 둘뿐입니다</td></tr>
             <tr><th scope="row">출제 형태</th><td colspan="3">matching(설정↔소속)과 "1.5MB를 보내려면 무엇을 바꿔야 하는가(모두 고르시오)". <strong>1048576과 1048588의 12바이트 차이</strong>도 출제 대상</td></tr>
           </tbody>
         </table>
@@ -773,7 +773,7 @@
             <tr><th scope="row">무엇인가</th><td>조인의 <strong>전제 조건</strong> — 공식 요건은 <strong>① 파티션 수 동일 ② 파티셔너 동일</strong> 두 개입니다. &ldquo;키 동일&rdquo;은 요건이 아니라 equi-join 자체의 전제</td><td>키 기준으로 <strong>다시 분배하는 연산</strong> (리파티션 토픽 생성)</td></tr>
             <tr><th scope="row">어디 설정인가</th><td>토픽 설계 · 프로듀서 <code>partitioner.class</code> · <code>StreamPartitioner</code></td><td>토폴로지 코드</td></tr>
             <tr><th scope="row">언제 발동하는가</th><td>런타임 파티션 할당 단계에서 <strong>파티션 수만 검증</strong></td><td>호출 즉시</td></tr>
-            <tr><th scope="row">혼동 시 결과</th><td colspan="2">파티션 수가 다르면 <strong><code>TopologyBuilderException</code></strong>이 나지만, <strong>파티셔너가 다른 것은 감지되지 않아 조인이 조용히 누락</strong>됩니다. KStream-GlobalKTable 조인과 KTable-KTable <strong>외래키 조인</strong>은 co-partitioning이 필요하지 않습니다</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">파티션 수가 다르면 <strong><code>TopologyException</code></strong>이 나지만, <strong>파티셔너가 다른 것은 감지되지 않아 조인이 조용히 누락</strong>됩니다. KStream-GlobalKTable 조인과 KTable-KTable <strong>외래키 조인</strong>은 co-partitioning이 필요하지 않습니다</td></tr>
             <tr><th scope="row">출제 형태</th><td colspan="2">"파티션 3개와 6개 토픽을 조인하려면?" → <strong>적은 쪽을 6으로</strong> 리파티션. KStream-KTable이면 <strong>KStream을 리파티션</strong>하는 편이 낫습니다(KTable은 상태 저장소가 하나 더 생김)</td></tr>
           </tbody>
         </table>

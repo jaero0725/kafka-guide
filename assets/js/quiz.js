@@ -498,7 +498,16 @@
         self.toggleFlag();
         return;
       }
-      if (e.key === 'Enter' && !inField) {
+      /* 버튼·링크에 포커스가 있으면 Enter 는 그 요소의 네이티브 활성화입니다.
+         가로채면 ▲▼(순서 이동)·"이 문항 다시"·"이전" 이 전부 죽고 즉시 채점됩니다. */
+      var activatable = tag === 'BUTTON' ||
+        (tag === 'A' && t.getAttribute && t.getAttribute('href')) ||
+        (t.getAttribute && t.getAttribute('role') === 'button');
+      if (e.key === 'Enter' && !activatable) {
+        /* 라디오·체크박스는 값 입력이 아니라 선택이므로 제출을 허용합니다
+           (화면 힌트가 "Enter 제출" 이라고 안내합니다). */
+        var isChoiceInput = tag === 'INPUT' && /^(radio|checkbox)$/i.test(t.type || '');
+        if (inField && !isChoiceInput) return;
         e.preventDefault();
         self.primaryAction();
         return;
@@ -556,7 +565,8 @@
     this.render();
     this.saveSession();
     // 이동 후 같은 버튼에 포커스를 유지
-    var sel = '.qo__row[data-item="' + itemId + '"] .qo__btn[data-dir="' + (dir < 0 ? 'up' : 'down') + '"]';
+    /* 마크업은 .qo__btn 자체에 data-act·data-item 을 답니다(qo__row 가 아님). */
+    var sel = '.qo__btn[data-act="' + (dir < 0 ? 'up' : 'down') + '"][data-item="' + itemId + '"]';
     var btn = this.el.querySelector(sel);
     if (btn) { if (btn.disabled) { var alt = btn.parentNode.querySelector('.qo__btn:not(:disabled)'); if (alt) alt.focus(); } else btn.focus(); }
     var p = this.prepared[this.index];

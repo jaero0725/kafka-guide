@@ -126,7 +126,7 @@
 
   /* 폼 / 컨트롤 */
   --c-control-bg: #ffffff;
-  --c-control-border: #c3cad3;
+  --c-control-border: #8b939e;
   --c-control-hover-bg: #f1f3f6;
   --c-control-active-bg: #e8f0f9;
   --c-focus-ring: #1a73c7;
@@ -210,7 +210,7 @@
     --c-code-inline-text: #f0a1c0;
 
     --c-control-bg: #1e232a;
-    --c-control-border: #414a55;
+    --c-control-border: #767f8b;
     --c-control-hover-bg: #262c34;
     --c-control-active-bg: #1a2635;
     --c-focus-ring: #79b8f3;
@@ -281,7 +281,7 @@
   --c-code-inline-text: #f0a1c0;
 
   --c-control-bg: #1e232a;
-  --c-control-border: #414a55;
+  --c-control-border: #767f8b;
   --c-control-hover-bg: #262c34;
   --c-control-active-bg: #1a2635;
   --c-focus-ring: #79b8f3;

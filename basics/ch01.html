@@ -597,7 +597,7 @@ bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server loca
           </table>
         </div>
         <p>
-          그래서 <strong>CLI의 <code>--zookeeper</code> 옵션도 4.0에서 제거</strong>되었습니다.
+          한편 CLI의 <code>--zookeeper</code> 옵션은 그보다 앞선 <strong>3.0에서 제거</strong>되었습니다(KIP-604). 예외적으로 <code>kafka-configs.sh</code>만 ZooKeeper 모드 전용 용도로 deprecated 상태의 <code>--zookeeper</code>를 3.9까지 남겨 두었고, 4.0의 ZooKeeper 제거와 함께 완전히 사라졌습니다. <strong>4.x에는 어떤 도구에도 <code>--zookeeper</code>가 없습니다.</strong>
           모든 명령은 <code>--bootstrap-server</code>를 씁니다. 자세한 배경과 마이그레이션 경로는
           <a href="appendix-legacy.html">부록 · 버전 표기와 레거시</a>에 있습니다.
         </p>
@@ -712,7 +712,7 @@ bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server loca
           <li><code>bootstrap.servers</code>를 여럿 적는 목적은 <strong>초기 연결 이중화</strong>이며 부하 분산이 아닙니다.</li>
           <li><code>message.max.bytes</code> 기본값은 <strong>1048588</strong>이고 <strong>압축 후 배치</strong> 기준입니다.</li>
           <li><code>2.13</code>은 <strong>Scala 버전</strong>입니다. Kafka 2.13은 존재하지 않습니다.</li>
-          <li>ZooKeeper는 <strong>4.0에서 제거</strong>되었고 <code>--zookeeper</code> 옵션도 없습니다.</li>
+          <li>ZooKeeper는 <strong>4.0에서 제거</strong>되었습니다. CLI의 <code>--zookeeper</code> 옵션은 그보다 앞선 <strong>3.0에서 제거</strong>(KIP-604), <code>kafka-configs.sh</code>만 3.9까지 남았습니다.</li>
           <li>KIP-848은 <strong>4.0 GA</strong>이지만 컨슈머 기본값은 <strong><code>group.protocol=classic</code></strong>입니다.</li>
         </ul>
       </aside>

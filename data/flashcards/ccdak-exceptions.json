@@ -283,7 +283,7 @@
     {
       "id": "fc-exc-024",
       "deck": "ccdak-exceptions",
-      "front": "`TopologyBuilderException` — 원인과 조치?",
+      "front": "`TopologyException` — 원인과 조치?",
       "back": "Streams 조인 양쪽 토픽의 파티션 수 불일치 등 토폴로지 구성 오류 · **재시도 불가**\n`repartition()` 으로 파티션 수를 맞춰야 합니다.",
       "tags": [
         "stream-join",

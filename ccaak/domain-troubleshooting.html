@@ -387,7 +387,7 @@
           과반을 잃으면 리더 선출 자체가 불가능하므로 <strong>노드 복구가 유일한 정답</strong>입니다.
         </li>
         <li>
-          선거가 반복되면(<code>LeaderElectionRateAndTimeMs</code>가 계속 non-zero)
+          선거가 반복되면(<code>IsrShrinksPerSec</code>·<code>IsrExpandsPerSec</code>가 계속 non-zero)
           컨트롤러 노드 간 네트워크와 <code>controller.quorum.fetch.timeout.ms</code>(기본 2000)를 봅니다.
         </li>
         <li>

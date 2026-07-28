@@ -766,7 +766,7 @@ public final class WordCount {
             <tr>
               <th scope="row">요건 ① 같은 파티션 수</th>
               <td>조인의 좌·우 입력 토픽은 <strong>파티션 수가 같아야</strong> 합니다</td>
-              <td><strong>검증합니다.</strong> 파티션 배정 단계(런타임)에 다르면 <code>TopologyBuilderException</code>이 발생합니다</td>
+              <td><strong>검증합니다.</strong> 파티션 배정 단계(런타임)에 다르면 <code>TopologyException</code>이 발생합니다</td>
             </tr>
             <tr>
               <th scope="row">요건 ② 같은 파티셔닝 전략</th>
@@ -822,7 +822,7 @@ public final class WordCount {
 
       <figure class="code">
         <figcaption>파티션 수가 다른 두 토픽 조인 — 적은 쪽을 명시적으로 재분배</figcaption>
-        <pre><code class="lang-java">// orders: 12 파티션, payments: 6 파티션 → 그대로 조인하면 TopologyBuilderException
+        <pre><code class="lang-java">// orders: 12 파티션, payments: 6 파티션 → 그대로 조인하면 TopologyException
 KStream&lt;String, Order&gt;   orders   = builder.stream("orders");
 KStream&lt;String, Payment&gt; payments = builder.stream("payments");
 

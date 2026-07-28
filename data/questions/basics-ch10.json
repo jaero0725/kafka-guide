@@ -15,12 +15,26 @@
       "question": "같은 토픽에 `(\"alice\", 1)` 다음 `(\"alice\", 3)` 이 들어왔다. 사용자별 값을 합산하면 KStream과 KTable에서 각각 얼마인가?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "KStream 3, KTable 4 — KStream은 마지막 값만 남기기 때문이다." },
-        { "id": "B", "text": "KStream 4, KTable 3 — KStream은 각 레코드를 독립적인 사실로, KTable은 갱신으로 해석한다." },
-        { "id": "C", "text": "둘 다 4다. 합산 연산은 추상 종류와 무관하게 같은 결과를 낸다." },
-        { "id": "D", "text": "둘 다 3이다. 같은 키의 레코드는 항상 최신 값으로 대체된다." }
+        {
+          "id": "A",
+          "text": "KStream 3, KTable 4 — KStream은 마지막 값만 남기기 때문이다."
+        },
+        {
+          "id": "B",
+          "text": "KStream 4, KTable 3 — KStream은 각 레코드를 독립적인 사실로, KTable은 갱신으로 해석한다."
+        },
+        {
+          "id": "C",
+          "text": "둘 다 4다. 합산 연산은 추상 종류와 무관하게 같은 결과를 낸다."
+        },
+        {
+          "id": "D",
+          "text": "둘 다 3이다. 같은 키의 레코드는 항상 최신 값으로 대체된다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "KStream은 record stream이므로 같은 키가 반복되어도 각각 별개의 사실입니다. 그래서 합산하면 1과 3이 모두 반영되어 4가 됩니다. KTable은 changelog stream이라 같은 키의 새 레코드가 앞 값을 갱신하는 upsert 의미를 가지므로 결과가 3입니다. 그래서 클릭·결제·센서 측정처럼 append-only 사실은 KStream, 프로필·재고·잔액처럼 키별 최신 상태는 KTable로 해석해야 하고, KTable에서는 value가 `null` 인 레코드가 삭제를 뜻합니다.",
       "distractorNotes": {
         "A": "두 결과가 뒤바뀌었습니다. 마지막 값만 남기는 쪽이 KTable입니다.",
@@ -28,10 +42,20 @@
         "D": "KStream에서는 대체가 일어나지 않습니다. 그것이 record stream의 정의입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api" },
-        { "title": "Apache Kafka — Streams Core Concepts", "url": "https://kafka.apache.org/documentation/streams/core-concepts" }
+        {
+          "title": "Apache Kafka — Streams DSL",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api"
+        },
+        {
+          "title": "Apache Kafka — Streams Core Concepts",
+          "url": "https://kafka.apache.org/documentation/streams/core-concepts"
+        }
       ],
-      "tags": ["kstream-vs-ktable", "kafka-streams", "dsl"]
+      "tags": [
+        "kstream-vs-ktable",
+        "kafka-streams",
+        "dsl"
+      ]
     },
     {
       "id": "basics-ch10-002",
@@ -43,12 +67,26 @@
       "question": "값만 바꾸는 변환을 할 때 `map` 대신 `mapValues` 를 권하는 이유로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`map` 은 키를 바꿀 수 있어 리파티션 대상으로 표시되지만 `mapValues` 는 그렇지 않다." },
-        { "id": "B", "text": "`mapValues` 는 stateless이고 `map` 은 상태 저장소를 만든다." },
-        { "id": "C", "text": "`mapValues` 는 여러 레코드를 한 번에 처리해 처리량이 높다." },
-        { "id": "D", "text": "`map` 은 종단 연산이라 뒤에 다른 연산을 붙일 수 없다." }
+        {
+          "id": "A",
+          "text": "`map` 은 키를 바꿀 수 있어 리파티션 대상으로 표시되지만 `mapValues` 는 그렇지 않다."
+        },
+        {
+          "id": "B",
+          "text": "`mapValues` 는 stateless이고 `map` 은 상태 저장소를 만든다."
+        },
+        {
+          "id": "C",
+          "text": "`mapValues` 는 여러 레코드를 한 번에 처리해 처리량이 높다."
+        },
+        {
+          "id": "D",
+          "text": "`map` 은 종단 연산이라 뒤에 다른 연산을 붙일 수 없다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "두 연산 모두 stateless지만 리파티션 관점에서 다릅니다. `map` 은 키를 바꿀 가능성이 있으므로 스트림을 \"리파티션 필요\"로 표시하고, 뒤에 그룹화나 조인이 오면 내부 리파티션 토픽을 거쳐 실제 재분배가 일어납니다. `mapValues` 는 값만 바꾸므로 표시되지 않고 네트워크 왕복과 추가 토픽이 생기지 않습니다. 같은 논리로 `groupByKey` 는 표시된 경우에만, `groupBy` 는 항상 리파티션하므로 키를 바꿀 필요가 없다면 `groupByKey` 가 정답입니다.",
       "distractorNotes": {
         "B": "`map` 도 stateless입니다. 상태 저장소를 만드는 것은 `count`·`reduce`·`aggregate`·윈도우·조인입니다.",
@@ -56,10 +94,20 @@
         "D": "`map` 은 중간 연산입니다. 종단 연산은 `foreach`·`print`·`to` 계열입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api" },
-        { "title": "Apache Kafka — Streams Architecture", "url": "https://kafka.apache.org/documentation/streams/architecture" }
+        {
+          "title": "Apache Kafka — Streams DSL",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api"
+        },
+        {
+          "title": "Apache Kafka — Streams Architecture",
+          "url": "https://kafka.apache.org/documentation/streams/architecture"
+        }
       ],
-      "tags": ["stateless-stateful", "repartition", "dsl"]
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "dsl"
+      ]
     },
     {
       "id": "basics-ch10-003",
@@ -71,12 +119,26 @@
       "question": "Kafka Streams 토폴로지를 브로커 없이 단위 테스트하려면 무엇을 쓰는가?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`MockProducer` 와 `MockConsumer` 를 조합해 토폴로지 입출력을 대신한다." },
-        { "id": "B", "text": "`EmbeddedKafkaCluster` 가 Apache Kafka의 공개 테스트 아티팩트이므로 이것을 쓴다." },
-        { "id": "C", "text": "`kafka-streams-test-utils` 의 `TopologyTestDriver` 와 `TestInputTopic`/`TestOutputTopic` 을 쓴다." },
-        { "id": "D", "text": "Testcontainers로 실제 브로커를 띄우는 것이 유일한 방법이다." }
+        {
+          "id": "A",
+          "text": "`MockProducer` 와 `MockConsumer` 를 조합해 토폴로지 입출력을 대신한다."
+        },
+        {
+          "id": "B",
+          "text": "`EmbeddedKafkaCluster` 가 Apache Kafka의 공개 테스트 아티팩트이므로 이것을 쓴다."
+        },
+        {
+          "id": "C",
+          "text": "`kafka-streams-test-utils` 의 `TopologyTestDriver` 와 `TestInputTopic`/`TestOutputTopic` 을 쓴다."
+        },
+        {
+          "id": "D",
+          "text": "Testcontainers로 실제 브로커를 띄우는 것이 유일한 방법이다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "`TopologyTestDriver` 는 Streams 런타임을 시뮬레이션해 입력 레코드를 토폴로지에 흘리고 결과 레코드를 캡처하며 내장 상태 저장소까지 조회할 수 있게 해 줍니다. 브로커가 필요하지 않으므로 `bootstrap.servers` 에 더미 값을 넣어도 되고, 테스트가 끝나면 `close()` 로 자원을 정리해야 합니다. 입출력은 `TestInputTopic`·`TestOutputTopic` 으로 다루고 커스텀 Processor 검증에는 `MockProcessorContext` 를 씁니다. `MockProducer`·`MockConsumer` 는 프로듀서·컨슈머 로직용이고, Testcontainers는 실제 브로커가 필요한 통합 테스트용이라 목적이 다릅니다.",
       "distractorNotes": {
         "A": "이 두 목 객체는 클라이언트 API 로직을 검증하는 도구입니다. 토폴로지를 실행해 주지 않습니다.",
@@ -84,10 +146,20 @@
         "D": "브로커 없이 검증하는 것이 이 도구의 목적입니다. Testcontainers는 통합 테스트 단계에서 병행합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Testing Streams Code", "url": "https://kafka.apache.org/documentation/streams/developer-guide/testing" },
-        { "title": "Apache Kafka — Streams Architecture", "url": "https://kafka.apache.org/documentation/streams/architecture" }
+        {
+          "title": "Apache Kafka — Testing Streams Code",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/testing"
+        },
+        {
+          "title": "Apache Kafka — Streams Architecture",
+          "url": "https://kafka.apache.org/documentation/streams/architecture"
+        }
       ],
-      "tags": ["kafka-testing", "topology-test-driver", "kafka-streams"]
+      "tags": [
+        "kafka-testing",
+        "topology-test-driver",
+        "kafka-streams"
+      ]
     },
     {
       "id": "basics-ch10-004",
@@ -99,23 +171,47 @@
       "question": "파티션 6개 토픽과 12개 토픽을 KStream-KTable 조인하려고 한다. 어떻게 되는가?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "Streams가 파티션 수를 자동으로 맞춰 주므로 그대로 동작한다." },
-        { "id": "B", "text": "조인 결과가 비어 있게 되지만 예외는 발생하지 않는다." },
-        { "id": "C", "text": "빌드 시점에 `TopologyException` 이 발생해 애플리케이션이 기동하지 못한다." },
-        { "id": "D", "text": "런타임 파티션 배정 단계에서 `TopologyBuilderException` 이 발생하므로 `repartition()` 으로 파티션 수를 맞춰야 한다." }
+        {
+          "id": "A",
+          "text": "Streams가 파티션 수를 자동으로 맞춰 주므로 그대로 동작한다."
+        },
+        {
+          "id": "B",
+          "text": "조인 결과가 비어 있게 되지만 예외는 발생하지 않는다."
+        },
+        {
+          "id": "C",
+          "text": "빌드 시점(`builder.build()`)에 `TopologyException` 이 발생해 애플리케이션이 기동하지 못한다."
+        },
+        {
+          "id": "D",
+          "text": "런타임 파티션 배정 단계에서 `TopologyException` 이 발생하므로 `repartition()` 으로 파티션 수를 맞춰야 한다."
+        }
       ],
-      "answer": ["D"],
-      "explanation": "co-partitioning 요건 중 파티션 수 동일은 Streams가 실제로 검증하는 항목이며, 파티션 배정 단계에서 어긋나면 `TopologyBuilderException` 이 발생합니다. 해소 방법은 한쪽을 `repartition()` 으로 상대 토픽과 같은 파티션 수로 재분배하는 것입니다. 반면 같은 파티셔너를 쓰는지는 Streams가 검증할 수 없으므로 사용자가 보장해야 하며, 어긋나면 예외 없이 조용히 잘못된 결과가 나옵니다. 파티셔너 관련 설정을 모두 기본값으로 두었다면 이 항목은 문제가 되지 않습니다.",
+      "answer": [
+        "D"
+      ],
+      "explanation": "co-partitioning 요건 중 파티션 수 동일은 Streams가 실제로 검증하는 항목입니다. 다만 검증 시점이 중요합니다 — 토픽의 실제 파티션 수는 클러스터 메타데이터를 조회해야 알 수 있으므로 `builder.build()` 가 아니라 **런타임의 파티션 배정 단계**에서 확인되고, 어긋나면 `TopologyException` 이 \"Topics not co-partitioned: [...]\" 메시지와 함께 발생합니다. 해소 방법은 한쪽을 `repartition()` 으로 상대 토픽과 같은 파티션 수로 재분배하는 것입니다. 반면 같은 파티셔너를 쓰는지는 Streams가 검증할 수 없으므로 사용자가 보장해야 하며, 어긋나면 예외 없이 조용히 잘못된 결과가 나옵니다.",
       "distractorNotes": {
         "A": "자동 조정은 없습니다. co-partitioning 보장은 사용자 책임이라고 공식 문서가 명시합니다.",
         "B": "결과가 비는 것은 키가 맞지 않을 때의 증상입니다. 파티션 수 불일치는 예외로 드러납니다.",
-        "C": "예외 클래스 이름과 발생 시점이 모두 다릅니다. 파티션 배정은 런타임 단계입니다."
+        "C": "클래스 이름은 맞지만 **시점**이 틀렸습니다. 빌드 시점에는 토픽의 실제 파티션 수를 알 수 없습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api" },
-        { "title": "Apache Kafka — Streams Architecture", "url": "https://kafka.apache.org/documentation/streams/architecture" }
+        {
+          "title": "Apache Kafka — Streams DSL",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api"
+        },
+        {
+          "title": "Apache Kafka — Streams Architecture",
+          "url": "https://kafka.apache.org/documentation/streams/architecture"
+        }
       ],
-      "tags": ["stream-join", "co-partitioning", "repartition"]
+      "tags": [
+        "stream-join",
+        "co-partitioning",
+        "repartition"
+      ]
     },
     {
       "id": "basics-ch10-005",
@@ -127,12 +223,26 @@
       "question": "co-partitioning과 조인 제약에 대한 설명으로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "KStream-GlobalKTable 조인은 co-partitioning이 필요하지 않고, KStream-KStream 조인은 항상 윈도우가 필요하다." },
-        { "id": "B", "text": "KStream-GlobalKTable 조인도 파티션 수를 맞춰야 하며, KStream-KStream 조인은 윈도우 없이도 가능하다." },
-        { "id": "C", "text": "KTable-KTable foreign-key 조인은 사용자가 직접 co-partitioning을 맞춰야 한다." },
-        { "id": "D", "text": "모든 조인은 co-partitioning이 필요하며 예외는 없다." }
+        {
+          "id": "A",
+          "text": "KStream-GlobalKTable 조인은 co-partitioning이 필요하지 않고, KStream-KStream 조인은 항상 윈도우가 필요하다."
+        },
+        {
+          "id": "B",
+          "text": "KStream-GlobalKTable 조인도 파티션 수를 맞춰야 하며, KStream-KStream 조인은 윈도우 없이도 가능하다."
+        },
+        {
+          "id": "C",
+          "text": "KTable-KTable foreign-key 조인은 사용자가 직접 co-partitioning을 맞춰야 한다."
+        },
+        {
+          "id": "D",
+          "text": "모든 조인은 co-partitioning이 필요하며 예외는 없다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "GlobalKTable은 모든 파티션의 데이터를 각 인스턴스가 전부 들고 있으므로 파티션 배치를 맞출 필요가 없습니다. KTable-KTable foreign-key 조인도 Streams가 내부적으로 재분배를 처리하므로 co-partitioning 예외에 해당합니다. 반대로 KStream-KStream 조인은 언제나 윈도우 조인인데, 그렇지 않으면 조인에 쓰이는 내부 상태 저장소가 무한히 커지기 때문입니다. \"윈도우 없는 stream-stream 조인\"은 오답 선택지로 자주 등장합니다.",
       "distractorNotes": {
         "B": "두 서술이 모두 반대입니다. GlobalKTable은 예외이고 stream-stream 조인은 윈도우가 필수입니다.",
@@ -140,10 +250,20 @@
         "D": "예외가 두 가지 있습니다. GlobalKTable 조인과 KTable foreign-key 조인입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api" },
-        { "title": "Apache Kafka — Streams Core Concepts", "url": "https://kafka.apache.org/documentation/streams/core-concepts" }
+        {
+          "title": "Apache Kafka — Streams DSL",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api"
+        },
+        {
+          "title": "Apache Kafka — Streams Core Concepts",
+          "url": "https://kafka.apache.org/documentation/streams/core-concepts"
+        }
       ],
-      "tags": ["stream-join", "co-partitioning", "kstream-vs-ktable"]
+      "tags": [
+        "stream-join",
+        "co-partitioning",
+        "kstream-vs-ktable"
+      ]
     },
     {
       "id": "basics-ch10-006",
@@ -159,12 +279,26 @@
         "body": "builder.stream(\"orders\")\n       .filter((k, v) -> v.amount() > 0)\n       .selectKey((k, v) -> v.customerId())\n       .groupByKey()\n       .count()\n       .toStream()\n       .to(\"orders-per-customer\");"
       },
       "choices": [
-        { "id": "A", "text": "`filter` 에서 만들어진다. 레코드 수가 줄어들면 재분배가 필요하다." },
-        { "id": "B", "text": "`selectKey` 가 스트림을 리파티션 대상으로 표시하고, 뒤의 `groupByKey` 에서 실제 재분배가 일어난다." },
-        { "id": "C", "text": "`count` 가 상태 저장소를 만들 때 리파티션 토픽도 함께 만들어진다." },
-        { "id": "D", "text": "`to` 에서 대상 토픽에 쓰기 직전에 재분배된다." }
+        {
+          "id": "A",
+          "text": "`filter` 에서 만들어진다. 레코드 수가 줄어들면 재분배가 필요하다."
+        },
+        {
+          "id": "B",
+          "text": "`selectKey` 가 스트림을 리파티션 대상으로 표시하고, 뒤의 `groupByKey` 에서 실제 재분배가 일어난다."
+        },
+        {
+          "id": "C",
+          "text": "`count` 가 상태 저장소를 만들 때 리파티션 토픽도 함께 만들어진다."
+        },
+        {
+          "id": "D",
+          "text": "`to` 에서 대상 토픽에 쓰기 직전에 재분배된다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "키를 바꾸는 연산은 즉시 토픽을 만들지 않고 스트림을 \"리파티션 필요\"로 표시(mark)만 합니다. 실제 재분배는 그 뒤에 그룹화나 조인이 올 때 일어나며, 이 토폴로지에서는 `groupByKey` 가 그 지점입니다. 집계는 같은 키가 같은 태스크로 모여야 성립하는데, 키가 바뀌면 같은 새 키의 레코드가 여러 파티션에 흩어져 있기 때문입니다. `count` 가 만드는 것은 상태 저장소와 그 changelog 토픽이며 리파티션 토픽과는 별개입니다.",
       "distractorNotes": {
         "A": "`filter` 는 키를 바꾸지 않으므로 표시되지 않습니다. 레코드 수 감소는 파티션 배치와 무관합니다.",
@@ -172,10 +306,21 @@
         "D": "`to` 는 결과를 쓰는 종단 연산입니다. 재분배 지점이 아닙니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api" },
-        { "title": "Apache Kafka — Streams Architecture", "url": "https://kafka.apache.org/documentation/streams/architecture" }
+        {
+          "title": "Apache Kafka — Streams DSL",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api"
+        },
+        {
+          "title": "Apache Kafka — Streams Architecture",
+          "url": "https://kafka.apache.org/documentation/streams/architecture"
+        }
       ],
-      "tags": ["stateless-stateful", "repartition", "dsl", "changelog"]
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "dsl",
+        "changelog"
+      ]
     },
     {
       "id": "basics-ch10-007",
@@ -187,24 +332,52 @@
       "question": "상태 저장소를 만드는 stateful 연산을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`count`" },
-        { "id": "B", "text": "윈도우 집계" },
-        { "id": "C", "text": "`filterNot`" },
-        { "id": "D", "text": "`flatMapValues`" },
-        { "id": "E", "text": "`branch`" }
+        {
+          "id": "A",
+          "text": "`count`"
+        },
+        {
+          "id": "B",
+          "text": "`branch`"
+        },
+        {
+          "id": "C",
+          "text": "윈도우 집계"
+        },
+        {
+          "id": "D",
+          "text": "`filterNot`"
+        },
+        {
+          "id": "E",
+          "text": "`flatMapValues`"
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "C"
+      ],
       "explanation": "stateful 연산은 `count`·`reduce`·`aggregate`, 모든 윈도우 연산, 모든 조인, 그리고 `suppress` 입니다. 이들은 로컬 상태 저장소를 만들고 그 내용을 changelog 토픽에 백업하므로, 인스턴스가 죽어도 다른 인스턴스가 changelog를 재생해 상태를 복원할 수 있습니다. `filter`·`filterNot`·`map`·`mapValues`·`flatMapValues`·`branch`·`merge`·`peek`·`selectKey` 는 상태를 갖지 않는 stateless 연산입니다. 상태 여부와 리파티션 유발 여부는 서로 독립된 축이라는 점을 함께 기억해야 합니다.",
       "distractorNotes": {
-        "C": "조건에 따라 레코드를 걸러 낼 뿐 이전 레코드를 기억하지 않습니다.",
-        "D": "값 하나를 여러 값으로 펼치는 stateless 연산입니다.",
-        "E": "스트림을 여러 갈래로 나누는 stateless 연산입니다. `peek` 도 같은 부류입니다."
+        "B": "스트림을 여러 갈래로 나누는 stateless 연산입니다. `peek` 도 같은 부류입니다.",
+        "D": "조건에 따라 레코드를 걸러 낼 뿐 이전 레코드를 기억하지 않습니다.",
+        "E": "값 하나를 여러 값으로 펼치는 stateless 연산입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api" },
-        { "title": "Apache Kafka — Streams Architecture", "url": "https://kafka.apache.org/documentation/streams/architecture" }
+        {
+          "title": "Apache Kafka — Streams DSL",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api"
+        },
+        {
+          "title": "Apache Kafka — Streams Architecture",
+          "url": "https://kafka.apache.org/documentation/streams/architecture"
+        }
       ],
-      "tags": ["stateless-stateful", "changelog", "dsl"]
+      "tags": [
+        "stateless-stateful",
+        "changelog",
+        "dsl"
+      ]
     },
     {
       "id": "basics-ch10-008",
@@ -216,24 +389,52 @@
       "question": "grace period와 윈도우 상태 보관에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "레코드의 타임스탬프가 어떤 윈도우에 속하더라도 stream time이 윈도우 끝 + grace period를 넘었다면 그 레코드는 폐기된다." },
-        { "id": "B", "text": "윈도우 상태 저장소의 보관 기간은 grace period와 별개이며 `Materialized#withRetention()` 으로 조정한다." },
-        { "id": "C", "text": "grace period를 늘리면 윈도우 상태 보관 기간도 같은 값으로 자동 조정된다." },
-        { "id": "D", "text": "grace period는 processing time 기준으로 판정된다." },
-        { "id": "E", "text": "grace period 안에 도착한 레코드는 새 윈도우를 하나 더 만들어 별도로 집계된다." }
+        {
+          "id": "A",
+          "text": "윈도우 상태 저장소의 보관 기간은 grace period와 별개이며 `Materialized#withRetention()` 으로 조정한다."
+        },
+        {
+          "id": "B",
+          "text": "grace period 안에 도착한 레코드는 새 윈도우를 하나 더 만들어 별도로 집계된다."
+        },
+        {
+          "id": "C",
+          "text": "grace period를 늘리면 윈도우 상태 보관 기간도 같은 값으로 자동 조정된다."
+        },
+        {
+          "id": "D",
+          "text": "grace period는 processing time 기준으로 판정된다."
+        },
+        {
+          "id": "E",
+          "text": "레코드의 타임스탬프가 어떤 윈도우에 속하더라도 stream time이 윈도우 끝 + grace period를 넘었다면 그 레코드는 폐기된다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "E"
+      ],
       "explanation": "grace period는 특정 윈도우에 대해 순서가 어긋난 레코드를 얼마나 더 기다릴지를 정합니다. 판정 규칙은 stream time이 그 윈도우의 끝 + grace period를 넘었는지이며, 넘었다면 레코드는 폐기되고 윈도우에 반영되지 않습니다. 윈도우 상태 저장소의 보관 기간은 이와 별개의 개념이라 기본값이 1일이고 `Materialized#withRetention()` 으로 바꿉니다. 순서 어긋남은 event time에서만 의미가 있으므로 grace period도 event time 기준으로 판정됩니다.",
       "distractorNotes": {
+        "B": "늦게 도착한 레코드는 원래 속한 윈도우에 반영됩니다. 새 윈도우를 만들지 않습니다.",
         "C": "두 값은 독립적으로 설정됩니다. 자동 연동되지 않습니다.",
-        "D": "processing time에는 순서 어긋남이라는 개념이 성립하지 않습니다.",
-        "E": "늦게 도착한 레코드는 원래 속한 윈도우에 반영됩니다. 새 윈도우를 만들지 않습니다."
+        "D": "processing time에는 순서 어긋남이라는 개념이 성립하지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api" },
-        { "title": "Apache Kafka — Streams Core Concepts", "url": "https://kafka.apache.org/documentation/streams/core-concepts" }
+        {
+          "title": "Apache Kafka — Streams DSL",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api"
+        },
+        {
+          "title": "Apache Kafka — Streams Core Concepts",
+          "url": "https://kafka.apache.org/documentation/streams/core-concepts"
+        }
       ],
-      "tags": ["windowing", "grace-period", "event-time"]
+      "tags": [
+        "windowing",
+        "grace-period",
+        "event-time"
+      ]
     },
     {
       "id": "basics-ch10-009",
@@ -245,13 +446,37 @@
       "question": "각 DSL 연산을 그 성질과 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`mapValues`", "right": "stateless이며 리파티션을 유발하지 않는다" },
-        { "id": "p2", "left": "`selectKey`", "right": "stateless이지만 스트림을 리파티션 대상으로 표시한다" },
-        { "id": "p3", "left": "`count`", "right": "stateful이며 상태 저장소와 changelog 토픽을 만든다" },
-        { "id": "p4", "left": "`groupBy`", "right": "키를 새로 정하므로 언제나 리파티션한다" },
-        { "id": "p5", "left": "`suppress`", "right": "stateful이지만 리파티션을 유발하지 않는다" }
+        {
+          "id": "p1",
+          "left": "`mapValues`",
+          "right": "stateless이며 리파티션을 유발하지 않는다"
+        },
+        {
+          "id": "p2",
+          "left": "`selectKey`",
+          "right": "stateless이지만 스트림을 리파티션 대상으로 표시한다"
+        },
+        {
+          "id": "p3",
+          "left": "`count`",
+          "right": "stateful이며 상태 저장소와 changelog 토픽을 만든다"
+        },
+        {
+          "id": "p4",
+          "left": "`groupBy`",
+          "right": "키를 새로 정하므로 언제나 리파티션한다"
+        },
+        {
+          "id": "p5",
+          "left": "`suppress`",
+          "right": "stateful이지만 리파티션을 유발하지 않는다"
+        }
       ],
-      "extraRights": ["입력이 이미 그룹화되어 있어야 하는 stateful 연산이다", "모든 인스턴스에 전체 데이터를 복제해 두는 테이블을 만든다", "레코드를 외부 시스템으로 내보내는 종단 연산이다"],
+      "extraRights": [
+        "입력이 이미 그룹화되어 있어야 하는 stateful 연산이다",
+        "모든 인스턴스에 전체 데이터를 복제해 두는 테이블을 만든다",
+        "레코드를 외부 시스템으로 내보내는 종단 연산이다"
+      ],
       "explanation": "연산을 분류하는 축은 상태 저장소를 만드는가와 리파티션을 유발하는가 두 개이며 서로 독립입니다. `mapValues` 는 어느 쪽도 아니고, `selectKey` 는 상태는 없지만 키를 바꾸므로 리파티션 대상으로 표시됩니다. `count` 는 상태 저장소와 changelog를 만들지만 그 자체가 리파티션을 유발하지는 않으며, `groupBy` 는 키를 새로 정하기 때문에 항상 리파티션합니다. `suppress` 는 윈도우 최종 결과만 내보내기 위해 상태를 유지하는 stateful 연산이면서 재분배는 하지 않습니다.",
       "distractorNotes": {
         "p2": "`map`·`flatMap`·`selectKey` 는 표시만 하고 실제 재분배는 뒤의 그룹화·조인에서 일어납니다.",
@@ -259,10 +484,21 @@
         "p5": "`suppress` 를 stateless로 착각하기 쉽지만 윈도우 결과를 붙잡아 두므로 상태가 필요합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api" },
-        { "title": "Apache Kafka — Streams Architecture", "url": "https://kafka.apache.org/documentation/streams/architecture" }
+        {
+          "title": "Apache Kafka — Streams DSL",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api"
+        },
+        {
+          "title": "Apache Kafka — Streams Architecture",
+          "url": "https://kafka.apache.org/documentation/streams/architecture"
+        }
       ],
-      "tags": ["stateless-stateful", "repartition", "dsl", "changelog"]
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "dsl",
+        "changelog"
+      ]
     },
     {
       "id": "basics-ch10-010",
@@ -274,22 +510,49 @@
       "question": "키를 바꾼 뒤 집계할 때 리파티션이 일어나는 과정을 순서대로 배열하세요.",
       "code": null,
       "items": [
-        { "id": "i3", "text": "Streams가 내부 리파티션 토픽에 새 키로 레코드를 다시 쓴다" },
-        { "id": "i1", "text": "`selectKey` 가 키를 바꾸면서 스트림을 리파티션 필요로 표시한다" },
-        { "id": "i4", "text": "리파티션 토픽을 다시 읽어 같은 키가 같은 태스크에 모인 상태로 집계한다" },
-        { "id": "i2", "text": "뒤이어 오는 `groupByKey` 가 실제 재분배를 트리거한다" }
+        {
+          "id": "i4",
+          "text": "Streams가 내부 리파티션 토픽에 새 키로 레코드를 다시 쓴다"
+        },
+        {
+          "id": "i2",
+          "text": "`selectKey` 가 키를 바꾸면서 스트림을 리파티션 필요로 표시한다"
+        },
+        {
+          "id": "i1",
+          "text": "리파티션 토픽을 다시 읽어 같은 키가 같은 태스크에 모인 상태로 집계한다"
+        },
+        {
+          "id": "i3",
+          "text": "뒤이어 오는 `groupByKey` 가 실제 재분배를 트리거한다"
+        }
       ],
-      "answer": ["i1", "i2", "i3", "i4"],
+      "answer": [
+        "i2",
+        "i3",
+        "i4",
+        "i1"
+      ],
       "explanation": "키를 바꾸는 연산은 표시만 남기고 재분배를 미룹니다. 표시된 스트림에 그룹화나 조인이 오는 순간 실제 재분배가 트리거되고, Streams가 관리하는 내부 리파티션 토픽에 새 키로 레코드를 다시 씁니다. 그 토픽을 다시 읽으면 같은 키가 같은 파티션, 따라서 같은 태스크로 모이므로 집계와 조인이 성립합니다. 이 왕복이 비용이므로 키를 바꿀 필요가 없다면 `mapValues` 와 `groupByKey` 를 쓰는 것이 곧 성능 개선입니다.",
       "distractorNotes": {
-        "i2": "키를 바꾸는 순간 토픽이 만들어진다고 착각하기 쉽습니다. 트리거는 뒤의 그룹화·조인입니다.",
-        "i3": "리파티션 토픽을 사용자가 만들어야 한다고 오해하기 쉽지만 Streams가 생성·관리합니다."
+        "i3": "키를 바꾸는 순간 토픽이 만들어진다고 착각하기 쉽습니다. 트리거는 뒤의 그룹화·조인입니다.",
+        "i4": "리파티션 토픽을 사용자가 만들어야 한다고 오해하기 쉽지만 Streams가 생성·관리합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Streams DSL", "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api" },
-        { "title": "Apache Kafka — Streams Architecture", "url": "https://kafka.apache.org/documentation/streams/architecture" }
+        {
+          "title": "Apache Kafka — Streams DSL",
+          "url": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api"
+        },
+        {
+          "title": "Apache Kafka — Streams Architecture",
+          "url": "https://kafka.apache.org/documentation/streams/architecture"
+        }
       ],
-      "tags": ["stateless-stateful", "repartition", "dsl"]
+      "tags": [
+        "stateless-stateful",
+        "repartition",
+        "dsl"
+      ]
     }
   ]
 }

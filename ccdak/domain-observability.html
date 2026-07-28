@@ -277,9 +277,10 @@ payments   2          243655          398812          155157   -                
               <td>낮으면 네트워크 스레드 포화 → <code>num.network.threads</code> 검토</td>
             </tr>
             <tr>
-              <th scope="row"><code>kafka.controller:type=ControllerStats,<br>name=LeaderElectionRateAndTimeMs</code></th>
-              <td>낮게 유지</td>
-              <td>잦으면 브로커 불안정. 클라이언트에는 <code>NotLeaderOrFollowerException</code>으로 보임</td>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,<br>name=IsrShrinksPerSec</code></th>
+              <td>평시 0</td>
+              <td>잦으면 브로커 불안정. 클라이언트에는 <code>NotLeaderOrFollowerException</code>으로 보임.
+                  <code>LeaderElectionRateAndTimeMs</code>는 <strong>KRaft에서 제거</strong>된 ZooKeeper 전용 지표입니다</td>
             </tr>
             <tr>
               <th scope="row"><code>kafka.server:type=BrokerTopicMetrics,<br>name=BytesInPerSec</code> · <code>BytesOutPerSec</code></th>
