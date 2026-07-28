@@ -1,0 +1,93 @@
+<svg viewBox="0 0 720 358" role="img" class="kg-diagram"
+     aria-labelledby="d061-title d061-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d061-title">retention 삭제 단위 — 레코드가 아니라 세그먼트 단위로 지워집니다</title>
+  <desc id="d061-desc">시간축 위에 네 개의 세그먼트로 이루어진 파티션 로그를 그린 그림입니다.
+    가로축은 10일 전부터 지금까지이고, retention.ms 기본값 604800000 즉 7일에 해당하는
+    지금에서 7일 전 지점에 세로 경계선이 그려져 있습니다.
+    세그먼트 S0 과 S1 은 세그먼트 안의 가장 큰 타임스탬프가 경계보다 오래되어 세그먼트 전체가 삭제됩니다.
+    세그먼트 S2 는 8일 전부터 3일 전까지의 레코드를 담고 있습니다.
+    이 세그먼트의 가장 큰 타임스탬프는 3일 전이므로 아직 보관 대상입니다.
+    그 결과 S2 안에 있는 8일 전, 7일 반 전 레코드까지 경계를 넘겼는데도 함께 남습니다.
+    세그먼트 S3 은 활성 세그먼트여서 애초에 삭제 대상이 아닙니다.
+    즉 실제 보관량은 retention.ms 만으로 정해지지 않고 segment.ms 와 segment.bytes 가 함께 정합니다.
+    삭제는 레코드 단위로 일어나지 않습니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">retention 삭제 단위 — 삭제는 <tspan class="dg-bold">세그먼트 통째로</tspan> 일어납니다</text>
+
+  <!-- retention 경계선 -->
+  <text x="188" y="44" class="dg-fs-sm dg-bold">retention.ms 경계 = 지금 − 7일</text>
+  <line class="dg-edge dg-edge--danger dg-edge--dashed" x1="280" y1="52" x2="280" y2="182"/>
+  <path class="dg-marker--danger" d="M275,52 L285,52 L280,44 Z"/>
+
+  <!-- 로그 레인 (세그먼트 4개가 이어진 하나의 로그) -->
+  <text x="12" y="70" class="dg-fs-sm dg-bold">파티션 로그</text>
+  <text x="12" y="100" class="dg-fs-sm dg-mono dg-muted">orders-0</text>
+
+  <g data-dg="seg-0">
+    <rect class="dg-node dg-node--danger" x="100" y="76" width="60" height="38" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="130" y="99" text-anchor="middle">S0</text>
+  </g>
+  <g data-dg="seg-1">
+    <rect class="dg-node dg-node--danger" x="160" y="76" width="60" height="38" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="190" y="99" text-anchor="middle">S1</text>
+  </g>
+  <g data-dg="seg-2">
+    <rect class="dg-node dg-node--ok" x="220" y="76" width="300" height="38" rx="3"/>
+    <!-- 경계를 넘긴 구간 (세그먼트 안에 함께 남는 부분) -->
+    <rect class="dg-node dg-node--warn" x="220" y="80" width="60" height="30" rx="2"/>
+    <text class="dg-fs-sm dg-bold" x="400" y="99" text-anchor="middle">S2 — 8일 전 ~ 3일 전 레코드</text>
+  </g>
+  <g data-dg="seg-3">
+    <rect class="dg-node dg-node--accent" x="520" y="76" width="180" height="38" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="610" y="99" text-anchor="middle">S3 (활성)</text>
+  </g>
+
+  <!-- 시간축 -->
+  <line class="dg-grid" x1="100" y1="126" x2="700" y2="126"/>
+  <line class="dg-grid" x1="100" y1="122" x2="100" y2="130"/>
+  <line class="dg-grid" x1="220" y1="122" x2="220" y2="130"/>
+  <line class="dg-grid" x1="340" y1="122" x2="340" y2="130"/>
+  <line class="dg-grid" x1="460" y1="122" x2="460" y2="130"/>
+  <line class="dg-grid" x1="580" y1="122" x2="580" y2="130"/>
+  <line class="dg-grid" x1="700" y1="122" x2="700" y2="130"/>
+  <text class="dg-fs-sm dg-muted" x="100" y="142" text-anchor="middle">10일 전</text>
+  <text class="dg-fs-sm dg-muted" x="220" y="142" text-anchor="middle">8일 전</text>
+  <text class="dg-fs-sm dg-muted" x="340" y="142" text-anchor="middle">6일 전</text>
+  <text class="dg-fs-sm dg-muted" x="460" y="142" text-anchor="middle">4일 전</text>
+  <text class="dg-fs-sm dg-muted" x="580" y="142" text-anchor="middle">2일 전</text>
+  <text class="dg-fs-sm dg-muted" x="700" y="142" text-anchor="middle">지금</text>
+
+  <!-- 판정 -->
+  <text x="12" y="172" class="dg-fs-sm dg-bold">판정</text>
+  <rect class="dg-node dg-node--danger" x="100" y="158" width="120" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="160" y="172" text-anchor="middle">세그먼트 삭제</text>
+  <rect class="dg-node dg-node--ok" x="220" y="158" width="300" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="370" y="172" text-anchor="middle">보관 — 최대 타임스탬프(3일 전)가 경계 안쪽</text>
+  <rect class="dg-node dg-node--accent" x="520" y="158" width="180" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="610" y="172" text-anchor="middle">활성 — 삭제 대상 아님</text>
+
+  <!-- 핵심 -->
+  <rect class="dg-node dg-node--warn" x="12" y="192" width="696" height="60" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="210">핵심 — S2 안의 8일 전 · 7일 반 전 레코드는 경계를 넘겼는데도 남아 있습니다.</text>
+  <text class="dg-fs-sm" x="22" y="228">시간 판정은 세그먼트 안 <tspan class="dg-bold">가장 큰 타임스탬프</tspan> 하나로 합니다. 레코드마다 따로 지우지 않습니다.</text>
+  <text class="dg-fs-sm" x="22" y="246">그래서 실제 보관량은 항상 <tspan class="dg-mono">retention.ms</tspan> <tspan class="dg-bold">이상</tspan>이 됩니다.</text>
+
+  <!-- 설정 -->
+  <rect class="dg-node dg-node--alt" x="12" y="262" width="340" height="58" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="280">보관량을 실제로 좌우하는 설정</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="298">segment.ms</text>
+  <text class="dg-fs-sm" x="140" y="298">기본 604800000 (7일)</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="315">segment.bytes</text>
+  <text class="dg-fs-sm" x="140" y="315">기본 1073741824 (1 GiB)</text>
+
+  <rect class="dg-node dg-node--alt" x="368" y="262" width="340" height="58" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="378" y="280">보관 기준 설정</text>
+  <text class="dg-fs-sm dg-mono" x="378" y="298">retention.ms</text>
+  <text class="dg-fs-sm" x="496" y="298">기본 604800000 (7일)</text>
+  <text class="dg-fs-sm dg-mono" x="378" y="315">retention.bytes</text>
+  <text class="dg-fs-sm" x="496" y="315">기본 −1 (크기 제한 없음)</text>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="332" x2="708" y2="332"/>
+  <text class="dg-fs-sm dg-muted" x="12" y="350">7일이 지나면 정확히 사라진다고 기대하려면 <tspan class="dg-mono">segment.ms</tspan> 를 보관 기간보다 훨씬 짧게 잡아야 합니다.</text>
+</svg>

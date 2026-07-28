@@ -1,0 +1,245 @@
+<svg viewBox="0 0 720 1020" role="img" class="kg-diagram"
+     aria-labelledby="d133-title d133-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d133-title">CCDAK 설정값 관계도 — 내구성 · 재시도 · 배치 · 메시지 크기 · 컨슈머 생존 5개 클러스터</title>
+  <desc id="d133-desc">프로듀서 · 브로커 · 토픽 · 컨슈머 설정 23개를 다섯 묶음으로 나누고, 공식 문서에 명시된 의존 관계만 화살표로 이은 관계도입니다. 소속은 색과 기호로 구분하며 세모는 프로듀서, 네모는 브로커, 동그라미는 토픽, 마름모는 컨슈머입니다. 내구성 묶음에서는 acks=all 일 때만 min.insync.replicas 를 검사하고, min.insync.replicas 는 replication.factor 이하여야 하며, unclean.leader.election.enable 이 true 면 ISR 밖 레플리카가 리더가 되어 그 보장이 깨집니다. 재시도 예산 묶음에서는 delivery.timeout.ms 가 request.timeout.ms 와 linger.ms 의 합 이상이어야 하고, enable.idempotence 는 acks=all 과 max.in.flight 5 이하를 요구합니다. 배치 묶음에서는 batch.size 도달과 linger.ms 만료 중 먼저 오는 쪽에 전송하며 압축은 배치 단위입니다. 메시지 크기 묶음에서는 max.request.size 와 message.max.bytes 만 하드 상한이고 fetch 쪽 세 설정은 첫 배치가 더 커도 반환해 진행을 보장합니다. 컨슈머 생존 묶음에서는 하트비트 축과 poll 축이 서로 달라 처리가 길어지면 max.poll.interval.ms 쪽이 먼저 터집니다.</desc>
+
+<defs>
+<marker id="mk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--accent" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-danger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--danger" d="M0,1 L10,5 L0,9 Z"/></marker>
+<marker id="mk-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dg-marker dg-marker--muted" d="M0,1 L10,5 L0,9 Z"/></marker>
+</defs>
+<text class="dg-fs-md dg-bold" x="8" y="18">CCDAK 설정값 관계도 — 실제로 서로를 제약하는 설정만 이었습니다</text>
+<rect class="dg-node dg-node--accent" x="8" y="30" width="16" height="12" rx="3"/>
+<text class="dg-fs-sm" x="30" y="41">▲ 프로듀서</text>
+<rect class="dg-node dg-node--warn" x="126" y="30" width="16" height="12" rx="3"/>
+<text class="dg-fs-sm" x="148" y="41">■ 브로커</text>
+<rect class="dg-node dg-node--ok" x="244" y="30" width="16" height="12" rx="3"/>
+<text class="dg-fs-sm" x="266" y="41">● 토픽</text>
+<rect class="dg-node dg-node--alt" x="362" y="30" width="16" height="12" rx="3"/>
+<text class="dg-fs-sm" x="384" y="41">◆ 컨슈머</text>
+<text class="dg-fs-sm dg-muted" x="478" y="41">노드를 클릭하면 연결된 설정만 남습니다</text>
+<text class="dg-fs-sm" x="8" y="60">⇒ 필요 조건      ≤ ≥ 값 상한 · 하한      ⊂ 예산 · 용량에 포함      ⊕ 둘 중 먼저 오는 쪽</text>
+<text class="dg-fs-sm" x="8" y="78">⊳ 토픽이 브로커 값을 덮어씀      ⊗ 한 번에 처리할 양      ⨯ 보장을 무력화(위험)      ∥ 직접 의존 없음</text>
+<rect class="dg-panel" x="30" y="90" width="682" height="132" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="107">1. 내구성 — 데이터를 잃지 않으려면</text>
+<g data-dg="n-acks" data-n="acks" data-o="프로듀서" data-v="all">
+<rect class="dg-node dg-node--accent" x="44" y="116" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="114" y="140" text-anchor="middle">acks</text>
+<text class="dg-fs-sm dg-muted" x="114" y="162" text-anchor="middle">▲ 기본 all</text>
+</g>
+<g data-dg="n-min-insync-replicas" data-n="min.insync.replicas" data-o="브로커 · 토픽" data-v="1">
+<rect class="dg-node dg-node--warn" x="215.3" y="116" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="285.3" y="133" text-anchor="middle">min.insync.</text>
+<text class="dg-fs-sm dg-bold dg-mono" x="285.3" y="148" text-anchor="middle">replicas</text>
+<text class="dg-fs-sm dg-muted" x="285.3" y="162" text-anchor="middle">■ 기본 1</text>
+</g>
+<g data-dg="n-replication-factor" data-n="replication.factor" data-o="토픽" data-v="생성 시 지정">
+<rect class="dg-node dg-node--ok" x="386.7" y="116" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="456.7" y="133" text-anchor="middle">replication.</text>
+<text class="dg-fs-sm dg-bold dg-mono" x="456.7" y="148" text-anchor="middle">factor</text>
+<text class="dg-fs-sm dg-muted" x="456.7" y="162" text-anchor="middle">● 기본 생성 시 지정</text>
+</g>
+<g data-dg="n-unclean-leader-election-enable" data-n="unclean.leader.election.enable" data-o="브로커 · 토픽" data-v="false">
+<rect class="dg-node dg-node--warn" x="558" y="116" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="628" y="133" text-anchor="middle">unclean.leader.</text>
+<text class="dg-fs-sm dg-bold dg-mono" x="628" y="148" text-anchor="middle">election.enable</text>
+<text class="dg-fs-sm dg-muted" x="628" y="162" text-anchor="middle">■ 기본 false</text>
+</g>
+<text class="dg-fs-sm" x="44" y="198">acks=all 일 때만 min.insync.replicas 를 검사 — ISR 이 부족하면 NotEnoughReplicas 로 거부됩니다</text>
+<text class="dg-fs-sm" x="44" y="214">min.insync.replicas ≤ replication.factor · 권장 RF 3 + min.insync 2 · unclean=true 면 이 보장이 깨집니다</text>
+<rect class="dg-panel" x="30" y="244" width="682" height="202" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="261">2. 재시도 예산 — 언제까지 다시 보내는가</text>
+<g data-dg="n-retries" data-n="retries" data-o="프로듀서" data-v="2147483647">
+<rect class="dg-node dg-node--accent" x="44" y="270" width="190" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="139" y="294" text-anchor="middle">retries</text>
+<text class="dg-fs-sm dg-muted" x="139" y="316" text-anchor="middle">▲ 기본 2147483647</text>
+</g>
+<g data-dg="n-request-timeout-ms" data-n="request.timeout.ms" data-o="프로듀서" data-v="30000">
+<rect class="dg-node dg-node--accent" x="276" y="270" width="190" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="371" y="294" text-anchor="middle">request.timeout.ms</text>
+<text class="dg-fs-sm dg-muted" x="371" y="316" text-anchor="middle">▲ 기본 30000</text>
+</g>
+<g data-dg="n-delivery-timeout-ms" data-n="delivery.timeout.ms" data-o="프로듀서" data-v="120000">
+<rect class="dg-node dg-node--accent" x="508" y="270" width="190" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="603" y="294" text-anchor="middle">delivery.timeout.ms</text>
+<text class="dg-fs-sm dg-muted" x="603" y="316" text-anchor="middle">▲ 기본 120000</text>
+</g>
+<g data-dg="n-enable-idempotence" data-n="enable.idempotence" data-o="프로듀서" data-v="true">
+<rect class="dg-node dg-node--accent" x="44" y="340" width="190" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="139" y="364" text-anchor="middle">enable.idempotence</text>
+<text class="dg-fs-sm dg-muted" x="139" y="386" text-anchor="middle">▲ 기본 true</text>
+</g>
+<g data-dg="n-max-in-flight" data-n="max.in.flight.requests.per.connection" data-o="프로듀서" data-v="5">
+<rect class="dg-node dg-node--accent" x="276" y="340" width="190" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="371" y="357" text-anchor="middle">max.in.flight.requests.</text>
+<text class="dg-fs-sm dg-bold dg-mono" x="371" y="372" text-anchor="middle">per.connection</text>
+<text class="dg-fs-sm dg-muted" x="371" y="386" text-anchor="middle">▲ 기본 5</text>
+</g>
+<text class="dg-fs-sm" x="44" y="422">delivery.timeout.ms ≥ request.timeout.ms + linger.ms · 재시도는 이 예산 안에서만 반복됩니다</text>
+<text class="dg-fs-sm" x="44" y="438">enable.idempotence=true 는 acks=all · retries 0 초과 · max.in.flight ≤ 5 를 요구합니다</text>
+<rect class="dg-panel" x="30" y="468" width="682" height="132" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="485">3. 배치 — 언제 묶어서 보내는가</text>
+<g data-dg="n-linger-ms" data-n="linger.ms" data-o="프로듀서" data-v="5">
+<rect class="dg-node dg-node--accent" x="44" y="494" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="114" y="518" text-anchor="middle">linger.ms</text>
+<text class="dg-fs-sm dg-muted" x="114" y="540" text-anchor="middle">▲ 기본 5</text>
+</g>
+<g data-dg="n-batch-size" data-n="batch.size" data-o="프로듀서" data-v="16384">
+<rect class="dg-node dg-node--accent" x="215.3" y="494" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="285.3" y="518" text-anchor="middle">batch.size</text>
+<text class="dg-fs-sm dg-muted" x="285.3" y="540" text-anchor="middle">▲ 기본 16384</text>
+</g>
+<g data-dg="n-buffer-memory" data-n="buffer.memory" data-o="프로듀서" data-v="33554432">
+<rect class="dg-node dg-node--accent" x="386.7" y="494" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="456.7" y="518" text-anchor="middle">buffer.memory</text>
+<text class="dg-fs-sm dg-muted" x="456.7" y="540" text-anchor="middle">▲ 기본 33554432</text>
+</g>
+<g data-dg="n-compression-type" data-n="compression.type" data-o="프로듀서" data-v="none">
+<rect class="dg-node dg-node--accent" x="558" y="494" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="628" y="518" text-anchor="middle">compression.type</text>
+<text class="dg-fs-sm dg-muted" x="628" y="540" text-anchor="middle">▲ 기본 none</text>
+</g>
+<text class="dg-fs-sm" x="44" y="576">batch.size 도달과 linger.ms 만료 중 먼저 오는 쪽에 전송하고, 압축은 배치 단위로 수행됩니다</text>
+<text class="dg-fs-sm" x="44" y="592">buffer.memory 가 차면 send() 가 max.block.ms(기본 60000) 만큼 블록된 뒤 예외를 던집니다</text>
+<rect class="dg-panel" x="30" y="622" width="682" height="202" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="639">4. 메시지 크기 — 어디서 막히는가</text>
+<g data-dg="n-max-request-size" data-n="max.request.size" data-o="프로듀서" data-v="1048576">
+<rect class="dg-node dg-node--accent" x="44" y="648" width="190" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="139" y="672" text-anchor="middle">max.request.size</text>
+<text class="dg-fs-sm dg-muted" x="139" y="694" text-anchor="middle">▲ 기본 1048576</text>
+</g>
+<g data-dg="n-message-max-bytes" data-n="message.max.bytes" data-o="브로커" data-v="1048588">
+<rect class="dg-node dg-node--warn" x="276" y="648" width="190" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="371" y="672" text-anchor="middle">message.max.bytes</text>
+<text class="dg-fs-sm dg-muted" x="371" y="694" text-anchor="middle">■ 기본 1048588</text>
+</g>
+<g data-dg="n-max-message-bytes" data-n="max.message.bytes" data-o="토픽" data-v="1048588">
+<rect class="dg-node dg-node--ok" x="508" y="648" width="190" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="603" y="672" text-anchor="middle">max.message.bytes</text>
+<text class="dg-fs-sm dg-muted" x="603" y="694" text-anchor="middle">● 기본 1048588</text>
+</g>
+<g data-dg="n-replica-fetch-max-bytes" data-n="replica.fetch.max.bytes" data-o="브로커" data-v="1048576">
+<rect class="dg-node dg-node--warn" x="44" y="718" width="190" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="139" y="742" text-anchor="middle">replica.fetch.max.bytes</text>
+<text class="dg-fs-sm dg-muted" x="139" y="764" text-anchor="middle">■ 기본 1048576</text>
+</g>
+<g data-dg="n-max-partition-fetch-bytes" data-n="max.partition.fetch.bytes" data-o="컨슈머" data-v="1048576">
+<rect class="dg-node dg-node--alt" x="276" y="718" width="190" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="371" y="735" text-anchor="middle">max.partition.fetch.</text>
+<text class="dg-fs-sm dg-bold dg-mono" x="371" y="750" text-anchor="middle">bytes</text>
+<text class="dg-fs-sm dg-muted" x="371" y="764" text-anchor="middle">◆ 기본 1048576</text>
+</g>
+<g data-dg="n-fetch-max-bytes" data-n="fetch.max.bytes" data-o="컨슈머" data-v="52428800">
+<rect class="dg-node dg-node--alt" x="508" y="718" width="190" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="603" y="742" text-anchor="middle">fetch.max.bytes</text>
+<text class="dg-fs-sm dg-muted" x="603" y="764" text-anchor="middle">◆ 기본 52428800</text>
+</g>
+<text class="dg-fs-sm" x="44" y="800">하드 상한은 둘뿐입니다 — max.request.size 와 message.max.bytes · 넘으면 RecordTooLarge 로 거부</text>
+<text class="dg-fs-sm" x="44" y="816">fetch 쪽 3개는 하드 상한이 아닙니다 — 첫 배치가 더 크면 그대로 반환해 진행을 보장합니다</text>
+<rect class="dg-panel" x="30" y="846" width="682" height="132" rx="4"/>
+<text class="dg-fs-sm dg-bold" x="40" y="863">5. 컨슈머 생존 — 왜 그룹에서 빠지는가</text>
+<g data-dg="n-heartbeat-interval-ms" data-n="heartbeat.interval.ms" data-o="컨슈머" data-v="3000">
+<rect class="dg-node dg-node--alt" x="44" y="872" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="114" y="889" text-anchor="middle">heartbeat.</text>
+<text class="dg-fs-sm dg-bold dg-mono" x="114" y="904" text-anchor="middle">interval.ms</text>
+<text class="dg-fs-sm dg-muted" x="114" y="918" text-anchor="middle">◆ 기본 3000</text>
+</g>
+<g data-dg="n-session-timeout-ms" data-n="session.timeout.ms" data-o="컨슈머" data-v="45000">
+<rect class="dg-node dg-node--alt" x="215.3" y="872" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="285.3" y="889" text-anchor="middle">session.timeout.</text>
+<text class="dg-fs-sm dg-bold dg-mono" x="285.3" y="904" text-anchor="middle">ms</text>
+<text class="dg-fs-sm dg-muted" x="285.3" y="918" text-anchor="middle">◆ 기본 45000</text>
+</g>
+<g data-dg="n-max-poll-interval-ms" data-n="max.poll.interval.ms" data-o="컨슈머" data-v="300000">
+<rect class="dg-node dg-node--alt" x="386.7" y="872" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="456.7" y="889" text-anchor="middle">max.poll.</text>
+<text class="dg-fs-sm dg-bold dg-mono" x="456.7" y="904" text-anchor="middle">interval.ms</text>
+<text class="dg-fs-sm dg-muted" x="456.7" y="918" text-anchor="middle">◆ 기본 300000</text>
+</g>
+<g data-dg="n-max-poll-records" data-n="max.poll.records" data-o="컨슈머" data-v="500">
+<rect class="dg-node dg-node--alt" x="558" y="872" width="140" height="54" rx="4"/>
+<text class="dg-fs-sm dg-bold dg-mono" x="628" y="896" text-anchor="middle">max.poll.records</text>
+<text class="dg-fs-sm dg-muted" x="628" y="918" text-anchor="middle">◆ 기본 500</text>
+</g>
+<text class="dg-fs-sm" x="44" y="954">heartbeat.interval.ms 는 session.timeout.ms 의 1/3 이하 권장 — 하트비트는 백그라운드 스레드가 보냅니다</text>
+<text class="dg-fs-sm" x="44" y="970">max.poll.records × 건당 처리시간 이 max.poll.interval.ms 를 넘으면 poll 축에서 이탈합니다</text>
+<g data-dg="edge" data-a="acks" data-b="min-insync-replicas">
+<path class="dg-edge" d="M186,143 L212.3,143" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="199.7" y="136" text-anchor="middle">⇒</text>
+</g>
+<g data-dg="edge" data-a="min-insync-replicas" data-b="replication-factor">
+<path class="dg-edge" d="M357.3,143 L383.7,143" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="371" y="136" text-anchor="middle">≤</text>
+</g>
+<g data-dg="edge" data-a="unclean-leader-election-enable" data-b="acks">
+<path class="dg-edge dg-edge--danger dg-edge--dashed" d="M628,170 L628,179 L114,179 L114,173" marker-end="url(#mk-arrow-danger)"/>
+</g>
+<g data-dg="edge" data-a="request-timeout-ms" data-b="delivery-timeout-ms">
+<path class="dg-edge" d="M468,297 L505,297" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="487" y="290" text-anchor="middle">⊂</text>
+</g>
+<g data-dg="edge" data-a="retries" data-b="delivery-timeout-ms">
+<path class="dg-edge" d="M139,324 L139,333 L603,333 L603,327" marker-end="url(#mk-arrow)"/>
+</g>
+<g data-dg="edge" data-a="enable-idempotence" data-b="max-in-flight">
+<path class="dg-edge" d="M236,367 L273,367" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="255" y="360" text-anchor="middle">⇒</text>
+</g>
+<g data-dg="edge" data-a="enable-idempotence" data-b="retries">
+<path class="dg-edge" d="M139,340 L139,327" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="152" y="335" text-anchor="middle">⇒</text>
+</g>
+<g data-dg="edge" data-a="enable-idempotence" data-b="acks">
+<path class="dg-edge dg-edge--accent dg-edge--dashed" d="M44,367 L18,367 L18,143 L41,143" marker-end="url(#mk-arrow-accent)"/>
+<text class="dg-fs-sm dg-bold" x="23" y="163" text-anchor="start">⇒</text>
+</g>
+<g data-dg="edge" data-a="linger-ms" data-b="batch-size">
+<path class="dg-edge" d="M186,521 L212.3,521" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="199.7" y="514" text-anchor="middle">⊕</text>
+</g>
+<g data-dg="edge" data-a="batch-size" data-b="buffer-memory">
+<path class="dg-edge" d="M357.3,521 L383.7,521" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="371" y="514" text-anchor="middle">⊂</text>
+</g>
+<g data-dg="edge" data-a="compression-type" data-b="batch-size">
+<path class="dg-edge" d="M628,548 L628,557 L285.3,557 L285.3,551" marker-end="url(#mk-arrow)"/>
+</g>
+<g data-dg="edge" data-a="compression-type" data-b="message-max-bytes">
+<path class="dg-edge dg-edge--accent dg-edge--dashed" d="M698,521 L706,521 L706,636 L371,636 L371,645" marker-end="url(#mk-arrow-accent)"/>
+<text class="dg-fs-sm dg-bold" x="538.5" y="631" text-anchor="middle">≤</text>
+</g>
+<g data-dg="edge" data-a="max-request-size" data-b="message-max-bytes">
+<path class="dg-edge" d="M236,675 L273,675" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="255" y="668" text-anchor="middle">≤</text>
+</g>
+<g data-dg="edge" data-a="max-message-bytes" data-b="message-max-bytes">
+<path class="dg-edge" d="M506,675 L469,675" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="487" y="668" text-anchor="middle">⊳</text>
+</g>
+<g data-dg="edge" data-a="message-max-bytes" data-b="replica-fetch-max-bytes">
+<path class="dg-edge" d="M371,702 L371,710 L139,710 L139,715" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="255" y="706" text-anchor="middle">≥</text>
+</g>
+<g data-dg="edge" data-a="message-max-bytes" data-b="max-partition-fetch-bytes">
+<path class="dg-edge" d="M371,702 L371,715" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="384" y="715" text-anchor="middle">≥</text>
+</g>
+<g data-dg="edge" data-a="max-partition-fetch-bytes" data-b="fetch-max-bytes">
+<path class="dg-edge" d="M468,745 L505,745" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="487" y="738" text-anchor="middle">⊂</text>
+</g>
+<g data-dg="edge" data-a="heartbeat-interval-ms" data-b="session-timeout-ms">
+<path class="dg-edge" d="M186,899 L212.3,899" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="199.7" y="892" text-anchor="middle">≤</text>
+</g>
+<g data-dg="edge" data-a="session-timeout-ms" data-b="max-poll-interval-ms">
+<path class="dg-edge dg-edge--muted dg-edge--dotted" d="M357.3,899 L383.7,899" marker-end="url(#mk-arrow-muted)"/>
+<text class="dg-fs-sm dg-bold" x="371" y="892" text-anchor="middle">∥</text>
+</g>
+<g data-dg="edge" data-a="max-poll-records" data-b="max-poll-interval-ms">
+<path class="dg-edge" d="M556,899 L529.7,899" marker-end="url(#mk-arrow)"/>
+<text class="dg-fs-sm dg-bold" x="542.3" y="892" text-anchor="middle">⊗</text>
+</g>
+<text class="dg-fs-sm dg-muted" x="8" y="1006">기본값은 Apache Kafka 4.3 기준 · linger.ms 는 4.0 에서 0 → 5, acks 와 enable.idempotence 는 3.0 에서 바뀜</text>
+</svg>

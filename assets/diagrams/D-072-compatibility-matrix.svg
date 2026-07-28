@@ -1,0 +1,317 @@
+<svg viewBox="0 0 720 440" role="img" class="kg-diagram"
+     aria-labelledby="d072-title d072-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d072-title">스키마 호환성 모드 매트릭스 — 변경 유형별 허용·거부</title>
+  <desc id="d072-desc">가로는 스키마 변경 유형 일곱 가지, 세로는 호환성 모드 일곱 가지인 표입니다.
+    변경 유형은 기본값 있는 필드 추가, 기본값 없는 필드 추가, 기본값 있던 필드 삭제, 기본값 없던 필드 삭제,
+    타입 확대 int 에서 long, 타입 축소 long 에서 int, 별칭 없는 필드 이름 변경입니다.
+    호환성 모드는 BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE 입니다.
+    BACKWARD 는 새 스키마가 이전 스키마로 쓰인 데이터를 읽을 수 있는지 검사하고,
+    FORWARD 는 새 스키마로 쓴 데이터를 이전 스키마가 읽을 수 있는지 검사하며, FULL 은 둘 다 검사합니다.
+    TRANSITIVE 가 붙으면 직전 버전만이 아니라 모든 이전 버전과 비교합니다.
+    BACKWARD 에서는 기본값 있는 필드 추가, 필드 삭제, 타입 확대가 허용되고
+    기본값 없는 필드 추가, 타입 축소, 이름 변경은 거부됩니다.
+    FORWARD 에서는 필드 추가와 기본값 있던 필드 삭제, 타입 축소가 허용되고
+    기본값 없던 필드 삭제, 타입 확대, 이름 변경은 거부됩니다.
+    FULL 은 양쪽 모두 허용인 경우만 허용하므로 기본값 있는 필드 추가와 기본값 있던 필드 삭제만 통과합니다.
+    NONE 은 검사를 하지 않으므로 모두 통과하지만 깨진 조합도 등록됩니다.
+    이 표는 이전 버전이 하나인 v1 에서 v2 로의 변경을 기준으로 하므로 TRANSITIVE 열의 판정이 같습니다.
+    컨트롤에서 변경 유형과 호환성 모드를 고르면 그 칸이 강조되고 판정 이유가 표시됩니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">스키마 호환성 매트릭스 — 이 변경을 이 모드에서 등록할 수 있는가</text>
+  <text x="12" y="36" class="dg-fs-sm">이 표는 <tspan class="dg-bold">v1 → v2 (이전 버전이 1개)</tspan> 기준입니다. TRANSITIVE 는 판정 규칙이 아니라 <tspan class="dg-bold">비교 대상 버전 범위</tspan>가 다릅니다.</text>
+
+  <rect class="dg-node dg-node--alt" x="12" y="44" width="693" height="40" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="20" y="60">호환성 모드 ↓</text>
+  <text class="dg-fs-sm dg-bold" x="20" y="77">변경 유형 →</text>
+  <g data-dg="col-c1">
+    <text class="dg-fs-sm dg-bold" x="217.5" y="60" text-anchor="middle">필드 추가</text>
+    <text class="dg-fs-sm" x="217.5" y="77" text-anchor="middle">기본값 O</text>
+  </g>
+  <g data-dg="col-c2">
+    <text class="dg-fs-sm dg-bold" x="292.5" y="60" text-anchor="middle">필드 추가</text>
+    <text class="dg-fs-sm" x="292.5" y="77" text-anchor="middle">기본값 X</text>
+  </g>
+  <g data-dg="col-c3">
+    <text class="dg-fs-sm dg-bold" x="367.5" y="60" text-anchor="middle">필드 삭제</text>
+    <text class="dg-fs-sm" x="367.5" y="77" text-anchor="middle">기본값 O</text>
+  </g>
+  <g data-dg="col-c4">
+    <text class="dg-fs-sm dg-bold" x="442.5" y="60" text-anchor="middle">필드 삭제</text>
+    <text class="dg-fs-sm" x="442.5" y="77" text-anchor="middle">기본값 X</text>
+  </g>
+  <g data-dg="col-c5">
+    <text class="dg-fs-sm dg-bold" x="517.5" y="60" text-anchor="middle">타입 확대</text>
+    <text class="dg-fs-sm" x="517.5" y="77" text-anchor="middle">int→long</text>
+  </g>
+  <g data-dg="col-c6">
+    <text class="dg-fs-sm dg-bold" x="592.5" y="60" text-anchor="middle">타입 축소</text>
+    <text class="dg-fs-sm" x="592.5" y="77" text-anchor="middle">long→int</text>
+  </g>
+  <g data-dg="col-c7">
+    <text class="dg-fs-sm dg-bold" x="667.5" y="60" text-anchor="middle">필드 이름</text>
+    <text class="dg-fs-sm" x="667.5" y="77" text-anchor="middle">변경</text>
+  </g>
+
+  <g data-dg="row-m1">
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="99">BACKWARD</text>
+    <text class="dg-fs-sm dg-muted" x="20" y="113">직전 버전과 비교</text>
+  </g>
+  <g data-dg="cell-m1-c1">
+    <rect class="dg-node dg-node--ok" x="184" y="89" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="217.5" y="106" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m1-c2">
+    <rect class="dg-node dg-node--danger" x="259" y="89" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="292.5" y="106" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m1-c3">
+    <rect class="dg-node dg-node--ok" x="334" y="89" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="367.5" y="106" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m1-c4">
+    <rect class="dg-node dg-node--ok" x="409" y="89" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="442.5" y="106" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m1-c5">
+    <rect class="dg-node dg-node--ok" x="484" y="89" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="517.5" y="106" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m1-c6">
+    <rect class="dg-node dg-node--danger" x="559" y="89" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="592.5" y="106" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m1-c7">
+    <rect class="dg-node dg-node--danger" x="634" y="89" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="667.5" y="106" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="row-m2">
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="133">BACKWARD_TRANSITIVE</text>
+    <text class="dg-fs-sm dg-muted" x="20" y="147">모든 이전 버전과 비교</text>
+  </g>
+  <g data-dg="cell-m2-c1">
+    <rect class="dg-node dg-node--ok" x="184" y="123" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="217.5" y="140" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m2-c2">
+    <rect class="dg-node dg-node--danger" x="259" y="123" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="292.5" y="140" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m2-c3">
+    <rect class="dg-node dg-node--ok" x="334" y="123" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="367.5" y="140" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m2-c4">
+    <rect class="dg-node dg-node--ok" x="409" y="123" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="442.5" y="140" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m2-c5">
+    <rect class="dg-node dg-node--ok" x="484" y="123" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="517.5" y="140" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m2-c6">
+    <rect class="dg-node dg-node--danger" x="559" y="123" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="592.5" y="140" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m2-c7">
+    <rect class="dg-node dg-node--danger" x="634" y="123" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="667.5" y="140" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="row-m3">
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="167">FORWARD</text>
+    <text class="dg-fs-sm dg-muted" x="20" y="181">직전 버전과 비교</text>
+  </g>
+  <g data-dg="cell-m3-c1">
+    <rect class="dg-node dg-node--ok" x="184" y="157" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="217.5" y="174" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m3-c2">
+    <rect class="dg-node dg-node--ok" x="259" y="157" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="292.5" y="174" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m3-c3">
+    <rect class="dg-node dg-node--ok" x="334" y="157" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="367.5" y="174" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m3-c4">
+    <rect class="dg-node dg-node--danger" x="409" y="157" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="442.5" y="174" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m3-c5">
+    <rect class="dg-node dg-node--danger" x="484" y="157" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="517.5" y="174" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m3-c6">
+    <rect class="dg-node dg-node--ok" x="559" y="157" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="592.5" y="174" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m3-c7">
+    <rect class="dg-node dg-node--danger" x="634" y="157" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="667.5" y="174" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="row-m4">
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="201">FORWARD_TRANSITIVE</text>
+    <text class="dg-fs-sm dg-muted" x="20" y="215">모든 이전 버전과 비교</text>
+  </g>
+  <g data-dg="cell-m4-c1">
+    <rect class="dg-node dg-node--ok" x="184" y="191" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="217.5" y="208" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m4-c2">
+    <rect class="dg-node dg-node--ok" x="259" y="191" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="292.5" y="208" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m4-c3">
+    <rect class="dg-node dg-node--ok" x="334" y="191" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="367.5" y="208" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m4-c4">
+    <rect class="dg-node dg-node--danger" x="409" y="191" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="442.5" y="208" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m4-c5">
+    <rect class="dg-node dg-node--danger" x="484" y="191" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="517.5" y="208" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m4-c6">
+    <rect class="dg-node dg-node--ok" x="559" y="191" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="592.5" y="208" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m4-c7">
+    <rect class="dg-node dg-node--danger" x="634" y="191" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="667.5" y="208" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="row-m5">
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="235">FULL</text>
+    <text class="dg-fs-sm dg-muted" x="20" y="249">직전 버전 · 양방향</text>
+  </g>
+  <g data-dg="cell-m5-c1">
+    <rect class="dg-node dg-node--ok" x="184" y="225" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="217.5" y="242" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m5-c2">
+    <rect class="dg-node dg-node--danger" x="259" y="225" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="292.5" y="242" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m5-c3">
+    <rect class="dg-node dg-node--ok" x="334" y="225" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="367.5" y="242" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m5-c4">
+    <rect class="dg-node dg-node--danger" x="409" y="225" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="442.5" y="242" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m5-c5">
+    <rect class="dg-node dg-node--danger" x="484" y="225" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="517.5" y="242" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m5-c6">
+    <rect class="dg-node dg-node--danger" x="559" y="225" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="592.5" y="242" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m5-c7">
+    <rect class="dg-node dg-node--danger" x="634" y="225" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="667.5" y="242" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="row-m6">
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="269">FULL_TRANSITIVE</text>
+    <text class="dg-fs-sm dg-muted" x="20" y="283">모든 이전 · 양방향</text>
+  </g>
+  <g data-dg="cell-m6-c1">
+    <rect class="dg-node dg-node--ok" x="184" y="259" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="217.5" y="276" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m6-c2">
+    <rect class="dg-node dg-node--danger" x="259" y="259" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="292.5" y="276" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m6-c3">
+    <rect class="dg-node dg-node--ok" x="334" y="259" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="367.5" y="276" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m6-c4">
+    <rect class="dg-node dg-node--danger" x="409" y="259" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="442.5" y="276" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m6-c5">
+    <rect class="dg-node dg-node--danger" x="484" y="259" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="517.5" y="276" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m6-c6">
+    <rect class="dg-node dg-node--danger" x="559" y="259" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="592.5" y="276" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="cell-m6-c7">
+    <rect class="dg-node dg-node--danger" x="634" y="259" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="667.5" y="276" text-anchor="middle">거부</text>
+  </g>
+  <g data-dg="row-m7">
+    <text class="dg-fs-sm dg-mono dg-bold" x="20" y="303">NONE</text>
+    <text class="dg-fs-sm dg-muted" x="20" y="317">검사하지 않음</text>
+  </g>
+  <g data-dg="cell-m7-c1">
+    <rect class="dg-node dg-node--warn" x="184" y="293" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="217.5" y="310" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m7-c2">
+    <rect class="dg-node dg-node--warn" x="259" y="293" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="292.5" y="310" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m7-c3">
+    <rect class="dg-node dg-node--warn" x="334" y="293" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="367.5" y="310" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m7-c4">
+    <rect class="dg-node dg-node--warn" x="409" y="293" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="442.5" y="310" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m7-c5">
+    <rect class="dg-node dg-node--warn" x="484" y="293" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="517.5" y="310" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m7-c6">
+    <rect class="dg-node dg-node--warn" x="559" y="293" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="592.5" y="310" text-anchor="middle">허용</text>
+  </g>
+  <g data-dg="cell-m7-c7">
+    <rect class="dg-node dg-node--warn" x="634" y="293" width="67" height="24" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="667.5" y="310" text-anchor="middle">허용</text>
+  </g>
+
+  <line class="dg-grid" x1="12" y1="84" x2="705" y2="84"/>
+  <line class="dg-grid" x1="12" y1="118" x2="705" y2="118"/>
+  <line class="dg-grid" x1="12" y1="152" x2="705" y2="152"/>
+  <line class="dg-grid" x1="12" y1="186" x2="705" y2="186"/>
+  <line class="dg-grid" x1="12" y1="220" x2="705" y2="220"/>
+  <line class="dg-grid" x1="12" y1="254" x2="705" y2="254"/>
+  <line class="dg-grid" x1="12" y1="288" x2="705" y2="288"/>
+  <line class="dg-grid" x1="12" y1="322" x2="705" y2="322"/>
+  <line class="dg-grid" x1="180" y1="44" x2="180" y2="322"/>
+  <line class="dg-grid" x1="255" y1="44" x2="255" y2="322"/>
+  <line class="dg-grid" x1="330" y1="44" x2="330" y2="322"/>
+  <line class="dg-grid" x1="405" y1="44" x2="405" y2="322"/>
+  <line class="dg-grid" x1="480" y1="44" x2="480" y2="322"/>
+  <line class="dg-grid" x1="555" y1="44" x2="555" y2="322"/>
+  <line class="dg-grid" x1="630" y1="44" x2="630" y2="322"/>
+  <line class="dg-grid" x1="705" y1="44" x2="705" y2="322"/>
+
+  <rect data-dg="row-cursor" class="dg-edge dg-edge--accent" x="14" y="86" width="164" height="30" rx="4"/>
+  <rect data-dg="col-cursor" class="dg-edge dg-edge--accent" x="182" y="46" width="71" height="36" rx="4"/>
+  <rect data-dg="cell-cursor" class="dg-edge dg-edge--accent" x="182" y="87" width="71" height="28" rx="4"/>
+
+  <rect class="dg-node dg-node--alt" x="12" y="332" width="696" height="66" rx="4"/>
+  <g data-dg="verdict">
+    <rect class="dg-node dg-node--ok" x="22" y="342" width="58" height="22" rx="3"/>
+    <text data-dg="verdict-text" class="dg-fs-sm dg-bold" x="51" y="357" text-anchor="middle">허용</text>
+  </g>
+  <text data-dg="combo" class="dg-fs-sm dg-bold" x="90" y="357">BACKWARD × 필드 추가 (기본값 O) — 직전 버전과 비교</text>
+  <text data-dg="why-1" class="dg-fs-sm" x="22" y="377">새 스키마(reader)의 새 필드는 옛 데이터에 없지만 default 로 채워집니다.</text>
+  <text data-dg="why-2" class="dg-fs-sm" x="22" y="393">업그레이드 순서: <tspan class="dg-bold">컨슈머를 먼저</tspan> 올립니다.</text>
+
+  <rect class="dg-node dg-node--ok" x="12" y="408" width="16" height="12" rx="2"/>
+  <text class="dg-fs-sm" x="34" y="418">허용 — 등록됩니다</text>
+  <rect class="dg-node dg-node--danger" x="180" y="408" width="16" height="12" rx="2"/>
+  <text class="dg-fs-sm" x="202" y="418">거부 — 등록이 실패합니다</text>
+  <rect class="dg-node dg-node--warn" x="392" y="408" width="16" height="12" rx="2"/>
+  <text class="dg-fs-sm" x="414" y="418">NONE — 검사 없이 통과 (보장도 없음)</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="438">기준: Avro 스키마 해석 규칙 — 필드 대응은 이름(또는 reader 별칭)으로 찾고, 못 찾으면 reader 쪽 default 가 있어야 합니다. 승격은 int→long→float→double, bytes↔string 만 허용됩니다.</text>
+</svg>

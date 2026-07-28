@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kafka Streams (12%) — Kafka Guide</title>
+  <meta name="description" content="CCDAK Kafka Streams(12%) 압축 정리. KStream·KTable·GlobalKTable 의미론, stateless와 stateful 연산, 리파티션을 유발하는 연산, 조인 4종 매트릭스와 co-partitioning 요구사항, 윈도우 4종, exactly_once_v2. Apache Kafka 4.3 기준.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccdak" data-page="domain-streams"></div>
+
+  <main id="main" class="page" data-page-id="ccdak/domain-streams">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCDAK</a></li>
+        <li><span aria-current="page">Kafka Streams</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCDAK 도메인 · 가중치 12%</p>
+      <h1>Kafka Streams</h1>
+      <p class="page__lead">
+        Streams는 별도 클러스터가 아니라 <strong>애플리케이션에 넣는 라이브러리</strong>입니다.
+        출제는 API 전체를 묻지 않고 <strong>세 가지 판단</strong>에 집중됩니다 —
+        이 데이터는 KStream인가 KTable인가, 이 연산은 상태를 갖는가 그리고 리파티션을 유발하는가,
+        이 조인은 co-partitioning이 필요한가.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 도메인의 학습 목표</h2>
+      <ul>
+        <li>KStream · KTable · GlobalKTable의 의미론 차이를 데이터 성격으로 판단할 수 있습니다.</li>
+        <li>stateless / stateful 연산을 분류하고, <strong>리파티션을 유발하는 연산</strong>을 골라낼 수 있습니다.</li>
+        <li>조인 4종의 윈도우 필요 여부와 co-partitioning 요구사항을 말할 수 있습니다.</li>
+        <li>윈도우 4종의 차이와 grace period의 역할을 설명할 수 있습니다.</li>
+        <li>태스크·스레드 병렬성과 <code>exactly_once_v2</code>의 전제를 알 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="what-this-domain-asks">
+      <h2 id="what-this-domain-asks">이 도메인이 묻는 것</h2>
+      <p>
+        참고 챕터는 <a href="../basics/ch10.html">10장 Kafka Streams와 ksqlDB</a>입니다.
+        Streams는 <strong>표준 Kafka 프로듀서·컨슈머 위에 올라간 라이브러리</strong>이므로,
+        <a href="domain-app-development.html">Application Development 도메인</a>의 지식이 그대로 적용됩니다.
+        Streams 애플리케이션의 병렬성은 결국 <strong>입력 토픽의 파티션 수</strong>이고,
+        상태 저장소는 결국 <strong>Kafka의 컴팩션 토픽(changelog)</strong>입니다.
+        이 두 연결을 잡고 있으면 문제 대부분이 풀립니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="stream-table-duality">
+      <h2 id="stream-table-duality">핵심 개념 (1) KStream · KTable · GlobalKTable</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>세 추상의 의미론 차이</caption>
+          <thead>
+            <tr>
+              <th scope="col">관점</th>
+              <th scope="col">KStream</th>
+              <th scope="col">KTable</th>
+              <th scope="col">GlobalKTable</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">해석</th>
+              <td>레코드 스트림 (append-only)</td>
+              <td>changelog 스트림 (upsert)</td>
+              <td>changelog 스트림 (전체 복제)</td>
+            </tr>
+            <tr>
+              <th scope="row">같은 키가 또 오면</th>
+              <td><strong>별개의 이벤트</strong></td>
+              <td><strong>이전 값을 갱신</strong></td>
+              <td>이전 값을 갱신</td>
+            </tr>
+            <tr>
+              <th scope="row">value가 null이면</th>
+              <td>값이 null인 이벤트</td>
+              <td><strong>삭제 (tombstone)</strong></td>
+              <td>삭제</td>
+            </tr>
+            <tr>
+              <th scope="row">파티션 배분</th>
+              <td>인스턴스별로 일부 파티션</td>
+              <td>인스턴스별로 일부 파티션</td>
+              <td><strong>모든 인스턴스가 전체 복제</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">적합한 데이터</th>
+              <td>클릭, 결제 트랜잭션, 센서 측정, 로그</td>
+              <td>사용자 프로필, 재고 수량, 계정 잔액</td>
+              <td>국가 코드, 환율, 카테고리 마스터</td>
+            </tr>
+            <tr>
+              <th scope="row">크기 제약</th>
+              <td>없음</td>
+              <td>없음 (파티션 단위로 분산)</td>
+              <td><strong>인스턴스 메모리·디스크에 전체가 들어가야 함</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Streams">
+        <p>
+          <strong>"이 데이터를 KStream으로 읽어야 하는가 KTable로 읽어야 하는가"</strong> 유형의 판단 기준은
+          <em>"같은 키가 반복될 때 두 값이 모두 의미가 있는가"</em>입니다.
+        </p>
+        <ul>
+          <li>결제 이벤트 — 같은 사용자가 두 번 결제하면 <strong>둘 다 사실</strong>이므로 KStream입니다.</li>
+          <li>사용자 주소 — 같은 사용자의 새 주소가 오면 <strong>이전 주소는 무효</strong>이므로 KTable입니다.</li>
+        </ul>
+        <p>
+          결제 이벤트를 KTable로 읽으면 <strong>이전 결제가 조용히 덮어써져</strong> 합계가 틀립니다.
+          이것이 이 도메인의 대표적 시나리오 문항입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="stateless-stateful">
+      <h2 id="stateless-stateful">핵심 개념 (2) stateless · stateful · 리파티션</h2>
+
+      <p>
+        <strong>이 절의 표가 이 도메인 최다 출제 지점입니다.</strong>
+        연산을 세 축으로 분류해야 합니다 — 상태를 갖는가, 리파티션을 유발하는가, 그리고 키를 바꾸는가.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>DSL 연산 분류 — 리파티션 유발 여부가 실무·시험에서 가장 중요합니다</caption>
+          <thead>
+            <tr>
+              <th scope="col">연산</th>
+              <th scope="col">상태</th>
+              <th scope="col">키를 바꾸는가</th>
+              <th scope="col">리파티션 유발</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>filter</code> · <code>filterNot</code></th><td>stateless</td><td class="mark-no">아니오</td><td class="mark-no">없음</td></tr>
+            <tr><th scope="row"><code>mapValues</code> · <code>flatMapValues</code></th><td>stateless</td><td class="mark-no"><strong>아니오</strong></td><td class="mark-no"><strong>없음</strong></td></tr>
+            <tr><th scope="row"><code>map</code> · <code>flatMap</code></th><td>stateless</td><td class="mark-ok"><strong>가능</strong></td><td class="mark-ok"><strong>표시됨</strong></td></tr>
+            <tr><th scope="row"><code>selectKey</code></th><td>stateless</td><td class="mark-ok"><strong>예</strong></td><td class="mark-ok"><strong>표시됨</strong></td></tr>
+            <tr><th scope="row"><code>peek</code> · <code>foreach</code></th><td>stateless</td><td class="mark-no">아니오</td><td class="mark-no">없음</td></tr>
+            <tr><th scope="row"><code>split</code> / <code>branch</code> · <code>merge</code></th><td>stateless</td><td class="mark-no">아니오</td><td class="mark-no">없음</td></tr>
+            <tr><th scope="row"><code>repartition</code></th><td>stateless</td><td class="mark-no">아니오</td><td class="mark-ok"><strong>즉시 발생</strong></td></tr>
+            <tr><th scope="row"><code>groupByKey</code></th><td>—</td><td class="mark-no">아니오</td><td class="mark-no">없음 (키가 그대로)</td></tr>
+            <tr><th scope="row"><code>groupBy</code></th><td>—</td><td class="mark-ok"><strong>예</strong></td><td class="mark-ok"><strong>항상 발생</strong></td></tr>
+            <tr><th scope="row"><code>count</code> · <code>reduce</code> · <code>aggregate</code></th><td><strong>stateful</strong></td><td class="mark-no">아니오</td><td class="mark-no">(선행 group 단계에서 결정)</td></tr>
+            <tr><th scope="row">모든 윈도우 연산</th><td><strong>stateful</strong></td><td class="mark-no">아니오</td><td class="mark-no">—</td></tr>
+            <tr><th scope="row">모든 조인</th><td><strong>stateful</strong></td><td class="mark-no">아니오</td><td class="mark-ok">앞에서 키를 바꿨으면 발생</td></tr>
+            <tr><th scope="row"><code>suppress</code></th><td><strong>stateful</strong></td><td class="mark-no">아니오</td><td class="mark-no">없음</td></tr>
+            <tr><th scope="row"><code>toTable</code></th><td><strong>stateful</strong></td><td class="mark-no">아니오</td><td class="mark-no">없음</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Streams">
+        <p>
+          <strong><code>map</code>은 리파티션을 유발하고 <code>mapValues</code>는 유발하지 않습니다.</strong>
+          이유는 하나입니다 — <code>map</code>은 키를 바꿀 수 있고, 키가 바뀌면
+          <strong>같은 키가 같은 파티션에 있다는 보장이 깨지기</strong> 때문입니다.
+          <code>mapValues</code>는 값만 바꾸므로 키 기반 배치가 유지되고 리파티션이 필요 없습니다.
+          이 문항은 거의 매번 출제됩니다.
+        </p>
+        <p>
+          정확히 말하면 <code>map</code>·<code>selectHKey</code>·<code>flatMap</code>은
+          스트림을 <strong>"리파티션 필요"로 표시</strong>할 뿐이고,
+          실제 리파티션 토픽은 <strong>그 뒤에 키 기반 연산(집계·조인)이 올 때</strong> 생성됩니다.
+          <code>map</code> 뒤에 바로 <code>to()</code>만 있으면 리파티션 토픽이 만들어지지 않습니다.
+          "값만 바꾸면 되는데 <code>map</code>을 썼다"가 성능 문제의 흔한 원인입니다 —
+          <strong><code>mapValues</code>로 바꾸는 것이 정답</strong>입니다.
+        </p>
+      </aside>
+
+      <h3 id="state-stores">상태 저장소와 changelog</h3>
+      <ul>
+        <li>stateful 연산은 로컬 <strong>상태 저장소(기본 RocksDB)</strong>를 만듭니다.</li>
+        <li>같은 내용이 <strong>changelog 토픽</strong>(<code>{application.id}-{store}-changelog</code>)에 기록됩니다.
+          이 토픽은 <strong><code>cleanup.policy=compact</code></strong>입니다.</li>
+        <li>인스턴스가 죽으면 다른 인스턴스가 changelog를 재생해 상태를 복구합니다.
+          상태가 크면 복구가 오래 걸리므로 <code>num.standby.replicas</code>(기본 <strong>0</strong>)를 올려
+          <strong>따뜻한 예비 사본</strong>을 유지합니다.</li>
+        <li>리파티션 토픽은 <code>{application.id}-{name}-repartition</code>이며
+          <strong><code>cleanup.policy=delete</code></strong>입니다 (중간 데이터이므로).</li>
+      </ul>
+
+      <aside class="note note--warn" data-label="주의">
+        <p>
+          <strong>changelog 토픽을 사람이 지우면 상태를 복구할 수 없습니다.</strong>
+          그리고 <code>cleanup.policy</code>를 <code>delete</code>로 바꾸면
+          오래된 키의 상태가 사라져 <strong>복구 시 데이터가 누락</strong>됩니다
+          (<a href="../cases/case08.html">케이스 8</a>).
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="joins">
+      <h2 id="joins">핵심 개념 (3) 조인 매트릭스와 co-partitioning</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>조인 4종 — 윈도우 필요 여부와 co-partitioning 요구</caption>
+          <thead>
+            <tr>
+              <th scope="col">조인</th>
+              <th scope="col">윈도우</th>
+              <th scope="col">co-partitioning</th>
+              <th scope="col">지원 유형</th>
+              <th scope="col">트리거</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">KStream ⋈ KStream</th>
+              <td class="mark-ok"><strong>필수</strong> (<code>JoinWindows</code>)</td>
+              <td class="mark-ok">필요</td>
+              <td>inner · left · outer</td>
+              <td>양쪽 어느 레코드가 와도</td>
+            </tr>
+            <tr>
+              <th scope="row">KStream ⋈ KTable</th>
+              <td class="mark-no">불필요</td>
+              <td class="mark-ok">필요</td>
+              <td>inner · left</td>
+              <td><strong>KStream 쪽 레코드만</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">KStream ⋈ GlobalKTable</th>
+              <td class="mark-no">불필요</td>
+              <td class="mark-no"><strong>불필요</strong></td>
+              <td>inner · left</td>
+              <td>KStream 쪽 레코드만</td>
+            </tr>
+            <tr>
+              <th scope="row">KTable ⋈ KTable</th>
+              <td class="mark-no">불필요</td>
+              <td class="mark-ok">필요<br>(FK 조인은 불필요)</td>
+              <td>inner · left · outer</td>
+              <td>양쪽 어느 갱신이 와도</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="copartitioning">co-partitioning의 세 조건</h3>
+      <ol>
+        <li>양쪽 입력의 <strong>키가 같은 의미</strong>여야 합니다 (equi-join이므로 <code>leftKey == rightKey</code>).</li>
+        <li>양쪽 입력 토픽의 <strong>파티션 수가 같아야</strong> 합니다.</li>
+        <li>양쪽에 쓰는 모든 애플리케이션이 <strong>같은 파티셔닝 전략</strong>을 써야 합니다
+          (같은 <code>partitioner.class</code> 또는 같은 <code>StreamPartitioner</code>).</li>
+      </ol>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Streams">
+        <p>
+          Kafka Streams는 co-partitioning을 <strong>부분적으로만 검증합니다.</strong>
+          런타임의 파티션 할당 단계에서 <strong>양쪽 파티션 수가 다르면
+          <code>TopologyBuilderException</code></strong>을 던집니다.
+          그러나 <strong>파티셔닝 전략이 다른 것은 감지하지 못합니다</strong> —
+          이 경우 예외 없이 <strong>조용히 조인이 누락</strong>됩니다.
+          "조인 결과가 일부만 나온다"의 원인이 여기입니다.
+        </p>
+        <p>
+          해결은 파티션 수가 적은 쪽을 <code>repartition()</code>으로 맞추는 것입니다.
+          공식 문서는 <strong>병목을 피하기 위해 적은 쪽을 많은 쪽에 맞추라</strong>고 권합니다.
+          KStream-KTable 조인이면 <strong>KStream을 리파티션</strong>하는 편이 낫습니다
+          (KTable을 리파티션하면 상태 저장소가 하나 더 생깁니다).
+        </p>
+        <p>
+          그리고 <strong>GlobalKTable 조인은 co-partitioning이 필요 없습니다.</strong>
+          모든 인스턴스가 전체 사본을 갖기 때문이고, <code>KeyValueMapper</code>로
+          <strong>키가 아닌 값으로도 조인</strong>할 수 있습니다.
+          KTable-KTable <strong>외래키(FK) 조인</strong>도 Streams가 내부적으로 co-partitioning을 처리합니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>KStream-KStream 조인 — 윈도우가 필수입니다</figcaption>
+        <pre><code class="lang-java">KStream&lt;String, Order&gt;   orders   = builder.stream("orders");
+KStream&lt;String, Payment&gt; payments = builder.stream("payments");
+
+// 5분 윈도우 안에서 같은 키를 만나면 조인한다
+KStream&lt;String, Settled&gt; settled = orders.join(
+    payments,
+    (order, payment) -> new Settled(order, payment),   // ValueJoiner
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
+    Joined.with(Serdes.String(), orderSerde, paymentSerde));</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="windows">
+      <h2 id="windows">핵심 개념 (4) 윈도우 4종</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>윈도우 타입 비교</caption>
+          <thead>
+            <tr>
+              <th scope="col">윈도우</th>
+              <th scope="col">경계</th>
+              <th scope="col">한 레코드가 속하는 윈도우 수</th>
+              <th scope="col">생성 API</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Tumbling</th>
+              <td>고정 크기, <strong>겹치지 않음</strong></td>
+              <td class="t-center">1개</td>
+              <td><code>TimeWindows.ofSizeWithNoGrace(size)</code></td>
+            </tr>
+            <tr>
+              <th scope="row">Hopping</th>
+              <td>고정 크기, <strong>advance 간격으로 겹침</strong></td>
+              <td class="t-center">size ÷ advance 개</td>
+              <td><code>TimeWindows.ofSizeAndGrace(size, grace)<br>.advanceBy(advance)</code></td>
+            </tr>
+            <tr>
+              <th scope="row">Sliding</th>
+              <td>레코드를 중심으로 <strong>실제 데이터가 있는 구간만</strong></td>
+              <td class="t-center">데이터에 따라 가변</td>
+              <td><code>SlidingWindows<br>.ofTimeDifferenceAndGrace(diff, grace)</code></td>
+            </tr>
+            <tr>
+              <th scope="row">Session</th>
+              <td><strong>비활성 간격(gap)</strong>으로 구분. 크기 가변</td>
+              <td class="t-center">1개 (세션 병합 가능)</td>
+              <td><code>SessionWindows<br>.ofInactivityGapWithNoGrace(gap)</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Streams">
+        <p>
+          <strong>Tumbling은 Hopping의 특수한 경우</strong>입니다 —
+          advance = size이면 겹치지 않으므로 tumbling이 됩니다.
+          "10분 크기, 5분 advance인 hopping 윈도우에서 한 레코드는 몇 개 윈도우에 속하는가?" → <strong>2개</strong>입니다.
+        </p>
+        <p>
+          <strong>Session 윈도우만 크기가 고정되지 않습니다.</strong>
+          gap 안에 이벤트가 계속 오면 세션이 계속 늘어나고,
+          늦게 도착한 이벤트가 두 세션 사이를 메우면 <strong>두 세션이 하나로 병합</strong>됩니다.
+          "사용자 활동 구간을 묶으려면?" → session 윈도우입니다.
+        </p>
+      </aside>
+
+      <h3 id="time-and-grace">시간 개념과 grace period</h3>
+      <ul>
+        <li><strong>event time</strong> — 레코드에 기록된 타임스탬프. Streams의 <strong>기본 기준</strong>입니다.</li>
+        <li><strong>ingestion time</strong> — 브로커가 로그에 쓴 시각 (토픽 <code>message.timestamp.type=LogAppendTime</code>).</li>
+        <li><strong>processing time</strong> — 처리하는 순간의 벽시계 시각.</li>
+      </ul>
+      <p>
+        타임스탬프 추출기의 기본값은 <code>FailOnInvalidTimestamp</code>이며,
+        음수(무효) 타임스탬프를 만나면 <strong>예외를 던집니다.</strong>
+        레거시 데이터를 다룰 때는 <code>LogAndSkipOnInvalidTimestamp</code>나
+        <code>WallclockTimestampExtractor</code>로 바꾸는 선택지를 씁니다.
+      </p>
+      <p>
+        <strong>grace period</strong>는 윈도우가 닫힌 뒤에도 늦게 온 레코드를 받아 주는 유예 기간입니다.
+        <code>…WithNoGrace(…)</code>를 쓰면 유예가 0이므로 <strong>지연 도착 레코드가 버려집니다.</strong>
+        grace를 크게 주면 정확도가 오르지만 <strong>결과 확정이 늦어지고 상태가 커집니다.</strong>
+        중간 결과를 억제하고 최종 결과만 내보내려면 <code>suppress()</code>를 씁니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="parallelism-eos">
+      <h2 id="parallelism-eos">핵심 개념 (5) 병렬성과 exactly-once</h2>
+
+      <ul>
+        <li><strong>태스크 수 = 입력 토픽의 파티션 수</strong>입니다 (sub-topology별로 계산).
+          파티션이 6개면 태스크는 6개이고, <strong>그 이상으로는 병렬 처리가 늘지 않습니다.</strong></li>
+        <li><code>num.stream.threads</code>(기본 <strong>1</strong>)는 한 인스턴스가 돌리는 스레드 수입니다.
+          태스크는 스레드에 배분됩니다.</li>
+        <li>인스턴스를 늘리면 태스크가 인스턴스 사이로 재배분됩니다.
+          <strong>인스턴스 × 스레드 &gt; 태스크 수</strong>가 되면 남는 스레드는 유휴 상태입니다.</li>
+        <li>Streams는 내부적으로 컨슈머 그룹을 쓰며, <strong>그룹 ID는 <code>application.id</code></strong>입니다.
+          그래서 <code>application.id</code>를 바꾸면 <strong>처음부터 다시 읽습니다.</strong></li>
+      </ul>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Streams">
+        <p>
+          <code>processing.guarantee</code>의 기본값은 <strong><code>at_least_once</code></strong>입니다.
+          EOS를 쓰려면 <code>exactly_once_v2</code>로 명시해야 하며,
+          공식 문서는 <strong>브로커 3대 이상</strong>을 기본 전제로 명시합니다
+          (<code>transaction.state.log.replication.factor=3</code>,
+          <code>transaction.state.log.min.isr=2</code>이기 때문입니다).
+          단일 브로커 개발 환경에서는 이 두 브로커 설정을 1로 낮춰야 동작합니다.
+        </p>
+        <p>
+          그리고 <strong>Streams의 EOS도 Kafka 경계 안에서만 성립합니다.</strong>
+          <code>foreach</code>에서 외부 API를 호출하면 그 호출은 트랜잭션에 포함되지 않습니다.
+        </p>
+      </aside>
+
+      <h3 id="interactive-queries">인터랙티브 쿼리와 ksqlDB</h3>
+      <p>
+        상태 저장소는 <strong><code>KafkaStreams.store(...)</code></strong>로 직접 조회할 수 있습니다.
+        인스턴스가 여러 대면 키가 어느 인스턴스에 있는지 메타데이터로 찾아 그 인스턴스에 요청을 전달해야 합니다
+        (내장 RPC는 없고 애플리케이션이 구현합니다).
+      </p>
+      <p>
+        <strong>ksqlDB는 Kafka Streams 위에 올라간 SQL 계층</strong>이며,
+        Apache Kafka 본체가 아니라 Confluent 컴포넌트입니다.
+        <code>CREATE STREAM</code> / <code>CREATE TABLE</code>이 각각 KStream / KTable에 대응합니다.
+        Java 코드 없이 스트림 처리를 하고 싶을 때 쓰고,
+        복잡한 로직·커스텀 상태가 필요하면 Streams로 갑니다.
+      </p>
+      <aside class="note note--version" data-label="버전 노트 · Streams Rebalance Protocol">
+        <p>
+          Streams 전용 리밸런스 프로토콜이 <strong>Kafka 4.1에서 Early Access</strong>로 도입되었습니다.
+          프로덕션 기본값이 아니므로, 시험 대비에서는 <strong>"4.1 EA로 도입됨"</strong>이라는 사실만 알아 두면 됩니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="must-memorize">
+      <h2 id="must-memorize">반드시 외워야 할 설정값</h2>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Kafka Streams 필수 암기 설정 (Apache Kafka 4.3)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">시험 포인트</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>application.id</code></th><td>(필수)</td><td><strong>컨슈머 그룹 ID · 내부 토픽 접두어 · client-id 접두어</strong> 세 역할</td></tr>
+            <tr><th scope="row"><code>processing.guarantee</code></th><td><code>at_least_once</code></td><td>값은 <code>at_least_once</code> / <code>exactly_once_v2</code> 두 개뿐</td></tr>
+            <tr><th scope="row"><code>num.stream.threads</code></th><td><strong>1</strong></td><td>기본이 1이므로 명시하지 않으면 단일 스레드</td></tr>
+            <tr><th scope="row"><code>num.standby.replicas</code></th><td><strong>0</strong></td><td>기본이 0이므로 <strong>복구 시 changelog 전량 재생</strong></td></tr>
+            <tr><th scope="row"><code>replication.factor</code></th><td>-1</td><td>-1이면 브로커 기본값 사용. 내부 토픽 RF를 3으로 두려면 명시</td></tr>
+            <tr><th scope="row"><code>commit.interval.ms</code></th><td>30000</td><td>EOS(<code>exactly_once_v2</code>)에서는 더 작은 값이 적용됩니다</td></tr>
+            <tr><th scope="row"><code>statestore.cache.max.bytes</code></th><td>10485760</td><td>10MiB. 0으로 두면 모든 갱신이 하위로 흘러 결과가 많아짐</td></tr>
+            <tr><th scope="row"><code>state.dir</code></th><td><code>${java.io.tmpdir}</code></td><td><strong>기본값이 임시 디렉터리</strong> — 재시작·컨테이너 교체 시 상태 유실</td></tr>
+            <tr><th scope="row"><code>default.key.serde</code> · <code>default.value.serde</code></th><td><code>null</code></td><td>기본값이 없으므로 <strong>지정하지 않으면 런타임 오류</strong></td></tr>
+            <tr><th scope="row"><code>default.timestamp.extractor</code></th><td><code>FailOnInvalidTimestamp</code></td><td>무효 타임스탬프에 예외를 던짐</td></tr>
+            <tr><th scope="row"><code>deserialization.exception.handler</code></th><td><code>LogAndFailExceptionHandler</code></td><td>역직렬화 실패 시 <strong>애플리케이션이 죽습니다.</strong> 건너뛰려면 <code>LogAndContinue…</code></td></tr>
+            <tr><th scope="row"><code>topology.optimization</code></th><td><code>none</code></td><td><code>all</code>로 켜면 불필요한 리파티션 토픽을 줄일 수 있음</td></tr>
+            <tr><th scope="row"><code>max.task.idle.ms</code></th><td>0</td><td>조인에서 한쪽 입력을 기다리는 시간. 0이면 기다리지 않음</td></tr>
+            <tr><th scope="row"><code>buffered.records.per.partition</code></th><td>1000</td><td>파티션별 내부 버퍼</td></tr>
+            <tr><th scope="row"><code>poll.ms</code></th><td>100</td><td>내부 컨슈머 poll 블로킹 시간</td></tr>
+            <tr><th scope="row"><code>acceptable.recovery.lag</code></th><td>10000</td><td>이 이하로 따라잡으면 "복구 완료"로 보고 태스크를 넘김</td></tr>
+            <tr><th scope="row"><code>probing.rebalance.interval.ms</code></th><td>600000</td><td>10분. warmup 진행 확인 주기</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="가장 자주 사고를 내는 기본값">
+        <p>
+          <code>state.dir</code>의 기본값은 <strong><code>${java.io.tmpdir}</code></strong>입니다.
+          컨테이너에서 그대로 쓰면 <strong>파드가 재시작될 때마다 상태가 사라져
+          changelog 전량을 재생</strong>합니다. 영속 볼륨 경로로 반드시 바꾸세요.
+          여기에 <code>num.standby.replicas=0</code>(기본값)이 겹치면 복구 시간이 그대로 다운타임이 됩니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="common-traps">
+      <h2 id="common-traps">자주 나오는 함정</h2>
+
+      <h3 id="trap-map">함정 1 — <code>map</code> vs <code>mapValues</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>이 도메인 최다 출제 쌍</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col"><code>map</code></th><th scope="col"><code>mapValues</code></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>키와 값을 모두 바꿀 수 있음</td><td>값만 바꿈</td></tr>
+            <tr><th scope="row">상태</th><td>stateless</td><td>stateless</td></tr>
+            <tr><th scope="row">언제 발동</th><td>키가 바뀔 수 있으므로 <strong>"리파티션 필요"로 표시</strong></td><td>표시하지 않음</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>불필요한 리파티션 토픽 생성 → <strong>네트워크·디스크·지연 증가</strong></td><td>—</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"값만 변환하는데 리파티션을 피하려면 어떤 연산을?" → <code>mapValues</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-kstream-ktable">함정 2 — KStream vs KTable</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>같은 토픽을 어떻게 읽느냐로 결과가 완전히 달라집니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col">KStream</th><th scope="col">KTable</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>사실의 연속</td><td>키별 최신 상태</td></tr>
+            <tr><th scope="row">같은 키 반복</th><td>각각 별개 이벤트</td><td>갱신 (이전 값 무효)</td></tr>
+            <tr><th scope="row">언제 발동</th><td><code>builder.stream(...)</code></td><td><code>builder.table(...)</code></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>상태를 스트림으로 읽어 <strong>중복 집계</strong></td><td>이벤트를 테이블로 읽어 <strong>이벤트 유실</strong></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"결제 이벤트 합계가 실제보다 작다" → KTable로 읽은 경우</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-globalktable">함정 3 — KTable vs GlobalKTable</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>둘 다 테이블이지만 분산 방식이 다릅니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col">KTable</th><th scope="col">GlobalKTable</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">데이터 분산</th><td>파티션 단위로 인스턴스에 분산</td><td><strong>모든 인스턴스가 전체 복제</strong></td></tr>
+            <tr><th scope="row">조인 시 co-partitioning</th><td class="mark-ok">필요</td><td class="mark-no"><strong>불필요</strong></td></tr>
+            <tr><th scope="row">키가 아닌 값으로 조인</th><td class="mark-no">불가</td><td class="mark-ok">가능 (<code>KeyValueMapper</code>)</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">큰 테이블을 GlobalKTable로 만들면 <strong>인스턴스마다 전체를 적재</strong>해 메모리·시작 시간이 폭증</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"파티션 수가 다른 참조 데이터와 조인하려면?" → GlobalKTable</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-windows">함정 4 — 윈도우 4종</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>"겹치는가"와 "크기가 고정인가"로 구분합니다</caption>
+          <thead>
+            <tr><th scope="col">관점</th><th scope="col">Tumbling</th><th scope="col">Hopping</th><th scope="col">Sliding</th><th scope="col">Session</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">겹침</th><td class="mark-no">없음</td><td class="mark-ok">있음</td><td class="mark-ok">있음</td><td class="mark-no">없음</td></tr>
+            <tr><th scope="row">크기 고정</th><td class="mark-ok">고정</td><td class="mark-ok">고정</td><td class="mark-ok">고정 간격</td><td class="mark-no"><strong>가변</strong></td></tr>
+            <tr><th scope="row">경계 결정</th><td>시각</td><td>시각</td><td>레코드 시각 기준 구간</td><td><strong>비활성 gap</strong></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="4">Hopping을 Tumbling으로 착각하면 집계가 <strong>중복 계산</strong>됩니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="4">"advance &lt; size인 윈도우의 이름은?" → hopping</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-copartition">함정 5 — co-partitioning vs <code>repartition()</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>하나는 요구사항, 하나는 그것을 만족시키는 수단입니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col">co-partitioning</th><th scope="col"><code>repartition()</code></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">무엇인가</th><td>조인의 <strong>전제 조건</strong> (키·파티션 수·파티셔너 일치)</td><td>키 기준으로 <strong>다시 분배하는 연산</strong></td></tr>
+            <tr><th scope="row">어디 설정인가</th><td>토픽 설계 · 프로듀서 파티셔너</td><td>토폴로지 코드</td></tr>
+            <tr><th scope="row">언제 발동</th><td>조인 시 검사 (파티션 수만)</td><td>호출 즉시 리파티션 토픽 생성</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>파티션 수가 다르면 <code>TopologyBuilderException</code>,<br>파티셔너가 다르면 <strong>조용히 누락</strong></td><td>남용하면 불필요한 토픽·지연 증가</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"파티션 3개 토픽과 6개 토픽을 조인하려면?" → 적은 쪽을 6으로 리파티션</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-smt-vs-streams">함정 6 — SMT vs Streams (재확인)</h3>
+      <p>
+        <a href="domain-connect.html#trap-smt-streams">Connect 도메인의 같은 함정</a>이 Streams 쪽에서도 나옵니다.
+        <strong>집계·조인·윈도우는 SMT로 불가능</strong>하고,
+        <strong>필드 하나 바꾸는 일에 Streams 애플리케이션을 띄우는 것은 과잉</strong>입니다.
+        경계는 "여러 레코드의 관계가 필요한가"입니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="code-reading">
+      <h2 id="code-reading">코드 읽기 문제 대비</h2>
+
+      <h3 id="code-1">스니펫 1 — 리파티션 토픽이 몇 개 생기는가</h3>
+      <figure class="code">
+        <figcaption>Topology.java</figcaption>
+        <pre><code class="lang-java">builder.stream("clicks")                       // key = sessionId
+       .filter((k, v) -> v.getStatus() == 200)
+       .mapValues(v -> v.getUrl())              // (A)
+       .selectKey((k, url) -> url)              // (B)
+       .groupByKey()
+       .count()
+       .toStream()
+       .to("url-counts");</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <p>
+          리파티션 토픽은 <strong>1개</strong>입니다.
+          (A) <code>mapValues</code>는 키를 바꾸지 않으므로 리파티션을 표시하지 않습니다.
+          (B) <code>selectKey</code>가 키를 바꿔 "리파티션 필요"로 표시하고,
+          그 뒤의 <code>groupByKey().count()</code>가 키 기반 연산이므로
+          <strong>그 지점에서 리파티션 토픽 하나가 생성</strong>됩니다.
+          <code>filter</code>는 아무 영향이 없습니다.
+        </p>
+      </aside>
+
+      <h3 id="code-2">스니펫 2 — 이 조인은 동작하는가</h3>
+      <figure class="code">
+        <figcaption>orders 토픽은 파티션 12개, customers 토픽은 파티션 3개</figcaption>
+        <pre><code class="lang-java">KStream&lt;String, Order&gt;    orders    = builder.stream("orders");
+KTable&lt;String, Customer&gt;  customers = builder.table("customers");
+
+KStream&lt;String, Enriched&gt; enriched = orders.join(
+    customers,
+    (order, customer) -> new Enriched(order, customer));</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <p>
+          <strong>실패합니다.</strong> KStream-KTable 조인은 co-partitioning이 필요한데
+          파티션 수가 12과 3으로 다릅니다.
+          런타임의 파티션 할당 단계에서 <strong><code>TopologyBuilderException</code></strong>이 발생합니다.
+        </p>
+        <p>
+          해결 방법은 두 가지입니다.
+        </p>
+        <ul>
+          <li><code>customers</code>를 <strong><code>GlobalKTable</code>로 읽는다</strong> — co-partitioning 불필요.
+            참조 데이터가 작으면 이 편이 가장 간단합니다.</li>
+          <li><code>customers</code> 토픽을 12 파티션으로 리파티션한다 — 공식 문서 권고는
+            <strong>적은 쪽을 많은 쪽에 맞추는 것</strong>입니다.</li>
+        </ul>
+        <p>"윈도우를 추가한다"는 선택지는 오답입니다 — KStream-KTable 조인에는 윈도우가 없습니다.</p>
+      </aside>
+
+      <h3 id="code-3">스니펫 3 — 이 설정으로 EOS가 동작하는가</h3>
+      <figure class="code">
+        <figcaption>streams.properties (브로커 1대인 개발 환경)</figcaption>
+        <pre><code class="lang-properties">application.id=fraud-detector
+bootstrap.servers=localhost:9092
+processing.guarantee=exactly_once_v2
+default.key.serde=org.apache.kafka.common.serialization.Serdes$StringSerde
+default.value.serde=org.apache.kafka.common.serialization.Serdes$StringSerde</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <p>
+          <strong>동작하지 않습니다.</strong> <code>exactly_once_v2</code>는
+          <code>__transaction_state</code> 토픽을 쓰는데, 그 토픽의 기본 설정이
+          <code>transaction.state.log.replication.factor=3</code>,
+          <code>transaction.state.log.min.isr=2</code>입니다.
+          브로커가 1대면 토픽 생성 또는 트랜잭션 초기화가 실패합니다.
+        </p>
+        <p>
+          개발 환경에서는 <strong>브로커 쪽</strong> 두 설정을 1로 낮춰야 합니다.
+          "Streams 설정을 바꾼다"는 선택지는 오답입니다 — <strong>브로커 설정 문제</strong>입니다.
+          프로덕션에서는 브로커 3대 이상이 정답입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch10.html">
+          <span class="card__title">10장 · Kafka Streams와 ksqlDB</span>
+          <span class="card__desc">토폴로지, 상태 저장소, 윈도우, 조인의 전체 설명.</span>
+          <span class="card__meta">기본개념</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex09.html">
+          <span class="card__title">예제 9 · Streams 실시간 집계</span>
+          <span class="card__desc">동작하는 윈도우 집계 코드와 테스트.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="domain-testing.html">
+          <span class="card__title">Application Testing</span>
+          <span class="card__desc"><code>TopologyTestDriver</code>로 토폴로지를 브로커 없이 검증합니다.</span>
+          <span class="card__meta">CCDAK 8%</span>
+        </a></li>
+        <li><a class="card" href="../cases/case08.html">
+          <span class="card__title">케이스 8 · 상태 토픽이 사라짐</span>
+          <span class="card__desc">changelog 토픽의 <code>cleanup.policy</code>를 잘못 둔 결과.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/streams.html">
+          <span class="card__title">Streams 치트시트</span>
+          <span class="card__desc">DSL 연산 표, 윈도우 비교, 조인 매트릭스.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="traps.html">
+          <span class="card__title">함정 사전 40쌍</span>
+          <span class="card__desc">Streams 구역 5쌍을 포함한 전체 비교표.</span>
+          <span class="card__meta">CCDAK 도구</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="mini-quiz">
+      <h2 id="mini-quiz">도메인 미니 퀴즈</h2>
+      <div class="quiz-embed" data-set="ccdak-streams" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/streams/core-concepts" rel="noopener noreferrer">Streams Core Concepts</a> — 스트림·테이블 이원성, 태스크와 스레드, 시간 개념</li>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html" rel="noopener noreferrer">Streams DSL</a> — 연산 분류, 리파티션, 조인 매트릭스, co-partitioning 요구사항과 <code>TopologyBuilderException</code>, 윈도우 4종 API</li>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html" rel="noopener noreferrer">Streams Configs</a> — <code>num.stream.threads</code>, <code>num.standby.replicas</code>, <code>state.dir</code>, <code>processing.guarantee</code> 기본값</li>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/memory-mgmt.html" rel="noopener noreferrer">Memory Management</a> — <code>statestore.cache.max.bytes</code></li>
+        <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/interactive-queries.html" rel="noopener noreferrer">Interactive Queries</a> — 상태 저장소 직접 조회</li>
+        <li><a href="https://kafka.apache.org/documentation/#streamsconfigs" rel="noopener noreferrer">Streams Configs (표)</a> — 전체 설정 기본값</li>
+      </ul>
+      <aside class="note note--warn" data-label="출처 주의">
+        <p>
+          ksqlDB는 Apache Kafka 본체가 아니라 <strong>Confluent 컴포넌트</strong>입니다.
+          이 페이지에서는 "Streams 위의 SQL 계층"이라는 위치와 스트림/테이블 대응 관계까지만 서술했으며,
+          구체적 문법·기능은 Confluent 공식 문서로 확인하세요
+          (이 사이트를 만든 환경에서는 접근할 수 없었습니다).
+        </p>
+      </aside>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

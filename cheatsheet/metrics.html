@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>메트릭 치트시트 — Kafka Guide</title>
+  <meta name="description" content="Apache Kafka 4.3 JMX 메트릭 치트시트. 브로커·KRaft 컨트롤러·프로듀서·컨슈머 MBean 이름과 정상 범위, 이상 시 의미와 조치. Consumer lag 측정 3가지 방법 비교와 PromQL 알림 룰 포함.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="cheatsheet" data-page="metrics"></div>
+
+  <main id="main" class="page page--wide" data-page-id="cheatsheet/metrics">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="cli.html">빠른참조</a></li>
+        <li><span aria-current="page">메트릭</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">빠른참조 · 메트릭</p>
+      <h1>메트릭 치트시트</h1>
+      <p class="page__lead">
+        MBean 이름 · 의미 · 정상 범위 · 이상 시 의미 · 조치를 한 표에 담았습니다.
+        "정상 범위" 열은 <strong>공식 문서가 명시한 값만</strong> 적었고,
+        문서에 기준이 없는 메트릭은 그렇게 표시했습니다 — 이런 메트릭은
+        임계값을 남의 숫자로 정할 수 없고 <strong>자기 클러스터의 베이스라인</strong>으로 정해야 합니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">알림을 딱 5개만 걸어야 한다면</h2>
+      <ul>
+        <li><code>OfflinePartitionsCount</code> &gt; 0 — <strong>지금 데이터 유실 중</strong>일 수 있습니다. 최우선.</li>
+        <li><code>ActiveControllerCount</code> 합계 ≠ 1 — 컨트롤러가 없거나 둘입니다.</li>
+        <li><code>UnderMinIsrPartitionCount</code> &gt; 0 — <code>acks=all</code> 쓰기가 막혀 있습니다.</li>
+        <li><code>UnderReplicatedPartitions</code>가 <strong>지속</strong> &gt; 0 — 복제가 따라오지 못합니다.</li>
+        <li>Consumer lag의 <strong>증가 추세</strong> — 절대값보다 기울기가 중요합니다.</li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="jmx-setup">
+      <h2 id="jmx-setup">JMX 켜기</h2>
+
+      <p>
+        Apache Kafka는 <strong>원격 JMX를 기본적으로 비활성화</strong>합니다.
+        CLI로 기동하는 프로세스는 <code>JMX_PORT</code> 환경변수로 켤 수 있습니다.
+        공식 문서는 원격 JMX를 켤 때 <strong>반드시 보안을 함께 설정</strong>하라고 명시합니다 —
+        Kafka에서 JMX 인증은 기본적으로 꺼져 있습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>로컬 개발 — 인증 없이 (운영 금지)</figcaption>
+        <pre><code class="lang-bash">export JMX_PORT=9999
+bin/kafka-server-start.sh config/server.properties
+
+# 확인
+bin/kafka-run-class.sh kafka.tools.JmxTool \
+  --jmx-url service:jmx:rmi:///jndi/rmi://localhost:9999/jmxrmi \
+  --object-name 'kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions'</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>운영 — 인증·TLS를 켜서</figcaption>
+        <pre><code class="lang-bash">export KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true \
+-Dcom.sun.management.jmxremote.authenticate=true \
+-Dcom.sun.management.jmxremote.ssl=true \
+-Dcom.sun.management.jmxremote.password.file=/etc/kafka/jmxremote.password \
+-Dcom.sun.management.jmxremote.access.file=/etc/kafka/jmxremote.access \
+-Djava.rmi.server.hostname=$(hostname -f)"
+export JMX_PORT=9999
+bin/kafka-server-start.sh config/server.properties</code></pre>
+      </figure>
+
+      <aside class="note" data-label="이름 규칙">
+        <p>
+          모든 rate 메트릭에는 <code>-total</code> 접미어가 붙은 누적 카운터가 함께 존재합니다.
+          예를 들어 <code>records-consumed-rate</code>에는
+          <code>records-consumed-total</code>이 대응됩니다.
+          <strong>알림은 rate로, 사후 분석은 total로</strong> 보는 편이 편합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="broker-metrics">
+      <h2 id="broker-metrics">브로커 메트릭</h2>
+
+      <div class="toolbar">
+        <div class="field">
+          <label for="f-broker">브로커 메트릭 검색</label>
+          <input class="cheat-filter" id="f-broker" data-target="#t-broker-metrics" type="search"
+                 placeholder="설정명으로 검색 (예: Isr, Idle, Offline)" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-broker-metrics">
+          <caption>브로커 필수 JMX 메트릭 — 정상 범위는 Apache Kafka 4.3.1 Monitoring 문서의 "Normal value" 열</caption>
+          <thead>
+            <tr>
+              <th scope="col">MBean</th>
+              <th scope="col">의미</th>
+              <th scope="col">정상 범위</th>
+              <th scope="col">이상 시 의미</th>
+              <th scope="col">조치</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions</code></th>
+              <td>ISR 크기가 전체 레플리카 수보다 작은 파티션 수</td>
+              <td><code>0</code></td>
+              <td>복제가 뒤처졌거나 브로커가 죽었습니다. 아직 쓰기는 되지만 여유가 사라졌습니다</td>
+              <td><code>--describe --under-replicated-partitions</code>로 어느 파티션인지 확인 → 특정 브로커에 몰려 있으면 그 브로커의 디스크·네트워크·GC를 봅니다. 전 브로커에 퍼져 있으면 <code>num.replica.fetchers</code> 상향</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount</code></th>
+              <td>ISR이 <code>min.insync.replicas</code> 미달인 파티션 수</td>
+              <td><code>0</code></td>
+              <td><strong><code>acks=all</code> 쓰기가 거부됩니다.</strong> 프로듀서는 <code>NotEnoughReplicasException</code>을 받습니다</td>
+              <td>즉시 대응 대상. 죽은 브로커를 되살리거나, 정말 급하면 토픽의 <code>min.insync.replicas</code>를 한시적으로 낮춥니다(내구성을 포기하는 선택)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,name=AtMinIsrPartitionCount</code></th>
+              <td>ISR 크기가 정확히 <code>min.insync.replicas</code>인 파티션 수</td>
+              <td><code>0</code></td>
+              <td>한 대만 더 잃으면 쓰기가 멈춥니다. 조기 경보에 가장 유용한 메트릭</td>
+              <td>URP 대응과 같지만 <strong>여유 시간이 있는 상태</strong>입니다. 여기서 처리하세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=OfflinePartitionsCount</code></th>
+              <td>리더가 없는 (내부 토픽 제외) 파티션 수</td>
+              <td><code>0</code></td>
+              <td><strong>해당 파티션은 읽기·쓰기 모두 불가</strong>합니다. 최고 심각도</td>
+              <td><code>--describe --unavailable-partitions</code> → 모든 레플리카가 오프라인인지 확인. 복구 불가면 <code>--election-type unclean</code>이 마지막 수단(유실 감수)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=ActiveControllerCount</code></th>
+              <td>이 노드가 활성 컨트롤러인지 (<code>0</code> 또는 <code>1</code>)</td>
+              <td>클러스터 전체에서 <strong>정확히 하나</strong>가 <code>1</code></td>
+              <td>합계 <code>0</code>이면 컨트롤러가 없어 메타데이터 변경이 전부 실패합니다. <code>2</code> 이상이면 split-brain 의심</td>
+              <td><code>kafka-metadata-quorum.sh describe --status</code>로 쿼럼 상태 확인. 컨트롤러 노드의 디스크·네트워크 점검</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent</code></th>
+              <td>요청 처리(I/O) 스레드가 유휴인 시간의 평균 비율</td>
+              <td><code>0</code>~<code>1</code>, <strong>이상적으로 &gt; 0.3</strong></td>
+              <td>0.3 아래면 I/O 스레드가 포화입니다. 요청이 큐에서 대기하며 지연이 늘어납니다</td>
+              <td><code>num.io.threads</code> 상향(디스크 수 이상). 디스크 자체가 병목이면 스레드를 늘려도 개선되지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.network:type=SocketServer,name=NetworkProcessorAvgIdlePercent</code></th>
+              <td>네트워크 프로세서 스레드의 평균 유휴 비율</td>
+              <td><code>0</code>~<code>1</code>, <strong>이상적으로 &gt; 0.3</strong></td>
+              <td>0.3 아래면 네트워크 스레드가 포화입니다. TLS 핸드셰이크·압축 해제가 많을 때 자주 발생</td>
+              <td><code>num.network.threads</code> 상향. 연결 수가 과도하면 클라이언트 쪽 커넥션 풀링도 검토</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,name=IsrShrinksPerSec</code></th>
+              <td>ISR에서 레플리카가 빠지는 비율</td>
+              <td>브로커 장애가 없으면 <code>0</code></td>
+              <td>지속적으로 튀면 복제가 <code>replica.lag.time.max.ms</code> 안에 따라오지 못합니다</td>
+              <td><code>IsrExpandsPerSec</code>와 함께 보세요. 둘이 번갈아 튀면 "ISR 플래핑"입니다 → 복제 대역폭·GC·디스크 점검</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,name=IsrExpandsPerSec</code></th>
+              <td>ISR에 레플리카가 복귀하는 비율</td>
+              <td>브로커 장애가 없으면 <code>0</code></td>
+              <td>shrink와 짝을 이룹니다</td>
+              <td>위와 동일</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,name=FailedIsrUpdatesPerSec</code></th>
+              <td>ISR 갱신 요청이 실패한 비율</td>
+              <td><code>0</code></td>
+              <td>컨트롤러와의 통신 또는 epoch 불일치 문제</td>
+              <td>컨트롤러 로그와 <code>MetadataErrorCount</code>를 함께 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec</code></th>
+              <td>ISR 밖 레플리카가 리더로 승격된 비율</td>
+              <td><code>0</code></td>
+              <td><strong>데이터 유실이 발생했습니다.</strong> 승격된 레플리카에 없는 레코드는 사라집니다</td>
+              <td><code>unclean.leader.election.enable=false</code>인지 확인. <code>true</code>였다면 왜 켜져 있는지 추적</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTimeMs</code></th>
+              <td>리더 선거 발생 비율과 소요 시간</td>
+              <td>브로커 장애가 있을 때만 <strong>0이 아님</strong></td>
+              <td>장애가 없는데 값이 있으면 브로커가 조용히 흔들리고 있습니다(GC, 네트워크)</td>
+              <td>브로커 GC 로그와 <code>broker.session.timeout.ms</code> 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount</code></th>
+              <td>리더가 선호 리더가 아닌 파티션 수</td>
+              <td>문서에 기준 없음 — 0에 가까워야 정상</td>
+              <td>리더가 일부 브로커에 몰려 부하가 불균형해집니다</td>
+              <td><code>kafka-leader-election.sh --election-type preferred --all-topic-partitions</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=MetadataErrorCount</code></th>
+              <td>이 컨트롤러 노드가 메타데이터 로그 처리 중 만난 오류 횟수</td>
+              <td>문서에 기준 없음 — 0이어야 정상</td>
+              <td>메타데이터 로그가 손상되었거나 버전 불일치</td>
+              <td>컨트롤러 로그 확인. <code>kafka-dump-log.sh --cluster-metadata-decoder</code>로 로그 직접 검사</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.log:type=LogManager,name=OfflineLogDirectoryCount</code></th>
+              <td>오프라인 상태인 로그 디렉터리 수</td>
+              <td><code>0</code></td>
+              <td>디스크 장애입니다. 해당 디렉터리의 파티션이 오프라인이 됩니다</td>
+              <td>디스크 교체. JBOD면 나머지 디렉터리로 재할당. <code>kafka-log-dirs.sh --describe</code>로 영향 범위 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.log:type=LogManager,name=LogDirectoryOffline</code></th>
+              <td>로그 디렉터리별 오프라인 여부 (<code>1</code>=오프라인)</td>
+              <td><code>0</code></td>
+              <td>위와 동일하되 디렉터리 단위로 식별할 수 있습니다</td>
+              <td>위와 동일</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,name=OfflineReplicaCount</code></th>
+              <td>오프라인 레플리카 수</td>
+              <td><code>0</code></td>
+              <td>디스크 장애 또는 로그 디렉터리 문제</td>
+              <td>위와 동일</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,name=PartitionCount</code></th>
+              <td>이 브로커가 호스팅하는 파티션 수</td>
+              <td>브로커 간에 <strong>대체로 균등</strong></td>
+              <td>한 브로커에 몰려 있으면 그 브로커가 병목이 됩니다</td>
+              <td><code>kafka-reassign-partitions.sh</code>로 재배치</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,name=LeaderCount</code></th>
+              <td>이 브로커가 리더인 파티션 수</td>
+              <td>브로커 간에 <strong>대체로 균등</strong></td>
+              <td>리더 편중. 쓰기 부하가 한 브로커에 집중됩니다</td>
+              <td>preferred 리더 선거 실행. <code>auto.leader.rebalance.enable</code> 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaFetcherManager,name=MaxLag,clientId=Replica</code></th>
+              <td>팔로워와 리더 간 최대 메시지 lag</td>
+              <td>produce 요청의 <strong>최대 배치 크기에 비례</strong>하는 정도</td>
+              <td>지속적으로 크면 복제가 따라오지 못합니다. URP의 선행 지표</td>
+              <td><code>num.replica.fetchers</code>·<code>replica.fetch.max.bytes</code> 확인. 복제 throttle이 남아 있는지도 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec,topic=…</code></th>
+              <td>클라이언트로부터의 유입 바이트 비율 (토픽별)</td>
+              <td>문서에 기준 없음 — 용량 계획의 입력값</td>
+              <td>급증은 트래픽 폭주 또는 재처리, 급감은 프로듀서 장애</td>
+              <td><code>BytesOutPerSec</code>·<code>ReplicationBytesInPerSec</code>와 함께 보세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=BrokerTopicMetrics,name=BytesOutPerSec,topic=…</code></th>
+              <td>클라이언트로 나가는 바이트 비율 (토픽별)</td>
+              <td>문서에 기준 없음</td>
+              <td>유입 대비 배수가 컨슈머 그룹 수를 반영합니다</td>
+              <td>디스크 읽기가 페이지 캐시에서 처리되는지 OS 지표와 대조</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesInPerSec</code></th>
+              <td>다른 브로커에서 들어오는 복제 트래픽</td>
+              <td>문서에 기준 없음</td>
+              <td>재할당·복구 중 급증합니다</td>
+              <td>throttle 없이 재할당을 돌리면 여기가 튑니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec,topic=…</code></th>
+              <td>유입 메시지 비율 (토픽별)</td>
+              <td>문서에 기준 없음</td>
+              <td>바이트 대비 메시지 수가 급변하면 레코드 크기 분포가 바뀐 것</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=BrokerTopicMetrics,name=BytesRejectedPerSec,topic=…</code></th>
+              <td>레코드 배치가 <code>max.message.bytes</code>를 넘어 거부된 바이트 비율</td>
+              <td>문서 설명 기준 <code>0</code>이어야 정상</td>
+              <td><strong>프로듀서가 <code>RecordTooLargeException</code>을 받고 있습니다</strong></td>
+              <td>토픽 <code>max.message.bytes</code>, 프로듀서 <code>max.request.size</code>, 브로커 <code>replica.fetch.max.bytes</code>를 함께 올려야 합니다 (<a href="../cases/case10.html">케이스 10</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=BrokerTopicMetrics,name=FailedProduceRequestsPerSec,topic=…</code></th>
+              <td>실패한 produce 요청 비율</td>
+              <td>문서에 기준 없음 — 0이어야 정상</td>
+              <td>ISR 부족, 권한 오류, 레코드 크기 초과 등</td>
+              <td><code>ErrorsPerSec</code>의 <code>error=</code> 태그로 원인 코드를 확인하세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=BrokerTopicMetrics,name=FailedFetchRequestsPerSec,topic=…</code></th>
+              <td>실패한 fetch 요청 비율</td>
+              <td>문서에 기준 없음 — 0이어야 정상</td>
+              <td>오프셋 범위 초과, 권한 오류 등</td>
+              <td>컨슈머 쪽 <code>OffsetOutOfRangeException</code>과 대조</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=…,error=…</code></th>
+              <td>요청 타입별·에러 코드별 오류 수. <code>error=NONE</code>은 성공</td>
+              <td>문서 설명 기준 <code>NONE</code> 이외는 0이어야 정상</td>
+              <td>에러 코드가 원인을 그대로 알려 줍니다</td>
+              <td>가장 먼저 볼 진단 메트릭. 코드 의미는 <a href="troubleshooting.html">트러블슈팅 치트시트</a> 참조</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.network:type=RequestChannel,name=RequestQueueSize</code></th>
+              <td>요청 큐에 쌓인 요청 수</td>
+              <td>문서에 기준 없음</td>
+              <td><code>queued.max.requests</code>에 근접하면 새 요청이 블록됩니다</td>
+              <td><code>RequestHandlerAvgIdlePercent</code>와 함께 봐야 의미가 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=Produce</code></th>
+              <td>produce purgatory에서 대기 중인 요청 수</td>
+              <td><code>acks=-1</code>(all)을 쓰면 <strong>0이 아닌 것이 정상</strong></td>
+              <td>급증은 복제가 느려 <code>acks=all</code> 응답이 지연되는 것</td>
+              <td>복제 지연 대응과 동일</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=Fetch</code></th>
+              <td>fetch purgatory에서 대기 중인 요청 수</td>
+              <td>컨슈머의 <code>fetch.max.wait.ms</code>에 따라 달라짐</td>
+              <td>정상적으로 커집니다. 오해하기 쉬운 메트릭</td>
+              <td>단독으로 알림을 걸지 마세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.log:type=LogFlushStats,name=LogFlushRateAndTimeMs</code></th>
+              <td>로그 flush 비율과 소요 시간</td>
+              <td>문서에 기준 없음</td>
+              <td>flush 시간이 길면 디스크가 병목입니다</td>
+              <td>디스크 교체 또는 파티션 분산. <code>flush.messages</code>를 임의로 낮추지 마세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.log:type=Log,name=Size,topic=…,partition=…</code></th>
+              <td>파티션의 디스크 크기(바이트)</td>
+              <td>문서에 기준 없음</td>
+              <td>특정 파티션만 크면 키 분포가 편향된 것</td>
+              <td>파티셔닝 전략 재검토 (<a href="../cases/case04.html">케이스 4</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.log:type=Log,name=RetentionSizeInPercent,topic=…,partition=…</code></th>
+              <td>파티션 크기를 <code>retention.bytes</code> 대비 비율로 표시</td>
+              <td>문서 설명 기준: <code>retention.bytes</code> 미설정 또는 Tiered Storage 사용 시 <code>0</code>을 반환</td>
+              <td>100%에 가까우면 오래된 데이터가 곧 삭제됩니다</td>
+              <td>재처리 여유가 필요하면 리텐션 상향</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.log:type=Log,name=NumLogSegments,topic=…,partition=…</code></th>
+              <td>파티션의 세그먼트 파일 수</td>
+              <td>문서에 기준 없음</td>
+              <td>과도하면 파일 디스크립터와 인덱스 메모리를 많이 씁니다</td>
+              <td><code>segment.bytes</code>·<code>segment.ms</code> 조정</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.log:type=Log,name=LogEndOffset,topic=…,partition=…</code></th>
+              <td>파티션의 마지막 오프셋 (LEO)</td>
+              <td>단조 증가</td>
+              <td>멈춰 있으면 그 파티션에 쓰기가 없습니다</td>
+              <td>lag 계산의 분자. 컨슈머 커밋 오프셋과의 차이가 lag입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.log:type=Log,name=LogStartOffset,topic=…,partition=…</code></th>
+              <td>파티션의 첫 오프셋 (리텐션 삭제 경계)</td>
+              <td>단조 증가</td>
+              <td>급증은 대량 삭제가 일어난 것</td>
+              <td>컨슈머 커밋 오프셋이 이보다 작으면 <code>OffsetOutOfRangeException</code>이 납니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.log:type=LogManager,name=remainingLogsToRecover</code></th>
+              <td>재시작 시 복구가 남은 로그 수</td>
+              <td>정상 기동 후 <code>0</code></td>
+              <td>비정상 종료 후 복구가 진행 중입니다</td>
+              <td><code>num.recovery.threads.per.data.dir</code>를 올리면 복구가 빨라집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,name=ReassigningPartitions</code></th>
+              <td>이 브로커에서 재할당 중인 리더 파티션 수</td>
+              <td>재할당이 없으면 <code>0</code></td>
+              <td>0이 아니면 재할당이 진행 중입니다</td>
+              <td><code>--verify</code>로 완료를 확인하고 throttle을 제거하세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesInPerSec</code></th>
+              <td>재할당 유입 트래픽</td>
+              <td>재할당이 없으면 <code>0</code></td>
+              <td>재할당 진행 중에만 0이 아닙니다</td>
+              <td>throttle이 실제로 걸렸는지 확인하는 지표</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=AddPartitionsToTxnManager,name=VerificationFailureRate</code></th>
+              <td>트랜잭션 파티션 검증 실패 비율</td>
+              <td>정상 상태에서 <code>0</code> (일시적 오류는 예상 범위)</td>
+              <td>지속되면 트랜잭션 코디네이터와의 통신 문제</td>
+              <td><code>VerificationTimeMs</code>와 함께 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=ReplicaManager,name=ProducerIdCount</code></th>
+              <td>이 브로커의 레플리카가 보유한 producer ID 수</td>
+              <td>문서에 기준 없음</td>
+              <td>계속 증가하면 트랜잭션·멱등 프로듀서가 ID를 계속 새로 만들고 있습니다</td>
+              <td><code>transactional.id</code>가 인스턴스마다 안정적인지, <code>producer.id.expiration.ms</code>가 적절한지 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=group-coordinator-metrics,name=partition-load-time-max</code></th>
+              <td>그룹 메타데이터·오프셋 로드 최대 소요 시간(ms)</td>
+              <td>문서에 기준 없음</td>
+              <td>크면 코디네이터 이동 후 그룹 복구가 오래 걸립니다</td>
+              <td><code>__consumer_offsets</code> 파티션 크기와 컴팩션 상태 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-max</code></th>
+              <td>트랜잭션 메타데이터 로드 최대 소요 시간(ms)</td>
+              <td>문서에 기준 없음</td>
+              <td>크면 트랜잭션 코디네이터 페일오버가 느립니다</td>
+              <td><code>__transaction_state</code> 컴팩션 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type={Produce|Fetch},user=…,client-id=…</code></th>
+              <td>쿼터 메트릭. <code>throttle-time</code>·<code>byte-rate</code> 속성</td>
+              <td><code>throttle-time</code>은 <strong>이상적으로 0</strong></td>
+              <td>0이 아니면 클라이언트가 쿼터로 인해 지연되고 있습니다</td>
+              <td>클라이언트가 lag를 호소하는데 브로커가 한가하면 여기를 먼저 보세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.server:type=Request,user=…,client-id=…</code></th>
+              <td>요청 쿼터. <code>request-time</code> 백분율</td>
+              <td><code>throttle-time</code>은 <strong>이상적으로 0</strong></td>
+              <td>위와 동일</td>
+              <td><code>request_percentage</code> 쿼터 확인</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="kraft-metrics">
+      <h2 id="kraft-metrics">KRaft 컨트롤러 메트릭</h2>
+
+      <p>
+        ZooKeeper가 없는 4.x에서는 클러스터 메타데이터가 <code>__cluster_metadata</code> 토픽에 있고,
+        컨트롤러 쿼럼이 그것을 Raft로 복제합니다. 배경은
+        <a href="../basics/ch03.html">3장 KRaft와 클러스터 메타데이터</a>에 있습니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-kraft-metrics">
+          <caption>KRaft 컨트롤러 메트릭 (10개)</caption>
+          <thead>
+            <tr>
+              <th scope="col">MBean</th>
+              <th scope="col">의미</th>
+              <th scope="col">정상 범위</th>
+              <th scope="col">조치</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=ActiveControllerCount</code></th>
+              <td>이 노드의 활성 컨트롤러 수. 유효값은 <code>0</code> 또는 <code>1</code></td>
+              <td>클러스터 합계 <code>1</code></td>
+              <td>합계가 1이 아니면 최우선 대응</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=ActiveBrokerCount</code></th>
+              <td>이 컨트롤러가 보는 활성 브로커 수</td>
+              <td>실제 브로커 수와 일치</td>
+              <td>부족하면 어느 브로커가 fenced인지 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=FencedBrokerCount</code></th>
+              <td>fenced 상태인 브로커 수</td>
+              <td><code>0</code></td>
+              <td>브로커가 하트비트를 못 보내고 있습니다. <code>broker.session.timeout.ms</code>·네트워크 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=GlobalTopicCount</code></th>
+              <td>전체 토픽 수</td>
+              <td>기준 없음</td>
+              <td>급증은 <code>auto.create.topics.enable</code>로 오타 토픽이 생기는 신호일 수 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=GlobalPartitionCount</code></th>
+              <td>전체 파티션 수</td>
+              <td>기준 없음</td>
+              <td>파티션 총수는 컨트롤러 메모리·페일오버 시간에 직접 영향 (<a href="../cases/case05.html">케이스 5</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=OfflinePartitionsCount</code></th>
+              <td>리더가 없는 (내부 토픽 제외) 파티션 수</td>
+              <td><code>0</code></td>
+              <td>최고 심각도 알림</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount</code></th>
+              <td>리더가 선호 리더가 아닌 파티션 수</td>
+              <td>0에 가까워야 정상</td>
+              <td>preferred 리더 선거</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=KafkaController,name=MetadataErrorCount</code></th>
+              <td>메타데이터 로그 처리 중 발생한 오류 횟수</td>
+              <td>0이어야 정상</td>
+              <td>컨트롤러 로그 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs</code></th>
+              <td>컨트롤러 이벤트 큐 대기 시간 히스토그램</td>
+              <td>기준 없음</td>
+              <td>커지면 컨트롤러가 밀리고 있습니다 → 메타데이터 변경(토픽 생성 등)이 느려집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs</code></th>
+              <td>컨트롤러 이벤트 처리 시간 히스토그램</td>
+              <td>기준 없음</td>
+              <td>위와 함께 봅니다. 처리 시간이 길면 파티션 총수를 줄이는 것을 검토</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="request-latency">
+      <h2 id="request-latency">요청 지연 분해</h2>
+
+      <p>
+        "produce가 느리다"는 신고를 받았을 때 <strong>어디서 느린지</strong>를 가르는 표입니다.
+        모두 <code>request={Produce|FetchConsumer|FetchFollower}</code> 태그를 가집니다.
+        <code>TotalTimeMs</code>는 아래 네 구간의 합으로 분해됩니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-latency">
+          <caption>요청 지연 구간별 메트릭 (6개) — <code>kafka.network:type=RequestMetrics</code></caption>
+          <thead>
+            <tr>
+              <th scope="col">MBean <code>name=</code></th>
+              <th scope="col">이 구간이 크면</th>
+              <th scope="col">조치</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>TotalTimeMs</code></th>
+              <td>전체 지연. 아래 구간의 합입니다</td>
+              <td>먼저 이 값을 보고 어느 구간이 지배적인지 내려가세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>RequestQueueTimeMs</code></th>
+              <td>요청이 큐에서 기다렸습니다 — <strong>I/O 스레드 부족</strong></td>
+              <td><code>num.io.threads</code> 상향. <code>RequestHandlerAvgIdlePercent</code> 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>LocalTimeMs</code></th>
+              <td>리더에서의 처리 시간 — <strong>디스크 또는 CPU</strong></td>
+              <td>디스크 I/O 지표 확인. 압축 해제·포맷 변환도 여기 포함됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>RemoteTimeMs</code></th>
+              <td>팔로워를 기다린 시간. <code>acks=all</code>이면 <strong>0이 아닌 것이 정상</strong></td>
+              <td>급증은 복제 지연입니다. <code>MaxLag</code>·URP 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ResponseQueueTimeMs</code></th>
+              <td>응답이 큐에서 기다렸습니다 — <strong>네트워크 스레드 부족</strong></td>
+              <td><code>num.network.threads</code> 상향</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>ResponseSendTimeMs</code></th>
+              <td>응답 전송 시간 — <strong>클라이언트 네트워크 또는 대역폭</strong></td>
+              <td>클라이언트 쪽 네트워크와 쿼터 <code>throttle-time</code> 확인</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="읽는 순서">
+        <p>
+          <code>TotalTimeMs</code> → 큰 구간 하나를 고른다 →
+          그 구간이 지목하는 자원(스레드 / 디스크 / 복제 / 네트워크)을 확인한다.
+          이 순서를 따르면 "브로커가 느리다"를 30초 안에 좁힐 수 있습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="producer-metrics">
+      <h2 id="producer-metrics">프로듀서 클라이언트 메트릭</h2>
+
+      <p>
+        전부 <code>kafka.producer:type=producer-metrics,client-id="{client-id}"</code> 아래에 있습니다
+        (토픽별 메트릭은 <code>type=producer-topic-metrics</code>).
+        <strong><code>client.id</code>를 설정하지 않으면 식별이 사실상 불가능</strong>하므로 반드시 지정하세요.
+      </p>
+
+      <div class="toolbar">
+        <div class="field">
+          <label for="f-producer">프로듀서 메트릭 검색</label>
+          <input class="cheat-filter" id="f-producer" data-target="#t-producer-metrics" type="search"
+                 placeholder="설정명으로 검색 (예: batch, retry, latency)" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-producer-metrics">
+          <caption>프로듀서 메트릭 (17개)</caption>
+          <thead>
+            <tr>
+              <th scope="col">Attribute</th>
+              <th scope="col">의미</th>
+              <th scope="col">이상 시 의미</th>
+              <th scope="col">조치</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>record-send-rate</code></th><td>초당 전송 레코드 수</td><td>기대보다 낮으면 애플리케이션이 <code>send()</code>를 덜 호출하거나 버퍼가 막혀 있습니다</td><td><code>buffer-available-bytes</code>·<code>record-queue-time-avg</code> 확인</td></tr>
+            <tr><th scope="row"><code>record-error-rate</code></th><td>오류로 끝난 전송 비율</td><td><strong>0이 아니면 유실 가능성</strong>입니다. 콜백에서 예외를 삼키고 있지 않은지 확인</td><td>브로커 <code>ErrorsPerSec</code>의 에러 코드와 대조</td></tr>
+            <tr><th scope="row"><code>record-retry-rate</code></th><td>재시도된 전송 비율</td><td>지속적으로 높으면 리더 이동·ISR 부족·타임아웃이 반복되고 있습니다</td><td>URP·리더 선거 메트릭 확인</td></tr>
+            <tr><th scope="row"><code>batch-size-avg</code></th><td>요청당 파티션별 평균 전송 바이트</td><td><code>batch.size</code>보다 훨씬 작으면 배치가 차기 전에 전송되고 있습니다</td><td><code>linger.ms</code>를 올려야 배치가 커집니다. <code>batch.size</code>만 올려도 효과 없음</td></tr>
+            <tr><th scope="row"><code>batch-size-max</code></th><td>요청당 최대 전송 바이트</td><td></td><td></td></tr>
+            <tr><th scope="row"><code>batch-split-rate</code></th><td>배치가 분할된 비율</td><td>0이 아니면 배치가 브로커의 <code>max.message.bytes</code>를 넘어 나뉘고 있습니다</td><td><code>batch.size</code>를 브로커 한계 아래로 조정</td></tr>
+            <tr><th scope="row"><code>records-per-request-avg</code></th><td>요청당 평균 레코드 수</td><td>1에 가까우면 배치가 전혀 되지 않고 있습니다</td><td><code>linger.ms</code>·<code>batch.size</code></td></tr>
+            <tr><th scope="row"><code>compression-rate-avg</code></th><td>압축 후/전 크기 비율 (작을수록 잘 압축됨)</td><td>1에 가까우면 압축 효과가 없습니다 (이미 압축된 데이터 등)</td><td><code>compression.type=none</code>으로 CPU를 아끼는 편이 나을 수 있습니다</td></tr>
+            <tr><th scope="row"><code>record-queue-time-avg</code></th><td>레코드가 전송 버퍼에서 대기한 평균 시간(ms)</td><td><code>linger.ms</code>보다 훨씬 크면 Sender 스레드가 밀리고 있습니다</td><td>in-flight 한계·브로커 지연 확인</td></tr>
+            <tr><th scope="row"><code>record-queue-time-max</code></th><td>같은 값의 최대치</td><td>꼬리 지연을 볼 때 사용</td><td></td></tr>
+            <tr><th scope="row"><code>request-latency-avg</code></th><td>요청 왕복 지연 평균(ms)</td><td>브로커 <code>TotalTimeMs</code>보다 훨씬 크면 네트워크 구간 문제</td><td>두 값을 비교하는 것이 요점입니다</td></tr>
+            <tr><th scope="row"><code>request-latency-max</code></th><td>요청 왕복 지연 최대치</td><td></td><td></td></tr>
+            <tr><th scope="row"><code>requests-in-flight</code></th><td>응답을 기다리는 요청 수</td><td><code>max.in.flight.requests.per.connection</code>에 붙어 있으면 브로커 응답이 병목</td><td>멱등성이 켜져 있으면 이 값은 5를 넘을 수 없습니다</td></tr>
+            <tr><th scope="row"><code>produce-throttle-time-avg</code></th><td>브로커 쿼터로 지연된 평균 시간(ms)</td><td>0이 아니면 쿼터에 걸려 있습니다</td><td><code>producer_byte_rate</code> 쿼터 확인</td></tr>
+            <tr><th scope="row"><code>produce-throttle-time-max</code></th><td>같은 값의 최대치</td><td></td><td></td></tr>
+            <tr><th scope="row"><code>record-size-avg</code></th><td>평균 레코드 크기</td><td>급변은 페이로드 구조 변경 신호</td><td>용량 계획에 반영</td></tr>
+            <tr><th scope="row"><code>metadata-age</code></th><td>현재 사용 중인 메타데이터의 나이(초)</td><td><code>metadata.max.age.ms</code>보다 훨씬 크면 메타데이터 갱신이 실패하고 있습니다</td><td>브로커 도달성·<code>advertised.listeners</code> 확인</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="consumer-metrics">
+      <h2 id="consumer-metrics">컨슈머 클라이언트 메트릭</h2>
+
+      <div class="toolbar">
+        <div class="field">
+          <label for="f-consumer">컨슈머 메트릭 검색</label>
+          <input class="cheat-filter" id="f-consumer" data-target="#t-consumer-metrics" type="search"
+                 placeholder="설정명으로 검색 (예: lag, fetch, lead)" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-consumer-metrics">
+          <caption>컨슈머 메트릭 (13개) — <code>kafka.consumer:type=consumer-fetch-manager-metrics</code></caption>
+          <thead>
+            <tr>
+              <th scope="col">Attribute</th>
+              <th scope="col">의미</th>
+              <th scope="col">이상 시 의미</th>
+              <th scope="col">조치</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>records-lag-max</code></th>
+              <td>이 윈도 안 모든 파티션 중 최대 lag. <strong>커밋 오프셋이 아니라 현재 위치 기준</strong></td>
+              <td>증가 추세면 소비가 생산을 따라가지 못합니다</td>
+              <td>절대값이 아니라 <strong>기울기</strong>로 알림을 거세요. 이 메트릭은 컨슈머가 발행하므로 컨슈머가 죽으면 사라집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>records-lag</code> <span class="badge">파티션별</span></th>
+              <td>파티션별 최신 lag (<code>partition=</code>·<code>topic=</code> 태그)</td>
+              <td>특정 파티션만 크면 그 파티션에 핫키가 있거나 처리가 느립니다</td>
+              <td>파티션 단위로 좁혀 들어갈 때 사용</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>records-lag-avg</code> <span class="badge">파티션별</span></th>
+              <td>파티션별 평균 lag</td>
+              <td>순간값보다 추세를 보기 좋습니다</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>records-lead-min</code></th>
+              <td>lead = 현재 위치 − log-start-offset. 최소값</td>
+              <td><strong>0에 가까워지면 리텐션 삭제에 잡아먹히기 직전</strong>입니다</td>
+              <td>lag만 보면 놓치는 위험입니다. <code>OffsetOutOfRangeException</code>의 선행 지표</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>records-consumed-rate</code></th>
+              <td>초당 소비 레코드 수</td>
+              <td>0으로 떨어지면 poll 루프가 멈췄거나 리밸런스 중입니다</td>
+              <td>애플리케이션 스레드 덤프 확인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>bytes-consumed-rate</code></th>
+              <td>초당 소비 바이트</td>
+              <td>레코드 수와 함께 보면 평균 크기 변화를 알 수 있습니다</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch-rate</code></th>
+              <td>초당 fetch 요청 수</td>
+              <td>매우 높으면 <code>fetch.min.bytes</code>가 너무 작습니다</td>
+              <td>브로커 부하를 줄이려면 <code>fetch.min.bytes</code> 상향</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch-latency-avg</code></th>
+              <td>fetch 요청 평균 소요 시간(ms)</td>
+              <td><code>fetch.max.wait.ms</code>에 붙어 있으면 데이터가 부족해 기다린 것 (정상)</td>
+              <td>오해하기 쉬운 메트릭. 단독으로 판단하지 마세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch-latency-max</code></th>
+              <td>fetch 최대 소요 시간</td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch-size-avg</code></th>
+              <td>요청당 평균 fetch 바이트</td>
+              <td><code>max.partition.fetch.bytes</code>에 붙어 있으면 상한에 걸려 있습니다</td>
+              <td>큰 레코드를 다루면 상향 검토</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>records-per-request-avg</code></th>
+              <td>요청당 평균 레코드 수</td>
+              <td><code>max.poll.records</code>와 비교</td>
+              <td></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch-throttle-time-avg</code></th>
+              <td>쿼터로 지연된 평균 시간(ms)</td>
+              <td>0이 아니면 <code>consumer_byte_rate</code> 쿼터에 걸려 있습니다</td>
+              <td>"컨슈머가 느린데 브로커는 한가하다"의 흔한 원인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>preferred-read-replica</code> <span class="badge">파티션별</span></th>
+              <td>현재 읽고 있는 레플리카. <code>-1</code>이면 리더에서 읽는 중</td>
+              <td>랙 인식 읽기를 켰는데 계속 <code>-1</code>이면 설정이 적용되지 않았습니다</td>
+              <td><code>client.rack</code>과 브로커 <code>replica.selector.class</code> 확인</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="lag만 보면 놓치는 것">
+        <p>
+          <code>records-lag-max</code>가 0이어도 안전하지 않을 수 있습니다.
+          컨슈머가 <strong>완전히 멈추면 이 메트릭 자체가 사라집니다</strong>(컨슈머가 발행하므로).
+          "lag이 0"과 "lag 메트릭이 없음"을 구분하지 않는 대시보드는 장애를 숨깁니다.
+          브로커 쪽 <code>LogEndOffset</code>과 <code>__consumer_offsets</code> 기반 측정을
+          <strong>함께</strong> 두어야 합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="lag-methods">
+      <h2 id="lag-methods">Consumer lag 측정 3가지 방법</h2>
+
+      <div class="table-scroll">
+        <table class="config-table" id="t-lag-methods">
+          <caption>lag 측정 방법 비교 — 세 방법의 "lag"은 서로 다른 것을 셉니다</caption>
+          <thead>
+            <tr>
+              <th scope="col">방법</th>
+              <th scope="col">무엇을 재는가</th>
+              <th scope="col">장점</th>
+              <th scope="col">함정</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">① <code>kafka-consumer-groups.sh --describe</code></th>
+              <td>LEO − <strong>커밋된 오프셋</strong></td>
+              <td>컨슈머가 죽어도 측정됩니다. 그룹 전체를 한눈에 봅니다. 브로커만 있으면 됩니다</td>
+              <td>커밋 주기만큼 늦게 보입니다(자동 커밋 기본 5초). 커밋이 만료되면 <code>-</code>로 나옵니다. 폴링 비용이 있어 초당 수집은 부적합</td>
+            </tr>
+            <tr>
+              <th scope="row">② 컨슈머 JMX <code>records-lag-max</code></th>
+              <td>LEO − <strong>컨슈머의 현재 위치</strong> (커밋 아님)</td>
+              <td>실시간이고 오버헤드가 거의 없습니다. 처리 지연을 가장 정확히 반영합니다</td>
+              <td><strong>컨슈머가 죽으면 메트릭이 사라집니다.</strong> 파티션을 할당받지 못한 컨슈머는 lag을 보고하지 않습니다. "값 없음"을 "정상"으로 오독하기 쉽습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">③ 외부 exporter (예: Kafka Lag Exporter류)</th>
+              <td><code>__consumer_offsets</code>를 읽거나 Admin API로 조회해 LEO와 비교. 시간 단위 lag 추정도 제공</td>
+              <td>컨슈머 생존과 무관합니다. "몇 초 뒤처졌는가"를 시간으로 환산할 수 있어 SLO에 쓰기 좋습니다</td>
+              <td>별도 컴포넌트가 늘어납니다. Apache Kafka 본체 기능이 아니라 도구 선택·운영 책임이 생깁니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="권장 조합">
+        <p>
+          <strong>②로 알림, ①로 확인, ③으로 SLO</strong>가 실용적인 조합입니다.
+          ②만 쓰면 컨슈머 전멸을 감지하지 못하고, ①만 쓰면 반응이 느립니다.
+          어느 방법을 쓰든 <strong>절대값보다 기울기</strong>로 알림을 거세요 —
+          배포 직후 잠깐 오르는 것은 정상입니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>①로 lag 큰 파티션만 뽑기</figcaption>
+        <pre><code class="lang-bash">bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group my-group \
+  | awk 'NR>1 &amp;&amp; $6 ~ /^[0-9]+$/ { print $6, $1"/"$2"/"$3 }' \
+  | sort -rn | head -20
+
+# 출력 예: 사람 눈으로 편중을 바로 확인할 수 있습니다
+# 184320 orders/orders/7
+# 152011 orders/orders/3
+#      0 orders/orders/0</code></pre>
+      </figure>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="promql">
+      <h2 id="promql">PromQL 알림 룰</h2>
+
+      <p>
+        JMX Exporter로 수집한다고 가정한 예시입니다.
+        <strong>메트릭 이름은 exporter 설정에 따라 달라지므로</strong>
+        아래 이름은 자기 환경에 맞게 바꿔야 합니다. 여기서 봐야 할 것은
+        <strong>조건과 <code>for</code> 값</strong>입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>alerts.yml — 최소 5개</figcaption>
+        <pre><code class="lang-yaml">groups:
+  - name: kafka-critical
+    rules:
+      # 1) 리더 없는 파티션 — 읽기·쓰기 모두 불가. for 를 짧게 둡니다.
+      - alert: KafkaOfflinePartitions
+        expr: sum(kafka_controller_kafkacontroller_offlinepartitionscount) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "오프라인 파티션 {{ $value }}개 — 읽기·쓰기 불가"
+          runbook: "kafka-topics.sh --describe --unavailable-partitions"
+
+      # 2) 활성 컨트롤러가 정확히 하나가 아님 (0 = 없음, 2+ = split-brain 의심)
+      - alert: KafkaControllerCountAbnormal
+        expr: sum(kafka_controller_kafkacontroller_activecontrollercount) != 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "활성 컨트롤러 수 = {{ $value }} (정상은 1)"
+          runbook: "kafka-metadata-quorum.sh describe --status"
+
+      # 3) min.insync.replicas 미달 — acks=all 쓰기가 이미 실패하고 있습니다
+      - alert: KafkaUnderMinIsr
+        expr: sum(kafka_server_replicamanager_underminisrpartitioncount) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "min.insync.replicas 미달 파티션 {{ $value }}개 — acks=all 쓰기 거부"
+
+  - name: kafka-warning
+    rules:
+      # 4) URP 지속. 순간적인 URP는 정상이므로 for 를 길게 둡니다.
+      - alert: KafkaUnderReplicatedPartitions
+        expr: sum(kafka_server_replicamanager_underreplicatedpartitions) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "URP {{ $value }}개가 15분 이상 지속"
+
+      # 5) 요청 처리 스레드 포화 — 공식 문서 권장 하한이 0.3 입니다
+      - alert: KafkaRequestHandlerSaturated
+        expr: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent &lt; 0.3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} I/O 스레드 유휴율 {{ $value }} (권장 > 0.3)"
+
+      # 6) unclean 리더 선거 = 데이터 유실. 발생 자체가 사건입니다.
+      - alert: KafkaUncleanLeaderElection
+        expr: increase(kafka_controller_controllerstats_uncleanleaderelectionspersec_total[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "unclean 리더 선거 발생 — 데이터 유실 가능"
+
+      # 7) Consumer lag 은 절대값이 아니라 기울기로 봅니다.
+      #    5분간 계속 증가하면 소비가 생산을 못 따라가고 있습니다.
+      - alert: KafkaConsumerLagGrowing
+        expr: deriv(kafka_consumer_fetch_manager_records_lag_max[10m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.client_id }} lag 이 15분간 증가 추세"</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="알림 설계에서 자주 하는 실수">
+        <p>
+          <strong>URP에 <code>for: 0</code>을 두면 알림이 쓸모없어집니다.</strong>
+          롤링 재시작마다 URP는 정상적으로 발생합니다. 15분 이상 <strong>지속</strong>될 때만 의미가 있습니다.
+        </p>
+        <p>
+          반대로 <code>OfflinePartitionsCount</code>는 <strong>단 1분도 정상이 아닙니다.</strong>
+          두 메트릭에 같은 <code>for</code>를 쓰지 마세요.
+        </p>
+        <p>
+          그리고 <code>records-lag-max</code> 알림은
+          <strong>"메트릭이 사라진 경우"를 별도로 감시</strong>해야 합니다
+          (예: <code>absent()</code> 또는 <code>up</code> 지표와 조합).
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트</h2>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Observability">
+        <ul>
+          <li><code>UnderReplicatedPartitions</code>는 <strong>ISR &lt; 전체 레플리카</strong>, <code>UnderMinIsrPartitionCount</code>는 <strong>ISR &lt; <code>min.insync.replicas</code></strong>입니다. 후자가 실제로 쓰기를 막습니다.</li>
+          <li><code>ActiveControllerCount</code>는 브로커별 값이고 <strong>클러스터 전체 합이 1</strong>이어야 합니다. 브로커 하나에서 1을 봤다고 정상이 아닙니다.</li>
+          <li><code>RequestHandlerAvgIdlePercent</code>·<code>NetworkProcessorAvgIdlePercent</code>의 공식 권장 하한은 <strong>0.3</strong>입니다.</li>
+          <li><code>records-lag-max</code>는 <strong>커밋된 오프셋이 아니라 현재 위치</strong> 기준입니다 (문서에 명시).</li>
+          <li><code>OfflinePartitionsCount</code>는 <strong>컨트롤러</strong> MBean(<code>kafka.controller</code>)이고 <code>UnderReplicatedPartitions</code>는 <strong>브로커</strong> MBean(<code>kafka.server</code>)입니다. 소속을 바꿔 놓은 선택지가 자주 나옵니다.</li>
+          <li>모든 rate 메트릭에는 <code>-total</code> 누적 카운터가 있습니다.</li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Observability">
+        <p>
+          "produce 지연이 늘었다. 무엇을 먼저 보는가"에는
+          <code>TotalTimeMs</code>를 <code>RequestQueueTimeMs</code> / <code>LocalTimeMs</code> /
+          <code>RemoteTimeMs</code> / <code>ResponseQueueTimeMs</code>로 <strong>분해</strong>하는 답이 정답입니다.
+          <code>RemoteTimeMs</code>가 크면 <code>acks=all</code>에서 복제를 기다린 것이므로
+          <strong>클라이언트가 아니라 복제 쪽</strong>을 봐야 합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="troubleshooting.html">
+          <span class="card__title">트러블슈팅 치트시트</span>
+          <span class="card__desc">메트릭이 이상할 때 실행할 명령과 예외 20개.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="cli.html">
+          <span class="card__title">CLI 치트시트</span>
+          <span class="card__desc">URP·ISR·lag을 명령줄에서 확인하는 방법.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc"><code>num.io.threads</code>·<code>replica.lag.time.max.ms</code> 등 조치에 쓰는 설정.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch11.html">
+          <span class="card__title">11장 · 운영 기초</span>
+          <span class="card__desc">JMX → Prometheus → Grafana 파이프라인과 임계값 가이드.</span>
+          <span class="card__meta">기본개념</span>
+        </a></li>
+        <li><a class="card" href="../cases/case02.html">
+          <span class="card__title">케이스 2</span>
+          <span class="card__desc">lag은 늘어나는데 컨슈머는 살아 있던 사례.</span>
+          <span class="card__meta">케이스 스터디</span>
+        </a></li>
+        <li><a class="card" href="../ccdak/domain-observability.html">
+          <span class="card__title">CCDAK · Application Observability</span>
+          <span class="card__desc">시험 관점으로 압축한 관측 도메인.</span>
+          <span class="card__meta">자격증</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ============================================================== -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>
+        MBean 이름과 "정상 범위" 열은 Apache Kafka 4.3.1 공식 문서에서 그대로 확인했습니다.
+        문서에 정상 범위가 명시되지 않은 메트릭은 표에 그렇게 적었고, 임의의 임계값을 넣지 않았습니다.
+        PromQL 예시의 메트릭 이름은 exporter 설정에 따라 달라지는 부분이므로 공식 문서의 대상이 아닙니다.
+      </p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#monitoring" rel="noopener noreferrer">Monitoring</a> — 브로커 메트릭 표 전체, JMX 보안 주의사항, rate/total 규칙</li>
+        <li><a href="https://kafka.apache.org/documentation/#kraft_monitoring" rel="noopener noreferrer">KRaft Monitoring</a> — 컨트롤러 메트릭</li>
+        <li><a href="https://kafka.apache.org/documentation/#producer_monitoring" rel="noopener noreferrer">Producer Monitoring</a> — <code>producer-metrics</code> · <code>producer-topic-metrics</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#consumer_fetch_monitoring" rel="noopener noreferrer">Consumer Fetch Metrics</a> — <code>records-lag-max</code> · <code>records-lead-min</code> · <code>preferred-read-replica</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#quotas" rel="noopener noreferrer">Quotas</a> — <code>throttle-time</code> 해석</li>
+        <li><a href="https://archive.apache.org/dist/kafka/4.3.1/" rel="noopener noreferrer">Apache Kafka 4.3.1 배포 아카이브</a> — <code>kafka_2.13-4.3.1-site-docs.tgz</code></li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

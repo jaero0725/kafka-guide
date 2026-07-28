@@ -132,6 +132,58 @@ Kafka **4.3** 소스에서 직접 확인했다.
 | `default.replication.factor` | `1` | |
 | `auto.create.topics.enable` | `true` | |
 
+### Producer 추가 (A1이 site-docs + 소스 이중 확인)
+| 설정 | 기본값 |
+|---|---|
+| `buffer.memory` | `33554432` (32MB) |
+| `max.block.ms` | `60000` |
+| `retries` | `2147483647` |
+| `request.timeout.ms` | `30000` |
+| `retry.backoff.ms` / `retry.backoff.max.ms` | `100` / `1000` |
+| `max.request.size` | `1048576` |
+| `compression.type` | `none` (토픽 레벨은 `producer`) |
+| gzip / lz4 / zstd 레벨 | `-1` / `9` / `3` |
+| `transaction.timeout.ms` | `60000` |
+
+### Broker / 복제 추가 (A1 확인)
+| 설정 | 기본값 | 비고 |
+|---|---|---|
+| **`unclean.leader.election.enable`** | **`false`** | 직접 확인. 유실 위험 설정이므로 기본 비활성 |
+| `min.insync.replicas` | `1` | ⚠️ RF=3이어도 기본 1이다. 케이스 6의 원인 |
+| `replica.lag.time.max.ms` | `30000` | ISR 이탈 판정 |
+| `replica.fetch.max.bytes` | `1048576` | |
+| `offsets.topic.replication.factor` | `3` | |
+| `auto.leader.rebalance.enable` | `true` | |
+| `leader.imbalance.check.interval.seconds` | `300` | |
+| `broker.heartbeat.interval.ms` / `broker.session.timeout.ms` | `2000` / `9000` | KRaft |
+| `metadata.max.idle.interval.ms` | `500` | |
+| `initial.broker.registration.timeout.ms` | `60000` | |
+| `controller.quorum.auto.join.enable` | `false` | |
+
+### 소스에서 확인된 동작 (수치 아님)
+- `BuiltInPartitioner.partitionForKey` = `Utils.toPositive(Utils.murmur2(key)) % numPartitions`
+- 예외 계층: `RetriableException` → `RefreshRetriableException` → `InvalidMetadataException`,
+  그리고 `ApplicationRecoverableException`
+- 콜백은 Sender 스레드 실행. 실패 시 `metadata` 필드가 **전부 `-1`**.
+  같은 파티션 콜백은 순서 보장. **4.3부터 콜백 내 `flush()` 금지**
+- `SerializationException`은 **동기로 던져진다** (콜백으로 오지 않음)
+- 멱등성: `max.in.flight` 6 이상을 **명시**하면 `ConfigException`,
+  다른 설정 충돌 시에는 **조용히 비활성화**. 브로커가 파티션별 최근 배치 5개만 보관
+- `Partitioner` 인터페이스에 **`onNewBatch`는 없다** (구버전 자료 오류)
+- **4.0에서 제거된 클래스**: `DefaultPartitioner`, `UniformStickyPartitioner`,
+  `NotLeaderForPartitionException`
+- `--time -1`은 LEO가 아니라 **high watermark**를 반환한다
+- ELR (KIP-966): 4.1부터 기본 활성
+- 정적 vs 동적 컨트롤러 쿼럼 (KIP-853), `kafka-storage.sh` 포맷 3경로
+  (`--standalone` / `--initial-controllers` / `--no-initial-controllers`)
+
+### ⚠️ 공식 문서에 없어서 쓰면 안 되는 것
+- **압축 코덱별 압축률·CPU·지연의 구체적 수치.** 공식 문서에 없다.
+  상대 비교로만 서술하고, 필요하면 실측을 안내한다.
+- **처리량/지연 프리셋의 구체값** (`batch.size=65536` 등)은 공식 권장값이 아니다.
+  "방향을 나타내는 출발점"으로 명시할 것.
+- `compression.gzip.level=-1`이 실제 매핑되는 레벨 (구현 기본으로만 확인됨)
+
 ### 환경 요구사항 (site-docs `operations/java-version.md`)
 | 항목 | 값 |
 |---|---|

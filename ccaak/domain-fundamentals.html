@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CCAAK · Kafka Fundamentals — Kafka Guide</title>
+  <meta name="description" content="CCAAK Kafka Fundamentals 섹션을 운영자 관점으로 정리합니다. KRaft 클러스터 구조, 복제와 ISR, high watermark, 리더 선출과 preferred replica, 필수 CLI, 외워야 할 설정값, 장애 시나리오 대응.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccaak" data-page="domain-fundamentals"></div>
+
+  <main id="main" class="page" data-page-id="ccaak/domain-fundamentals">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCAAK</a></li>
+        <li><span aria-current="page">Kafka Fundamentals</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCAAK · 섹션 1</p>
+      <h1>Kafka Fundamentals</h1>
+      <p class="page__lead">
+        나머지 6개 섹션이 모두 이 섹션 위에 서 있습니다. 개발자 시험에서는 "이 코드가 무엇을 반환하는가"를 묻지만,
+        운영자 시험에서는 같은 개념을 <strong>"이 출력이 무엇을 뜻하는가"</strong>로 묻습니다.
+        <code>kafka-topics.sh --describe</code>의 한 줄을 보고 리더·ISR·복제 상태를 즉시 읽어 내는 것이 이 섹션의 목표입니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>KRaft 클러스터의 구성 요소(브로커·컨트롤러 쿼럼·<code>__cluster_metadata</code>)와 역할을 설명할 수 있습니다.</li>
+        <li>ISR이 축소·확장되는 조건과 <code>replica.lag.time.max.ms</code>의 역할을 말할 수 있습니다.</li>
+        <li>high watermark가 어떻게 결정되는지, 왜 컨슈머가 그 위를 못 읽는지 설명할 수 있습니다.</li>
+        <li>리더 선출 종류(정상·preferred·unclean)를 구분하고 각각의 대가를 말할 수 있습니다.</li>
+        <li><code>--describe</code> 계열 CLI 출력에서 이상 신호를 찾아낼 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="what-it-asks">
+      <h2 id="what-it-asks">이 도메인이 묻는 것</h2>
+
+      <p>
+        이 섹션의 문항은 크게 세 갈래입니다. 첫째, <strong>구조 판독</strong> — CLI 출력이나 설정 조각을 주고
+        무엇이 잘못되었는지 찾게 합니다. 둘째, <strong>보장의 경계</strong> — 어떤 조건에서 데이터가 남고
+        어떤 조건에서 사라지는지 묻습니다. 셋째, <strong>용어의 정확성</strong> — leader와 preferred leader,
+        replica와 ISR, LEO와 high watermark를 구분하는지 matching 유형으로 확인합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>이 섹션에서 반복되는 질문 형태</caption>
+          <thead>
+            <tr>
+              <th scope="col">질문 형태</th>
+              <th scope="col">실제로 확인하는 것</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">"이 토픽의 <code>Isr</code>가 <code>Replicas</code>보다 짧다. 무슨 일인가?"</th>
+              <td>ISR 축소 조건과 그것이 쓰기 가능성에 미치는 영향</td>
+            </tr>
+            <tr>
+              <th scope="row">"브로커 1대를 잃었을 때 데이터가 유실되는 조건은?"</th>
+              <td>RF · <code>min.insync.replicas</code> · <code>acks</code> 3자 관계</td>
+            </tr>
+            <tr>
+              <th scope="row">"파티션 수를 줄이려면?"</th>
+              <td><strong>줄일 수 없다</strong>는 사실과 그 이유</td>
+            </tr>
+            <tr>
+              <th scope="row">"컨트롤러가 하는 일을 고르시오"</th>
+              <td>KRaft에서 메타데이터가 어디에 저장되고 누가 관리하는가</td>
+            </tr>
+            <tr>
+              <th scope="row">"각 오프셋 지표를 의미와 연결하시오" (matching)</th>
+              <td>log-start-offset · committed offset · high watermark · LEO 구분</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="core-concepts">
+      <h2 id="core-concepts">핵심 개념 요약 — 운영자 관점</h2>
+
+      <h3 id="cluster-shape">클러스터의 모양</h3>
+
+      <p>
+        Kafka 4.x의 모든 서버는 <code>process.roles</code>로 역할을 선언합니다.
+        <code>broker</code>는 데이터를 저장·서빙하고, <code>controller</code>는 메타데이터 쿼럼에 참여합니다.
+        컨트롤러 중 하나가 <strong>active controller</strong>이고 나머지는 hot standby입니다.
+        클러스터 메타데이터는 <code>__cluster_metadata</code> 파티션에 Raft로 복제됩니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-010">
+        <figcaption>
+          KRaft 클러스터 전체 구조 — 브로커 3대와 컨트롤러 쿼럼, 클라이언트가 어디에 붙는지
+        </figcaption>
+      </figure>
+
+      <aside class="note" data-label="운영자가 먼저 볼 것">
+        <p>
+          클러스터에 문제가 생겼을 때 순서는 <strong>컨트롤러 → 브로커 → 토픽 → 클라이언트</strong>입니다.
+          컨트롤러 쿼럼이 과반을 잃으면 메타데이터 변경(토픽 생성, 리더 선출)이 멈추므로,
+          토픽 단위 증상으로 보이는 문제도 실제 원인은 컨트롤러일 수 있습니다.
+          쿼럼 상태는 <code>kafka-metadata-quorum.sh describe --status</code>로 확인합니다.
+        </p>
+      </aside>
+
+      <h3 id="replication-isr">복제와 ISR — 이 섹션의 중심</h3>
+
+      <p>
+        복제 단위는 토픽이 아니라 <strong>토픽-파티션</strong>입니다. 각 파티션에는 리더 하나와 팔로워가 있고,
+        쓰기와 읽기는 모두 리더로 갑니다. 팔로워는 리더에서 fetch해 따라잡습니다.
+        <strong>ISR(in-sync replicas)</strong>은 "충분히 따라잡은" 레플리카 집합입니다.
+      </p>
+
+      <p>
+        팔로워가 <code>replica.lag.time.max.ms</code>(기본 <strong>30000</strong>ms) 안에
+        리더의 로그 끝까지 따라잡은 fetch 요청을 보내지 못하면 ISR에서 빠집니다.
+        다시 따라잡으면 되돌아옵니다. 이 축소·확장은 각각
+        <code>IsrShrinksPerSec</code> · <code>IsrExpandsPerSec</code> 메트릭으로 관측됩니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-013">
+        <figcaption>
+          복제와 ISR — 팔로워 지연으로 ISR이 축소되어 <code>min.insync.replicas</code>를 밑도는 과정
+        </figcaption>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Fundamentals">
+        <p>
+          <strong>high watermark는 ISR 내 최소 LEO입니다.</strong>
+          컨슈머는 high watermark를 넘어서 읽을 수 없습니다. 따라서 팔로워 한 대가 느려지면
+          그 파티션의 <strong>소비 가능 지점 자체가 뒤로 밀립니다.</strong>
+          "프로듀서는 정상인데 컨슈머가 최신 데이터를 못 본다"는 증상의 한 원인이 여기입니다.
+          오프셋 4종의 관계는 <a href="../basics/ch01.html#offset-basics">1장</a>의 인터랙티브 다이어그램에서 확인하세요.
+        </p>
+      </aside>
+
+      <h3 id="leader-election">리더 선출 3종</h3>
+
+      <div class="table-scroll">
+        <table>
+          <caption>리더 선출의 종류와 대가</caption>
+          <thead>
+            <tr>
+              <th scope="col">종류</th>
+              <th scope="col">언제 일어나는가</th>
+              <th scope="col">대가</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">정상 선출</th>
+              <td>리더 브로커가 내려가면 컨트롤러가 <strong>ISR 안에서</strong> 새 리더를 뽑습니다.</td>
+              <td>없음. 커밋된 데이터는 보존됩니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">preferred 선출</th>
+              <td>레플리카 목록의 <strong>첫 번째</strong> 브로커로 리더를 되돌립니다.
+                  <code>auto.leader.rebalance.enable=true</code>(기본)이면 자동, 아니면
+                  <code>kafka-leader-election.sh --election-type preferred</code>로 수동.</td>
+              <td>선출 순간 짧은 리더 없음 구간. 대신 리더가 한쪽 브로커에 쏠리는 것을 막습니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">unclean 선출</th>
+              <td>ISR이 비어 있을 때 <strong>ISR 밖</strong> 레플리카를 리더로 올립니다.
+                  <code>unclean.leader.election.enable=true</code>일 때만 가능합니다(기본 <strong>false</strong>).</td>
+              <td><strong>데이터 유실.</strong> 가용성을 데이터로 사는 거래입니다.
+                  <code>UncleanLeaderElectionsPerSec</code>는 항상 0이어야 합니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="storage-shape">로그의 물리 구조</h3>
+
+      <p>
+        각 파티션은 <code>log.dirs</code> 아래 <code>{토픽명}-{파티션번호}</code> 디렉터리 하나에 들어갑니다.
+        여러 디렉터리를 지정하면 파티션이 라운드로빈으로 배치되며, <strong>하나의 파티션이 두 디렉터리에 걸치지는 않습니다.</strong>
+        디렉터리 안은 세그먼트 파일들로 나뉘고, <strong>삭제는 세그먼트 단위</strong>로만 일어납니다.
+        그래서 <code>retention.ms</code>를 짧게 줘도 <code>segment.bytes</code>/<code>segment.ms</code>가 크면
+        실제 보관량이 예상보다 오래 남습니다. 자세한 계산은 <a href="../basics/ch07.html">7장</a>에 있습니다.
+      </p>
+
+      <aside class="note note--warn" data-label="용량 산정에 직접 영향">
+        <p>
+          토픽 이름은 <strong>249자</strong>까지입니다. 디렉터리 이름 길이 제한에서 오는 값입니다.
+          또한 파티션마다 세그먼트당 index/timeindex 파일이 있어 <strong>세그먼트 1개가 map area 2개</strong>를 씁니다.
+          다수 리눅스 배포의 <code>vm.max_map_count</code> 기본값은 65535 근처이므로,
+          브로커에 파티션을 과하게 올리면 <code>OutOfMemoryError (Map failed)</code>로 죽습니다.
+          파일 디스크립터는 <strong>최소 100000</strong>을 시작점으로 권고합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="cli">
+      <h2 id="cli">필수 CLI 명령어</h2>
+
+      <p>
+        이 섹션에서 손에 익어야 하는 명령은 많지 않습니다. 대신 <strong>출력 판독</strong>이 중요합니다.
+        전체 목록은 <a href="../cheatsheet/cli.html">CLI 치트시트</a>에 있습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>토픽 구조 확인 — 이 세 줄이 시험 지문으로 그대로 나옵니다</figcaption>
+        <pre><code class="lang-bash"># 토픽 생성 (프로덕션에서는 항상 명시 생성)
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic orders \
+    --partitions 20 --replication-factor 3 --config min.insync.replicas=2
+
+# 리더 · 레플리카 · ISR 판독
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic orders
+
+# 목록
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+# 파티션 증설 (감소는 불가)
+bin/kafka-topics.sh --bootstrap-server localhost:9092 --alter --topic orders --partitions 40</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>메타데이터 쿼럼 상태 — 클러스터가 살아 있는지 가장 먼저 보는 곳</figcaption>
+        <pre><code class="lang-bash"># 쿼럼 요약: 리더, 에폭, high watermark, voter/observer 목록
+bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --status
+
+# 각 노드의 복제 진행 (Lag, LastFetchTimestamp, LastCaughtUpTimestamp)
+bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --replication
+
+# 브로커가 다 죽어 있으면 컨트롤러로 직접
+bin/kafka-metadata-quorum.sh --bootstrap-controller localhost:9093 describe --status</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>리더 균형 회복 — 롤링 재시작 뒤에 반드시 확인</figcaption>
+        <pre><code class="lang-bash"># preferred 레플리카로 리더 되돌리기 (전체 파티션)
+bin/kafka-leader-election.sh --bootstrap-server localhost:9092 \
+    --election-type preferred --all-topic-partitions</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>컨슈머 위치 확인 — lag의 기본 경로</figcaption>
+        <pre><code class="lang-bash"># CURRENT-OFFSET / LOG-END-OFFSET / LAG
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group my-group
+
+# 그룹 상태 요약 (코디네이터, 할당 전략, 멤버 수)
+bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group my-group --state
+
+# 그룹 종류를 한눈에 (Consumer / Share / Streams)
+bin/kafka-groups.sh --bootstrap-server localhost:9092 --list</code></pre>
+      </figure>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          메타데이터 조작에 쓰였던 <code>--zookeeper</code> 옵션은 <strong>4.0에서 제거</strong>되어 더 이상 존재하지 않습니다.
+          모든 명령은 <code>--bootstrap-server</code>를 쓰고, 브로커에 접근할 수 없는 상황에서는
+          <code>--bootstrap-controller</code>로 컨트롤러에 직접 붙습니다.
+          이 두 옵션은 <strong>동시에 쓸 수 없습니다.</strong>
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="must-know-configs">
+      <h2 id="must-know-configs">반드시 외워야 할 설정값</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Kafka 4.3 기준 기본값. 브로커 설정과 토픽 설정을 구분했습니다.</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">기본값</th>
+              <th scope="col">의미</th>
+              <th scope="col">운영 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>replica.lag.time.max.ms</code><br><span class="badge">broker</span></th>
+              <td>30000</td>
+              <td>이 시간 안에 리더를 따라잡지 못한 팔로워를 ISR에서 제거</td>
+              <td>낮추면 ISR이 예민해져 잦은 축소·확장이 생깁니다. <code>read-only</code>라 재시작이 필요합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>min.insync.replicas</code><br><span class="badge">broker</span> <span class="badge">topic</span></th>
+              <td>1</td>
+              <td><code>acks=all</code> 쓰기가 성공하기 위해 필요한 최소 ISR 크기</td>
+              <td>기본값 1이면 <code>acks=all</code>도 사실상 리더 1대만 확인합니다. RF=3이면 <strong>2</strong>가 표준입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>unclean.leader.election.enable</code><br><span class="badge">broker</span> <span class="badge">topic</span></th>
+              <td>false</td>
+              <td>ISR 밖 레플리카를 리더로 올릴지 여부</td>
+              <td>true로 바꾸면 유실을 허용합니다. 켜야 한다면 <strong>해당 토픽만</strong> 한시적으로 켜세요.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>default.replication.factor</code><br><span class="badge">broker</span></th>
+              <td>1</td>
+              <td>자동 생성 토픽의 복제 계수</td>
+              <td><code>auto.create.topics.enable=true</code>(기본)와 겹치면 오타 토픽이 RF=1로 조용히 생깁니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.partitions</code><br><span class="badge">broker</span></th>
+              <td>1</td>
+              <td>자동 생성 토픽의 파티션 수</td>
+              <td>소비 병렬성 상한이 1이 됩니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>auto.create.topics.enable</code><br><span class="badge">broker</span></th>
+              <td>true</td>
+              <td>없는 토픽에 요청이 오면 자동 생성</td>
+              <td>운영 클러스터에서는 끄는 편이 안전합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controlled.shutdown.enable</code><br><span class="badge">broker</span></th>
+              <td>true</td>
+              <td>종료 전에 리더십을 다른 레플리카로 넘김</td>
+              <td><strong>RF&gt;1이고 살아 있는 레플리카가 있어야 성공</strong>합니다. RF=1 토픽이 있으면 실패합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>auto.leader.rebalance.enable</code><br><span class="badge">broker</span></th>
+              <td>true</td>
+              <td>preferred 레플리카로 리더를 자동 복구</td>
+              <td>점검 주기는 <code>leader.imbalance.check.interval.seconds</code>(기본 <strong>300</strong>)입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offsets.topic.replication.factor</code><br><span class="badge">broker</span></th>
+              <td>3</td>
+              <td><code>__consumer_offsets</code>의 복제 계수</td>
+              <td>브로커가 3대 미만인 환경에서는 토픽 생성 자체가 실패합니다. 실습 클러스터에서 자주 걸립니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.state.log.replication.factor</code><br><span class="badge">broker</span></th>
+              <td>3</td>
+              <td><code>__transaction_state</code>의 복제 계수</td>
+              <td>짝인 <code>transaction.state.log.min.isr</code> 기본값은 <strong>2</strong>입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.segment.bytes</code><br><span class="badge">broker</span></th>
+              <td>1073741824<br>(1 GiB)</td>
+              <td>세그먼트 롤 크기</td>
+              <td>삭제는 세그먼트 단위라, 이 값이 크면 리텐션이 실제보다 늦게 듣습니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>segment.ms</code><br><span class="badge">topic</span></th>
+              <td>604800000<br>(7일)</td>
+              <td>시간 기준 세그먼트 롤</td>
+              <td>저트래픽 토픽은 크기 기준으로는 안 굴러가므로 이 값이 실질 기준이 됩니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retention.ms</code><br><span class="badge">topic</span></th>
+              <td>604800000<br>(7일)</td>
+              <td><code>delete</code> 정책의 보관 시간</td>
+              <td>장애 복구에 며칠이 필요한 파이프라인이면 먼저 확인할 값입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>message.max.bytes</code><br><span class="badge">broker</span></th>
+              <td>1048588</td>
+              <td>허용되는 최대 레코드 배치 크기(<strong>압축 후</strong>)</td>
+              <td>"1MB"가 아니라 정확히 1048588입니다. 토픽 레벨 <code>max.message.bytes</code>가 오버라이드합니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Fundamentals">
+        <p>
+          <strong>RF · <code>min.insync.replicas</code> · <code>acks</code>는 항상 함께 묻습니다.</strong>
+          RF=3 · <code>min.insync.replicas=2</code> · <code>acks=all</code> 조합에서는
+          브로커 1대를 잃어도 쓰기가 계속되고 데이터는 보존됩니다.
+          2대를 잃으면 ISR이 1이 되어 <strong>쓰기는 거부되지만(NotEnoughReplicas) 데이터는 남습니다.</strong>
+          "쓰기 실패"와 "데이터 유실"을 구분하는 것이 이 문항군의 핵심입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="scenarios">
+      <h2 id="scenarios">장애 시나리오와 대응</h2>
+
+      <h3 id="scenario-isr-shrink">시나리오 1 — ISR이 계속 줄었다 늘어난다</h3>
+
+      <div class="table-scroll">
+        <table>
+          <caption>ISR 플래핑(flapping) 대응</caption>
+          <thead>
+            <tr><th scope="col">단계</th><th scope="col">할 일</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">증상</th><td><code>IsrShrinksPerSec</code>와 <code>IsrExpandsPerSec</code>가 0이 아닌 값으로 반복. <code>UnderReplicatedPartitions</code>가 0과 양수를 왕복.</td></tr>
+            <tr><th scope="row">1</th><td>어느 브로커가 빠지는지 특정합니다. <code>kafka-topics.sh --describe</code>에서 <code>Isr</code>에 빠진 노드 ID를 확인합니다.</td></tr>
+            <tr><th scope="row">2</th><td>그 브로커의 디스크 I/O와 네트워크를 봅니다. 팔로워 fetch가 느려지는 원인은 대개 디스크 포화입니다.</td></tr>
+            <tr><th scope="row">3</th><td><code>RequestHandlerAvgIdlePercent</code>가 낮으면 요청 처리 스레드가 부족합니다. <code>num.io.threads</code>(기본 8)를 검토합니다.</td></tr>
+            <tr><th scope="row">4</th><td>진행 중인 파티션 재할당이 있는지 확인합니다. 스로틀이 해제되지 않은 상태면 정상 복제까지 조여집니다.</td></tr>
+            <tr><th scope="row">5</th><td>근본 원인을 못 찾았는데 급하다면 <code>num.replica.fetchers</code>(기본 1)를 늘려 팔로워 fetch 병렬성을 올립니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="하지 말아야 할 대응">
+        <p>
+          ISR 플래핑을 없애려고 <code>replica.lag.time.max.ms</code>를 크게 늘리는 것은
+          <strong>증상만 감추는 조치</strong>입니다. ISR에는 실제로 뒤처진 레플리카가 남고,
+          그 상태에서 리더가 죽으면 뒤처진 레플리카가 리더가 되어 손실 구간이 커집니다.
+        </p>
+      </aside>
+
+      <h3 id="scenario-rf1-shutdown">시나리오 2 — 브로커를 정상 종료했는데 종료가 끝나지 않는다</h3>
+
+      <ol>
+        <li><code>controlled.shutdown.enable=true</code>(기본)이면 브로커는 종료 전에 자기 리더 파티션을 넘기려 시도합니다.</li>
+        <li>그런데 <strong>RF=1 파티션</strong>이 하나라도 있으면 넘길 대상이 없어 controlled shutdown이 실패합니다.</li>
+        <li>먼저 <code>kafka-topics.sh --describe</code>로 RF=1 토픽을 찾습니다. 자동 생성으로 만들어진 토픽이 흔한 원인입니다.</li>
+        <li>재할당 JSON에 레플리카를 추가해 <code>kafka-reassign-partitions.sh --execute</code>로 <strong>복제 계수를 올립니다</strong>(절차는 <a href="domain-cluster-config.html#increase-rf">클러스터 구성</a>).</li>
+        <li>근본 대책은 <code>auto.create.topics.enable=false</code>와 <code>default.replication.factor</code> 상향입니다.</li>
+      </ol>
+
+      <h3 id="scenario-leader-skew">시나리오 3 — 롤링 재시작 뒤 특정 브로커만 CPU가 높다</h3>
+
+      <ol>
+        <li>재시작된 브로커는 <strong>팔로워로만 복귀</strong>합니다. 리더가 남은 브로커들에 쏠려 부하가 불균형해집니다.</li>
+        <li><code>PreferredReplicaImbalanceCount</code>가 0보다 큰지 확인합니다. 이 값이 곧 "리더가 preferred가 아닌 파티션 수"입니다.</li>
+        <li><code>auto.leader.rebalance.enable=true</code>라면 <code>leader.imbalance.check.interval.seconds</code>(기본 300) 주기로 자동 복구됩니다. 기다립니다.</li>
+        <li>급하면 <code>kafka-leader-election.sh --election-type preferred --all-topic-partitions</code>로 수동 복구합니다.</li>
+        <li>롤링 절차 자체에 <strong>각 노드 재시작 후 URP가 0으로 돌아올 때까지 대기</strong>를 넣어 두면 이 상황이 크게 줄어듭니다.</li>
+      </ol>
+
+      <h3 id="scenario-partition-decrease">시나리오 4 — "파티션이 너무 많으니 줄여 달라"는 요청</h3>
+
+      <p>
+        <strong>Kafka는 파티션 수 감소를 지원하지 않습니다.</strong> 유일한 방법은
+        새 토픽을 원하는 파티션 수로 만들어 데이터를 옮기고 클라이언트를 전환하는 것입니다.
+        늘리는 것도 공짜가 아닙니다. 키 해시 분배가 바뀌어 기존 키의 순서 보장이 깨지고,
+        <code>auto.offset.reset=latest</code>인 컨슈머는 새 파티션의 초기 메시지를 놓칠 수 있습니다.
+      </p>
+
+      <aside class="note note--danger" data-label="절대 하지 말 것">
+        <p>
+          <strong>내부 토픽의 파티션 수를 수동으로 늘리지 마세요.</strong>
+          <code>__consumer_offsets</code>, <code>__transaction_state</code>,
+          <code>__share_group_state</code>, <code>__cluster_metadata</code>가 대상입니다.
+          코디네이터 매핑 로직이 깨져 상태 불일치와 데이터 손상으로 이어집니다.
+          이 토픽들은 Kafka가 관리하며 손대지 않습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">자주 나오는 함정</h2>
+
+      <aside class="note note--warn" data-label="함정 1">
+        <p>
+          <strong>"RF=3이면 안전하다"</strong> — <code>min.insync.replicas</code>가 기본값 1로 남아 있으면
+          <code>acks=all</code>도 리더 1대의 확인으로 성공합니다. RF는 사본 개수일 뿐,
+          <strong>몇 개가 확인해야 성공인지는 별개 설정</strong>입니다.
+          이 조합으로 유실이 난 사례는 <a href="../cases/case06.html">케이스 6</a>에 있습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 2">
+        <p>
+          <strong>"ISR = 레플리카 수"</strong> — ISR은 레플리카의 <em>부분집합</em>입니다.
+          <code>Replicas: 1,2,3</code>에 <code>Isr: 1,2</code>면 3번이 뒤처진 상태입니다.
+          matching 문항에서 <code>UnderReplicatedPartitions</code>(|ISR| &lt; |replicas|)와
+          <code>UnderMinIsrPartitionCount</code>(|ISR| &lt; <code>min.insync.replicas</code>)를
+          바꿔 놓는 오답이 자주 나옵니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 3">
+        <p>
+          <strong>"leader와 preferred leader는 같다"</strong> — preferred leader는
+          레플리카 목록의 <strong>첫 번째</strong> 브로커라는 <em>설계상의 지정</em>이고,
+          현재 leader는 <em>실제 상태</em>입니다. 둘이 다른 것 자체는 장애가 아니지만,
+          누적되면 부하 불균형이 됩니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 4">
+        <p>
+          <strong>"컨슈머 lag은 LEO 기준"</strong> — CLI가 보여 주는 <code>LOG-END-OFFSET</code> 기준 lag과,
+          컨슈머가 실제로 읽을 수 있는 상한(high watermark)은 다릅니다.
+          복제가 뒤처진 파티션에서는 <strong>컨슈머가 최선을 다해도 lag이 0이 되지 않습니다.</strong>
+          이때 봐야 할 것은 컨슈머가 아니라 복제 상태입니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 5">
+        <p>
+          <strong>"세그먼트 크기는 리텐션과 무관하다"</strong> — 삭제는 세그먼트 단위입니다.
+          활성(active) 세그먼트는 삭제 대상이 아니므로, 세그먼트가 굴러가지 않으면 리텐션도 듣지 않습니다.
+          "<code>retention.ms</code>를 1시간으로 줬는데 디스크가 안 준다"의 답이 이것입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="cases">
+      <h2 id="cases">관련 케이스 스터디</h2>
+      <ul>
+        <li><a href="../cases/case03.html">케이스 3 · 브로커 장애 후 메시지가 유실됐다</a> — <code>acks</code>와 ISR의 결합</li>
+        <li><a href="../cases/case05.html">케이스 5 · 파티션을 1000개로 늘렸더니 더 느려졌다</a> — 파티션 수의 비용</li>
+        <li><a href="../cases/case06.html">케이스 6 · RF=3인데 브로커 1대 죽자 유실됐다</a> — <code>min.insync.replicas</code> 기본값 함정</li>
+        <li><a href="../cases/case01.html">케이스 1 · 배포 후 며칠치 데이터가 사라졌다</a> — 리텐션과 세그먼트</li>
+      </ul>
+      <p>
+        배경 개념이 더 필요하면 <a href="../basics/ch02.html">2장 아키텍처와 핵심 개념</a>과
+        <a href="../basics/ch03.html">3장 KRaft와 클러스터 메타데이터</a>를 먼저 보세요.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="quiz">
+      <h2 id="quiz">미니 퀴즈</h2>
+      <p>
+        matching과 list order 유형이 섞여 있습니다. 실제 CCAAK에서도 이 두 유형이 출제되므로 함께 연습하세요.
+      </p>
+      <div class="quiz-embed" data-set="ccaak-fundamentals" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> — <code>replica.lag.time.max.ms</code>, <code>min.insync.replicas</code>, <code>unclean.leader.election.enable</code>, <code>controlled.shutdown.enable</code>, <code>auto.leader.rebalance.enable</code>, <code>offsets.topic.replication.factor</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs" rel="noopener noreferrer">Topic Configs</a> — <code>retention.ms</code>, <code>segment.ms</code>, <code>max.message.bytes</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops" rel="noopener noreferrer">Basic Kafka Operations</a> — 토픽 생성·수정, 파티션 감소 불가, 내부 토픽 파티션 증설 금지, graceful shutdown, preferred 리더 선출</li>
+        <li><a href="https://kafka.apache.org/documentation/#kraft" rel="noopener noreferrer">KRaft</a> — <code>process.roles</code>, 컨트롤러 쿼럼, <code>kafka-metadata-quorum.sh</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#monitoring" rel="noopener noreferrer">Monitoring</a> — <code>UnderReplicatedPartitions</code>, <code>UnderMinIsrPartitionCount</code>, <code>IsrShrinksPerSec</code>, <code>UncleanLeaderElectionsPerSec</code>, <code>PreferredReplicaImbalanceCount</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#hwandos" rel="noopener noreferrer">Hardware and OS</a> — 파일 디스크립터 100000 권고, <code>vm.max_map_count</code>와 세그먼트당 map area 2개</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

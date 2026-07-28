@@ -1,0 +1,83 @@
+<svg viewBox="0 0 720 392" role="img" class="kg-diagram"
+     aria-labelledby="d036-title d036-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d036-title">onCompletion() 호출 시점 — 콜백은 Sender 스레드에서 실행됩니다</title>
+  <desc id="d036-desc">시간이 왼쪽에서 오른쪽으로 흐르는 두 개의 수평 레인입니다.
+    위 레인은 애플리케이션 스레드입니다. send() 를 호출하면 레코드를 RecordAccumulator 에 넣고 Future 를 즉시 반환하며,
+    그 뒤로는 다른 레코드를 계속 처리합니다. 브로커 응답을 기다리지 않습니다.
+    아래 레인은 Sender 스레드입니다. 배치 조건이 충족될 때까지 기다렸다가 ProduceRequest 를 보내고,
+    브로커가 처리한 응답을 받은 다음 onCompletion 콜백을 실행합니다.
+    세로 파선이 콜백 실행 시점이며, 그 시점에 애플리케이션 스레드는 이미 다른 일을 하고 있습니다.
+    즉 콜백은 애플리케이션 스레드로 돌아오지 않고 Sender 스레드에서 실행됩니다.
+    따라서 콜백 안에서 오래 걸리는 작업을 하면 Sender 스레드가 막혀 프로듀서 전체 전송이 느려집니다.
+    동기 전송이 필요하면 send() 가 돌려준 Future 의 get() 을 호출해야 하고, 그때 블록되는 것은 애플리케이션 스레드입니다.</desc>
+
+  <defs>
+    <marker id="d036-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+    <marker id="d036-ah-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker--accent" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+  </defs>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">콜백이 실행될 때 애플리케이션 스레드는 이미 다른 일을 하고 있습니다</text>
+
+  <!-- ═══ 레인 A ═══ -->
+  <rect class="dg-panel" x="8" y="34" width="704" height="106" rx="4"/>
+  <text x="18" y="52" class="dg-fs-sm dg-bold">레인 A · 애플리케이션 스레드</text>
+
+  <rect class="dg-node dg-node--accent" x="40" y="66" width="110" height="36" rx="4"/>
+  <text x="50" y="89" class="dg-fs-sm dg-bold dg-mono">send()</text>
+
+  <rect class="dg-node" x="158" y="66" width="110" height="36" rx="4"/>
+  <text x="168" y="89" class="dg-fs-sm">Future 반환</text>
+
+  <rect class="dg-node dg-node--muted" x="276" y="66" width="424" height="36" rx="4"/>
+  <text x="286" y="89" class="dg-fs-sm">그동안 다른 레코드를 계속 처리합니다 — 응답을 기다리지 않습니다</text>
+
+  <text x="40" y="126" class="dg-fs-sm dg-muted">← 여기까지가 <tspan class="dg-mono">send()</tspan> 가 붙잡는 시간 (버퍼에 넣는 시간뿐) →</text>
+  <line class="dg-edge dg-edge--muted" x1="40" y1="112" x2="268" y2="112"/>
+  <line class="dg-edge dg-edge--muted" x1="40" y1="108" x2="40" y2="116"/>
+  <line class="dg-edge dg-edge--muted" x1="268" y1="108" x2="268" y2="116"/>
+
+  <!-- 넘김 -->
+  <line class="dg-edge dg-edge--accent dg-edge--dashed" x1="95" y1="102" x2="95" y2="188" marker-end="url(#d036-ah-accent)"/>
+  <text x="103" y="160" class="dg-fs-sm dg-muted">레코드를 배치 큐에 넣습니다</text>
+
+  <!-- ═══ 레인 B ═══ -->
+  <rect class="dg-panel" x="8" y="150" width="704" height="124" rx="4"/>
+  <text x="18" y="168" class="dg-fs-sm dg-bold">레인 B · Sender 스레드 (백그라운드 I/O 스레드)</text>
+
+  <rect class="dg-node dg-node--alt" x="158" y="192" width="142" height="36" rx="4"/>
+  <text x="168" y="215" class="dg-fs-sm">배치 대기 <tspan class="dg-mono">linger</tspan></text>
+
+  <rect class="dg-node dg-node--alt" x="308" y="192" width="82" height="36" rx="4"/>
+  <text x="318" y="215" class="dg-fs-sm">요청 전송</text>
+
+  <rect class="dg-node dg-node--muted" x="398" y="192" width="102" height="36" rx="4"/>
+  <text x="408" y="215" class="dg-fs-sm dg-muted">브로커 처리</text>
+
+  <rect class="dg-node dg-node--alt" x="508" y="192" width="62" height="36" rx="4"/>
+  <text x="516" y="215" class="dg-fs-sm">응답</text>
+
+  <rect class="dg-node dg-node--accent" x="578" y="192" width="122" height="36" rx="4"/>
+  <text x="588" y="215" class="dg-fs-sm dg-bold dg-mono">onCompletion()</text>
+
+  <text x="18" y="250" class="dg-fs-sm dg-bold">콜백을 오래 잡으면 이 레인이 막혀 전송 전체가 느려집니다.</text>
+  <text x="18" y="266" class="dg-fs-sm dg-muted">무거운 작업은 콜백 안에서 직접 하지 말고 별도 Executor 로 넘기세요.</text>
+
+  <!-- 콜백 시점 세로선 -->
+  <line class="dg-edge dg-edge--accent dg-edge--dashed" x1="574" y1="60" x2="574" y2="292"/>
+  <text x="566" y="56" class="dg-fs-sm dg-bold" text-anchor="end">콜백 실행 시점 →</text>
+
+  <!-- 시간축 -->
+  <line class="dg-edge" x1="40" y1="292" x2="700" y2="292" marker-end="url(#d036-ah)"/>
+  <text x="40" y="310" class="dg-fs-sm dg-muted">시간</text>
+  <text x="700" y="310" class="dg-fs-sm dg-muted" text-anchor="end">두 레인은 같은 시간축을 공유합니다</text>
+
+  <!-- 정리 -->
+  <line class="dg-grid" x1="8" y1="326" x2="712" y2="326"/>
+  <text x="8" y="344" class="dg-fs-sm"><tspan class="dg-bold">콜백은 Sender 스레드에서 실행됩니다.</tspan> 애플리케이션 스레드로 돌아오지 않습니다.</text>
+  <text x="8" y="362" class="dg-fs-sm">동기 전송이 필요하면 <tspan class="dg-mono">send(...).get()</tspan> 을 호출합니다. 이때 블록되는 것은 애플리케이션 스레드입니다.</text>
+  <text x="8" y="380" class="dg-fs-sm dg-muted">직렬화 실패처럼 <tspan class="dg-mono">send()</tspan> 안에서 즉시 드러난 오류만 예외적으로 호출 스레드에서 콜백이 실행됩니다.</text>
+</svg>

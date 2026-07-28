@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fundamentals (23%) — Kafka Guide</title>
+  <meta name="description" content="CCDAK Fundamentals(23%) 압축 정리. 파티션과 복제·ISR, 오프셋 4종, 메시지 크기 5개 설정의 정합, 리텐션과 컴팩션·tombstone, 스키마 호환성 매트릭스와 배포 순서, security.protocol 4종. Apache Kafka 4.3 기준.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccdak" data-page="domain-fundamentals"></div>
+
+  <main id="main" class="page" data-page-id="ccdak/domain-fundamentals">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCDAK</a></li>
+        <li><span aria-current="page">Fundamentals</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCDAK 도메인 · 가중치 23%</p>
+      <h1>Fundamentals</h1>
+      <p class="page__lead">
+        두 번째로 큰 도메인입니다. Application Development와 합쳐 <strong>51%</strong>가 됩니다.
+        "기초"라는 이름 때문에 쉽게 보고 넘기기 쉬운데, 실제로는
+        <strong>정확한 숫자와 경계 조건</strong>을 묻는 문제가 몰려 있는 도메인입니다.
+        1048588인지 1048576인지, 컴팩션이 언제 무엇을 남기는지, 어떤 스키마 변경이 어느 모드에서 허용되는지 —
+        어림짐작으로는 점수가 나오지 않습니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 도메인의 학습 목표</h2>
+      <ul>
+        <li>복제 계수 · ISR · <code>min.insync.replicas</code>의 관계로 "몇 대까지 죽어도 되는가"를 계산할 수 있습니다.</li>
+        <li>오프셋 4종(log-start / committed / high watermark / LEO)을 구분할 수 있습니다.</li>
+        <li>메시지 크기 관련 <strong>5개 설정</strong>의 이름과 소속을 정확히 말할 수 있습니다.</li>
+        <li>리텐션 삭제와 컴팩션의 동작 차이, tombstone의 수명을 설명할 수 있습니다.</li>
+        <li>스키마 호환성 모드별로 <strong>허용되는 변경과 배포 순서</strong>를 판단할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="what-this-domain-asks">
+      <h2 id="what-this-domain-asks">이 도메인이 묻는 것</h2>
+      <p>
+        Fundamentals는 <a href="../basics/ch02.html">2장 아키텍처</a>,
+        <a href="../basics/ch07.html">7장 스토리지·리텐션·컴팩션</a>,
+        <a href="../basics/ch08.html">8장 스키마와 직렬화</a>의 범위입니다.
+        개발자 관점의 "이 데이터가 어떻게 저장되고 언제 사라지는가"가 핵심입니다.
+        브로커를 직접 운영하는 절차(파티션 재할당, 롤링 업그레이드 등)는 CCAAK 쪽 비중이 크지만,
+        <strong>CLI 워크플로의 순서</strong>는 CCDAK에서도 list order 유형으로 나올 수 있습니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="partitions-replication">
+      <h2 id="partitions-replication">핵심 개념 (1) 파티션과 복제</h2>
+
+      <h3 id="ordering-unit">순서 보장의 단위는 파티션입니다</h3>
+      <p>
+        토픽은 여러 파티션으로 나뉘고, 각 파티션은 append-only 로그입니다.
+        <strong>오프셋은 파티션 안에서만 의미가 있고</strong>, 토픽 전역 오프셋은 존재하지 않습니다.
+        같은 키를 가진 레코드는 같은 파티션으로 가므로, 순서를 보장하려면 키를 지정해야 합니다.
+      </p>
+      <p>
+        파티션 수는 <strong>늘릴 수만 있고 줄일 수 없습니다.</strong> 그리고 늘리면
+        <code>murmur2(key) % numPartitions</code>의 분모가 바뀌므로
+        <strong>기존 키의 파티션 배치가 달라져 순서 보장이 깨집니다.</strong>
+        또한 파티션 수 증가는 그 토픽을 구독하는 컨슈머 그룹의 <strong>리밸런스를 유발</strong>합니다.
+      </p>
+
+      <h3 id="isr">ISR과 내구성 계산</h3>
+      <p>
+        각 파티션에는 리더 하나와 팔로워가 있고, 리더를 충분히 따라잡은 레플리카의 집합을
+        <strong>ISR(In-Sync Replicas)</strong>이라고 합니다.
+        팔로워가 <code>replica.lag.time.max.ms</code>(브로커 기본 <code>30000</code>) 동안
+        리더를 따라잡지 못하면 ISR에서 빠집니다.
+      </p>
+      <p>
+        <code>acks=all</code>은 "모든 레플리카"가 아니라 <strong>"현재 ISR의 모든 멤버"</strong>의 응답을 기다립니다.
+        그래서 ISR이 1로 줄어든 상태에서는 <code>acks=all</code>도 사실상 <code>acks=1</code>이 됩니다.
+        이 구멍을 막는 것이 <code>min.insync.replicas</code>입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>RF=3에서 <code>min.insync.replicas</code>별 내구성 (모두 <code>acks=all</code> 전제)</caption>
+          <thead>
+            <tr>
+              <th scope="col"><code>min.insync.replicas</code></th>
+              <th scope="col">쓰기 가능한 최대 장애 브로커 수</th>
+              <th scope="col">특징</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">1 (기본값)</th>
+              <td class="t-center">2대</td>
+              <td>가용성 최대. 리더만 살아 있으면 쓰기 성공 → <strong>리더가 죽으면 유실 가능</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">2 (권장)</th>
+              <td class="t-center">1대</td>
+              <td>가용성과 내구성의 균형. 프로덕션 표준 조합</td>
+            </tr>
+            <tr>
+              <th scope="row">3</th>
+              <td class="t-center">0대</td>
+              <td>내구성 최대. <strong>한 대만 죽어도 쓰기가 멈춤</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>
+          "<strong>RF=3, <code>min.insync.replicas=2</code>인데 브로커 1대가 죽었다. 쓰기가 실패했다. 왜?</strong>"
+          → 프로듀서가 <code>acks=1</code>이었거나, 죽은 브로커가 아니라
+          <strong>느린 팔로워가 이미 ISR에서 빠져 ISR이 2였던</strong> 상황입니다.
+          이때 1대가 더 빠지면 ISR=1이 되어 <code>NotEnoughReplicasException</code>이 발생합니다.
+          "RF=3이면 2대까지 죽어도 안전하다"는 서술은 <code>min.insync.replicas</code>를 무시한 것입니다
+          (<a href="../cases/case06.html">케이스 6</a>).
+        </p>
+        <p>
+          <code>unclean.leader.election.enable</code>의 기본값은 <strong><code>false</code></strong>입니다.
+          즉 ISR에 없는 레플리카를 리더로 올리지 않습니다.
+          <code>true</code>로 바꾸면 파티션이 즉시 복구되는 대신 <strong>데이터가 유실됩니다.</strong>
+          "가용성을 위해 켠다"는 선택지는 트레이드오프를 정확히 아는지 묻는 함정입니다.
+        </p>
+      </aside>
+
+      <h3 id="offsets-four">오프셋 4종</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>하나의 파티션 로그 위에 동시에 존재하는 네 지점</caption>
+          <thead>
+            <tr><th scope="col">이름</th><th scope="col">의미</th><th scope="col">누가 정하는가</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">log-start-offset</th><td>리텐션으로 삭제된 경계. 이보다 앞은 존재하지 않음</td><td>브로커 (리텐션)</td></tr>
+            <tr><th scope="row">committed offset</th><td>컨슈머 그룹이 "여기까지 처리했다"고 커밋한 위치</td><td>컨슈머 그룹</td></tr>
+            <tr><th scope="row">high watermark</th><td><strong>ISR 전원이 복제를 마친 상한.</strong> 컨슈머는 이 이상 읽지 못함</td><td>리더 (ISR 최소 LEO)</td></tr>
+            <tr><th scope="row">LEO (log end offset)</th><td>리더가 기록한 마지막 다음 위치</td><td>리더</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        인터랙티브 그림으로 네 지점이 어떻게 벌어지는지 보려면
+        <a href="../basics/ch01.html#offset-basics">1장 오프셋 절</a>과
+        <a href="../basics/ch02.html">2장</a>을 보세요.
+        <strong>consumer lag = high watermark − committed offset</strong>이며,
+        LEO에서 빼는 것이 아닙니다. 이 정의는 <a href="domain-observability.html">Observability 도메인</a>에서도 다시 나옵니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="message-size">
+      <h2 id="message-size">핵심 개념 (2) 메시지 크기 — 5개 설정이 정합해야 합니다</h2>
+
+      <p>
+        이 도메인에서 가장 자주 나오는 matching 문항이 <strong>"설정 ↔ 소속"</strong>입니다.
+        메시지 크기 관련 설정은 다섯 개이고, 각각 다른 컴포넌트에 있습니다.
+        하나만 올리면 다른 곳에서 막힙니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>메시지 크기 관련 5개 설정 (Apache Kafka 4.3 기본값)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">소속</th>
+              <th scope="col">기본값</th>
+              <th scope="col">막히면 나타나는 증상</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>max.request.size</code></th>
+              <td><strong>프로듀서</strong></td>
+              <td>1048576</td>
+              <td>클라이언트에서 즉시 <code>RecordTooLargeException</code> (브로커까지 가지 않음)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>message.max.bytes</code></th>
+              <td><strong>브로커</strong></td>
+              <td><strong>1048588</strong></td>
+              <td>브로커가 거부. 프로듀서는 재시도 후 실패</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.message.bytes</code></th>
+              <td><strong>토픽</strong></td>
+              <td>1048588</td>
+              <td>브로커 기본값을 <strong>토픽 단위로 오버라이드</strong>. 이 값이 실제 판정 기준</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.partition.fetch.bytes</code></th>
+              <td><strong>컨슈머</strong></td>
+              <td>1048576</td>
+              <td>파티션당 상한. 큰 레코드가 이보다 크면 진행이 멈출 수 있음</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>fetch.max.bytes</code></th>
+              <td><strong>컨슈머</strong></td>
+              <td>52428800</td>
+              <td>요청 전체 상한 (50MB)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>replica.fetch.max.bytes</code></th>
+              <td><strong>브로커</strong> (팔로워)</td>
+              <td>1048576</td>
+              <td>팔로워가 큰 레코드를 못 복제 → <strong>ISR 축소</strong>. 가장 늦게 발견되는 지점</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="숫자 함정 — 1048576과 1048588">
+        <p>
+          <code>message.max.bytes</code>의 기본값은 <strong>1048588</strong>이고,
+          <code>max.request.size</code>는 <strong>1048576</strong>(정확히 1MiB)입니다.
+          <strong>12바이트 차이</strong>가 있습니다. 브로커 쪽 값은 레코드 배치 오버헤드를 감안한 값입니다.
+          "둘 다 1MB"로 외우면 <strong>"두 값이 같은가?"를 묻는 문항에서 틀립니다.</strong>
+        </p>
+        <p>
+          또한 이 상한은 <strong>압축 후 레코드 배치</strong> 크기 기준입니다.
+          "개별 메시지 크기"라고 서술한 선택지는 부정확합니다.
+        </p>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>
+          큰 메시지를 허용하려면 <strong>순서대로 전부</strong> 올려야 합니다.
+          ① 토픽 <code>max.message.bytes</code> → ② 프로듀서 <code>max.request.size</code> →
+          ③ 컨슈머 <code>max.partition.fetch.bytes</code> → ④ 브로커 <code>replica.fetch.max.bytes</code>.
+          ④를 빼먹으면 쓰기는 되지만 <strong>복제가 실패해 ISR이 줄어듭니다.</strong>
+          list order 유형으로 나오기 좋은 소재입니다 (<a href="../cases/case10.html">케이스 10</a>).
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="retention-compaction">
+      <h2 id="retention-compaction">핵심 개념 (3) 리텐션과 컴팩션</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>cleanup.policy</code> 두 값의 동작</caption>
+          <thead>
+            <tr><th scope="col">관점</th><th scope="col"><code>delete</code> (기본값)</th><th scope="col"><code>compact</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">기준</th><td>시간(<code>retention.ms</code>) 또는 크기(<code>retention.bytes</code>)</td><td>키별 최신 값만 유지</td></tr>
+            <tr><th scope="row">삭제 단위</th><td><strong>세그먼트 전체</strong></td><td>키 단위로 옛 값 제거</td></tr>
+            <tr><th scope="row">키 필요</th><td>불필요</td><td><strong>필수</strong> — 키가 없으면 컴팩션이 동작하지 않습니다</td></tr>
+            <tr><th scope="row">용도</th><td>이벤트 스트림, 로그</td><td>상태(state) 토픽, changelog, <code>__consumer_offsets</code></td></tr>
+            <tr><th scope="row">삭제 표현</th><td>기간 경과</td><td><strong>tombstone</strong> — value가 <code>null</code>인 레코드</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>리텐션·컴팩션 관련 토픽 설정 (Apache Kafka 4.3 기본값)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">시험 포인트</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>cleanup.policy</code></th><td><code>delete</code></td><td><code>compact,delete</code> 조합도 가능</td></tr>
+            <tr><th scope="row"><code>retention.ms</code></th><td>604800000 (7일)</td><td><code>-1</code>이면 시간 기준 삭제를 하지 않음</td></tr>
+            <tr><th scope="row"><code>retention.bytes</code></th><td>-1 (무제한)</td><td><strong>파티션당</strong> 크기입니다. 토픽 전체가 아닙니다</td></tr>
+            <tr><th scope="row"><code>segment.bytes</code></th><td>1073741824 (1GiB)</td><td>삭제가 세그먼트 단위이므로 실제 보관량을 좌우</td></tr>
+            <tr><th scope="row"><code>segment.ms</code></th><td>604800000 (7일)</td><td>세그먼트를 시간으로 마감. 이게 크면 리텐션이 늦게 적용됨</td></tr>
+            <tr><th scope="row"><code>min.cleanable.dirty.ratio</code></th><td>0.5</td><td>더러운 비율이 이 값을 넘어야 컴팩션 시작</td></tr>
+            <tr><th scope="row"><code>delete.retention.ms</code></th><td>86400000 (1일)</td><td><strong>tombstone을 유지하는 기간.</strong> 이 뒤에 tombstone도 사라짐</td></tr>
+            <tr><th scope="row"><code>min.compaction.lag.ms</code></th><td>0</td><td>레코드가 최소 이 시간은 컴팩션 대상이 되지 않음</td></tr>
+            <tr><th scope="row"><code>max.compaction.lag.ms</code></th><td>9223372036854775807</td><td>사실상 무제한. 컴팩션 지연 상한을 강제할 때 낮춤</td></tr>
+            <tr><th scope="row"><code>message.timestamp.type</code></th><td><code>CreateTime</code></td><td><code>LogAppendTime</code>으로 바꾸면 리텐션 기준 시각이 달라짐</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>컴팩션에서 반복 출제되는 세 가지입니다.</p>
+        <ul>
+          <li><strong>활성 세그먼트(active segment)는 컴팩션 대상이 아닙니다.</strong>
+            그래서 컴팩션 토픽에서도 같은 키의 옛 값이 한동안 보입니다.</li>
+          <li><strong>컴팩션은 중복을 즉시 제거하지 않습니다.</strong>
+            백그라운드 클리너가 <code>min.cleanable.dirty.ratio</code> 조건을 만족했을 때 수행합니다.
+            "컴팩션 토픽에서는 키당 레코드가 항상 하나"라는 선택지는 오답입니다.</li>
+          <li><strong><code>cleanup.policy</code> 변경은 기존 데이터에 소급 적용되지 않습니다</strong>
+            — 정확히는, 이미 리텐션으로 삭제된 데이터가 되살아나지 않습니다.
+            <code>compact</code>였던 토픽을 <code>delete</code>로 바꿔 데이터가 사라진 사고는
+            <a href="../cases/case08.html">케이스 8</a>에서 다룹니다.</li>
+        </ul>
+      </aside>
+
+      <h3 id="disk-sizing">디스크 용량 산정</h3>
+      <figure class="code">
+        <figcaption>필요 용량 개산식</figcaption>
+        <pre><code class="lang-text">필요 디스크 = 일일 유입량 × 보관 일수 × 복제 계수 × (1 − 압축률) × 여유 계수
+
+예) 200GB/일, 7일 보관, RF=3, 압축률 60%, 여유 30%
+  = 200 × 7 × 3 × 0.4 × 1.3
+  = 2184 GB  → 브로커 3대면 대당 약 730GB</code></pre>
+      </figure>
+      <p>
+        계산 문항으로 나올 수 있습니다. <strong>복제 계수를 곱하는 것을 잊지 않는 것</strong>이 핵심이고,
+        압축은 프로듀서가 압축한 배치를 브로커가 그대로 저장하므로
+        (토픽 <code>compression.type=producer</code>가 기본값) 디스크에서도 압축 효과가 유지됩니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="schema-compat">
+      <h2 id="schema-compat">핵심 개념 (4) 스키마 호환성과 배포 순서</h2>
+
+      <p>
+        Schema Registry는 Apache Kafka 본체가 아니라 Confluent 컴포넌트이지만 CCDAK 출제 범위입니다.
+        <strong>이 절의 두 표가 이 도메인 최고의 가성비 산출물입니다.</strong>
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>변경 유형 × 호환성 모드 — 허용 여부</caption>
+          <thead>
+            <tr>
+              <th scope="col">스키마 변경</th>
+              <th scope="col">BACKWARD</th>
+              <th scope="col">FORWARD</th>
+              <th scope="col">FULL</th>
+              <th scope="col">NONE</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">default 있는 필드 <strong>추가</strong></th>
+              <td class="mark-ok">허용</td>
+              <td class="mark-ok">허용</td>
+              <td class="mark-ok">허용</td>
+              <td class="mark-ok">허용</td>
+            </tr>
+            <tr>
+              <th scope="row">default 없는 필드 <strong>추가</strong></th>
+              <td class="mark-no">거부</td>
+              <td class="mark-ok">허용</td>
+              <td class="mark-no">거부</td>
+              <td class="mark-ok">허용</td>
+            </tr>
+            <tr>
+              <th scope="row">default 있는 필드 <strong>삭제</strong></th>
+              <td class="mark-ok">허용</td>
+              <td class="mark-ok">허용</td>
+              <td class="mark-ok">허용</td>
+              <td class="mark-ok">허용</td>
+            </tr>
+            <tr>
+              <th scope="row">default 없는 필드 <strong>삭제</strong></th>
+              <td class="mark-ok">허용</td>
+              <td class="mark-no">거부</td>
+              <td class="mark-no">거부</td>
+              <td class="mark-ok">허용</td>
+            </tr>
+            <tr>
+              <th scope="row">필드 <strong>타입 변경</strong></th>
+              <td class="mark-no">거부<br>(승격 가능한 조합 제외)</td>
+              <td class="mark-no">거부</td>
+              <td class="mark-no">거부</td>
+              <td class="mark-ok">허용</td>
+            </tr>
+            <tr>
+              <th scope="row">필드 <strong>이름 변경</strong></th>
+              <td class="mark-no">위험<br>(alias 필요)</td>
+              <td class="mark-no">위험</td>
+              <td class="mark-no">위험</td>
+              <td class="mark-ok">허용</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>호환성 모드별 배포 순서 — 이 표를 외우면 관련 문항을 전부 잡습니다</caption>
+          <thead>
+            <tr>
+              <th scope="col">모드</th>
+              <th scope="col">의미</th>
+              <th scope="col">먼저 배포할 쪽</th>
+              <th scope="col">비교 대상</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><strong>BACKWARD</strong><br>(기본값)</th>
+              <td>새 스키마로 <strong>옛 데이터</strong>를 읽을 수 있다</td>
+              <td><strong>컨슈머 먼저</strong></td>
+              <td>직전 버전</td>
+            </tr>
+            <tr>
+              <th scope="row">BACKWARD_TRANSITIVE</th>
+              <td>같음</td>
+              <td>컨슈머 먼저</td>
+              <td><strong>모든 이전 버전</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><strong>FORWARD</strong></th>
+              <td>옛 스키마로 <strong>새 데이터</strong>를 읽을 수 있다</td>
+              <td><strong>프로듀서 먼저</strong></td>
+              <td>직전 버전</td>
+            </tr>
+            <tr>
+              <th scope="row">FORWARD_TRANSITIVE</th>
+              <td>같음</td>
+              <td>프로듀서 먼저</td>
+              <td>모든 이전 버전</td>
+            </tr>
+            <tr>
+              <th scope="row">FULL</th>
+              <td>양방향</td>
+              <td>순서 무관</td>
+              <td>직전 버전</td>
+            </tr>
+            <tr>
+              <th scope="row">FULL_TRANSITIVE</th>
+              <td>양방향</td>
+              <td>순서 무관</td>
+              <td>모든 이전 버전</td>
+            </tr>
+            <tr>
+              <th scope="row">NONE</th>
+              <td>검사하지 않음</td>
+              <td>—</td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>
+          배포 순서를 외우는 요령: <strong>"BACKWARD = 뒤(옛 데이터)를 읽는다 = 읽는 쪽을 먼저 바꾼다 = 컨슈머 먼저"</strong>.
+          FORWARD는 그 반대입니다.
+          이 순서를 뒤바꾸면 배포 순간 컨슈머가 모르는 스키마를 받아 전량 죽습니다
+          (<a href="../cases/case09.html">케이스 9</a>).
+        </p>
+        <p>
+          <code>*_TRANSITIVE</code>의 차이는 <strong>비교 대상이 직전 버전인지 모든 이전 버전인지</strong> 하나뿐입니다.
+          v1 → v2 → v3를 거치며 조금씩 바꾸면, 비-TRANSITIVE에서는
+          <strong>v1과 v3가 호환되지 않을 수 있습니다.</strong> 이것이 출제 지점입니다.
+        </p>
+      </aside>
+
+      <h3 id="wire-format">wire format과 subject 전략</h3>
+      <figure class="code">
+        <figcaption>Schema Registry가 붙이는 바이트 레이아웃</figcaption>
+        <pre><code class="lang-text">[0x00]  [4바이트 schema id]  [Avro/Protobuf 페이로드]
+  1B          4B                  나머지
+  ↑           ↑
+magic byte   빅엔디안 정수. 컨슈머는 이 id 로 레지스트리에서 스키마를 조회</code></pre>
+      </figure>
+      <ul>
+        <li><strong>TopicNameStrategy</strong> (기본) — subject = <code>{topic}-key</code> / <code>{topic}-value</code>.
+          한 토픽에 한 종류의 레코드.</li>
+        <li><strong>RecordNameStrategy</strong> — subject = 레코드 풀네임.
+          <strong>한 토픽에 여러 종류의 레코드</strong>를 넣을 때. 같은 레코드 타입은 토픽이 달라도 스키마를 공유.</li>
+        <li><strong>TopicRecordNameStrategy</strong> — <code>{topic}-{레코드 풀네임}</code>. 위 둘의 절충.</li>
+      </ul>
+      <aside class="note note--warn" data-label="주의">
+        <p>
+          <code>auto.register.schemas</code>를 프로덕션 프로듀서에서 켜 두면
+          <strong>잘못된 스키마가 조용히 등록</strong>되어 호환성 검사를 사실상 우회합니다.
+          운영 환경에서는 끄고 CI에서 등록하는 것이 안전합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="security-and-cli">
+      <h2 id="security-and-cli">핵심 개념 (5) 보안 프로토콜과 관리 CLI</h2>
+
+      <h3 id="security-protocol"><code>security.protocol</code> 4종</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>클라이언트 <code>security.protocol</code> 값과 의미</caption>
+          <thead>
+            <tr>
+              <th scope="col">값</th>
+              <th scope="col">인증</th>
+              <th scope="col">전송 암호화</th>
+              <th scope="col">비고</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>PLAINTEXT</code></th><td class="mark-no">없음</td><td class="mark-no">없음</td><td>개발용만</td></tr>
+            <tr><th scope="row"><code>SSL</code></th><td>선택적 (mTLS 시)</td><td class="mark-ok">TLS</td><td>클라이언트 인증서로 인증도 가능</td></tr>
+            <tr><th scope="row"><code>SASL_PLAINTEXT</code></th><td class="mark-ok">SASL</td><td class="mark-no"><strong>없음</strong></td><td><strong>자격증명이 평문으로 흐릅니다</strong></td></tr>
+            <tr><th scope="row"><code>SASL_SSL</code></th><td class="mark-ok">SASL</td><td class="mark-ok">TLS</td><td><strong>프로덕션 권장</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>
+          <code>SASL_PLAINTEXT</code>의 <em>PLAINTEXT</em>는 <strong>인증 방식이 아니라 전송 계층</strong>을 가리킵니다.
+          SASL 메커니즘 <code>PLAIN</code>과 이름이 비슷해 혼동을 유도합니다.
+          <code>SASL_PLAINTEXT</code> + <code>PLAIN</code> 조합은 <strong>비밀번호를 평문으로 네트워크에 흘립니다.</strong>
+        </p>
+        <p>
+          그리고 <strong>인증(authentication) ≠ 인가(authorization)</strong>입니다.
+          SASL로 로그인이 되어도 ACL이 없으면 읽기·쓰기가 거부됩니다.
+          "인증을 설정했는데 <code>TopicAuthorizationException</code>이 난다" → ACL 문제입니다.
+        </p>
+      </aside>
+
+      <h3 id="reassign-partitions">파티션 재할당 워크플로</h3>
+      <figure class="code">
+        <figcaption>kafka-reassign-partitions.sh 3단계 (list order 유형 단골)</figcaption>
+        <pre><code class="lang-bash"># 1) 계획 생성 — 현재 배치와 제안 배치를 JSON 으로 출력한다
+bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \
+  --topics-to-move-json-file topics.json \
+  --broker-list "1,2,3" --generate
+
+# 2) 실행 — 복제 대역폭을 제한해 프로덕션 영향을 줄인다
+bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \
+  --reassignment-json-file plan.json --throttle 50000000 --execute
+
+# 3) 확인 — 완료되면 스로틀이 해제된다. 반드시 verify 까지 해야 한다
+bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 \
+  --reassignment-json-file plan.json --verify</code></pre>
+      </figure>
+      <aside class="note note--warn" data-label="자주 틀리는 지점">
+        <p>
+          <code>--generate</code> → <code>--execute</code> → <code>--verify</code> 순서이고,
+          <strong><code>--verify</code>를 실행해야 스로틀이 해제</strong>됩니다.
+          이 단계를 빼면 복제 대역폭 제한이 남아 이후 복구가 느려집니다.
+          그리고 이 명령은 <strong>파티션 수를 바꾸지 못합니다</strong> —
+          레플리카의 배치(어느 브로커에 두는가)만 옮깁니다. 진행 중 작업은 <code>--cancel</code>로 취소합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="must-memorize">
+      <h2 id="must-memorize">반드시 외워야 할 설정값</h2>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Fundamentals 도메인 필수 암기 설정 (Apache Kafka 4.3)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">소속</th><th scope="col">기본값</th><th scope="col">시험 포인트</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>num.partitions</code></th><td>브로커</td><td>1</td><td>자동 생성 토픽의 파티션 수. 소비 병렬성의 상한</td></tr>
+            <tr><th scope="row"><code>default.replication.factor</code></th><td>브로커</td><td>1</td><td>자동 생성 토픽은 <strong>복제되지 않습니다</strong></td></tr>
+            <tr><th scope="row"><code>auto.create.topics.enable</code></th><td>브로커</td><td><code>true</code></td><td>오타 토픽이 조용히 생성됨</td></tr>
+            <tr><th scope="row"><code>min.insync.replicas</code></th><td>브로커 · 토픽</td><td>1</td><td><code>acks=all</code>과만 상호작용</td></tr>
+            <tr><th scope="row"><code>unclean.leader.election.enable</code></th><td>브로커 · 토픽</td><td><code>false</code></td><td><code>true</code>면 가용성↑ 내구성↓ (유실 허용)</td></tr>
+            <tr><th scope="row"><code>replica.lag.time.max.ms</code></th><td>브로커</td><td>30000</td><td>이 시간 못 따라오면 ISR 제외</td></tr>
+            <tr><th scope="row"><code>message.max.bytes</code></th><td>브로커</td><td>1048588</td><td>압축 후 배치 기준</td></tr>
+            <tr><th scope="row"><code>replica.fetch.max.bytes</code></th><td>브로커</td><td>1048576</td><td>빼먹으면 복제만 실패</td></tr>
+            <tr><th scope="row"><code>offsets.retention.minutes</code></th><td>브로커</td><td>10080 (7일)</td><td>커밋 오프셋 만료 → <code>auto.offset.reset</code> 발동</td></tr>
+            <tr><th scope="row"><code>transaction.state.log.replication.factor</code></th><td>브로커</td><td>3</td><td>EOS는 브로커 3대 이상을 전제</td></tr>
+            <tr><th scope="row"><code>transaction.state.log.min.isr</code></th><td>브로커</td><td>2</td><td>단일 브로커 개발 환경에서 낮춰야 EOS가 동작</td></tr>
+            <tr><th scope="row"><code>cleanup.policy</code></th><td>토픽</td><td><code>delete</code></td><td><code>compact</code>, <code>compact,delete</code></td></tr>
+            <tr><th scope="row"><code>retention.ms</code></th><td>토픽</td><td>604800000</td><td>7일</td></tr>
+            <tr><th scope="row"><code>segment.bytes</code></th><td>토픽</td><td>1073741824</td><td>1GiB. 삭제 단위</td></tr>
+            <tr><th scope="row"><code>delete.retention.ms</code></th><td>토픽</td><td>86400000</td><td>tombstone 수명 1일</td></tr>
+            <tr><th scope="row"><code>min.cleanable.dirty.ratio</code></th><td>토픽</td><td>0.5</td><td>컴팩션 시작 조건</td></tr>
+            <tr><th scope="row"><code>compression.type</code></th><td>토픽</td><td><code>producer</code></td><td>프로듀서 기본값(<code>none</code>)과 <strong>다릅니다</strong></td></tr>
+            <tr><th scope="row"><code>remote.storage.enable</code></th><td>토픽</td><td><code>false</code></td><td>Tiered Storage 사용 여부</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="common-traps">
+      <h2 id="common-traps">자주 나오는 함정</h2>
+
+      <h3 id="trap-retention-compaction">함정 1 — 리텐션 vs 컴팩션</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>"오래된 데이터를 없앤다"는 점만 같습니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col">리텐션 (<code>delete</code>)</th><th scope="col">컴팩션 (<code>compact</code>)</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">무엇이 남는가</th><td>기간 안의 <strong>모든 레코드</strong></td><td>키별 <strong>최신 값 하나</strong></td></tr>
+            <tr><th scope="row">어디 설정</th><td>토픽 (브로커 기본값 있음)</td><td>토픽</td></tr>
+            <tr><th scope="row">언제 발동</th><td>세그먼트가 마감되고 기간·크기 초과 시</td><td>dirty ratio 초과 시 백그라운드 클리너</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td>상태 토픽에 <code>delete</code>가 남아 <strong>상태가 사라짐</strong></td><td>이벤트 토픽에 <code>compact</code>를 걸어 <strong>이력이 사라짐</strong></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"키별 최신 상태만 필요한 토픽의 설정은?" / "컴팩션 토픽에서 옛 값이 아직 보이는 이유는?"</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-hw-leo">함정 2 — high watermark vs LEO vs committed offset</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>세 지점을 섞으면 lag 계산 문항이 전부 틀립니다</caption>
+          <thead>
+            <tr><th scope="col">관점</th><th scope="col">committed offset</th><th scope="col">high watermark</th><th scope="col">LEO</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">주인</th><td>컨슈머 그룹</td><td>파티션 리더 (ISR 기준)</td><td>파티션 리더</td></tr>
+            <tr><th scope="row">저장 위치</th><td><code>__consumer_offsets</code></td><td>브로커 메모리·복제 상태</td><td>로그의 끝</td></tr>
+            <tr><th scope="row">컨슈머가 읽는 상한</th><td>—</td><td><strong>이것</strong></td><td>읽을 수 없음</td></tr>
+            <tr><th scope="row">lag 계산</th><td colspan="3">lag = <strong>high watermark − committed offset</strong></td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="3">"컨슈머가 아직 못 본 레코드 수는?" — LEO로 계산한 선택지가 함정</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-transitive">함정 3 — TRANSITIVE vs 비-TRANSITIVE</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>차이는 "비교 대상"뿐입니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col">BACKWARD</th><th scope="col">BACKWARD_TRANSITIVE</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">비교 대상</th><td>직전 버전만</td><td><strong>등록된 모든 이전 버전</strong></td></tr>
+            <tr><th scope="row">누적 변경</th><td>v1↔v3 호환이 <strong>깨질 수 있음</strong></td><td>깨지지 않음</td></tr>
+            <tr><th scope="row">과거 데이터 재처리</th><td>오래된 데이터를 새 스키마로 읽다 실패 가능</td><td>안전</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"v1 데이터를 v3 컨슈머로 재처리하려면 어떤 모드가 필요한가"</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-retention-segment">함정 4 — <code>retention.ms</code> vs <code>segment.ms</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>보관 기간을 짧게 줬는데 데이터가 안 사라지는 이유</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col"><code>retention.ms</code></th><th scope="col"><code>segment.ms</code></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">기본값</th><td>604800000 (7일)</td><td>604800000 (7일)</td></tr>
+            <tr><th scope="row">의미</th><td>얼마나 보관할지</td><td>세그먼트를 얼마 만에 마감할지</td></tr>
+            <tr><th scope="row">관계</th><td colspan="2">삭제는 <strong>마감된 세그먼트 단위</strong>로만 일어납니다. 활성 세그먼트는 지워지지 않습니다</td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2"><code>retention.ms=3600000</code>(1시간)으로 줘도 <code>segment.ms</code>가 7일이면 최대 7일치가 남습니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"보관 기간을 줄였는데 디스크가 안 줄어드는 이유는?"</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-tombstone">함정 5 — <code>delete.retention.ms</code> vs <code>retention.ms</code></h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>둘 다 "retention"이 붙지만 대상이 다릅니다</caption>
+          <thead><tr><th scope="col">관점</th><th scope="col"><code>retention.ms</code></th><th scope="col"><code>delete.retention.ms</code></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">대상</th><td>일반 레코드</td><td><strong>tombstone(value=null)</strong></td></tr>
+            <tr><th scope="row">기본값</th><td>604800000 (7일)</td><td>86400000 (1일)</td></tr>
+            <tr><th scope="row">정책</th><td><code>cleanup.policy=delete</code></td><td><code>cleanup.policy=compact</code></td></tr>
+            <tr><th scope="row">혼동 시 결과</th><td colspan="2">tombstone이 너무 빨리 사라지면, 오래 멈췄던 컨슈머가 <strong>삭제 사실을 못 보고</strong> 옛 값을 유지합니다</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="2">"컴팩션 토픽에서 삭제가 하위 시스템에 전파되지 않은 이유는?"</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="trap-max-bytes">함정 6 — 크기 설정 3종의 소속</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>이름이 비슷해 소속을 바꿔 놓는 선택지가 많습니다</caption>
+          <thead>
+            <tr><th scope="col">관점</th><th scope="col"><code>max.request.size</code></th><th scope="col"><code>message.max.bytes</code></th><th scope="col"><code>fetch.max.bytes</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">소속</th><td>프로듀서</td><td>브로커 (토픽은 <code>max.message.bytes</code>)</td><td>컨슈머</td></tr>
+            <tr><th scope="row">기본값</th><td>1048576</td><td>1048588</td><td>52428800</td></tr>
+            <tr><th scope="row">언제 발동</th><td>전송 직전 클라이언트에서</td><td>브로커가 배치를 받을 때</td><td>fetch 응답 크기 산정 시</td></tr>
+            <tr><th scope="row">초과 시</th><td><code>RecordTooLargeException</code> (즉시)</td><td>브로커가 거부</td><td>(상한이므로 초과 없음)</td></tr>
+            <tr><th scope="row">출제 형태</th><td colspan="3">"1.5MB 메시지를 보내려면 무엇을 바꿔야 하는가 (모두 고르시오)"</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="code-reading">
+      <h2 id="code-reading">코드·설정 읽기 문제 대비</h2>
+
+      <h3 id="code-1">스니펫 1 — 이 토픽 설정의 문제</h3>
+      <figure class="code">
+        <figcaption>kafka-topics.sh 로 만든 상태 토픽</figcaption>
+        <pre><code class="lang-bash">bin/kafka-topics.sh --create --topic user-profile-state \
+  --bootstrap-server localhost:9092 \
+  --partitions 6 --replication-factor 3 \
+  --config retention.ms=86400000</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <p>
+          "state"라는 이름과 달리 <code>cleanup.policy</code>를 지정하지 않았으므로
+          기본값 <strong><code>delete</code></strong>가 적용됩니다.
+          <code>retention.ms=86400000</code>(1일)이므로 <strong>1일 뒤 상태가 사라집니다.</strong>
+          키별 최신 상태를 유지하려면 <code>--config cleanup.policy=compact</code>가 필요하고,
+          그때는 <code>retention.ms</code>가 의미를 잃습니다.
+          <a href="../cases/case08.html">케이스 8</a>이 이 사고입니다.
+        </p>
+      </aside>
+
+      <h3 id="code-2">스니펫 2 — 이 스키마 변경은 통과하는가</h3>
+      <figure class="code">
+        <figcaption>v1 → v2 (subject 호환성 모드는 BACKWARD)</figcaption>
+        <pre><code class="lang-json">// v1
+{ "type": "record", "name": "Order", "fields": [
+    { "name": "orderId", "type": "string" },
+    { "name": "amount",  "type": "long" } ]}
+
+// v2 — couponCode 를 추가
+{ "type": "record", "name": "Order", "fields": [
+    { "name": "orderId",    "type": "string" },
+    { "name": "amount",     "type": "long" },
+    { "name": "couponCode", "type": "string" } ]}</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <p>
+          <strong>거부됩니다.</strong> <code>couponCode</code>에 <code>default</code>가 없기 때문입니다.
+          BACKWARD는 "새 스키마로 옛 데이터를 읽을 수 있어야" 하는데,
+          v1로 쓰인 레코드에는 <code>couponCode</code>가 없고 채울 기본값도 없습니다.
+          <code>{ "name": "couponCode", "type": ["null","string"], "default": null }</code>로 바꾸면 통과합니다.
+          <strong>배포 순서는 컨슈머 먼저</strong>입니다.
+        </p>
+      </aside>
+
+      <h3 id="code-3">스니펫 3 — 이 계산의 답</h3>
+      <figure class="code">
+        <figcaption>파티션 상태</figcaption>
+        <pre><code class="lang-text">Topic: payments  Partition: 3
+  Leader: 2   Replicas: 2,3,1   Isr: 2,3
+  log-start-offset: 1200
+  committed offset (group=billing): 8400
+  high watermark: 9100
+  LEO: 9350</code></pre>
+      </figure>
+      <aside class="note note--ok" data-label="판독 포인트">
+        <ul>
+          <li><strong>consumer lag = 9100 − 8400 = 700</strong>입니다. LEO(9350)로 계산한 950은 오답입니다.</li>
+          <li>9100~9350 구간은 <strong>아직 ISR 전원이 복제하지 못한 250건</strong>이며 컨슈머에게 보이지 않습니다.</li>
+          <li>ISR이 <code>2,3</code>이므로 레플리카 1이 빠져 있습니다.
+            <code>min.insync.replicas=2</code>라면 아직 쓰기는 가능하지만, 한 대만 더 빠지면 실패합니다.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch02.html">
+          <span class="card__title">2장 · 아키텍처와 핵심 개념</span>
+          <span class="card__desc">복제, ISR, 리더 선출, 오프셋 4종의 전체 설명.</span>
+          <span class="card__meta">기본개념</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch07.html">
+          <span class="card__title">7장 · 스토리지·리텐션·컴팩션</span>
+          <span class="card__desc">세그먼트 물리 구조, 컴팩션 before/after, Tiered Storage.</span>
+          <span class="card__meta">기본개념</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch08.html">
+          <span class="card__title">8장 · 스키마와 직렬화</span>
+          <span class="card__desc">호환성 매트릭스 전문, subject 전략, wire format.</span>
+          <span class="card__meta">기본개념</span>
+        </a></li>
+        <li><a class="card" href="../cases/case06.html">
+          <span class="card__title">케이스 6 · RF=3인데 유실</span>
+          <span class="card__desc"><code>min.insync.replicas</code>를 1로 둔 결과.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../cases/case10.html">
+          <span class="card__title">케이스 10 · 큰 메시지 무한 재시도</span>
+          <span class="card__desc">5개 설정 중 하나를 빼먹었을 때 무엇이 먼저 깨지는가.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc">브로커·토픽 설정 전체 표와 프리셋 3종.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="mini-quiz">
+      <h2 id="mini-quiz">도메인 미니 퀴즈</h2>
+      <div class="quiz-embed" data-set="ccdak-fundamentals" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> — <code>message.max.bytes</code>, <code>min.insync.replicas</code>, <code>replica.lag.time.max.ms</code>, <code>replica.fetch.max.bytes</code>, <code>offsets.retention.minutes</code>, <code>transaction.state.log.*</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs" rel="noopener noreferrer">Topic Configs</a> — <code>cleanup.policy</code>, <code>retention.ms</code>, <code>segment.bytes</code>, <code>segment.ms</code>, <code>delete.retention.ms</code>, <code>min.cleanable.dirty.ratio</code>, <code>max.message.bytes</code>, <code>compression.type</code>, <code>remote.storage.enable</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#replication" rel="noopener noreferrer">Replication</a> — ISR, high watermark, unclean leader election</li>
+        <li><a href="https://kafka.apache.org/documentation/#compaction" rel="noopener noreferrer">Log Compaction</a> — tombstone, 활성 세그먼트 제외, dirty ratio</li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops_partitionassignment" rel="noopener noreferrer">Expanding your cluster / Reassigning partitions</a> — <code>--generate</code> / <code>--execute</code> / <code>--verify</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#security_overview" rel="noopener noreferrer">Security</a> — <code>security.protocol</code> 4종, 인증과 인가의 분리</li>
+      </ul>
+      <aside class="note note--warn" data-label="출처 주의">
+        <p>
+          Schema Registry의 호환성 모드와 subject naming strategy는 Apache Kafka 본체가 아니라
+          <strong>Confluent Platform 문서</strong>의 범위입니다.
+          이 사이트를 만든 환경에서는 <code>docs.confluent.io</code>에 접근할 수 없어
+          <strong>Avro 스키마 해상 규칙과 널리 알려진 모드 정의를 근거로 정리</strong>했습니다.
+          응시 전에 Confluent 공식 Schema Registry 문서로 매트릭스를 한 번 대조하는 것을 권합니다.
+        </p>
+      </aside>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

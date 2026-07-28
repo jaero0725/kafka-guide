@@ -1,0 +1,135 @@
+<svg viewBox="0 0 720 348" role="img" class="kg-diagram"
+     aria-labelledby="d052-title d052-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d052-title">read_committed 와 LSO — 진행 중 트랜잭션이 뒤쪽 커밋 메시지까지 가립니다</title>
+  <desc id="d052-desc">파티션 로그의 오프셋 0부터 11까지를 12칸으로 그린 그림입니다.
+    오프셋 0과 1은 일반 메시지, 2와 3은 트랜잭션 T1 의 레코드, 4는 T1 의 커밋 마커입니다.
+    오프셋 5는 아직 진행 중인 트랜잭션 T2 의 첫 레코드이고, 6과 7은 트랜잭션 T3 의 레코드, 8은 T3 의 커밋 마커,
+    9와 11은 트랜잭션과 무관한 일반 메시지, 10은 T2 의 두 번째 레코드입니다.
+    LSO 즉 last stable offset 은 진행 중인 가장 앞선 트랜잭션의 첫 오프셋인 5 입니다.
+    isolation.level 이 기본값 read_uncommitted 인 컨슈머는 high watermark 까지 전부 읽습니다.
+    read_committed 컨슈머는 LSO 보다 작은 오프셋만 반환하므로 0부터 4까지만 읽습니다.
+    그 결과 T3 가 이미 커밋을 끝낸 6, 7, 8 과 트랜잭션과 아무 상관 없는 9, 11 까지 보이지 않습니다.
+    이것이 read_committed 가 지연을 만드는 이유이며, 진행 중 트랜잭션이 길수록 지연이 커집니다.</desc>
+
+  <text x="12" y="20" class="dg-fs-md dg-bold">read_committed 와 LSO — 진행 중 트랜잭션 하나가 그 뒤 전부를 막습니다</text>
+
+  <!-- 리더 로그 라벨 -->
+  <text x="12" y="82" class="dg-fs-sm dg-bold">리더 로그</text>
+  <text x="12" y="99" class="dg-fs-sm dg-mono dg-muted">orders-0</text>
+
+  <!-- 레코드 칸 12개 -->
+  <g data-dg="cell-0">
+    <rect class="dg-node dg-node--ok" x="80" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="104" y="68" text-anchor="middle">0</text>
+    <text class="dg-fs-sm dg-bold" x="104" y="85" text-anchor="middle">일반</text>
+    <text class="dg-fs-sm dg-muted" x="104" y="102" text-anchor="middle">보임</text>
+  </g>
+  <g data-dg="cell-1">
+    <rect class="dg-node dg-node--ok" x="128" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="152" y="68" text-anchor="middle">1</text>
+    <text class="dg-fs-sm dg-bold" x="152" y="85" text-anchor="middle">일반</text>
+    <text class="dg-fs-sm dg-muted" x="152" y="102" text-anchor="middle">보임</text>
+  </g>
+  <g data-dg="cell-2">
+    <rect class="dg-node dg-node--ok" x="176" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="200" y="68" text-anchor="middle">2</text>
+    <text class="dg-fs-sm dg-bold" x="200" y="85" text-anchor="middle">T1</text>
+    <text class="dg-fs-sm dg-muted" x="200" y="102" text-anchor="middle">커밋</text>
+  </g>
+  <g data-dg="cell-3">
+    <rect class="dg-node dg-node--ok" x="224" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="248" y="68" text-anchor="middle">3</text>
+    <text class="dg-fs-sm dg-bold" x="248" y="85" text-anchor="middle">T1</text>
+    <text class="dg-fs-sm dg-muted" x="248" y="102" text-anchor="middle">커밋</text>
+  </g>
+  <g data-dg="cell-4">
+    <rect class="dg-node dg-node--ok" x="272" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="296" y="68" text-anchor="middle">4</text>
+    <text class="dg-fs-sm dg-bold" x="296" y="85" text-anchor="middle">마커</text>
+    <text class="dg-fs-sm dg-muted" x="296" y="102" text-anchor="middle">T1 끝</text>
+  </g>
+  <g data-dg="cell-5">
+    <rect class="dg-node dg-node--warn" x="320" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="344" y="68" text-anchor="middle">5</text>
+    <text class="dg-fs-sm dg-bold" x="344" y="85" text-anchor="middle">T2</text>
+    <text class="dg-fs-sm dg-bold" x="344" y="102" text-anchor="middle">진행중</text>
+  </g>
+  <g data-dg="cell-6">
+    <rect class="dg-node dg-node--danger" x="368" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="392" y="68" text-anchor="middle">6</text>
+    <text class="dg-fs-sm dg-bold" x="392" y="85" text-anchor="middle">T3</text>
+    <text class="dg-fs-sm dg-muted" x="392" y="102" text-anchor="middle">커밋</text>
+  </g>
+  <g data-dg="cell-7">
+    <rect class="dg-node dg-node--danger" x="416" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="440" y="68" text-anchor="middle">7</text>
+    <text class="dg-fs-sm dg-bold" x="440" y="85" text-anchor="middle">T3</text>
+    <text class="dg-fs-sm dg-muted" x="440" y="102" text-anchor="middle">커밋</text>
+  </g>
+  <g data-dg="cell-8">
+    <rect class="dg-node dg-node--danger" x="464" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="488" y="68" text-anchor="middle">8</text>
+    <text class="dg-fs-sm dg-bold" x="488" y="85" text-anchor="middle">마커</text>
+    <text class="dg-fs-sm dg-muted" x="488" y="102" text-anchor="middle">T3 끝</text>
+  </g>
+  <g data-dg="cell-9">
+    <rect class="dg-node dg-node--danger" x="512" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="536" y="68" text-anchor="middle">9</text>
+    <text class="dg-fs-sm dg-bold" x="536" y="85" text-anchor="middle">일반</text>
+    <text class="dg-fs-sm dg-muted" x="536" y="102" text-anchor="middle">막힘</text>
+  </g>
+  <g data-dg="cell-10">
+    <rect class="dg-node dg-node--warn" x="560" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="584" y="68" text-anchor="middle">10</text>
+    <text class="dg-fs-sm dg-bold" x="584" y="85" text-anchor="middle">T2</text>
+    <text class="dg-fs-sm dg-bold" x="584" y="102" text-anchor="middle">진행중</text>
+  </g>
+  <g data-dg="cell-11">
+    <rect class="dg-node dg-node--danger" x="608" y="52" width="48" height="56" rx="3"/>
+    <text class="dg-fs-sm dg-num" x="632" y="68" text-anchor="middle">11</text>
+    <text class="dg-fs-sm dg-bold" x="632" y="85" text-anchor="middle">일반</text>
+    <text class="dg-fs-sm dg-muted" x="632" y="102" text-anchor="middle">막힘</text>
+  </g>
+
+  <!-- high watermark 마커 (오른쪽 끝) -->
+  <g data-dg="marker-hw">
+    <line class="dg-edge dg-edge--dashed" x1="656" y1="44" x2="656" y2="116"/>
+    <text class="dg-fs-sm dg-bold" x="662" y="76">HW</text>
+    <text class="dg-fs-sm dg-bold dg-num" x="662" y="93">12</text>
+  </g>
+
+  <!-- LSO 마커 (오프셋 5 경계) -->
+  <g data-dg="marker-lso">
+    <line class="dg-edge dg-edge--accent" x1="320" y1="44" x2="320" y2="140"/>
+    <path class="dg-marker--accent" d="M315,44 L325,44 L320,36 Z"/>
+    <rect class="dg-node dg-node--accent" x="252" y="118" width="136" height="20" rx="4"/>
+    <text class="dg-fs-sm dg-bold" x="260" y="132">LSO = 5</text>
+    <text class="dg-fs-sm" x="320" y="132">진행 중 T2 의 첫 오프셋</text>
+  </g>
+
+  <!-- 컨슈머 가시 범위 -->
+  <text x="12" y="164" class="dg-fs-sm dg-bold"><tspan class="dg-mono">read_uncommitted</tspan> (기본값)</text>
+  <rect class="dg-node dg-node--ok" x="80" y="170" width="576" height="18" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="368" y="183" text-anchor="middle">0 ~ 11 전부 반환 — abort 된 레코드까지 보입니다</text>
+
+  <text x="12" y="208" class="dg-fs-sm dg-bold"><tspan class="dg-mono">read_committed</tspan></text>
+  <rect class="dg-node dg-node--accent" x="80" y="214" width="240" height="18" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="200" y="227" text-anchor="middle">0 ~ 4 만 반환</text>
+  <rect class="dg-node dg-node--danger" x="320" y="214" width="336" height="18" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="488" y="227" text-anchor="middle">LSO 뒤 — 7건 전부 보류</text>
+
+  <!-- 핵심 설명 -->
+  <rect class="dg-node dg-node--danger" x="12" y="244" width="696" height="46" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="262">오프셋 6·7·8 은 T3 가 <tspan class="dg-bold">이미 커밋을 끝낸</tspan> 레코드이고, 9·11 은 트랜잭션과 무관한 일반 메시지입니다.</text>
+  <text class="dg-fs-sm" x="22" y="281">그런데도 오프셋 5의 T2 가 끝나지 않아 전부 보류됩니다. <tspan class="dg-bold">긴 트랜잭션 = 컨슈머 지연</tspan>이 되는 이유입니다.</text>
+
+  <!-- 범례 -->
+  <line class="dg-grid" x1="12" y1="300" x2="708" y2="300"/>
+  <rect class="dg-node dg-node--ok" x="12" y="310" width="16" height="12" rx="2"/>
+  <text class="dg-fs-sm" x="34" y="320">read_committed 로도 보임</text>
+  <rect class="dg-node dg-node--warn" x="212" y="310" width="16" height="12" rx="2"/>
+  <text class="dg-fs-sm" x="234" y="320">진행 중 트랜잭션 T2 의 레코드</text>
+  <rect class="dg-node dg-node--danger" x="452" y="310" width="16" height="12" rx="2"/>
+  <text class="dg-fs-sm" x="474" y="320">LSO 뒤라서 보이지 않음</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="340"><tspan class="dg-mono">isolation.level</tspan> 기본값은 <tspan class="dg-mono">read_uncommitted</tspan> 입니다. read_committed 에서 <tspan class="dg-mono">seekToEnd()</tspan> 는 HW 가 아니라 LSO 를 돌려줍니다.</text>
+</svg>

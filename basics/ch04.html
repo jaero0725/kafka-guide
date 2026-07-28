@@ -1,0 +1,1873 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>4장 · Producer 심화 — Kafka Guide</title>
+  <meta name="description" content="Apache Kafka 4.3 기준 Producer 전송 파이프라인, batch.size와 linger.ms(4.0에서 0→5 변경)의 상호작용, acks와 min.insync.replicas의 결합, 멱등성 프로듀서와 max.in.flight 5 제약, murmur2 키 파티셔닝과 sticky 배치, 압축 4종, delivery.timeout.ms 기반 재시도 예산까지 정리합니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="basics" data-page="ch04"></div>
+
+  <main id="main" class="page" data-page-id="basics/ch04">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="ch01.html">기본개념</a></li>
+        <li><span aria-current="page">4장 · Producer 심화</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">기본개념 · 4장</p>
+      <h1>Producer 심화</h1>
+      <p class="page__lead">
+        CCDAK에서 가장 비중이 큰 도메인이 Application Development(28%)이고,
+        그 안에서 가장 많이 출제되는 컴포넌트가 Producer입니다.
+        <code>send()</code>가 <strong>비동기이며 즉시 반환한다</strong>는 사실 하나에서
+        배치·순서·중복·유실·콜백 스레드 문제가 전부 파생됩니다.
+        이 장은 그 파생 관계를 순서대로 풀어 갑니다.
+        4.x에서 조용히 바뀐 기본값(<code>linger.ms=5</code>)과
+        제거된 클래스(<code>DefaultPartitioner</code>)도 함께 짚습니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li><code>send()</code> 호출부터 콜백까지의 단계를 나열하고, 각 단계가 <strong>어느 스레드</strong>에서 실행되는지 구분할 수 있습니다.</li>
+        <li><code>batch.size</code> · <code>linger.ms</code> · <code>buffer.memory</code> · <code>max.block.ms</code>의 상호작용을 설명할 수 있습니다.</li>
+        <li><code>acks</code> 세 값의 정확한 의미와 <code>min.insync.replicas</code>와의 결합 결과를 판단할 수 있습니다.</li>
+        <li>멱등성 프로듀서가 <strong>무엇을 보장하고 무엇을 보장하지 않는지</strong> 구분하고, <code>max.in.flight.requests.per.connection</code>이 5 이하여야 하는 이유를 설명할 수 있습니다.</li>
+        <li>키가 있을 때와 없을 때의 파티션 결정 방식을 구분하고, "라운드로빈"이라는 서술이 왜 부정확한지 설명할 수 있습니다.</li>
+        <li>retriable · non-retriable 에러를 구분하고 <code>delivery.timeout.ms</code>가 전체 상한이 되는 구조를 설명할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="send-pipeline">
+      <h2 id="send-pipeline">전송 파이프라인 — <code>send()</code>에서 콜백까지</h2>
+
+      <p>
+        <code>KafkaProducer.send()</code>는 <strong>브로커에 데이터를 보내지 않습니다.</strong>
+        레코드를 직렬화하고 파티션을 정한 뒤 <strong>메모리 버퍼에 넣고 즉시 반환</strong>합니다.
+        실제 네트워크 전송은 별도의 <strong>Sender 스레드</strong>가 합니다.
+        이 분리가 Producer 동작 전체의 출발점입니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-030">
+        <figcaption>
+          Producer 전송 파이프라인 — <code>send()</code> 호출부터 콜백까지.
+          인터셉터·직렬화·파티셔너·버퍼 적재는 <strong>호출 스레드</strong>,
+          배치 드레인·전송·응답 처리·콜백 실행은 <strong>Sender 스레드</strong>입니다
+        </figcaption>
+      </figure>
+
+      <h3 id="pipeline-stages">단계별로 무슨 일이 일어나는가</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>전송 파이프라인 단계와 실행 스레드</caption>
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">단계</th>
+              <th scope="col">실행 스레드</th>
+              <th scope="col">관련 설정</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">1</th>
+              <td>인터셉터 <code>onSend()</code></td>
+              <td>호출 스레드</td>
+              <td><code>interceptor.classes</code></td>
+            </tr>
+            <tr>
+              <th scope="row">2</th>
+              <td>메타데이터 확보 — 토픽의 파티션 수를 모르면 여기서 <strong>블로킹</strong></td>
+              <td>호출 스레드</td>
+              <td><code>max.block.ms</code>, <code>metadata.max.age.ms</code></td>
+            </tr>
+            <tr>
+              <th scope="row">3</th>
+              <td>키·값 직렬화</td>
+              <td>호출 스레드</td>
+              <td><code>key.serializer</code>, <code>value.serializer</code></td>
+            </tr>
+            <tr>
+              <th scope="row">4</th>
+              <td>파티션 결정</td>
+              <td>호출 스레드</td>
+              <td><code>partitioner.class</code>, <code>partitioner.ignore.keys</code></td>
+            </tr>
+            <tr>
+              <th scope="row">5</th>
+              <td>RecordAccumulator의 파티션별 배치에 append — 버퍼가 가득하면 <strong>블로킹</strong></td>
+              <td>호출 스레드</td>
+              <td><code>buffer.memory</code>, <code>batch.size</code>, <code>max.block.ms</code></td>
+            </tr>
+            <tr>
+              <th scope="row">6</th>
+              <td><strong><code>send()</code> 반환</strong> — <code>Future&lt;RecordMetadata&gt;</code></td>
+              <td>호출 스레드</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row">7</th>
+              <td>전송 가능한 배치 수집(drain) 후 압축</td>
+              <td><strong>Sender</strong></td>
+              <td><code>linger.ms</code>, <code>batch.size</code>, <code>compression.type</code></td>
+            </tr>
+            <tr>
+              <th scope="row">8</th>
+              <td>브로커별로 묶어 ProduceRequest 전송</td>
+              <td><strong>Sender</strong></td>
+              <td><code>max.request.size</code>, <code>max.in.flight.requests.per.connection</code></td>
+            </tr>
+            <tr>
+              <th scope="row">9</th>
+              <td>응답 대기 · 재시도 판단</td>
+              <td><strong>Sender</strong></td>
+              <td><code>acks</code>, <code>request.timeout.ms</code>, <code>retries</code>, <code>retry.backoff.ms</code></td>
+            </tr>
+            <tr>
+              <th scope="row">10</th>
+              <td><code>Future</code> 완료 + 인터셉터 <code>onAcknowledgement()</code> + <strong>콜백 실행</strong></td>
+              <td><strong>Sender</strong></td>
+              <td><code>delivery.timeout.ms</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          <strong><code>send()</code>는 두 곳에서 블로킹될 수 있습니다</strong> —
+          (1) 토픽 메타데이터를 아직 모를 때, (2) <code>buffer.memory</code>가 가득 찼을 때.
+          두 경우 모두 <code>max.block.ms</code>(기본 60000ms)가 상한이고,
+          초과하면 <code>TimeoutException</code>이 발생합니다.
+        </p>
+        <p>
+          공식 문서는 <strong>사용자가 제공한 직렬화기나 파티셔너 안에서의 블로킹은
+          이 타임아웃에 포함되지 않는다</strong>고 명시합니다.
+          커스텀 직렬화기에서 외부 스키마 서버를 동기 호출하면
+          <code>max.block.ms</code>로 막을 수 없다는 뜻입니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>기본 Producer — Kafka 4.3 클라이언트 API</figcaption>
+        <pre><code class="lang-java">import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Properties;
+
+public final class OrderProducer {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderProducer.class);
+
+    public static void main(String[] args) {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                  "kafka-1:9092,kafka-2:9092,kafka-3:9092");   // 초기 연결 이중화
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        // 아래 세 개는 Kafka 4.x 기본값이므로 생략해도 동일합니다.
+        // 의도를 코드에 남기기 위해 명시했습니다.
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
+
+        // try-with-resources 로 닫아야 버퍼에 남은 배치가 flush 됩니다.
+        try (Producer&lt;String, String&gt; producer = new KafkaProducer&lt;&gt;(props)) {
+
+            ProducerRecord&lt;String, String&gt; record =
+                new ProducerRecord&lt;&gt;("orders", "order-1024", "{\"amount\":12900}");
+
+            producer.send(record, (metadata, exception) -&gt; {
+                if (exception != null) {
+                    // 콜백은 Sender 스레드에서 실행됩니다. 여기서 블로킹하면 전송 전체가 멈춥니다.
+                    // 로깅과 메트릭 증가까지만 하고, 재처리는 큐로 넘깁니다.
+                    log.error("send failed topic={} key={}", record.topic(), record.key(), exception);
+                    return;
+                }
+                log.debug("sent partition={} offset={}", metadata.partition(), metadata.offset());
+            });
+
+            // 종료 직전 명시적 flush — close() 도 내부적으로 flush 합니다.
+            // try-with-resources 를 쓰지 않는다면 shutdown hook 에서
+            // producer.close(Duration.ofSeconds(30)) 을 호출해야 버퍼가 비워집니다.
+            producer.flush();
+        } catch (RuntimeException e) {
+            log.error("producer terminated abnormally", e);
+            throw e;
+        }
+    }
+}</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="자주 하는 실수">
+        <p>
+          <code>producer.close()</code>를 호출하지 않으면 <strong>버퍼에 남아 있는 배치가
+          전송되지 않고 프로세스가 종료</strong>됩니다. 특히 <code>linger.ms=5</code>가
+          기본값인 4.x에서는 마지막 몇 밀리초 분량이 항상 버퍼에 남아 있습니다.
+          try-with-resources 또는 shutdown hook에서
+          <code>close(Duration.ofSeconds(30))</code>을 호출하세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="callback-timing">
+      <h2 id="callback-timing">콜백은 언제, 어느 스레드에서 실행되는가</h2>
+
+      <figure class="diagram" data-diagram="D-036">
+        <figcaption>
+          <code>onCompletion()</code> 호출 시점 타임라인 — <code>send()</code>의 즉시 반환,
+          배치 대기, 브로커 응답, 그리고 <strong>Sender 스레드에서의 콜백 실행</strong>까지의 시간 축
+        </figcaption>
+      </figure>
+
+      <p>
+        <code>Callback</code> 인터페이스의 공식 javadoc은 두 문장으로 핵심을 정리합니다 —
+        이 콜백은 <strong>일반적으로 백그라운드 I/O 스레드에서 실행되므로 빨라야 하고</strong>,
+        <strong>레코드가 서버에서 acknowledge된 시점에 호출</strong>됩니다.
+      </p>
+
+      <h3 id="callback-contract">콜백의 계약</h3>
+      <ul>
+        <li><strong>실행 스레드는 Sender(I/O) 스레드</strong>입니다. 애플리케이션 스레드가 아닙니다.
+          콜백 안에서 DB 호출·HTTP 호출·락 획득을 하면
+          <strong>그 프로듀서의 모든 파티션 전송이 함께 지연됩니다.</strong></li>
+        <li><code>(metadata, exception)</code> 중 <strong>한쪽은 항상 null</strong>입니다.
+          예외가 있을 때 <code>metadata</code>는 <strong>모든 필드가 <code>-1</code>인 빈 메타데이터</strong>가
+          전달됩니다(null이 아닙니다). 파티션을 정할 수 없었던 경우에도 <code>-1</code>이 들어갑니다.</li>
+        <li><strong>같은 파티션으로 보낸 레코드들의 콜백은 순서가 보장됩니다.</strong>
+          공식 javadoc의 예시대로 <code>callback1</code>이 <code>callback2</code>보다 먼저 실행됩니다.
+          다른 파티션 사이에는 순서 보장이 없습니다.</li>
+        <li>호출 시점은 <strong>브로커 응답을 받았을 때 또는 최종 실패가 확정되었을 때</strong>입니다.
+          최종 실패의 상한이 <code>delivery.timeout.ms</code>입니다.</li>
+      </ul>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          <strong>4.3부터 <code>flush()</code>가 콜백 안에서의 호출을 금지합니다.</strong>
+          업그레이드 문서는 "<code>flush</code> 메서드가 잠재적 데드락을 감지해
+          콜백 내부에서의 사용을 금지한다"고 명시합니다.
+          이전 버전에서는 <strong>이것이 알려진 위험</strong>이었고 실제로 프로듀서가 멈췄습니다.
+          콜백 안에서 <code>flush()</code>·<code>send().get()</code>·락 획득을 하지 말아야 하는
+          이유가 이제 런타임에서 강제됩니다.
+        </p>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          <code>Future.get()</code>을 <code>send()</code> 직후에 호출하면
+          <strong>비동기의 이점이 사라집니다.</strong> 배치가 형성되지 못하고
+          한 건씩 왕복하므로 처리량이 급락합니다.
+        </p>
+        <div class="diff">
+          <div class="diff__before">
+            <p>동기 전송 — 매 레코드마다 브로커 왕복을 기다립니다. 배치가 만들어지지 않습니다.</p>
+            <figure class="code">
+              <figcaption>안티패턴</figcaption>
+              <pre><code class="lang-java">for (Order o : orders) {
+    producer.send(toRecord(o)).get();   // 매번 블로킹
+}</code></pre>
+            </figure>
+          </div>
+          <div class="diff__after">
+            <p>콜백으로 실패만 처리하고, 경계에서 한 번만 <code>flush()</code>합니다.</p>
+            <figure class="code">
+              <figcaption>권장</figcaption>
+              <pre><code class="lang-java">for (Order o : orders) {
+    producer.send(toRecord(o), (md, ex) -&gt; {
+        if (ex != null) failures.add(o);   // 논블로킹 수집만
+    });
+}
+producer.flush();                          // 배치 경계에서 한 번</code></pre>
+            </figure>
+          </div>
+        </div>
+        <p>
+          단 <strong>"이 레코드가 확실히 저장되었는지"를 응답 전에 알아야 하는</strong>
+          동기 API 경계(예: HTTP 요청-응답 안에서 이벤트 발행을 보장해야 할 때)라면
+          <code>get()</code>이 맞는 선택입니다. 그때는
+          <code>get(timeout, unit)</code> 형태로 상한을 두세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="batching-and-latency">
+      <h2 id="batching-and-latency">배치와 지연 — <code>batch.size</code> × <code>linger.ms</code></h2>
+
+      <figure class="diagram" data-diagram="D-031">
+        <figcaption>
+          배치 형성 타임라인 — <code>batch.size</code> 도달과 <code>linger.ms</code> 만료 중
+          <strong>먼저 오는 쪽</strong>에서 전송이 일어나는 구조
+        </figcaption>
+      </figure>
+
+      <p>
+        RecordAccumulator는 <strong>파티션별로</strong> 배치를 만듭니다.
+        하나의 배치가 전송되는 조건은 두 가지이고 <strong>먼저 충족되는 쪽</strong>이 이깁니다.
+      </p>
+      <ol>
+        <li>그 파티션에 <code>batch.size</code>(기본 <strong>16384</strong>바이트) 분량이 쌓임</li>
+        <li><code>linger.ms</code>(기본 <strong>5</strong>ms) 경과</li>
+      </ol>
+      <p>
+        공식 문서의 표현은 명확합니다 — "한 파티션에 대해 <code>batch.size</code> 분량의 레코드를
+        얻으면 이 설정과 무관하게 <strong>즉시</strong> 전송하고, 그보다 적으면
+        지정한 시간만큼 <em>linger</em>하며 더 기다린다."
+      </p>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          <strong><code>linger.ms</code>의 기본값이 4.0에서 <code>0</code> → <code>5</code>로 바뀌었습니다.</strong>
+          공식 문서가 밝힌 근거는 "더 큰 배치의 효율 이득이 linger 증가를 상쇄해
+          결과적으로 프로듀서 지연이 비슷하거나 오히려 낮아지기 때문"입니다.
+        </p>
+        <div class="table-scroll">
+          <table class="config-table config-table--plain">
+            <tbody>
+              <tr><th scope="row">Kafka 2.x · 3.x</th><td><code>linger.ms=0</code> — 배치가 비어 있으면 즉시 전송</td></tr>
+              <tr><th scope="row">Kafka 4.x</th><td><code>linger.ms=5</code> — 최대 5ms 동안 배치를 모음</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          시중 자료 대부분이 3.x 기준이라 <code>0</code>으로 적혀 있습니다.
+          <strong>레이턴시가 극도로 민감한 경로라면 명시적으로 <code>linger.ms=0</code>을
+          지정해야 예전 동작이 됩니다.</strong> 이 항목은 문제로도 출제 가치가 높습니다.
+        </p>
+      </aside>
+
+      <h3 id="batch-size-details"><code>batch.size</code>의 미묘한 성질 세 가지</h3>
+      <ul>
+        <li><strong><code>batch.size</code>보다 큰 레코드는 배치되지 않습니다.</strong>
+          공식 문서가 "이 크기보다 큰 레코드를 배치하려는 시도는 하지 않는다"고 명시합니다.
+          큰 레코드는 자기 혼자 하나의 요청이 됩니다.</li>
+        <li><strong><code>batch.size=0</code>은 배치를 완전히 끕니다.</strong>
+          처리량이 크게 떨어지므로 진단 목적 외에는 쓰지 않습니다.</li>
+        <li>버퍼는 <strong>지정한 크기만큼 미리 할당</strong>됩니다.
+          <code>batch.size</code>를 과하게 크게 두면 메모리를 낭비합니다.</li>
+      </ul>
+
+      <aside class="note" data-label="알아 두면 좋은 것">
+        <p>
+          공식 문서는 <strong>브로커의 backpressure가 실제 linger 시간을
+          이 설정보다 길게 만들 수 있다</strong>고 언급합니다.
+          in-flight 요청이 상한에 걸려 Sender가 새 요청을 보낼 수 없으면
+          배치는 계속 커집니다. 즉 <code>linger.ms=5</code>인데도
+          실제 배치 지연이 수십 ms가 될 수 있습니다 —
+          이 경우 원인은 프로듀서 설정이 아니라 브로커 쪽 처리 지연입니다.
+        </p>
+      </aside>
+
+      <h3 id="buffer-memory"><code>buffer.memory</code>와 역압</h3>
+      <p>
+        <code>buffer.memory</code>(기본 <strong>33554432</strong> = 32MiB)는
+        전송 대기 레코드를 담는 전체 버퍼 크기입니다.
+        생산 속도가 전송 속도보다 빠르면 이 버퍼가 차고,
+        그때 <code>send()</code>가 <code>max.block.ms</code>만큼 블로킹된 뒤
+        <code>TimeoutException</code>으로 실패합니다.
+        공식 문서는 압축과 in-flight 요청 유지에도 추가 메모리가 쓰이므로
+        이 값이 <strong>프로듀서 전체 메모리의 엄격한 상한은 아니라고</strong> 명시합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>배치·버퍼 관련 설정과 처리량·지연 방향</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">기본값</th>
+              <th scope="col">올리면</th>
+              <th scope="col">내리면</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>batch.size</code></th>
+              <td>16384</td>
+              <td>처리량 ↑ 압축률 ↑ 메모리 ↑</td>
+              <td>지연 ↓ 처리량 ↓ (0이면 배치 없음)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>linger.ms</code></th>
+              <td><strong>5</strong></td>
+              <td>처리량 ↑ 압축률 ↑ <strong>지연 ↑</strong></td>
+              <td>지연 ↓ 요청 수 ↑ 처리량 ↓</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>buffer.memory</code></th>
+              <td>33554432</td>
+              <td>버스트 흡수력 ↑ 힙 사용 ↑</td>
+              <td>버스트 시 <code>send()</code> 블로킹·실패 ↑</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.block.ms</code></th>
+              <td>60000</td>
+              <td>버스트 시 스레드가 오래 대기</td>
+              <td>빨리 실패 — 애플리케이션이 역압을 인지</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.request.size</code></th>
+              <td>1048576</td>
+              <td>큰 배치 허용 (브로커 설정과 정합 필요)</td>
+              <td><code>RecordTooLargeException</code> ↑</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          "처리량을 올리려면 어떤 설정을 바꿔야 하는가" 문항의 정답 조합은
+          <strong><code>batch.size</code> ↑ + <code>linger.ms</code> ↑ + <code>compression.type</code> 지정</strong>입니다.
+          <code>acks=0</code>은 처리량에 도움이 될 수 있지만 <strong>내구성을 버리는 선택</strong>이므로
+          "처리량 튜닝"의 정답으로 제시되면 함정인 경우가 많습니다.
+          <code>max.in.flight.requests.per.connection</code>을 올리는 것도
+          멱등성이 켜진 4.x 기본 구성에서는 <strong>5가 상한</strong>이라 답이 되지 않습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="acks-and-durability">
+      <h2 id="acks-and-durability"><code>acks</code>와 내구성 — <code>min.insync.replicas</code>와의 결합</h2>
+
+      <figure class="diagram" data-diagram="D-032">
+        <figcaption>
+          <code>acks=0</code> / <code>1</code> / <code>all</code> 시퀀스 비교 —
+          각 설정에서 프로듀서가 응답을 받는 시점과 <strong>어디서 유실이 발생할 수 있는지</strong>
+        </figcaption>
+      </figure>
+
+      <h3 id="acks-values">세 값의 정확한 의미</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>acks</code> 값별 동작 (공식 문서 서술 기준). 기본값은 <code>all</code>입니다</caption>
+          <thead>
+            <tr>
+              <th scope="col">값</th>
+              <th scope="col">언제 성공으로 응답하는가</th>
+              <th scope="col">반환되는 오프셋</th>
+              <th scope="col">유실 시나리오</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>acks=0</code></th>
+              <td>서버 응답을 <strong>전혀 기다리지 않음.</strong> 소켓 버퍼에 넣는 순간 전송된 것으로 간주</td>
+              <td>항상 <strong><code>-1</code></strong></td>
+              <td>네트워크 유실·리더 다운을 <strong>알 수도 없음.</strong> <code>retries</code> 설정이 <strong>효력이 없습니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>acks=1</code></th>
+              <td>리더가 <strong>자기 로컬 로그에 기록</strong>하면 응답. 팔로워 복제는 기다리지 않음</td>
+              <td>실제 오프셋</td>
+              <td>ack 직후 <strong>복제 전에 리더가 죽으면 유실</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>acks=all</code> (= <code>-1</code>)</th>
+              <td><strong>현재 in-sync 레플리카 전원</strong>이 ack하면 응답</td>
+              <td>실제 오프셋</td>
+              <td>in-sync 레플리카가 <strong>하나도 남지 않는</strong> 경우에만 유실</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="정확히 알아야 하는 표현">
+        <p>
+          <code>acks=all</code>은 "모든 <strong>할당된</strong> 레플리카"가 아니라
+          <strong>"현재 ISR 전원"</strong>입니다. 공식 문서는 이 점을 예시로 설명합니다 —
+          레플리카가 2개인 토픽에서 하나가 죽어 <strong>in-sync 레플리카가 하나만 남았다면
+          <code>acks=all</code> 쓰기는 성공합니다.</strong>
+          그리고 남은 그 하나마저 죽으면 데이터는 사라집니다.
+        </p>
+        <p>
+          이것이 <code>min.insync.replicas</code>가 필요한 이유입니다.
+          <code>acks=all</code>만으로는 "몇 대에 기록되었는가"가 보장되지 않습니다.
+        </p>
+      </aside>
+
+      <h3 id="acks-with-min-isr"><code>min.insync.replicas</code>와의 조합</h3>
+      <p>
+        <code>min.insync.replicas</code>는 <strong>토픽·브로커 설정</strong>이고
+        <code>acks</code>는 <strong>프로듀서 설정</strong>입니다. 소속이 다릅니다.
+        공식 문서는 이 설정이 <strong><code>acks=all</code>일 때만 효력을 가진다</strong>고 명시합니다.
+        미달 시 프로듀서는 <code>NotEnoughReplicasException</code> 또는
+        <code>NotEnoughReplicasAfterAppendException</code>을 받습니다 — <strong>둘 다 retriable</strong>입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>RF 3 토픽에서 <code>acks</code> × <code>min.insync.replicas</code> 조합의 결과</caption>
+          <thead>
+            <tr>
+              <th scope="col">조합</th>
+              <th scope="col">ISR 3 (정상)</th>
+              <th scope="col">ISR 2</th>
+              <th scope="col">ISR 1</th>
+              <th scope="col">평가</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>acks=0</code> (minISR 무관)</th>
+              <td>성공 (확인 안 함)</td>
+              <td>성공 (확인 안 함)</td>
+              <td>성공 (확인 안 함)</td>
+              <td class="mark-no">at-most-once. 유실 감지 불가</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>acks=1</code> (minISR 무관)</th>
+              <td>성공 (리더만)</td>
+              <td>성공 (리더만)</td>
+              <td>성공 (리더만)</td>
+              <td class="mark-no">리더 장애 시 유실 가능</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>acks=all</code> · minISR 1</th>
+              <td>성공 (3대 ack)</td>
+              <td>성공 (2대 ack)</td>
+              <td>성공 (<strong>1대만</strong>)</td>
+              <td class="mark-no">"RF 3인데 유실"의 전형적 원인</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>acks=all</code> · minISR 2</th>
+              <td>성공 (3대 ack)</td>
+              <td>성공 (2대 ack)</td>
+              <td><strong>거부</strong></td>
+              <td class="mark-ok">권장. 1대 장애를 견디며 유실 방지</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>acks=all</code> · minISR 3</th>
+              <td>성공 (3대 ack)</td>
+              <td><strong>거부</strong></td>
+              <td><strong>거부</strong></td>
+              <td class="mark-no">브로커 1대 재시작에 쓰기 중단</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>이 절의 출제 지점입니다.</p>
+        <ul>
+          <li><code>acks</code>의 4.x 기본값은 <strong><code>all</code></strong>입니다(3.0부터 변경). <code>1</code>이라고 답하면 오답입니다.</li>
+          <li><code>min.insync.replicas</code>는 <strong><code>acks=all</code>일 때만</strong> 작동합니다. <code>acks=1</code>과 조합해도 아무 효과가 없습니다.</li>
+          <li><code>acks=0</code>이면 <strong><code>retries</code>가 무의미</strong>합니다 — 실패를 알 수 없기 때문입니다. 그리고 반환 오프셋은 항상 <code>-1</code>입니다.</li>
+          <li><code>acks=all</code>과 <code>acks=-1</code>은 <strong>같은 값</strong>입니다.</li>
+          <li>멱등성을 켜려면 <code>acks</code>가 <strong>반드시 <code>all</code></strong>이어야 합니다.</li>
+          <li>유실 없는 조합은 <strong>RF 3 + minISR 2 + <code>acks=all</code></strong>입니다. 실제 사례는 <a href="../cases/case06.html">케이스 6</a>에 있습니다.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="idempotent-producer">
+      <h2 id="idempotent-producer">멱등성 프로듀서 — 무엇을 보장하고 무엇을 보장하지 않는가</h2>
+
+      <figure class="diagram" data-diagram="D-033">
+        <figcaption>
+          멱등성 중복 판별 — PID(producer id)와 파티션별 시퀀스 번호로 브로커가
+          재시도된 배치를 중복으로 판정해 폐기하는 과정
+        </figcaption>
+      </figure>
+
+      <p>
+        재시도는 중복을 만듭니다. 프로듀서가 배치를 보냈고 브로커가 기록까지 했는데
+        응답이 유실되면, 프로듀서는 실패로 판단해 같은 배치를 다시 보냅니다.
+        결과는 <strong>로그에 두 번 기록된 같은 레코드</strong>입니다.
+        멱등성 프로듀서는 이것을 막습니다.
+      </p>
+
+      <h3 id="pid-and-sequence">PID와 시퀀스 번호</h3>
+      <p>
+        브로커는 각 프로듀서에게 <strong>producer id(PID)</strong>를 부여하고,
+        프로듀서는 <strong>파티션마다 단조 증가하는 시퀀스 번호</strong>를 붙여 배치를 보냅니다.
+        <a href="ch02.html#record-batch">2장에서 본 레코드 배치 헤더</a>의
+        <code>producerId</code> · <code>producerEpoch</code> · <code>baseSequence</code>가 바로 이것입니다.
+      </p>
+      <p>
+        브로커는 들어온 배치의 <strong>첫·마지막 시퀀스 번호</strong>를 그 프로듀서의
+        마지막 값과 비교해 중복을 판정합니다. 이미 기록한 시퀀스면 <strong>기록하지 않고
+        성공으로 응답</strong>합니다. 프로듀서는 재시도가 성공한 것으로 보고 진행하고,
+        로그에는 사본이 하나만 남습니다.
+      </p>
+
+      <h3 id="idempotence-requirements">멱등성이 요구하는 세 조건</h3>
+      <p>
+        공식 문서는 멱등성 활성화의 전제 조건을 명시합니다.
+      </p>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>enable.idempotence=true</code>가 요구하는 설정 (공식 문서 기준)</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">요구 조건</th><th scope="col">4.x 기본값</th><th scope="col">이유</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>max.in.flight.requests.per.connection</code></th>
+              <td><strong>5 이하</strong></td>
+              <td>5</td>
+              <td>브로커가 프로듀서별로 <strong>최대 5개 배치까지만</strong> 보관합니다. 6 이상이면 이전 배치가 브로커 쪽에서 밀려나 중복 판별이 불가능해집니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retries</code></th>
+              <td><strong>0보다 커야 함</strong></td>
+              <td>2147483647</td>
+              <td>재시도가 없으면 멱등성이 막을 대상 자체가 없습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>acks</code></th>
+              <td><strong><code>all</code>이어야 함</strong></td>
+              <td>all</td>
+              <td>ISR 전원 기록을 확인해야 중복 판별 상태가 레플리카 간에 일관됩니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="가장 중요한 함정">
+        <p>공식 문서가 규정하는 <strong>충돌 시 동작</strong>이 시험 단골입니다.</p>
+        <ul>
+          <li><strong>멱등성을 명시적으로 켰는데(<code>enable.idempotence=true</code>) 충돌하는 설정이 있으면
+            → <code>ConfigException</code>이 발생</strong>합니다. 프로듀서 생성 자체가 실패합니다.</li>
+          <li><strong>멱등성을 명시하지 않았고(기본값에 의존) 충돌하는 설정이 있으면
+            → 멱등성이 조용히 비활성화</strong>됩니다. 예외도 없습니다.</li>
+        </ul>
+        <p>
+          두 번째가 실무에서 훨씬 위험합니다. 예를 들어 3.x 시절 자료를 보고
+          <code>max.in.flight.requests.per.connection=10</code>만 설정하면,
+          <strong>멱등성이 꺼진 상태로 아무 경고 없이 동작</strong>합니다.
+          이는 곧 순서 보장도 함께 사라진다는 뜻입니다.
+          <strong>멱등성에 의존한다면 <code>enable.idempotence=true</code>를 명시하세요.</strong>
+          그러면 충돌이 <code>ConfigException</code>으로 즉시 드러납니다.
+        </p>
+      </aside>
+
+      <h3 id="idempotence-limits">멱등성의 경계</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>멱등성 프로듀서가 보장하는 것과 보장하지 않는 것</caption>
+          <thead>
+            <tr><th scope="col">항목</th><th scope="col">보장</th><th scope="col">설명</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">같은 프로듀서 인스턴스의 재시도로 인한 중복</th>
+              <td class="mark-ok">막습니다</td>
+              <td>PID + 시퀀스 번호로 판별</td>
+            </tr>
+            <tr>
+              <th scope="row">단일 파티션 안의 쓰기 순서</th>
+              <td class="mark-ok">보장합니다</td>
+              <td>in-flight 5 이하 조건 하에서</td>
+            </tr>
+            <tr>
+              <th scope="row">여러 파티션에 걸친 원자성</th>
+              <td class="mark-no">보장하지 않습니다</td>
+              <td>트랜잭션이 필요합니다 (<a href="ch06.html">6장</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row">애플리케이션이 같은 이벤트를 두 번 <code>send()</code>한 경우</th>
+              <td class="mark-no">막지 못합니다</td>
+              <td>서로 다른 시퀀스 번호이므로 정상 레코드 두 개입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">프로듀서 재시작 후의 중복</th>
+              <td class="mark-no">막지 못합니다</td>
+              <td>새 PID를 받습니다. 재시작 경계를 넘으려면 <code>transactional.id</code>가 필요합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">컨슈머 쪽 중복 처리</th>
+              <td class="mark-no">범위 밖입니다</td>
+              <td>컨슈머 멱등성은 별도 문제입니다 (<a href="ch06.html">6장</a>, <a href="../cases/case07.html">케이스 7</a>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          <code>enable.idempotence</code>의 4.x 기본값은 <strong><code>true</code></strong>입니다(3.0부터 변경).
+          <code>max.in.flight.requests.per.connection</code>은
+          <strong>5 이하</strong>여야 하며, 명시적으로 켠 상태에서 6 이상을 설정하면
+          <strong><code>ConfigException</code></strong>입니다.
+          "멱등성을 켜면 in-flight를 1로 둬야 한다"는 서술은 <strong>오답</strong>입니다 —
+          공식 문서는 5 이하의 <strong>모든 허용 값에서 순서가 보존</strong>된다고 명시합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="ordering-guarantees">
+      <h2 id="ordering-guarantees">순서 보장 — in-flight와 재시도의 관계</h2>
+
+      <p>
+        순서가 깨지는 메커니즘은 단순합니다. 같은 파티션으로 배치 A와 B를 연달아 보냈는데
+        <strong>A가 실패해 재시도되고 B가 먼저 성공</strong>하면, 로그에는 B가 앞에 기록됩니다.
+        공식 문서는 <code>retries</code> 설명에서 이 시나리오를 그대로 서술합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>설정 조합별 순서 보장 여부</caption>
+          <thead>
+            <tr>
+              <th scope="col"><code>enable.idempotence</code></th>
+              <th scope="col">in-flight</th>
+              <th scope="col">재시도</th>
+              <th scope="col">파티션 내 순서</th>
+              <th scope="col">중복</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>true</code> (4.x 기본)</th>
+              <td>1 ~ 5</td>
+              <td>있음</td>
+              <td class="mark-ok">보장</td>
+              <td class="mark-ok">제거됨</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>true</code></th>
+              <td>6 이상</td>
+              <td>—</td>
+              <td colspan="2"><strong>구성 불가 — <code>ConfigException</code></strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>false</code></th>
+              <td>1</td>
+              <td>있음</td>
+              <td class="mark-ok">보장</td>
+              <td class="mark-no">발생 가능</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>false</code></th>
+              <td>2 이상</td>
+              <td>있음</td>
+              <td class="mark-no"><strong>깨질 수 있음</strong></td>
+              <td class="mark-no">발생 가능</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>false</code></th>
+              <td>2 이상</td>
+              <td><code>retries=0</code></td>
+              <td class="mark-ok">보장</td>
+              <td class="mark-ok">없음 (대신 <strong>유실</strong>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="retries-vs-delivery-timeout"><code>retries</code>는 이제 조절 대상이 아닙니다</h3>
+      <p>
+        <code>retries</code>의 기본값은 <strong>2147483647</strong>(<code>Integer.MAX_VALUE</code>)입니다.
+        공식 문서는 <strong>"이 설정은 그대로 두고 대신 <code>delivery.timeout.ms</code>로
+        재시도 동작을 제어하는 것을 일반적으로 권장한다"</strong>고 명시합니다.
+        즉 실질적인 상한은 횟수가 아니라 <strong>시간</strong>입니다.
+      </p>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          "재시도를 몇 번까지 하는가?"라는 물음에 4.x에서의 정확한 답은
+          <strong>"<code>delivery.timeout.ms</code>가 만료될 때까지"</strong>입니다.
+          <code>retries</code> 기본값이 사실상 무한이기 때문입니다.
+          <code>retries=3</code> 같은 값을 하드코딩하는 것은 4.x에서 권장되지 않습니다.
+        </p>
+        <p>
+          그리고 <strong>"<code>retries=0</code>으로 두면 중복이 없다"</strong>는 서술은
+          중복 대신 <strong>유실</strong>을 선택하는 것이며,
+          4.x에서는 <strong>멱등성이 이미 기본 활성</strong>이므로 애초에 필요하지 않습니다.
+          오히려 <code>retries=0</code>은 멱등성 조건(<code>retries &gt; 0</code>)을 위반해
+          멱등성을 꺼버립니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="partitioning">
+      <h2 id="partitioning">파티셔너 — 키가 있을 때와 없을 때</h2>
+
+      <figure class="diagram" data-diagram="D-034">
+        <figcaption>
+          키 있음/없음 파티셔닝 비교 — 키가 있으면 <code>murmur2(key) % N</code>으로 결정적,
+          키가 없으면 <code>batch.size</code> 분량이 쌓일 때까지 <strong>같은 파티션에 sticky</strong>하게
+          몰아 보내는 동작. 버튼으로 메시지를 보내며 분배를 관찰할 수 있습니다
+        </figcaption>
+      </figure>
+
+      <h3 id="key-present">키가 있으면 — 결정적 해시</h3>
+      <p>
+        공식 문서는 기본 파티셔닝 로직을 이렇게 설명합니다 —
+        "파티션이 지정되지 않았고 키가 있으면 <strong>키의 해시를 기준으로</strong> 파티션을 고른다."
+        실제 구현은 Kafka 소스의 <code>BuiltInPartitioner</code>에 있고, 계산식은 다음과 같습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>키 기반 파티션 결정 (Apache Kafka 4.3 <code>BuiltInPartitioner</code>)</figcaption>
+        <pre><code class="lang-java">// 직렬화된 키 바이트 → murmur2 해시 → 양수화 → 파티션 수로 나눈 나머지
+partition = Utils.toPositive(Utils.murmur2(serializedKey)) % numPartitions;</code></pre>
+      </figure>
+
+      <p>세 가지 결론이 여기서 나옵니다.</p>
+      <ul>
+        <li><strong>같은 키는 항상 같은 파티션</strong>으로 갑니다. 그래서 키 단위 순서가 보장됩니다.</li>
+        <li>대상은 <strong>직렬화된 키 바이트</strong>입니다. 직렬화기를 바꾸면(예: String → Avro)
+          같은 논리적 키가 다른 파티션으로 갈 수 있습니다.</li>
+        <li><strong>파티션 수(<code>numPartitions</code>)가 나눗셈에 들어갑니다.</strong>
+          파티션을 24개에서 32개로 늘리면 대부분의 키가 다른 파티션으로 이동하고,
+          그 순간 <strong>키 단위 순서 보장이 끊깁니다</strong>
+          (<a href="../cases/case05.html">케이스 5</a>).</li>
+      </ul>
+
+      <h3 id="key-absent">키가 없으면 — sticky 배치, 라운드로빈이 아닙니다</h3>
+      <p>
+        공식 문서의 서술입니다 — "파티션도 키도 없으면
+        <strong>그 파티션에 <code>batch.size</code> 이상이 생산될 때 바뀌는 sticky 파티션</strong>을 고른다."
+        같은 문서는 기본 전략을 "<strong>한 파티션에 최소 <code>batch.size</code> 바이트가
+        생산될 때까지 그 파티션으로 레코드를 보내는</strong> 전략"으로 요약합니다.
+      </p>
+      <p>
+        즉 레코드마다 파티션을 바꾸는 것이 아니라, <strong>배치가 찰 때까지 한 파티션에 몰아넣고
+        그다음 다른 파티션으로 전환</strong>합니다. 목적은 배치 효율입니다 —
+        레코드를 파티션마다 흩뿌리면 배치가 작게 조각나 요청 수가 늘고 압축률도 떨어집니다.
+      </p>
+
+      <aside class="note note--danger" data-label="시험에서 특히 주의">
+        <p>
+          시험 문항이나 오래된 자료가 <strong>"키가 없으면 라운드로빈으로 분산된다"</strong>고
+          서술하는 경우가 있습니다. 두 가지를 함께 알고 있어야 합니다.
+        </p>
+        <ul>
+          <li><strong>정확한 4.x 동작</strong>은 <strong>배치 단위 sticky 후 전환</strong>입니다.
+            레코드 단위 라운드로빈이 아닙니다.</li>
+          <li><strong>장기적으로 보면</strong> 파티션들이 순서대로 돌아가며 채워지므로
+            <strong>전체 분포는 고르게</strong> 됩니다. "결과적으로 균등 분산"이라는 서술은 맞습니다.</li>
+        </ul>
+        <p>
+          문항이 "레코드 하나하나가 다른 파티션으로 가는가"를 묻는 것이라면 <strong>아니오</strong>,
+          "결국 파티션들이 고르게 채워지는가"를 묻는 것이라면 <strong>예</strong>입니다.
+          <strong>레코드 단위 라운드로빈을 강제하려면
+          <code>RoundRobinPartitioner</code>를 명시적으로 지정</strong>해야 합니다.
+        </p>
+      </aside>
+
+      <h3 id="partitioner-configs">파티셔너 관련 설정</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>파티셔너 설정 — Apache Kafka 4.3 기준</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">설명</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>partitioner.class</code></th>
+              <td>null</td>
+              <td>지정하지 않으면 기본 파티셔닝 로직을 씁니다. 공식 문서가 제시하는 대안은
+                <code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>이며,
+                커스텀은 <code>Partitioner</code> 인터페이스를 구현합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partitioner.ignore.keys</code></th>
+              <td>false</td>
+              <td><code>true</code>면 <strong>키가 있어도 무시</strong>하고 파티션을 고릅니다.
+                커스텀 파티셔너를 쓰면 효과가 없습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partitioner.adaptive.partitioning.enable</code></th>
+              <td>true</td>
+              <td><strong>빠른 브로커가 담당한 파티션에 더 많이 보내려고</strong> 시도합니다.
+                <code>false</code>면 균등 분배를 시도합니다. 커스텀 파티셔너를 쓰면 효과가 없습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partitioner.availability.timeout.ms</code></th>
+              <td>0</td>
+              <td>0이면 비활성. 이 시간 이상 응답이 없는 브로커의 파티션을 회피합니다
+                (<code>adaptive.partitioning</code>이 <code>false</code>면 효과 없음)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          <strong>4.0에서 <code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code>와
+          <code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code> 클래스가
+          제거되었습니다.</strong>
+          3.x 자료를 그대로 옮겨
+          <code>partitioner.class=org.apache.kafka.clients.producer.UniformStickyPartitioner</code>를
+          설정하면 프로듀서 생성이 실패합니다.
+          <code>Partitioner</code> 인터페이스의 <code>onNewBatch</code> 메서드도 함께 제거되어,
+          4.x의 <code>Partitioner</code>는 <code>partition()</code>과 <code>close()</code>만 가집니다.
+          기본 sticky 동작은 <strong>파티셔너 클래스가 아니라 프로듀서 내부에 내장</strong>되었으므로,
+          <code>partitioner.class</code>를 지정하지 않는 것이 정답입니다.
+        </p>
+      </aside>
+
+      <h3 id="custom-partitioner">커스텀 파티셔너</h3>
+      <figure class="code">
+        <figcaption>VIP 고객 트래픽을 전용 파티션으로 격리하는 커스텀 파티셔너</figcaption>
+        <pre><code class="lang-java">import org.apache.kafka.clients.producer.Partitioner;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Utils;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * VIP 고객의 레코드를 마지막 파티션에 격리하고, 나머지는 기본과 동일하게
+ * murmur2 해시로 분배합니다. 격리 목적은 일반 트래픽 폭주가 VIP 처리 지연에
+ * 영향을 주지 않게 하는 것입니다.
+ */
+public class VipIsolatingPartitioner implements Partitioner {
+
+    private Set&lt;String&gt; vipKeys = Set.of();
+
+    @Override
+    public void configure(Map&lt;String, ?&gt; configs) {
+        Object raw = configs.get("vip.customer.ids");
+        if (raw != null) {
+            vipKeys = Set.of(raw.toString().split(","));
+        }
+    }
+
+    @Override
+    public int partition(String topic, Object key, byte[] keyBytes,
+                         Object value, byte[] valueBytes, Cluster cluster) {
+        List&lt;PartitionInfo&gt; partitions = cluster.partitionsForTopic(topic);
+        int numPartitions = partitions.size();
+        if (numPartitions == 0) {
+            throw new IllegalStateException("no partition metadata for topic " + topic);
+        }
+
+        int vipPartition = numPartitions - 1;
+
+        if (keyBytes == null) {
+            // 키가 없으면 VIP 판별이 불가능합니다. VIP 파티션을 제외한 범위로 보냅니다.
+            // (기본 sticky 배치의 이점은 포기하게 됩니다 — 그래서 키를 항상 넣는 편이 낫습니다)
+            return numPartitions == 1 ? 0
+                 : Utils.toPositive(Utils.murmur2(new byte[0])) % vipPartition;
+        }
+
+        if (vipKeys.contains(key.toString())) {
+            return vipPartition;
+        }
+
+        // VIP 파티션을 제외한 나머지에 기본과 같은 방식으로 분배
+        return numPartitions == 1 ? 0
+             : Utils.toPositive(Utils.murmur2(keyBytes)) % vipPartition;
+    }
+
+    @Override
+    public void close() {
+        // 정리할 자원이 없습니다.
+    }
+}</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="커스텀 파티셔너의 비용">
+        <p>
+          커스텀 파티셔너를 지정하면
+          <code>partitioner.ignore.keys</code>와
+          <code>partitioner.adaptive.partitioning.enable</code>이
+          <strong>모두 효과를 잃습니다</strong>(공식 문서 명시).
+          <strong>기본 sticky 배치 최적화도 사라집니다.</strong>
+          그리고 이 파티셔너는 <strong>호출 스레드에서 실행</strong>되므로
+          안에서 블로킹 I/O를 하면 <code>max.block.ms</code>로도 막히지 않습니다.
+          커스텀 파티셔너는 "정말 필요한가"를 두 번 확인하고 쓰세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="compression">
+      <h2 id="compression">압축 — 배치 단위로 적용됩니다</h2>
+
+      <figure class="diagram" data-diagram="D-035">
+        <figcaption>
+          압축 코덱 트레이드오프 — gzip · snappy · lz4 · zstd의 압축률, CPU 비용, 지연 특성 비교
+        </figcaption>
+      </figure>
+
+      <p>
+        <code>compression.type</code>의 프로듀서 기본값은 <strong><code>none</code></strong>이고
+        허용 값은 <code>none</code>, <code>gzip</code>, <code>snappy</code>,
+        <code>lz4</code>, <code>zstd</code>입니다.
+      </p>
+      <p>
+        핵심은 공식 문서의 이 문장입니다 — <strong>"압축은 데이터의 전체 배치 단위로
+        수행되므로, 배치가 잘 되는지가 압축 효율에도 영향을 준다."</strong>
+        즉 <strong><code>batch.size</code>와 <code>linger.ms</code>를 올리면 압축률도 함께
+        올라갑니다.</strong> 압축만 켜고 배치 설정을 그대로 두면 기대한 효과가 나오지 않습니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>압축 코덱과 레벨 설정 (기본값은 Apache Kafka 4.3 공식 문서 기준)</caption>
+          <thead>
+            <tr>
+              <th scope="col">코덱</th>
+              <th scope="col">레벨 설정</th>
+              <th scope="col">레벨 기본값</th>
+              <th scope="col">레벨 범위</th>
+              <th scope="col">일반적 특성</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>none</code></th>
+              <td>—</td>
+              <td>—</td>
+              <td>—</td>
+              <td>프로듀서 기본값. CPU 비용 없음, 네트워크·디스크 사용 최대</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>gzip</code></th>
+              <td><code>compression.gzip.level</code></td>
+              <td>-1 (구현 기본)</td>
+              <td>1~9 또는 -1</td>
+              <td>압축률이 높은 편, CPU 비용도 높은 편</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>snappy</code></th>
+              <td>(레벨 설정 없음)</td>
+              <td>—</td>
+              <td>—</td>
+              <td>속도 지향. 레벨 조절 불가</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>lz4</code></th>
+              <td><code>compression.lz4.level</code></td>
+              <td>9</td>
+              <td>1~17</td>
+              <td>속도 지향. 레벨로 압축률과 CPU를 조절</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>zstd</code></th>
+              <td><code>compression.zstd.level</code></td>
+              <td>3</td>
+              <td>-131072~22</td>
+              <td>레벨 범위가 가장 넓어 압축률과 속도의 조절 폭이 큼</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="수치에 대하여">
+        <p>
+          코덱별 <strong>구체적인 압축률·CPU 사용량 수치는 공식 문서에 명시되어 있지 않습니다.</strong>
+          데이터 형태(JSON·Avro·바이너리), 배치 크기, 하드웨어에 따라 크게 달라지므로
+          이 가이드는 수치를 제시하지 않습니다.
+          <strong>실제 워크로드로 직접 측정</strong>하는 것이 유일하게 신뢰할 수 있는 방법입니다
+          (<a href="../practice/ex03.html">예제 3</a>에서 측정 절차를 다룹니다).
+          표의 "일반적 특성"은 각 알고리즘의 설계 목표와 레벨 범위에 근거한 정성적 서술입니다.
+        </p>
+      </aside>
+
+      <h3 id="topic-compression">토픽 레벨 <code>compression.type</code></h3>
+      <p>
+        토픽에도 같은 이름의 설정이 있고 <strong>기본값은 <code>producer</code></strong>입니다.
+        허용 값은 <code>uncompressed</code>, <code>zstd</code>, <code>lz4</code>,
+        <code>snappy</code>, <code>gzip</code>, <code>producer</code>입니다.
+        <code>producer</code>는 <strong>프로듀서가 지정한 코덱을 그대로 유지</strong>한다는 뜻입니다.
+      </p>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>
+          토픽의 <code>compression.type</code>이 <code>producer</code>가 아닌 값으로 설정되어 있으면,
+          브로커는 프로듀서가 보낸 배치를 <strong>압축 해제하고 다시 압축</strong>해야 합니다.
+          그러면 <strong>zero-copy 전송의 이점이 사라지고 브로커 CPU를 씁니다.</strong>
+          "브로커 CPU가 높은데 원인을 못 찾겠다"는 상황에서 확인할 항목입니다.
+          기본값 <code>producer</code>를 유지하고 <strong>압축은 프로듀서에서 결정</strong>하는 것이
+          일반적인 권장 사항입니다.
+        </p>
+        <p>
+          그리고 <code>message.max.bytes</code>(브로커 기본 <strong>1048588</strong>)와
+          <code>max.request.size</code>(프로듀서 기본 <strong>1048576</strong>)는
+          모두 <strong>압축 후</strong> 크기로 평가됩니다. 압축을 켜면 더 많은 레코드를
+          하나의 요청에 담을 수 있게 됩니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="error-handling">
+      <h2 id="error-handling">에러 처리 — retriable, non-retriable, 그리고 시간 예산</h2>
+
+      <figure class="diagram" data-diagram="D-037">
+        <figcaption>
+          재시도 시간 예산 — <code>delivery.timeout.ms</code> 안에
+          <code>linger.ms</code> 대기와 <code>request.timeout.ms</code> × 재시도가 포함되는 관계
+        </figcaption>
+      </figure>
+
+      <h3 id="timeout-budget">시간 예산의 포함 관계</h3>
+      <p>
+        <code>delivery.timeout.ms</code>(기본 <strong>120000</strong>ms)는 공식 문서의 정의대로
+        <strong><code>send()</code>가 반환한 뒤 성공 또는 실패를 보고하기까지의 상한</strong>입니다.
+        여기에 세 가지가 모두 포함됩니다.
+      </p>
+      <ol>
+        <li>전송 전에 배치를 기다린 시간 (<code>linger.ms</code>)</li>
+        <li>브로커 응답을 기다린 시간 (<code>request.timeout.ms</code>, 기본 <strong>30000</strong>ms)</li>
+        <li>재시도 가능한 실패로 인한 재시도 전체 시간
+          (<code>retry.backoff.ms</code> 기본 100, <code>retry.backoff.max.ms</code> 기본 1000)</li>
+      </ol>
+      <p>
+        그래서 공식 문서는 <strong><code>delivery.timeout.ms</code>가
+        <code>request.timeout.ms</code> + <code>linger.ms</code>의 합보다
+        크거나 같아야 한다</strong>고 명시합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>재시도 예산을 명시적으로 설계한 예 — 최대 3분 안에 결론</figcaption>
+        <pre><code class="lang-properties"># 요청 하나가 브로커 응답을 기다리는 시간
+request.timeout.ms=30000
+
+# 배치 대기
+linger.ms=5
+
+# 전체 예산: 30s 요청 × 재시도 + 배치 대기 <= 180s
+# 30s 요청이 대략 5~6회 반복될 수 있는 예산입니다.
+delivery.timeout.ms=180000
+
+# 재시도 간 백오프 (지수 증가, 상한 1s)
+retry.backoff.ms=100
+retry.backoff.max.ms=1000
+
+# retries 는 건드리지 않습니다 — 기본값(사실상 무한)을 두고 시간으로 제어합니다</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="설정 순서 주의">
+        <p>
+          <code>request.timeout.ms</code>를 올릴 때
+          <code>delivery.timeout.ms</code>를 함께 올리지 않으면
+          <strong>재시도가 사실상 한 번도 일어나지 못합니다.</strong>
+          예를 들어 <code>request.timeout.ms=120000</code>이고
+          <code>delivery.timeout.ms</code>가 기본 <code>120000</code>이면
+          첫 요청 타임아웃과 동시에 배달 예산이 소진됩니다.
+          두 값은 항상 <strong>세트로</strong> 조정하세요.
+        </p>
+      </aside>
+
+      <h3 id="retriable-vs-not">retriable과 non-retriable</h3>
+      <p>
+        판정 기준은 <strong>예외가 <code>RetriableException</code>을 상속하는지</strong>입니다.
+        Apache Kafka 4.3 소스의 계층 구조는 다음과 같습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>예외 계층 (Apache Kafka 4.3)</figcaption>
+        <pre><code class="lang-text">KafkaException
+├── SerializationException                      ← non-retriable
+└── ApiException
+    ├── RetriableException                      ← 프로듀서가 자동 재시도
+    │   ├── TimeoutException
+    │   ├── NotEnoughReplicasException
+    │   ├── NotEnoughReplicasAfterAppendException
+    │   ├── CorruptRecordException
+    │   └── RefreshRetriableException            ← 메타데이터 갱신 후 재시도
+    │       └── InvalidMetadataException
+    │           ├── LeaderNotAvailableException
+    │           ├── NotLeaderOrFollowerException
+    │           ├── UnknownTopicOrPartitionException
+    │           └── NetworkException
+    ├── ApplicationRecoverableException          ← 애플리케이션이 복구해야 함
+    │   └── ProducerFencedException
+    ├── RecordTooLargeException                  ← non-retriable
+    ├── OutOfOrderSequenceException              ← non-retriable
+    └── InvalidConfigurationException
+        ├── InvalidTopicException                ← non-retriable
+        ├── RecordBatchTooLargeException         ← non-retriable
+        └── AuthorizationException
+            └── TopicAuthorizationException      ← non-retriable</code></pre>
+      </figure>
+
+      <p>
+        <code>Callback</code> 인터페이스의 공식 javadoc은 콜백에 전달될 수 있는 예외를
+        두 그룹으로 나열합니다. 시험 대비로는 이 목록이 가장 정확한 근거입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>콜백에 전달되는 예외 (<code>org.apache.kafka.clients.producer.Callback</code> javadoc 기준)</caption>
+          <thead>
+            <tr>
+              <th scope="col">분류</th>
+              <th scope="col">예외</th>
+              <th scope="col">대표적 원인과 조치</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row" rowspan="8">retriable<br>(일시적)</th>
+              <td><code>CorruptRecordException</code></td>
+              <td>전송 중 손상. 재전송으로 해결되는 경우가 많습니다</td>
+            </tr>
+            <tr>
+              <td><code>InvalidMetadataException</code><br>(및 하위 클래스)</td>
+              <td>리더 이동·브로커 재시작. 메타데이터를 갱신하고 재시도합니다</td>
+            </tr>
+            <tr>
+              <td><code>NotEnoughReplicasException</code></td>
+              <td>ISR &lt; <code>min.insync.replicas</code>. <strong>복제 문제를 해결</strong>해야 근본 해결입니다</td>
+            </tr>
+            <tr>
+              <td><code>NotEnoughReplicasAfterAppendException</code></td>
+              <td>리더는 기록했지만 필요한 ISR 수에 미달. 재전송 시 멱등성이 중복을 막습니다</td>
+            </tr>
+            <tr>
+              <td><code>OffsetOutOfRangeException</code></td>
+              <td>요청 오프셋이 범위 밖</td>
+            </tr>
+            <tr>
+              <td><code>TimeoutException</code></td>
+              <td>브로커 응답 지연 또는 버퍼 대기 초과. <code>request.timeout.ms</code>·<code>max.block.ms</code> 확인</td>
+            </tr>
+            <tr>
+              <td><code>UnknownTopicOrPartitionException</code></td>
+              <td>토픽이 아직 없거나 메타데이터가 낡음. <strong>오타 토픽</strong>일 수도 있습니다</td>
+            </tr>
+            <tr>
+              <td><code>BufferExhaustedException</code></td>
+              <td><code>buffer.memory</code> 소진. 생산 속도를 낮추거나 버퍼를 키웁니다</td>
+            </tr>
+            <tr>
+              <th scope="row" rowspan="9">non-retriable<br>(치명적 — 이 레코드는 절대 전송되지 않습니다)</th>
+              <td><code>InvalidTopicException</code></td>
+              <td>토픽 이름이 규칙 위반. 이름을 고쳐야 합니다</td>
+            </tr>
+            <tr>
+              <td><code>OffsetMetadataTooLarge</code></td>
+              <td>커밋 메타데이터 문자열이 상한 초과</td>
+            </tr>
+            <tr>
+              <td><code>RecordBatchTooLargeException</code></td>
+              <td>배치가 브로커의 <code>message.max.bytes</code> 초과</td>
+            </tr>
+            <tr>
+              <td><code>RecordTooLargeException</code></td>
+              <td>레코드가 <code>max.request.size</code> 또는 브로커 상한 초과.
+                <strong>5개 설정 정합</strong>을 확인하세요(<a href="../cases/case10.html">케이스 10</a>)</td>
+            </tr>
+            <tr>
+              <td><code>UnknownServerException</code></td>
+              <td>브로커가 분류하지 못한 오류. 브로커 로그를 봐야 합니다</td>
+            </tr>
+            <tr>
+              <td><code>UnknownProducerIdException</code></td>
+              <td>브로커가 이 PID의 상태를 잃음. 프로듀서를 재생성해야 합니다</td>
+            </tr>
+            <tr>
+              <td><code>InvalidProducerEpochException</code></td>
+              <td>같은 <code>transactional.id</code>의 새 인스턴스가 이 프로듀서를 밀어냄</td>
+            </tr>
+            <tr>
+              <td><code>AuthenticationException</code></td>
+              <td>인증 실패. 자격증명을 고쳐야 합니다</td>
+            </tr>
+            <tr>
+              <td><code>AuthorizationException</code></td>
+              <td>인가 실패. ACL을 부여해야 합니다 (<a href="ch11.html">11장</a>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="직렬화 예외의 위치">
+        <p>
+          <code>SerializationException</code>은 이 목록에 없습니다.
+          <strong>직렬화는 <code>send()</code> 안에서 호출 스레드가 수행</strong>하므로,
+          실패하면 <strong>콜백이 아니라 <code>send()</code>가 직접 던집니다.</strong>
+          따라서 <code>send()</code> 호출을 try-catch로 감싸야 잡을 수 있습니다.
+          같은 이유로 <code>send()</code>는 <code>TimeoutException</code>(메타데이터·버퍼 대기 초과)도
+          동기적으로 던질 수 있습니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>동기 예외와 비동기 예외를 모두 처리하는 형태</figcaption>
+        <pre><code class="lang-java">void publish(Order order) {
+    ProducerRecord&lt;String, Order&gt; record =
+        new ProducerRecord&lt;&gt;("orders", order.customerId(), order);
+    try {
+        producer.send(record, (metadata, exception) -&gt; {
+            if (exception == null) {
+                sentCounter.increment();
+                return;
+            }
+            // 비동기 실패: 재시도 예산을 모두 소진했거나 non-retriable 입니다.
+            // 여기서 다시 send() 하지 마세요 — Sender 스레드를 재귀적으로 막습니다.
+            if (exception instanceof org.apache.kafka.common.errors.RetriableException) {
+                // delivery.timeout.ms 를 다 쓰고도 실패 → 클러스터 쪽 문제로 취급
+                deadLetterQueue.offer(order);
+            } else {
+                // 데이터 자체가 문제 → 다시 보내도 같은 결과입니다
+                poisonPillStore.save(order, exception);
+            }
+        });
+    } catch (org.apache.kafka.common.errors.SerializationException e) {
+        // 직렬화 실패는 호출 스레드에서 동기적으로 발생합니다.
+        poisonPillStore.save(order, e);
+    } catch (org.apache.kafka.common.errors.TimeoutException e) {
+        // 메타데이터 미확보 또는 buffer.memory 소진 (max.block.ms 초과)
+        backpressureSignal.raise();
+        throw e;
+    }
+}</code></pre>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          예외 분류 문항의 판정 기준은 <strong><code>RetriableException</code> 상속 여부</strong>입니다.
+          외우기 쉬운 구분선은 이렇습니다.
+        </p>
+        <ul>
+          <li><strong>클러스터 상태 때문에 실패</strong>했다면 retriable —
+            리더 이동, ISR 부족, 타임아웃, 네트워크.</li>
+          <li><strong>데이터나 권한 때문에 실패</strong>했다면 non-retriable —
+            레코드가 너무 큼, 직렬화 실패, 토픽 이름 위반, 인증·인가 실패.</li>
+        </ul>
+        <p>
+          그리고 4.x에서 <code>NotLeaderForPartitionException</code>은
+          <strong>제거되었습니다.</strong> 대체 클래스는
+          <code>NotLeaderOrFollowerException</code>입니다.
+          오래된 자료의 클래스명이 선택지로 나오면 함정입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="configs">
+      <h2 id="configs">Producer 설정 정리</h2>
+
+      <p>
+        기본값은 Apache Kafka 4.3 공식 문서(Producer Configs) 기준입니다.
+        전체 목록과 프리셋은 <a href="../cheatsheet/config.html">설정 치트시트</a>에 있습니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>이 장에서 다룬 Producer 설정 전체</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">기본값</th>
+              <th scope="col">범위·타입</th>
+              <th scope="col">설명</th>
+              <th scope="col">튜닝 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>acks</code></th>
+              <td><strong>all</strong></td>
+              <td>string — <code>all</code> · <code>-1</code> · <code>0</code> · <code>1</code></td>
+              <td>성공 응답 전에 필요한 확인 수준</td>
+              <td>3.0부터 기본값이 <code>1</code>에서 변경. 멱등성은 <code>all</code>을 요구합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>enable.idempotence</code></th>
+              <td><strong>true</strong></td>
+              <td>boolean</td>
+              <td>재시도로 인한 중복 제거</td>
+              <td>3.0부터 기본 활성. 충돌 설정이 있으면 조용히 꺼질 수 있으니 명시를 권장</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>linger.ms</code></th>
+              <td><strong>5</strong></td>
+              <td>long — [0,…]</td>
+              <td>배치를 모으기 위해 기다리는 최대 시간</td>
+              <td><strong>4.0에서 0 → 5로 변경.</strong> 지연 민감 경로는 명시적으로 0</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>batch.size</code></th>
+              <td>16384</td>
+              <td>int — [0,…]</td>
+              <td>파티션별 배치 크기 상한 (바이트)</td>
+              <td>올리면 처리량·압축률 ↑. 0이면 배치 비활성</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>buffer.memory</code></th>
+              <td>33554432</td>
+              <td>long — [0,…]</td>
+              <td>전송 대기 레코드용 전체 버퍼</td>
+              <td>프로듀서 총 메모리의 엄격한 상한은 아닙니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.block.ms</code></th>
+              <td>60000</td>
+              <td>long — [0,…]</td>
+              <td><code>send()</code> 등이 블로킹될 수 있는 상한</td>
+              <td>사용자 직렬화기·파티셔너 내부 블로킹은 포함되지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.in.flight.requests.per.connection</code></th>
+              <td>5</td>
+              <td>int — [1,…]</td>
+              <td>커넥션당 미확인 요청 수</td>
+              <td>멱등성 사용 시 <strong>5 이하 필수.</strong> 초과 시 <code>ConfigException</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retries</code></th>
+              <td>2147483647</td>
+              <td>int — [0,…,2147483647]</td>
+              <td>일시적 오류 재시도 횟수</td>
+              <td>공식 권장은 <strong>건드리지 않고</strong> <code>delivery.timeout.ms</code>로 제어</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>delivery.timeout.ms</code></th>
+              <td>120000</td>
+              <td>int — [0,…]</td>
+              <td><code>send()</code> 후 성공·실패 보고까지의 전체 상한</td>
+              <td><code>request.timeout.ms</code> + <code>linger.ms</code> 이상이어야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>request.timeout.ms</code></th>
+              <td>30000</td>
+              <td>int — [0,…]</td>
+              <td>요청 하나의 응답 대기 시간</td>
+              <td>올릴 때 <code>delivery.timeout.ms</code>를 함께 올리세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retry.backoff.ms</code></th>
+              <td>100</td>
+              <td>long — [0,…]</td>
+              <td>재시도 전 대기 시간</td>
+              <td><code>retry.backoff.max.ms</code>까지 지수적으로 증가합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retry.backoff.max.ms</code></th>
+              <td>1000</td>
+              <td>long — [0,…]</td>
+              <td>재시도 백오프의 상한</td>
+              <td>브로커 장애가 길어질 때 재시도 폭주를 억제합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.request.size</code></th>
+              <td>1048576</td>
+              <td>int — [0,…]</td>
+              <td>요청 하나의 최대 크기</td>
+              <td>브로커 <code>message.max.bytes</code>(1048588)와 정합해야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.type</code></th>
+              <td>none</td>
+              <td>string — none · gzip · snappy · lz4 · zstd</td>
+              <td>배치 압축 코덱</td>
+              <td>배치 설정과 함께 올려야 효과가 큽니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.gzip.level</code></th>
+              <td>-1</td>
+              <td>int — [1,…,9] 또는 -1</td>
+              <td>gzip 압축 레벨</td>
+              <td>-1은 구현 기본 레벨</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.lz4.level</code></th>
+              <td>9</td>
+              <td>int — [1,…,17]</td>
+              <td>lz4 압축 레벨</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compression.zstd.level</code></th>
+              <td>3</td>
+              <td>int — [-131072,…,22]</td>
+              <td>zstd 압축 레벨</td>
+              <td>조절 폭이 가장 넓습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partitioner.class</code></th>
+              <td>null</td>
+              <td>class</td>
+              <td>파티션 결정 전략</td>
+              <td>지정하지 않는 것이 기본 sticky 최적화를 쓰는 방법입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partitioner.ignore.keys</code></th>
+              <td>false</td>
+              <td>boolean</td>
+              <td>키를 무시하고 파티션 결정</td>
+              <td>커스텀 파티셔너 사용 시 효과 없음</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partitioner.adaptive.partitioning.enable</code></th>
+              <td>true</td>
+              <td>boolean</td>
+              <td>빠른 브로커 쪽 파티션에 더 많이 보냄</td>
+              <td>커스텀 파티셔너 사용 시 효과 없음</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>partitioner.availability.timeout.ms</code></th>
+              <td>0</td>
+              <td>long — [0,…]</td>
+              <td>응답이 없는 브로커의 파티션 회피 기준</td>
+              <td>0이면 비활성. adaptive가 꺼져 있으면 효과 없음</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>interceptor.classes</code></th>
+              <td>""</td>
+              <td>list</td>
+              <td><code>ProducerInterceptor</code> 구현 목록</td>
+              <td><code>onSend()</code>는 호출 스레드, <code>onAcknowledgement()</code>는 Sender 스레드</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transactional.id</code></th>
+              <td>null</td>
+              <td>string — 비어 있지 않은 문자열</td>
+              <td>트랜잭션 프로듀서 식별자</td>
+              <td>설정하면 멱등성이 필수로 켜집니다. 상세는 <a href="ch06.html">6장</a></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.timeout.ms</code></th>
+              <td>60000</td>
+              <td>int</td>
+              <td>트랜잭션 코디네이터가 강제 abort하기까지의 시간</td>
+              <td>브로커의 상한을 넘길 수 없습니다 (<a href="ch06.html">6장</a>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.max.age.ms</code></th>
+              <td>300000</td>
+              <td>long — [0,…]</td>
+              <td>메타데이터 강제 갱신 주기</td>
+              <td>리더 변경은 에러 응답으로 즉시 감지되므로 보통 기본값 유지</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="presets">목적별 프리셋</h3>
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>세 가지 목적별 Producer 설정 프리셋. 4.x 기본값과 다른 항목만 표기했습니다</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">내구성 우선</th>
+              <th scope="col">처리량 우선</th>
+              <th scope="col">지연 우선</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>acks</code></th><td>all (기본)</td><td>all (기본)</td><td>all (기본)</td></tr>
+            <tr><th scope="row"><code>enable.idempotence</code></th><td>true (기본, 명시 권장)</td><td>true (기본)</td><td>true (기본)</td></tr>
+            <tr><th scope="row"><code>linger.ms</code></th><td>5 (기본)</td><td><strong>20~100</strong></td><td><strong>0</strong></td></tr>
+            <tr><th scope="row"><code>batch.size</code></th><td>16384 (기본)</td><td><strong>65536 이상</strong></td><td>16384 (기본)</td></tr>
+            <tr><th scope="row"><code>compression.type</code></th><td>선택</td><td><strong>lz4 또는 zstd</strong></td><td>none (기본) 또는 lz4</td></tr>
+            <tr><th scope="row"><code>delivery.timeout.ms</code></th><td><strong>충분히 크게</strong></td><td>120000 (기본)</td><td><strong>짧게 — 빨리 실패</strong></td></tr>
+            <tr><th scope="row"><code>buffer.memory</code></th><td>33554432 (기본)</td><td><strong>키우기</strong></td><td>33554432 (기본)</td></tr>
+            <tr><th scope="row">토픽 <code>min.insync.replicas</code></th><td><strong>2</strong> (RF 3 기준)</td><td>2</td><td>2</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        <strong>처리량 우선 프리셋의 구체적 값은 워크로드에 따라 달라집니다.</strong>
+        위 범위는 방향을 나타내는 출발점이며, 공식 문서가 제시하는 권장값은 아닙니다.
+        측정 절차는 <a href="../practice/ex03.html">예제 3</a>에 있습니다.
+      </p>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">흔한 오해</h2>
+
+      <aside class="note note--warn" data-label="오해 1">
+        <p>
+          <strong>"<code>retries=0</code>이어야 중복이 없다"</strong> —
+          4.x에서는 정반대의 결과를 낳습니다. <code>retries=0</code>은
+          멱등성의 전제 조건(<code>retries &gt; 0</code>)을 위반하므로
+          <strong>멱등성 자체가 꺼집니다.</strong>
+          그리고 재시도가 없으면 일시적 네트워크 오류가
+          <strong>그대로 유실</strong>이 됩니다.
+          중복을 막는 올바른 방법은 <code>retries</code>를 0으로 두는 것이 아니라
+          <strong><code>enable.idempotence=true</code>를 유지</strong>하는 것입니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="오해 2">
+        <p>
+          <strong>"<code>acks=all</code>이면 유실이 없다"</strong> —
+          <code>acks=all</code>은 <strong>"현재 ISR 전원"</strong>이 기준입니다.
+          ISR이 리더 하나로 줄어든 상태라면 <code>acks=all</code> 쓰기도
+          <strong>한 대에만</strong> 기록되고 성공으로 응답합니다.
+          그 리더가 죽으면 데이터는 사라집니다.
+          <strong><code>min.insync.replicas=2</code>를 함께 설정</strong>해야
+          이 구멍이 막힙니다. 세 값(RF · minISR · acks)은 세트입니다
+          (<a href="../cases/case06.html">케이스 6</a>).
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="오해 3">
+        <p>
+          <strong>"<code>send()</code>가 반환했으니 전송된 것이다"</strong> —
+          <code>send()</code>의 반환은 <strong>버퍼에 적재되었다는 뜻</strong>일 뿐입니다.
+          그 시점에 데이터는 아직 <strong>프로듀서 프로세스의 힙 메모리 안</strong>에 있습니다.
+          프로세스가 그 상태로 죽으면 데이터는 브로커에 도달하지 않습니다.
+          "저장되었다"를 확인하는 지점은 <strong>콜백이 예외 없이 호출되거나
+          <code>Future</code>가 정상 완료된 시점</strong>입니다.
+          그리고 종료 시 <code>close()</code>를 호출하지 않으면
+          버퍼에 남은 배치가 그대로 사라집니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트 정리</h2>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <div class="table-scroll">
+          <table class="config-table">
+            <caption>4장 핵심 암기 항목 — CCDAK Application Development(28%)의 중심</caption>
+            <thead>
+              <tr><th scope="col">항목</th><th scope="col">값 · 사실</th><th scope="col">함정</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>acks</code> 기본값</th>
+                <td><code>all</code></td>
+                <td><code>1</code>이라고 오답 (2.x 기준)</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>enable.idempotence</code> 기본값</th>
+                <td><code>true</code></td>
+                <td><code>false</code>라고 오답 (2.x 기준)</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>linger.ms</code> 기본값</th>
+                <td><strong>5</strong></td>
+                <td><strong><code>0</code>이라고 오답 — 시중 자료 대부분이 3.x 기준</strong></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>batch.size</code> 기본값</th>
+                <td>16384 (16KiB)</td>
+                <td>32768이라고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>buffer.memory</code> 기본값</th>
+                <td>33554432 (32MiB)</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>max.in.flight</code> 기본값·상한</th>
+                <td>기본 5 / 멱등성 시 <strong>5 이하</strong></td>
+                <td>"1이어야 순서 보장"이라고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>retries</code> 기본값</th>
+                <td>2147483647</td>
+                <td>0 또는 3이라고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>delivery.timeout.ms</code> 기본값</th>
+                <td>120000 (2분)</td>
+                <td>30000이라고 오답 (그건 <code>request.timeout.ms</code>)</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>request.timeout.ms</code> 기본값</th>
+                <td>30000 (30초)</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>max.block.ms</code> 기본값</th>
+                <td>60000 (1분)</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>max.request.size</code> 기본값</th>
+                <td>1048576</td>
+                <td>1048588이라고 오답 (그건 <code>message.max.bytes</code>)</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>compression.type</code> 기본값</th>
+                <td>프로듀서 <code>none</code> / 토픽 <code>producer</code></td>
+                <td>둘을 뒤바꿔 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">콜백 실행 스레드</th>
+                <td><strong>Sender(I/O) 스레드</strong></td>
+                <td>호출 스레드라고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">콜백 인자</th>
+                <td>예외 시 <code>metadata</code>의 모든 필드가 <code>-1</code></td>
+                <td><code>metadata</code>가 null이라고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">콜백 순서</th>
+                <td><strong>같은 파티션</strong>이면 순서 보장</td>
+                <td>토픽 전체에서 보장된다고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">키 있는 파티션 결정</th>
+                <td><code>murmur2(key) % numPartitions</code></td>
+                <td>다른 해시 함수라고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">키 없는 파티션 결정</th>
+                <td><strong>배치 단위 sticky</strong> (결과적으로 균등)</td>
+                <td>"레코드 단위 라운드로빈"으로 오답</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>acks=0</code>의 오프셋</th>
+                <td>항상 <code>-1</code>, <code>retries</code> 무효</td>
+                <td>실제 오프셋이 온다고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">멱등성 충돌 시</th>
+                <td>명시 → <code>ConfigException</code> / 미명시 → <strong>조용히 비활성</strong></td>
+                <td>항상 예외가 난다고 오답</td>
+              </tr>
+              <tr>
+                <th scope="row">4.0에서 제거된 클래스</th>
+                <td><code>DefaultPartitioner</code>, <code>UniformStickyPartitioner</code>, <code>NotLeaderForPartitionException</code></td>
+                <td>선택지에 등장하면 함정</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p><strong>코드 판독 문제 대비</strong> — 다음 스니펫에서 문제를 찾아 보세요.</p>
+        <figure class="code">
+          <figcaption>이 설정 조합의 문제는 무엇인가</figcaption>
+          <pre><code class="lang-java">props.put(ProducerConfig.ACKS_CONFIG, "1");
+props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 10);</code></pre>
+        </figure>
+        <p>
+          두 곳이 멱등성 조건을 위반합니다 — <code>acks</code>가 <code>all</code>이 아니고,
+          in-flight가 5를 초과합니다. <code>enable.idempotence=true</code>를
+          <strong>명시했으므로</strong> 프로듀서 생성 시
+          <strong><code>ConfigException</code>이 발생</strong>합니다.
+          만약 <code>enable.idempotence</code> 줄을 지웠다면 예외 없이 동작하지만
+          <strong>멱등성과 순서 보장이 모두 사라진</strong> 상태가 됩니다.
+        </p>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Observability">
+        <p>
+          Producer 쪽 문제를 판정하는 클라이언트 메트릭입니다.
+        </p>
+        <ul>
+          <li><code>record-error-rate</code> / <code>record-retry-rate</code> —
+            재시도가 늘고 있다면 클러스터 쪽(리더 이동, ISR 부족)을 봅니다.</li>
+          <li><code>buffer-available-bytes</code> —
+            0에 가까우면 <code>send()</code>가 블로킹되고 있습니다.</li>
+          <li><code>batch-size-avg</code> / <code>records-per-request-avg</code> —
+            배치가 작으면 <code>linger.ms</code>·<code>batch.size</code>가 효과를 못 내는 상태입니다.</li>
+          <li><code>request-latency-avg</code> —
+            <code>request.timeout.ms</code> 설정의 근거가 되는 값입니다.</li>
+          <li><code>compression-rate-avg</code> —
+            압축이 실제로 효과가 있는지 확인합니다.</li>
+        </ul>
+        <p>MBean 이름과 정상 범위는 <a href="../cheatsheet/metrics.html">메트릭 치트시트</a>에 정리되어 있습니다.</p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="check-quiz">
+      <h2 id="check-quiz">확인 문제</h2>
+      <p>
+        CCDAK Application Development 도메인의 중심 내용입니다.
+        단일 선택 · 복수 선택 · 연결형 · 순서 배열이 섞여 있으며 키보드만으로 완주할 수 있습니다.
+      </p>
+      <div class="quiz-embed" data-set="basics-ch04" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="ch05.html">
+          <span class="card__title">5장 · Consumer 심화</span>
+          <span class="card__desc">poll 루프, 타임아웃 4종, 리밸런스, KIP-848 새 프로토콜.</span>
+          <span class="card__meta">CCDAK 최우선</span>
+        </a></li>
+        <li><a class="card" href="ch06.html">
+          <span class="card__title">6장 · 전달 보장과 트랜잭션</span>
+          <span class="card__desc">멱등성과 트랜잭션의 차이, EOS의 경계, <code>read_committed</code>와 LSO.</span>
+          <span class="card__meta">CCDAK 최우선</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex03.html">
+          <span class="card__title">예제 3 · 무손실 프로듀서</span>
+          <span class="card__desc">돌아가는 코드로 acks·minISR·재시도 예산을 직접 검증합니다.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="../cases/case04.html">
+          <span class="card__title">케이스 4 · 키 없이 보낸 이벤트</span>
+          <span class="card__desc">순서가 뒤바뀐 상태 변경 이벤트. 원인 추적과 복구.</span>
+          <span class="card__meta">케이스 스터디</span>
+        </a></li>
+        <li><a class="card" href="../cases/case03.html">
+          <span class="card__title">케이스 3 · 프로듀서 전송 실패의 진짜 원인</span>
+          <span class="card__desc">ISR 부족과 unclean leader election이 프로듀서에 어떻게 보이는가.</span>
+          <span class="card__meta">케이스 스터디</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc">Producer 설정 전체 표와 처리량·지연·내구성 3가지 프리셋.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>이 장의 설정 기본값·동작 서술·예외 목록은 모두 아래에서 확인했습니다 (Apache Kafka 4.3 기준).</p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs" rel="noopener noreferrer">Producer Configs</a> — 이 장의 모든 프로듀서 설정 기본값과 설명</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_acks" rel="noopener noreferrer">Producer Configs — <code>acks</code></a> — 세 값의 정확한 정의, <code>acks=0</code>에서 오프셋 <code>-1</code>과 <code>retries</code> 무효, <code>all</code> = <code>-1</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_linger.ms" rel="noopener noreferrer">Producer Configs — <code>linger.ms</code></a> — 기본값이 4.0에서 0 → 5로 변경된 사실과 근거</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_batch.size" rel="noopener noreferrer">Producer Configs — <code>batch.size</code></a> — 크기 초과 레코드는 배치하지 않음, 0이면 배치 비활성, 브로커 backpressure 영향</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_enable.idempotence" rel="noopener noreferrer">Producer Configs — <code>enable.idempotence</code></a> — in-flight 5 이하 · <code>retries</code> &gt; 0 · <code>acks=all</code> 요구, 충돌 시 <code>ConfigException</code> 또는 조용한 비활성화</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_max.in.flight.requests.per.connection" rel="noopener noreferrer">Producer Configs — <code>max.in.flight.requests.per.connection</code></a> — 브로커가 프로듀서별로 최대 5개 배치를 보관하는 이유</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_delivery.timeout.ms" rel="noopener noreferrer">Producer Configs — <code>delivery.timeout.ms</code></a> — <code>request.timeout.ms</code> + <code>linger.ms</code> 이상 요구</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_partitioner.class" rel="noopener noreferrer">Producer Configs — <code>partitioner.class</code></a> — 기본 sticky 전략 서술, <code>RoundRobinPartitioner</code>, <code>Partitioner</code> 인터페이스</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_max.block.ms" rel="noopener noreferrer">Producer Configs — <code>max.block.ms</code></a> — 메타데이터·버퍼 대기 포함, 사용자 직렬화기·파티셔너 내부 블로킹 미포함</li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs_compression.type" rel="noopener noreferrer">Topic Configs — <code>compression.type</code></a> — 기본값 <code>producer</code>의 의미와 허용 값</li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs_min.insync.replicas" rel="noopener noreferrer">Topic Configs — <code>min.insync.replicas</code></a> — <code>acks=all</code>에서 ISR 전원 ack 요구, <code>NotEnoughReplicas</code> / <code>NotEnoughReplicasAfterAppend</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#semantics" rel="noopener noreferrer">Design — Message Delivery Semantics</a> — 멱등 전달, PID와 시퀀스 번호로 중복 제거</li>
+        <li><a href="https://kafka.apache.org/documentation/#design_ha" rel="noopener noreferrer">Design — Availability and Durability Guarantees</a> — <code>acks=all</code>이 "현재 ISR 전원" 기준이라는 서술과 예시</li>
+        <li><a href="https://kafka.apache.org/documentation/#messageformat" rel="noopener noreferrer">Implementation — Record Batch</a> — <code>producerId</code> · <code>producerEpoch</code> · <code>baseSequence</code>, 중복 판별에 첫·마지막 시퀀스를 쓰는 방식</li>
+        <li><a href="https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/Callback.html" rel="noopener noreferrer">Javadoc — <code>Callback</code></a> — 백그라운드 I/O 스레드 실행, 예외 시 metadata의 <code>-1</code>, retriable / non-retriable 예외 목록</li>
+        <li><a href="https://kafka.apache.org/40/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html" rel="noopener noreferrer">Javadoc — <code>KafkaProducer.send()</code></a> — 같은 파티션 콜백의 순서 보장</li>
+        <li><a href="https://kafka.apache.org/documentation/#upgrade" rel="noopener noreferrer">Upgrading Apache Kafka</a> — 4.0에서 <code>DefaultPartitioner</code> · <code>UniformStickyPartitioner</code> · <code>NotLeaderForPartitionException</code> 제거, <code>Partitioner.onNewBatch</code> 제거</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<svg viewBox="0 0 720 312" role="img" class="kg-diagram"
+     aria-labelledby="d037-title d037-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d037-title">재시도 예산 — delivery.timeout.ms 가 request.timeout.ms 와 재시도를 모두 포함</title>
+  <desc id="d037-desc">delivery.timeout.ms 120000 밀리초를 큰 막대로 그리고, 그 안에 request.timeout.ms 30000 밀리초 단위의 시도들을 중첩해 넣은 그림입니다.
+    바깥 막대는 send() 호출 이후 성공이나 실패를 보고할 최종 기한이고, 안쪽 칸은 각 전송 시도입니다.
+    30000 밀리초짜리 시도를 세 번 하면 90000 밀리초를 쓰고 30000 밀리초가 남습니다.
+    남은 예산 안에 성공하지 못하면 콜백에 TimeoutException 이 전달되며, retries 값이 아무리 커도 여기서 끝납니다.
+    linger.ms 기본값 5 밀리초와 retry.backoff.ms 기본값 100 밀리초는 이 축척에서 선 하나보다 얇아 보이지 않지만 예산에 포함됩니다.
+    공식 문서의 요구 조건은 delivery.timeout.ms 가 request.timeout.ms 와 linger.ms 의 합보다 크거나 같아야 한다는 것입니다.</desc>
+
+  <defs>
+    <marker id="d037-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker--accent" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+  </defs>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">재시도 횟수가 아니라 <tspan class="dg-mono">delivery.timeout.ms</tspan> 예산이 종료 시점을 정합니다</text>
+
+  <text x="8" y="44" class="dg-fs-sm dg-bold">바깥 = 전체 예산 · 안쪽 = 개별 시도</text>
+
+  <!-- 바깥 막대 -->
+  <rect class="dg-node dg-node--accent" x="104" y="52" width="592" height="76" rx="4"/>
+  <text x="112" y="70" class="dg-fs-sm dg-bold"><tspan class="dg-mono">delivery.timeout.ms = 120000</tspan> — <tspan class="dg-mono">send()</tspan> 이후 성공/실패를 보고할 최종 기한</text>
+
+  <!-- 안쪽 시도 -->
+  <rect class="dg-node dg-node--alt" x="110" y="80" width="145" height="40" rx="3"/>
+  <text x="118" y="96" class="dg-fs-sm dg-bold">시도 1</text>
+  <text x="118" y="112" class="dg-fs-sm dg-mono">30000</text>
+
+  <rect class="dg-node dg-node--alt" x="258" y="80" width="145" height="40" rx="3"/>
+  <text x="266" y="96" class="dg-fs-sm dg-bold">시도 2 (재시도)</text>
+  <text x="266" y="112" class="dg-fs-sm dg-mono">30000</text>
+
+  <rect class="dg-node dg-node--alt" x="406" y="80" width="145" height="40" rx="3"/>
+  <text x="414" y="96" class="dg-fs-sm dg-bold">시도 3 (재시도)</text>
+  <text x="414" y="112" class="dg-fs-sm dg-mono">30000</text>
+
+  <rect class="dg-node dg-node--danger" x="554" y="80" width="136" height="40" rx="3"/>
+  <text x="562" y="96" class="dg-fs-sm dg-bold">남은 예산</text>
+  <text x="562" y="112" class="dg-fs-sm dg-mono">30000</text>
+
+  <text x="8" y="96" class="dg-fs-sm dg-bold">시도 단위</text>
+  <text x="8" y="112" class="dg-fs-sm dg-muted">request</text>
+
+  <!-- 축 -->
+  <line class="dg-grid" x1="110" y1="140" x2="690" y2="140"/>
+  <line class="dg-grid" x1="110" y1="136" x2="110" y2="146"/>
+  <line class="dg-grid" x1="255" y1="136" x2="255" y2="146"/>
+  <line class="dg-grid" x1="400" y1="136" x2="400" y2="146"/>
+  <line class="dg-grid" x1="545" y1="136" x2="545" y2="146"/>
+  <line class="dg-grid" x1="690" y1="136" x2="690" y2="146"/>
+  <text x="110" y="160" class="dg-fs-sm dg-muted dg-num" text-anchor="middle">0</text>
+  <text x="255" y="160" class="dg-fs-sm dg-muted dg-num" text-anchor="middle">30000</text>
+  <text x="400" y="160" class="dg-fs-sm dg-muted dg-num" text-anchor="middle">60000</text>
+  <text x="545" y="160" class="dg-fs-sm dg-muted dg-num" text-anchor="middle">90000</text>
+  <text x="690" y="160" class="dg-fs-sm dg-muted dg-num" text-anchor="middle">120000</text>
+
+  <!-- linger 콜아웃 -->
+  <line class="dg-edge dg-edge--accent" x1="60" y1="182" x2="108" y2="126" marker-end="url(#d037-ah)"/>
+  <text x="8" y="196" class="dg-fs-sm dg-muted"><tspan class="dg-mono">linger.ms=5</tspan> 와 <tspan class="dg-mono">retry.backoff.ms=100</tspan> 도 예산에 포함되지만 이 축척에서는 선보다 얇습니다.</text>
+
+  <!-- 정리 -->
+  <line class="dg-grid" x1="8" y1="212" x2="712" y2="212"/>
+  <text x="8" y="232" class="dg-fs-sm dg-bold dg-mono">delivery.timeout.ms  ≥  request.timeout.ms + linger.ms</text>
+  <text x="8" y="252" class="dg-fs-sm"><tspan class="dg-mono">retries</tspan> 기본값은 <tspan class="dg-mono">2147483647</tspan> 입니다. 그래도 무한 재시도가 아닌 이유가 이 예산입니다.</text>
+  <text x="8" y="270" class="dg-fs-sm">예산을 넘기면 콜백에 <tspan class="dg-mono">TimeoutException</tspan> 이 전달됩니다. <tspan class="dg-mono">retries</tspan> 대신 이 값으로 조절하세요.</text>
+  <text x="8" y="288" class="dg-fs-sm dg-muted">복구 불가 오류는 예산이 남아도 즉시 실패합니다 (예: <tspan class="dg-mono">RecordTooLargeException</tspan>).</text>
+  <text x="8" y="306" class="dg-fs-sm dg-muted"><tspan class="dg-mono">request.timeout.ms</tspan> 는 <tspan class="dg-mono">replica.lag.time.max.ms</tspan>(30000) 보다 크게 — 불필요한 재시도 중복을 줄입니다.</text>
+</svg>

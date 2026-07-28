@@ -1,0 +1,85 @@
+<svg viewBox="0 0 720 318" role="img" class="kg-diagram"
+     aria-labelledby="d071-title d071-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d071-title">wire format 바이트 레이아웃 — magic byte 1 + schema id 4 + payload</title>
+  <desc id="d071-desc">Schema Registry 를 쓰는 직렬화 결과의 바이트 배치를 눈금으로 그린 그림입니다.
+    0번 바이트는 매직 바이트로 값이 0x00 입니다.
+    1번부터 4번까지 4바이트는 schema id 를 빅엔디언 정수로 담습니다.
+    그림의 예에서는 0x00 0x00 0x01 0x2F 이므로 schema id 는 303 입니다.
+    5번 바이트부터 끝까지가 payload 이며, Avro 바이너리로 인코딩된 값만 들어가고 스키마 본문은 들어가지 않습니다.
+    따라서 레코드당 고정 오버헤드는 정확히 5바이트입니다.
+    스키마 JSON 전문을 매 레코드에 넣으면 보통 수백에서 수천 바이트가 되므로,
+    id 4바이트로 대체하는 것이 이 형식의 목적입니다.
+    참고로 Protobuf 는 schema id 뒤에 메시지 인덱스가 더 붙고,
+    매직 바이트가 0x01 인 형식은 id 대신 16바이트 GUID 를 담습니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">wire format — 레코드 앞 5바이트가 전부입니다</text>
+
+  <!-- 바이트 눈금 -->
+  <text class="dg-fs-sm dg-muted dg-num" x="87" y="48" text-anchor="middle">byte 0</text>
+  <text class="dg-fs-sm dg-muted dg-num" x="141" y="48" text-anchor="middle">1</text>
+  <text class="dg-fs-sm dg-muted dg-num" x="195" y="48" text-anchor="middle">2</text>
+  <text class="dg-fs-sm dg-muted dg-num" x="249" y="48" text-anchor="middle">3</text>
+  <text class="dg-fs-sm dg-muted dg-num" x="303" y="48" text-anchor="middle">4</text>
+  <text class="dg-fs-sm dg-muted dg-num" x="360" y="48">5 …</text>
+
+  <text class="dg-fs-sm dg-bold" x="12" y="76">레코드</text>
+  <text class="dg-fs-sm dg-bold" x="12" y="93">value</text>
+
+  <!-- 바이트 칸 -->
+  <g data-dg="byte-magic">
+    <rect class="dg-node dg-node--warn" x="60" y="56" width="54" height="50" rx="3"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="87" y="78" text-anchor="middle">0x00</text>
+    <text class="dg-fs-sm" x="87" y="96" text-anchor="middle">magic</text>
+  </g>
+  <g data-dg="byte-id-0">
+    <rect class="dg-node dg-node--accent" x="114" y="56" width="54" height="50" rx="3"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="141" y="78" text-anchor="middle">0x00</text>
+  </g>
+  <g data-dg="byte-id-1">
+    <rect class="dg-node dg-node--accent" x="168" y="56" width="54" height="50" rx="3"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="195" y="78" text-anchor="middle">0x00</text>
+  </g>
+  <g data-dg="byte-id-2">
+    <rect class="dg-node dg-node--accent" x="222" y="56" width="54" height="50" rx="3"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="249" y="78" text-anchor="middle">0x01</text>
+  </g>
+  <g data-dg="byte-id-3">
+    <rect class="dg-node dg-node--accent" x="276" y="56" width="54" height="50" rx="3"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="303" y="78" text-anchor="middle">0x2F</text>
+  </g>
+  <text class="dg-fs-sm dg-bold" x="222" y="96" text-anchor="middle">schema id = 303</text>
+  <g data-dg="byte-payload">
+    <rect class="dg-node dg-node--alt" x="330" y="56" width="370" height="50" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="515" y="78" text-anchor="middle">payload — Avro 바이너리로 인코딩된 값</text>
+    <text class="dg-fs-sm" x="515" y="96" text-anchor="middle">필드 이름도 스키마도 들어 있지 않습니다</text>
+  </g>
+
+  <!-- 구간 표시 -->
+  <rect class="dg-node dg-node--warn" x="60" y="114" width="54" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="87" y="128" text-anchor="middle">1 B</text>
+  <rect class="dg-node dg-node--accent" x="114" y="114" width="216" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="222" y="128" text-anchor="middle">4 B — big-endian 정수</text>
+  <rect class="dg-node dg-node--alt" x="330" y="114" width="370" height="20" rx="3"/>
+  <text class="dg-fs-sm dg-bold" x="515" y="128" text-anchor="middle">가변 길이</text>
+
+  <text class="dg-fs-sm" x="12" y="154">고정 오버헤드 = <tspan class="dg-bold">5바이트</tspan>. 값이 1 KB 면 0.5% 도 되지 않습니다.</text>
+  <text class="dg-fs-sm" x="12" y="172">컨슈머는 앞 5바이트를 떼어 id 를 얻고, 그 id 로 <tspan class="dg-bold">읽기 스키마</tspan>를 결정합니다.</text>
+
+  <!-- 왜 스키마를 안 넣는가 -->
+  <text class="dg-fs-sm dg-bold" x="12" y="196">레코드마다 붙는 스키마 정보의 크기 비교</text>
+
+  <text class="dg-fs-sm" x="12" y="220">id 4바이트</text>
+  <rect class="dg-node--empty" x="160" y="204" width="480" height="22" rx="3"/>
+  <rect class="dg-node dg-node--accent" x="160" y="204" width="6" height="22" rx="2"/>
+  <text class="dg-fs-sm dg-bold dg-num" x="648" y="220">4 B</text>
+
+  <text class="dg-fs-sm" x="12" y="250">스키마 JSON 전문</text>
+  <rect class="dg-node--empty" x="160" y="234" width="480" height="22" rx="3"/>
+  <rect class="dg-node dg-node--danger" x="160" y="234" width="480" height="22" rx="3"/>
+  <text class="dg-fs-sm dg-bold dg-num" x="648" y="250">수백 ~ 수천 B</text>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="268" x2="708" y2="268"/>
+  <text class="dg-fs-sm dg-muted" x="12" y="286">Protobuf 는 schema id 뒤에 <tspan class="dg-bold">메시지 인덱스</tspan>가 더 붙습니다. Avro·JSON Schema 는 5바이트로 끝납니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="304">magic byte 가 <tspan class="dg-mono">0x01</tspan> 인 형식은 id 4바이트 대신 <tspan class="dg-bold">16바이트 GUID</tspan> 를 담습니다. 기본 형식은 <tspan class="dg-mono">0x00</tspan> 입니다.</text>
+</svg>

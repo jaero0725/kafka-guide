@@ -1,0 +1,78 @@
+<svg viewBox="0 0 720 396" role="img" class="kg-diagram"
+     aria-labelledby="d035-title d035-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d035-title">압축 트레이드오프 — 압축률과 CPU 비용은 서로 반대 방향</title>
+  <desc id="d035-desc">가로축이 CPU 비용, 세로축이 압축률인 좌표 위에 Kafka 가 지원하는 압축 코덱 none, snappy, lz4, gzip, zstd 의 상대적인 경향을 배치한 그림입니다.
+    왼쪽 아래는 CPU 를 거의 쓰지 않지만 압축도 되지 않는 none 이고, 오른쪽 위로 갈수록 압축률이 높아지면서 CPU 비용도 커집니다.
+    snappy 와 lz4 는 CPU 비용이 낮고 압축률이 중간이며, gzip 은 압축률이 높지만 CPU 비용도 큽니다.
+    zstd 는 압축 수준을 조절할 수 있어 gzip 에 가까운 압축률을 더 낮은 CPU 로 얻을 수 있는 범위를 가집니다.
+    절대 수치는 메시지 모양과 크기에 따라 크게 달라지므로 반드시 자기 데이터로 측정해야 하며, 이 그림은 순서와 방향만 나타냅니다.
+    아래에는 반드시 알아야 할 사실이 정리되어 있습니다.
+    압축은 배치 단위로 이뤄지므로 배치가 클수록 압축률이 좋아지고,
+    토픽과 브로커의 compression.type 기본값은 producer 로 프로듀서가 압축한 형태를 그대로 저장하며,
+    다른 코덱을 지정하면 브로커가 풀고 다시 압축하므로 브로커 CPU 를 더 씁니다.
+    압축 비용은 프로듀서와 컨슈머 양쪽에서 발생합니다.</desc>
+
+  <defs>
+    <marker id="d035-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+  </defs>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">압축률을 올리면 CPU 를 더 씁니다 — 어느 쪽이 비싼 자원인지로 고릅니다</text>
+
+  <!-- 좌표축 -->
+  <line class="dg-edge" x1="120" y1="240" x2="470" y2="240" marker-end="url(#d035-ah)"/>
+  <line class="dg-edge" x1="120" y1="240" x2="120" y2="44" marker-end="url(#d035-ah)"/>
+  <text x="300" y="262" class="dg-fs-sm dg-bold" text-anchor="middle">CPU 비용 (프로듀서 · 컨슈머 양쪽) →</text>
+  <text x="112" y="44" class="dg-fs-sm dg-bold" text-anchor="end">압축률</text>
+  <text x="112" y="60" class="dg-fs-sm dg-muted" text-anchor="end">높음</text>
+  <text x="112" y="236" class="dg-fs-sm dg-muted" text-anchor="end">없음</text>
+
+  <line class="dg-grid" x1="120" y1="180" x2="470" y2="180"/>
+  <line class="dg-grid" x1="120" y1="120" x2="470" y2="120"/>
+  <line class="dg-grid" x1="230" y1="240" x2="230" y2="44"/>
+  <line class="dg-grid" x1="340" y1="240" x2="340" y2="44"/>
+
+  <!-- 코덱 배치 -->
+  <rect class="dg-node dg-node--muted" x="126" y="206" width="82" height="28" rx="4"/>
+  <text x="134" y="225" class="dg-fs-sm dg-mono">none</text>
+
+  <rect class="dg-node dg-node--ok" x="150" y="140" width="82" height="28" rx="4"/>
+  <text x="158" y="159" class="dg-fs-sm dg-mono">snappy</text>
+
+  <rect class="dg-node dg-node--ok" x="132" y="106" width="82" height="28" rx="4"/>
+  <text x="140" y="125" class="dg-fs-sm dg-mono">lz4</text>
+
+  <rect class="dg-node dg-node--accent" x="238" y="58" width="122" height="28" rx="4"/>
+  <text x="246" y="77" class="dg-fs-sm dg-bold dg-mono">zstd</text>
+  <text x="300" y="77" class="dg-fs-sm">수준 조절</text>
+  <line class="dg-edge dg-edge--accent dg-edge--dashed" x1="360" y1="72" x2="392" y2="72"/>
+
+  <rect class="dg-node dg-node--warn" x="368" y="52" width="82" height="28" rx="4"/>
+  <text x="376" y="71" class="dg-fs-sm dg-mono">gzip</text>
+
+  <text x="126" y="196" class="dg-fs-sm dg-muted">CPU 는 안 쓰지만</text>
+  <text x="126" y="256" class="dg-fs-sm dg-muted">네트워크·디스크를 가장 많이 씁니다</text>
+
+  <!-- 선택 가이드 -->
+  <rect class="dg-panel" x="486" y="40" width="226" height="204" rx="4"/>
+  <text x="498" y="60" class="dg-fs-sm dg-bold">고르는 기준</text>
+  <text x="498" y="82" class="dg-fs-sm">지연이 가장 중요하다</text>
+  <text x="498" y="98" class="dg-fs-sm dg-mono">→ lz4 · snappy</text>
+  <text x="498" y="124" class="dg-fs-sm">저장·네트워크 비용이 크다</text>
+  <text x="498" y="140" class="dg-fs-sm dg-mono">→ zstd (수준으로 조절)</text>
+  <text x="498" y="166" class="dg-fs-sm">CPU 여유가 많고 압축률 우선</text>
+  <text x="498" y="182" class="dg-fs-sm dg-mono">→ gzip</text>
+  <text x="498" y="208" class="dg-fs-sm">이미 압축된 데이터(이미지 등)</text>
+  <text x="498" y="224" class="dg-fs-sm dg-mono">→ none</text>
+
+  <text x="8" y="284" class="dg-fs-sm dg-muted">위 배치는 <tspan class="dg-bold">상대적 경향</tspan> 입니다. 절대 수치는 데이터 모양에 따라 달라지므로 자기 데이터로 측정하세요.</text>
+
+  <!-- 정리 -->
+  <line class="dg-grid" x1="8" y1="300" x2="712" y2="300"/>
+  <text x="8" y="318" class="dg-fs-sm"><tspan class="dg-bold">압축은 배치 단위로 이뤄집니다.</tspan> 배치가 클수록 압축률이 좋아지므로 <tspan class="dg-mono">linger.ms</tspan>·<tspan class="dg-mono">batch.size</tspan> 와 함께 봅니다.</text>
+  <text x="8" y="336" class="dg-fs-sm">프로듀서 <tspan class="dg-mono">compression.type</tspan> 기본값은 <tspan class="dg-mono">none</tspan>, 토픽·브로커 기본값은 <tspan class="dg-mono">producer</tspan> (프로듀서가 압축한 그대로 저장).</text>
+  <text x="8" y="354" class="dg-fs-sm">토픽에 다른 코덱을 지정하면 브로커가 <tspan class="dg-bold">풀고 다시 압축</tspan> 하므로 브로커 CPU 를 더 씁니다.</text>
+  <text x="8" y="372" class="dg-fs-sm dg-muted">유효 값은 <tspan class="dg-mono">none · gzip · snappy · lz4 · zstd</tspan> 이고, 토픽 설정에는 <tspan class="dg-mono">uncompressed</tspan>·<tspan class="dg-mono">producer</tspan> 도 있습니다.</text>
+  <text x="8" y="390" class="dg-fs-sm dg-muted">수준 조절: <tspan class="dg-mono">compression.gzip.level</tspan>(-1) · <tspan class="dg-mono">compression.lz4.level</tspan>(9) · <tspan class="dg-mono">compression.zstd.level</tspan>(3)</text>
+</svg>

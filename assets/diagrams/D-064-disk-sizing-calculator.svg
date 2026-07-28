@@ -1,0 +1,63 @@
+<svg viewBox="0 0 720 352" role="img" class="kg-diagram"
+     aria-labelledby="d064-title d064-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d064-title">디스크 산정 계산기 — 처리량·보관기간·복제·압축에서 필요 용량 구하기</title>
+  <desc id="d064-desc">처리량, 평균 메시지 크기, 보관 기간, replication.factor, 압축 절감률, 여유율, 브로커 수를
+    입력해 필요한 디스크 용량을 계산하는 그림입니다.
+    계산식은 일일 유입량이 초당 메시지 수 곱하기 평균 메시지 크기 곱하기 86400 이고,
+    필요 용량은 일일 유입량 곱하기 보관 일수 곱하기 1에서 압축 절감률을 뺀 값 곱하기 replication.factor 를
+    1에서 여유율을 뺀 값으로 나눈 것입니다.
+    기본 입력은 초당 5000건, 1024바이트, 7일 보관, replication.factor 3, 압축 절감 40퍼센트,
+    여유 30퍼센트, 브로커 3대입니다.
+    이때 원본은 약 3.1테라바이트, 압축 후 약 1.86테라바이트, 복제를 곱하면 약 5.57테라바이트,
+    여유를 더한 클러스터 총 필요량은 약 7.96테라바이트, 브로커 한 대당 약 2.65테라바이트입니다.
+    막대 길이는 총 필요량을 기준으로 비례합니다.
+    인덱스 파일, 트랜잭션 상태, 내부 토픽은 계산에 포함되지 않았습니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">디스크 산정 — 압축과 복제를 빼먹으면 항상 부족해집니다</text>
+
+  <!-- 계산식 -->
+  <rect class="dg-node dg-node--alt" x="12" y="28" width="696" height="48" rx="4"/>
+  <text class="dg-fs-sm dg-mono" x="22" y="46">일일 유입 = 초당 메시지 수 × 평균 메시지 크기 × 86400</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="66">필요 용량 = 일일 유입 × 보관일수 × (1 − 압축절감률) × replication.factor ÷ (1 − 여유율)</text>
+
+  <!-- 현재 입력 -->
+  <text data-dg="input-1" class="dg-fs-sm" x="12" y="96">입력: 초당 5,000건 × 1.0 KiB · 보관 7일 · replication.factor 3</text>
+  <text data-dg="input-2" class="dg-fs-sm" x="12" y="114">압축 절감 40% · 여유 30% · 브로커 3대 · 초당 5.1 MB/s · 일일 442 GB</text>
+
+  <!-- 막대: 원본 -->
+  <text class="dg-fs-sm" x="12" y="146">원본 (압축·복제 전)</text>
+  <rect class="dg-node--empty" x="200" y="130" width="400" height="22" rx="3"/>
+  <rect data-dg="bar-raw" class="dg-node" x="200" y="130" width="156" height="22" rx="3"/>
+  <text data-dg="val-raw" class="dg-fs-sm dg-bold dg-num" x="706" y="146" text-anchor="end">3.10 TB</text>
+
+  <!-- 막대: 압축 후 -->
+  <text class="dg-fs-sm" x="12" y="178">압축 후</text>
+  <rect class="dg-node--empty" x="200" y="162" width="400" height="22" rx="3"/>
+  <rect data-dg="bar-comp" class="dg-node dg-node--ok" x="200" y="162" width="93" height="22" rx="3"/>
+  <text data-dg="val-comp" class="dg-fs-sm dg-bold dg-num" x="706" y="178" text-anchor="end">1.86 TB</text>
+
+  <!-- 막대: 복제 -->
+  <text class="dg-fs-sm" x="12" y="210">× replication.factor</text>
+  <rect class="dg-node--empty" x="200" y="194" width="400" height="22" rx="3"/>
+  <rect data-dg="bar-rf" class="dg-node dg-node--warn" x="200" y="194" width="280" height="22" rx="3"/>
+  <text data-dg="val-rf" class="dg-fs-sm dg-bold dg-num" x="706" y="210" text-anchor="end">5.57 TB</text>
+
+  <!-- 막대: 총 필요량 -->
+  <text class="dg-fs-sm dg-bold" x="12" y="242">+ 여유 = 클러스터 총량</text>
+  <rect class="dg-node--empty" x="200" y="226" width="400" height="22" rx="3"/>
+  <rect data-dg="bar-total" class="dg-node dg-node--accent" x="200" y="226" width="400" height="22" rx="3"/>
+  <text data-dg="val-total" class="dg-fs-sm dg-bold dg-num" x="706" y="242" text-anchor="end">7.96 TB</text>
+
+  <line class="dg-grid" x1="12" y1="256" x2="708" y2="256"/>
+
+  <!-- 막대: 브로커당 -->
+  <text class="dg-fs-sm dg-bold" x="12" y="284">브로커 1대당 필요 디스크</text>
+  <rect class="dg-node--empty" x="200" y="268" width="400" height="22" rx="3"/>
+  <rect data-dg="bar-broker" class="dg-node dg-node--accent" x="200" y="268" width="133" height="22" rx="3"/>
+  <text data-dg="val-broker" class="dg-fs-sm dg-bold dg-num" x="706" y="284" text-anchor="end">2.65 TB</text>
+
+  <!-- 각주 -->
+  <text class="dg-fs-sm dg-muted" x="12" y="312">TB = 1000 GB 기준입니다. 압축 절감률은 데이터 성격에 따라 크게 달라지므로 <tspan class="dg-bold">실측값을 넣으세요</tspan>.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="330">인덱스 파일·트랜잭션 상태·내부 토픽·리밸런스 중 임시 증가분은 빠져 있습니다 — 여유율로 흡수합니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="348">파티션이 브로커에 고르게 분포한다고 가정했습니다. 편중되면 특정 브로커가 먼저 찹니다.</text>
+</svg>

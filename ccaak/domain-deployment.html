@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CCAAK · Deployment Architecture — Kafka Guide</title>
+  <meta name="description" content="CCAAK Deployment Architecture 섹션. 컨트롤러 쿼럼 사이징(3 vs 5), 노드 롤과 combined 모드, 랙 인식, 브로커 하드웨어 사이징, 멀티 DC 구성, MirrorMaker 2, JVM·OS 설정을 운영자 관점으로 정리합니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="ccaak" data-page="domain-deployment"></div>
+
+  <main id="main" class="page" data-page-id="ccaak/domain-deployment">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="index.html">CCAAK</a></li>
+        <li><span aria-current="page">Deployment Architecture</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">CCAAK · 섹션 4</p>
+      <h1>Deployment Architecture</h1>
+      <p class="page__lead">
+        이 섹션은 <strong>한 번 정하면 오래 유지되는 결정들</strong>을 다룹니다.
+        컨트롤러를 몇 대 둘지, 역할을 분리할지, 랙을 어떻게 나눌지, 디스크를 어떻게 붙일지,
+        그리고 데이터센터를 어떻게 잇을지입니다. 장애 빈도는 낮지만
+        <strong>숫자를 정확히 외우면 확실히 맞힐 수 있는</strong> 문항이 많아 투자 효율이 좋습니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>컨트롤러 수를 3 또는 5로 정하는 근거(<code>2N+1</code>)와 각각의 내결함성을 계산할 수 있습니다.</li>
+        <li><code>process.roles</code> 3가지 조합의 용도와 combined 모드의 한계를 설명할 수 있습니다.</li>
+        <li>정적 쿼럼과 동적 쿼럼을 구분하고, 컨트롤러를 추가·제거하는 절차를 순서대로 말할 수 있습니다.</li>
+        <li><code>broker.rack</code>이 복제 배치에 미치는 효과를 <code>min(랙 수, RF)</code>로 설명할 수 있습니다.</li>
+        <li>멀티 DC에서 단일 클러스터 확장이 아니라 MirrorMaker 2를 쓰는 이유를 말할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="what-it-asks">
+      <h2 id="what-it-asks">이 도메인이 묻는 것</h2>
+
+      <div class="table-scroll">
+        <table>
+          <caption>이 섹션의 전형적인 질문 형태</caption>
+          <thead>
+            <tr><th scope="col">질문 형태</th><th scope="col">실제로 확인하는 것</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">"컨트롤러 5대 중 몇 대까지 잃어도 되는가?"</th><td><code>2N+1</code>과 과반 규칙</td></tr>
+            <tr><th scope="row">"프로덕션에서 권장되는 <code>process.roles</code>는?"</th><td>역할 분리 권장, combined 모드의 한계</td></tr>
+            <tr><th scope="row">"랙 3개, RF=3일 때 복제 배치는?"</th><td><code>min(랙 수, RF)</code>개 랙에 분산</td></tr>
+            <tr><th scope="row">"두 데이터센터에 걸친 단일 클러스터의 문제는?"</th><td>복제 지연과 권장 구성(DC별 클러스터 + 미러링)</td></tr>
+            <tr><th scope="row">"MM2로 복제된 토픽의 이름은?"</th><td><code>DefaultReplicationPolicy</code>의 <code>{source}.{topic}</code></td></tr>
+            <tr><th scope="row">"컨트롤러 추가 절차를 순서대로" (list order)</th><td>프로비저닝 → 기동 → 복제 확인 → <code>add-controller</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="core-concepts">
+      <h2 id="core-concepts">핵심 개념 요약 — 운영 관점</h2>
+
+      <h3 id="process-roles">노드 롤 — <code>process.roles</code></h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>process.roles</code> 3가지 조합</caption>
+          <thead>
+            <tr><th scope="col">값</th><th scope="col">역할</th><th scope="col">용도</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>broker</code></th>
+              <td>데이터 저장·서빙. 메타데이터 쿼럼에는 <strong>observer</strong>로만 참여</td>
+              <td>프로덕션 브로커 노드</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller</code></th>
+              <td>메타데이터 쿼럼의 <strong>voter</strong>. 데이터 파티션은 갖지 않음</td>
+              <td>프로덕션 컨트롤러 노드</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>broker,controller</code></th>
+              <td>둘 다 (combined 서버)</td>
+              <td>개발·소규모 환경. <strong>중요 운영 환경에서는 권장되지 않습니다</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="diagram" data-diagram="D-022">
+        <figcaption>
+          노드 롤 조합 — broker 전용 / controller 전용 / combined 3가지 배치 비교
+        </figcaption>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Deployment Architecture">
+        <p>
+          combined 모드가 권장되지 않는 이유는 성능이 아니라 <strong>격리와 운영성</strong>입니다.
+          공식 문서는 "컨트롤러가 시스템의 나머지로부터 덜 격리된다"는 점과
+          <strong>"combined 모드에서는 컨트롤러를 브로커와 별도로 롤링·스케일할 수 없다"</strong>는 점을 듭니다.
+          시험에서 이유를 고르라면 <strong>독립적인 롤링·스케일 불가</strong>가 핵심입니다.
+        </p>
+      </aside>
+
+      <h3 id="quorum-sizing">컨트롤러 쿼럼 사이징 — 3 vs 5</h3>
+
+      <p>
+        메타데이터 쿼럼은 Raft이므로 <strong>과반이 살아 있어야</strong> 쓰기(메타데이터 변경)가 가능합니다.
+        동시 장애 <code>N</code>건을 견디려면 컨트롤러가 <strong><code>2N+1</code></strong>대 필요합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>컨트롤러 수와 내결함성</caption>
+          <thead>
+            <tr>
+              <th scope="col">컨트롤러 수</th>
+              <th scope="col">과반</th>
+              <th scope="col">견딜 수 있는 동시 장애</th>
+              <th scope="col">선택 기준</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">1</th><td class="t-center">1</td><td class="t-center">0</td><td>개발 전용. 쿼럼 개념 실습용</td></tr>
+            <tr><th scope="row"><strong>3</strong></th><td class="t-center">2</td><td class="t-center"><strong>1</strong></td><td>대부분의 프로덕션. 비용과 안전의 균형</td></tr>
+            <tr><th scope="row"><strong>5</strong></th><td class="t-center">3</td><td class="t-center"><strong>2</strong></td><td>가용 영역 3개 이상, 유지보수 중 추가 장애까지 견뎌야 할 때</td></tr>
+            <tr><th scope="row">짝수(예: 4)</th><td class="t-center">3</td><td class="t-center">1</td><td><strong>의미 없음</strong> — 3대와 내결함성이 같은데 비용만 늘어납니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="diagram" data-diagram="D-021">
+        <figcaption>
+          컨트롤러 쿼럼과 메타데이터 로그 — <code>__cluster_metadata</code>, Raft 리더, 스냅샷의 관계
+        </figcaption>
+      </figure>
+
+      <aside class="note" data-label="컨트롤러 사이징 수치">
+        <p>
+          공식 문서는 일반적인 Kafka 클러스터라면 컨트롤러에
+          <strong>주 메모리 5GB, 메타데이터 로그 디렉터리 디스크 5GB</strong>면 충분하다고 봅니다.
+          컨트롤러는 모든 메타데이터를 <strong>메모리와 디스크에 모두</strong> 유지합니다.
+          메타데이터 로그 위치는 <code>metadata.log.dir</code>이며, 설정하지 않으면
+          <code>log.dirs</code>의 <strong>첫 번째</strong> 디렉터리를 씁니다.
+        </p>
+      </aside>
+
+      <h3 id="static-vs-dynamic">정적 쿼럼 vs 동적 쿼럼</h3>
+
+      <p>
+        KRaft에는 두 가지 운영 방식이 있습니다. 어느 쪽인지는 <strong>포맷 시점에 결정</strong>됩니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>정적 쿼럼과 동적 쿼럼</caption>
+          <thead>
+            <tr><th scope="col">구분</th><th scope="col">정적 쿼럼</th><th scope="col">동적 쿼럼</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">쓰는 설정</th>
+              <td><code>controller.quorum.voters</code>에 <strong>모든</strong> 컨트롤러의 ID·호스트·포트를 명시</td>
+              <td><code>controller.quorum.bootstrap.servers</code>. 클라이언트의 <code>bootstrap.servers</code>처럼 <strong>일부만</strong> 적어도 동작</td>
+            </tr>
+            <tr>
+              <th scope="row">컨트롤러 추가·제거</th>
+              <td class="t-center">불가</td>
+              <td class="t-center"><strong>가능</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">판별 방법</th>
+              <td><code>kraft.version</code>의 <code>FinalizedVersionLevel</code>이 <strong>0</strong> 또는 없음</td>
+              <td><code>kraft.version</code>이 <strong>1 이상</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">도입 시점</th>
+              <td>초기 KRaft 방식</td>
+              <td><code>kraft.version=1</code> (release-version <strong>4.1</strong>)에서 추가</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p>
+          KRaft 버전 1에서 <code>controller.quorum.voters</code>가 <strong>deprecated</strong>되고
+          <code>controller.quorum.bootstrap.servers</code>가 표준이 되었습니다.
+          정적에서 동적으로 올리는 절차는 ① <code>kafka-features.sh upgrade</code>로
+          <code>kraft.version</code>을 1 이상으로 올리고,
+          ② 확인 후 <strong>모든 노드</strong>(컨트롤러와 브로커 전부)에서
+          <code>controller.quorum.voters</code>를 지우고
+          <code>controller.quorum.bootstrap.servers</code>를 넣는 것입니다.
+        </p>
+        <p>
+          <strong>모든 브로커와 컨트롤러가</strong> <code>controller.quorum.bootstrap.servers</code>를 설정해야 합니다.
+          브로커만, 컨트롤러만 설정하는 것은 잘못된 구성입니다.
+        </p>
+      </aside>
+
+      <h3 id="rack-awareness">랙 인식 — <code>broker.rack</code></h3>
+
+      <p>
+        브로커에 <code>broker.rack=my-rack-id</code>를 붙이면
+        토픽 생성·수정·재배치 시 <strong>같은 파티션의 레플리카가 서로 다른 랙에 퍼집니다.</strong>
+        정확히는 한 파티션이 <strong><code>min(랙 수, replication factor)</code></strong>개의 랙에 걸칩니다.
+        클라우드에서는 가용 영역(AZ)을 랙으로 쓰는 것이 일반적입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>랙 수와 RF 조합의 효과</caption>
+          <thead>
+            <tr>
+              <th scope="col">랙 수</th>
+              <th scope="col">RF</th>
+              <th scope="col">파티션이 걸치는 랙 수</th>
+              <th scope="col">한 랙 전체 장애 시</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">3</th><td class="t-center">3</td><td class="t-center">3</td><td>레플리카 1개 손실. ISR 2개 유지 → <code>min.insync.replicas=2</code>로 쓰기 계속</td></tr>
+            <tr><th scope="row">2</th><td class="t-center">3</td><td class="t-center">2</td><td>한 랙에 2개가 있을 수 있어 <strong>레플리카 2개 손실 가능</strong></td></tr>
+            <tr><th scope="row">3</th><td class="t-center">2</td><td class="t-center">2</td><td>레플리카 1개 손실. ISR 1개 → <code>min.insync.replicas=2</code>면 쓰기 중단</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="랙 구성의 함정">
+        <p>
+          레플리카 배치 알고리즘은 <strong>브로커별 리더 수를 균등하게</strong> 유지하므로,
+          랙이 몇 개든 처리량은 균형이 잡힙니다.
+          그러나 <strong>랙마다 브로커 수가 다르면 레플리카 배치는 균등하지 않습니다.</strong>
+          브로커가 적은 랙에 레플리카가 더 많이 배치되어 스토리지와 복제 자원을 더 쓰게 됩니다.
+          공식 문서의 권고는 <strong>랙마다 브로커 수를 같게</strong> 두는 것입니다.
+        </p>
+      </aside>
+
+      <h3 id="broker-sizing">브로커 사이징과 디스크</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>하드웨어 판단 기준 (공식 문서 기준)</caption>
+          <thead>
+            <tr><th scope="col">항목</th><th scope="col">기준</th><th scope="col">근거</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">메모리</th>
+              <td>대략 <code>쓰기 처리량 × 30초</code>를 버퍼로 잡습니다</td>
+              <td>활성 리더·라이터를 버퍼링할 만큼의 페이지 캐시가 필요합니다</td>
+            </tr>
+            <tr>
+              <th scope="row">디스크</th>
+              <td><strong>디스크 처리량이 병목</strong>입니다. 개수가 많은 편이 유리합니다</td>
+              <td>공식 문서가 예로 든 구성은 7200rpm SATA 8개입니다</td>
+            </tr>
+            <tr>
+              <th scope="row">디스크 구성</th>
+              <td>JBOD(여러 <code>log.dirs</code>) 또는 RAID. <strong>애플리케이션 로그와 데이터 디스크를 분리</strong>하세요</td>
+              <td>RAID는 디스크 간 부하 분산에 유리하지만 쓰기 처리량과 용량을 잃습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">파일시스템</th>
+              <td><strong>XFS</strong> 권장. 마운트 옵션 <code>noatime</code></td>
+              <td>XFS가 EXT4보다 Request Local Time이 낮고 변동성도 작았습니다(160ms 대 250ms+)</td>
+            </tr>
+            <tr>
+              <th scope="row">파일 디스크립터</th>
+              <td>최소 <strong>100000</strong>을 시작점으로</td>
+              <td>세그먼트 파일 + 연결 수만큼 필요합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>vm.max_map_count</code></th>
+              <td>파티션 수에 맞춰 상향. <strong>세그먼트 1개 = map area 2개</strong></td>
+              <td>기본값이 65535 근처인 배포판에서 파티션을 과하게 올리면 <code>Map failed</code>로 죽습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">flush 정책</th>
+              <td><strong>기본값 유지</strong>(애플리케이션 fsync 비활성)</td>
+              <td>내구성은 복제로 확보합니다. fsync를 강제하면 지연이 늘고 디스크 사용 패턴이 나빠집니다</td>
+            </tr>
+            <tr>
+              <th scope="row">Java</th>
+              <td><strong>17 · 21 · 25</strong> 완전 지원. 브로커는 최소 17</td>
+              <td>Java 8은 4.0에서 제거되었습니다. 11은 clients·streams 등 일부 모듈만</td>
+            </tr>
+            <tr>
+              <th scope="row">OS</th>
+              <td>Linux 권장. Windows는 잘 지원되는 플랫폼이 아닙니다</td>
+              <td>공식 문서 명시</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Deployment Architecture">
+        <p>
+          <strong>"Kafka의 내구성은 fsync가 아니라 복제에서 온다"</strong>는 명제가 자주 출제됩니다.
+          공식 문서는 애플리케이션 레벨 fsync를 <strong>끄는 기본 설정을 권장</strong>하며,
+          장애 노드는 항상 레플리카로부터 복구된다고 설명합니다.
+          "유실을 막으려면 <code>log.flush.interval.messages</code>를 1로 설정한다"는 선택지는 오답입니다.
+        </p>
+      </aside>
+
+      <h3 id="multi-dc">멀티 데이터센터</h3>
+
+      <p>
+        권장 구성은 <strong>DC마다 로컬 Kafka 클러스터를 두고, 애플리케이션은 자기 DC의 클러스터만 쓰고,
+        클러스터 사이를 미러링</strong>하는 것입니다. 전체 데이터가 필요한 애플리케이션을 위해
+        <strong>집계(aggregate) 클러스터</strong>를 따로 두고 각 DC에서 미러링해 채웁니다.
+      </p>
+
+      <aside class="note note--danger" data-label="하지 말아야 할 구성">
+        <p>
+          <strong>고지연 링크를 가로지르는 단일 클러스터는 권장되지 않습니다.</strong>
+          Kafka 쓰기의 복제 지연이 그대로 링크 지연을 타기 때문입니다.
+          WAN을 넘어 읽고 쓰는 것 자체는 가능하지만, 그만큼의 지연을 그대로 감수해야 합니다.
+          WAN을 쓸 때는 <code>socket.send.buffer.bytes</code>와
+          <code>socket.receive.buffer.bytes</code>를 대역폭·지연 곱에 맞춰 올려야 처리량이 나옵니다.
+        </p>
+      </aside>
+
+      <h3 id="mm2">MirrorMaker 2</h3>
+
+      <p>
+        MM2는 Kafka Connect 프레임워크 위에 만들어진 <strong>클러스터 간</strong> 복제 도구입니다.
+        클러스터 <em>내부</em> 복제(레플리카)와는 완전히 다른 것입니다.
+        토픽 데이터와 설정, 컨슈머 그룹과 오프셋, ACL을 복제하고 파티셔닝을 보존합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>복제 흐름(replication flow) 패턴</caption>
+          <thead>
+            <tr><th scope="col">구성</th><th scope="col">흐름 표기</th><th scope="col">용도</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Active/Passive</th><td><code>A-&gt;B</code></td><td>재해 복구 대기 클러스터</td></tr>
+            <tr><th scope="row">Active/Active</th><td><code>A-&gt;B, B-&gt;A</code></td><td>양방향 고가용성</td></tr>
+            <tr><th scope="row">집계</th><td><code>A-&gt;K, B-&gt;K, C-&gt;K</code></td><td>여러 DC를 한 클러스터로 모으기</td></tr>
+            <tr><th scope="row">팬아웃</th><td><code>K-&gt;A, K-&gt;B, K-&gt;C</code></td><td>중앙에서 엣지로 배포</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="code">
+        <figcaption>connect-mirror-maker.properties — 최소 구성</figcaption>
+        <pre><code class="lang-properties"># 클러스터 별칭 정의
+clusters = us-west, us-east
+us-west.bootstrap.servers = broker3-west:9092
+us-east.bootstrap.servers = broker5-east:9092
+
+# 기본 복제 대상: 모든 토픽
+topics = .*
+
+# 흐름 활성화와 흐름별 오버라이드
+us-west->us-east.enabled = true
+us-west->us-east.topics = orders.*, payments.*
+
+# 워커 수보다 태스크를 넉넉히 (기본값 1은 너무 작습니다)
+tasks.max = 5
+
+# 클러스터별 클라이언트 설정 오버라이드
+us-west.consumer.isolation.level = read_committed
+us-east.producer.compression.type = zstd</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>전용 MM2 클러스터 실행</figcaption>
+        <pre><code class="lang-bash"># 이 프로세스가 담당할 대상 클러스터만 지정 (대상 클러스터 근처에서 실행하는 것이 일반적)
+bin/connect-mirror-maker.sh connect-mirror-maker.properties --clusters us-east
+
+# 지정하지 않으면 설정에 정의된 모든 흐름을 이 프로세스가 담당합니다
+bin/connect-mirror-maker.sh connect-mirror-maker.properties</code></pre>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>MM2 주요 기본값 — 시험에 나오는 값들</caption>
+          <thead>
+            <tr><th scope="col">설정</th><th scope="col">기본값</th><th scope="col">의미</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>replication.policy.class</code></th>
+              <td><code>DefaultReplicationPolicy</code></td>
+              <td>복제된 토픽 이름을 <strong><code>{source}.{topic}</code></strong>으로 만듭니다. 구분자는 <code>replication.policy.separator</code>(기본 <code>.</code>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>replication.factor</code></th>
+              <td><strong>2</strong></td>
+              <td>대상 클러스터에 만들 복제 토픽의 RF. <strong>기본값이 3이 아닙니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>tasks.max</code></th>
+              <td>1</td>
+              <td>공식 문서는 <strong>최소 2, 가능하면 더 크게</strong> 두라고 권고합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>sync.group.offsets.enabled</code></th>
+              <td><strong><code>false</code></strong></td>
+              <td>대상 클러스터의 <code>__consumer_offsets</code>에 오프셋을 직접 쓰는 기능. <strong>기본은 꺼져 있습니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>emit.checkpoints.enabled</code></th>
+              <td><code>true</code></td>
+              <td>체크포인트 토픽에 오프셋 매핑을 기록 (주기 기본 60초)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>sync.topic.configs.enabled</code></th>
+              <td><code>true</code></td>
+              <td>토픽 설정도 복제 (주기 기본 600초)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>sync.topic.acls.enabled</code></th>
+              <td><code>true</code></td>
+              <td>ACL도 복제 (주기 기본 600초)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>refresh.topics.interval.seconds</code></th>
+              <td>600</td>
+              <td>새 토픽·파티션 탐지 주기. 새 토픽이 늦게 복제되는 이유입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>offset.lag.max</code></th>
+              <td>100</td>
+              <td>오프셋 동기 레코드를 새로 쓰기 전 허용하는 최대 lag</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>groups.exclude</code></th>
+              <td><code>console-consumer-.*,connect-.*,__.*</code></td>
+              <td>기본적으로 제외되는 그룹 패턴</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>topics.exclude</code></th>
+              <td><code>mm2.*\.internal,.*\.replica,__.*</code></td>
+              <td>내부 토픽과 이미 복제된 토픽을 제외해 <strong>순환 복제를 막습니다</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Deployment Architecture">
+        <p>
+          <strong>복제된 토픽의 이름이 바뀝니다.</strong> <code>us-west</code>의 <code>orders</code>는
+          대상 클러스터에서 <code>us-west.orders</code>가 됩니다.
+          이것은 버그가 아니라 <strong>서로 다른 클러스터의 이벤트가 같은 토픽-파티션에 섞이지 않게</strong> 하는 장치입니다.
+          이름을 유지하고 싶으면 <code>replication.policy.class</code>를 커스텀 구현으로 바꿔야 합니다.
+        </p>
+        <p>
+          전용 MM2 클러스터의 exactly-once는 <strong>3.5.0부터</strong> 지원됩니다.
+          기존 클러스터는 <code>exactly.once.source.support</code>를
+          <code>preparing</code> → <code>enabled</code> <strong>2단계</strong>로 올려야 하고,
+          <code>dedicated.mode.enable.internal.rest=true</code>도 필요합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="cli">
+      <h2 id="cli">필수 CLI 명령어</h2>
+
+      <figure class="code">
+        <figcaption>클러스터 프로비저닝 — 포맷 방식이 정적/동적을 결정합니다</figcaption>
+        <pre><code class="lang-bash"># 클러스터 ID 생성 (전 노드가 같은 값을 씁니다)
+CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"
+
+# (권장) 첫 컨트롤러 하나로 부트스트랩한 뒤 나머지를 동적으로 추가
+bin/kafka-storage.sh format --cluster-id $CLUSTER_ID --standalone \
+    --config config/controller.properties
+
+# 또는 처음부터 여러 voter 로 부트스트랩 (모든 컨트롤러에서 같은 값으로 실행)
+bin/kafka-storage.sh format --cluster-id $CLUSTER_ID \
+    --initial-controllers "0@controller-0:9093:$UUID0,1@controller-1:9093:$UUID1,2@controller-2:9093:$UUID2" \
+    --config config/controller.properties
+
+# 기존 클러스터에 합류할 브로커·컨트롤러
+bin/kafka-storage.sh format --cluster-id $CLUSTER_ID \
+    --config config/server.properties --no-initial-controllers</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>쿼럼 상태 확인과 기능 버전 판별</figcaption>
+        <pre><code class="lang-bash"># 리더·에폭·voter·observer
+bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --status
+
+# 노드별 Lag / LastFetchTimestamp / LastCaughtUpTimestamp
+bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --replication
+
+# kraft.version 이 0 이면 정적, 1 이상이면 동적 쿼럼
+bin/kafka-features.sh --bootstrap-controller localhost:9093 describe
+
+# 기능 버전 업그레이드
+bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature kraft.version=1</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>컨트롤러 멤버십 변경 (동적 쿼럼 전용)</figcaption>
+        <pre><code class="lang-bash"># 추가: 프로비저닝 → 기동 → --replication 으로 따라잡았는지 확인 → add-controller
+bin/kafka-metadata-quorum.sh --command-config config/controller.properties \
+    --bootstrap-controller localhost:9093 add-controller
+
+# 제거: 노드를 내리기 전에 먼저 쿼럼에서 뺀다
+bin/kafka-metadata-quorum.sh --bootstrap-controller localhost:9093 remove-controller \
+    --controller-id 3 --controller-directory-id &lt;directory-id&gt;</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>브로커 제거 — 재할당이 먼저입니다</figcaption>
+        <pre><code class="lang-bash"># 1) cordon: 이 브로커의 로그 디렉터리를 신규 배치 대상에서 제외
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter \
+    --add-config cordoned.log.dirs="*" --entity-type brokers --entity-name 1
+
+# 2) 이 브로커의 모든 파티션을 다른 브로커로 재할당 (계획은 직접 작성)
+#    절차는 Cluster Configuration 페이지 참고
+
+# 3) 브로커 종료 후 클러스터에서 등록 해제
+bin/kafka-cluster.sh unregister --bootstrap-server localhost:9092 --id 1</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>메타데이터 디버깅 — 컨트롤러 이상 조사 시</figcaption>
+        <pre><code class="lang-bash"># 메타데이터 로그 세그먼트 디코딩
+bin/kafka-dump-log.sh --cluster-metadata-decoder \
+    --files metadata_log_dir/__cluster_metadata-0/00000000000000000000.log
+
+# 스냅샷을 대화식으로 탐색
+bin/kafka-metadata-shell.sh \
+    --snapshot metadata_log_dir/__cluster_metadata-0/00000000000000007228-0000000001.checkpoint</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="must-know-configs">
+      <h2 id="must-know-configs">반드시 외워야 할 설정값</h2>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Kafka 4.3 배포 관련 기본값</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">기본값</th>
+              <th scope="col">의미</th>
+              <th scope="col">운영 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>process.roles</code></th>
+              <td>비어 있음</td>
+              <td>노드 역할</td>
+              <td>KRaft에서 <strong>필수 설정</strong>입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>node.id</code></th>
+              <td>비어 있음</td>
+              <td>노드 식별자</td>
+              <td>클러스터 내 유일해야 합니다. <code>read-only</code>.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.bootstrap.servers</code></th>
+              <td>빈 문자열</td>
+              <td>컨트롤러 탐색 주소</td>
+              <td><strong>모든</strong> 브로커·컨트롤러가 설정해야 합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.fetch.timeout.ms</code></th>
+              <td>2000</td>
+              <td>이 시간 동안 리더에서 fetch를 못 하면 새 선거를 시작</td>
+              <td>컨트롤러 노드 간 네트워크가 불안정하면 선거가 반복됩니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>controller.quorum.election.timeout.ms</code></th>
+              <td>1000</td>
+              <td>선거 결론이 안 날 때 재선거까지 대기</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>metadata.log.dir</code></th>
+              <td><code>null</code></td>
+              <td>메타데이터 로그 위치</td>
+              <td>미설정 시 <code>log.dirs</code>의 <strong>첫 번째</strong>를 씁니다. 전용 디스크에 두는 것이 안전합니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.dirs</code></th>
+              <td><code>null</code></td>
+              <td>데이터 디렉터리 목록</td>
+              <td>미설정 시 <code>log.dir</code>(기본 <code>/tmp/kafka-logs</code>)이 쓰입니다. <strong><code>/tmp</code>는 프로덕션 금지.</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>broker.rack</code></th>
+              <td><code>null</code></td>
+              <td>랙·AZ 식별자</td>
+              <td>없으면 랙 인식 배치가 동작하지 않습니다. <code>read-only</code>.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.network.threads</code></th>
+              <td>3</td>
+              <td>네트워크 스레드 수</td>
+              <td><code>NetworkProcessorAvgIdlePercent</code>가 0.3 미만이면 검토 대상입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.io.threads</code></th>
+              <td>8</td>
+              <td>요청 처리 스레드 수</td>
+              <td><code>RequestHandlerAvgIdlePercent</code>가 0.3 미만이면 검토 대상입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>num.recovery.threads.per.data.dir</code></th>
+              <td>2</td>
+              <td>기동 시 로그 복구 스레드</td>
+              <td>비정상 종료 후 기동이 오래 걸리면 올립니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>queued.max.requests</code></th>
+              <td>500</td>
+              <td>요청 큐 깊이</td>
+              <td>큐가 차면 네트워크 스레드가 블록됩니다.</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>socket.request.max.bytes</code></th>
+              <td>104857600<br>(100 MiB)</td>
+              <td>단일 요청 최대 크기</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>connections.max.idle.ms</code></th>
+              <td>600000<br>(10분)</td>
+              <td>유휴 연결 종료</td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="scenarios">
+      <h2 id="scenarios">장애 시나리오와 대응</h2>
+
+      <h3 id="scenario-quorum-lost">시나리오 1 — 컨트롤러 과반을 잃었다</h3>
+
+      <ol>
+        <li>증상: 토픽 생성·삭제·설정 변경이 모두 타임아웃. <strong>기존 파티션의 읽기·쓰기는 한동안 계속됩니다.</strong></li>
+        <li><code>kafka-metadata-quorum.sh --bootstrap-controller ... describe --status</code>로 현재 voter와 리더를 확인합니다.</li>
+        <li>브로커도 못 붙는 상황이면 <code>--bootstrap-controller</code>로 컨트롤러에 직접 조회합니다.</li>
+        <li><strong>과반을 복구하는 것이 유일한 정답</strong>입니다. 내려간 컨트롤러를 다시 올립니다.</li>
+        <li>디스크가 날아간 컨트롤러를 새로 넣을 때는 <strong>포맷 전에</strong>
+            <code>describe --replication</code>으로 <strong>과반이 커밋된 데이터를 갖고 있는지</strong> 확인합니다.
+            빈 로그 디렉터리로 과반이 기동하면 커밋된 데이터가 빠진 리더가 뽑힐 수 있습니다.</li>
+      </ol>
+
+      <aside class="note note--danger" data-label="컨트롤러 디스크 교체 순서">
+        <p>
+          컨트롤러의 메타데이터 디스크를 잃었을 때는 순서가 중요합니다.
+          ① <code>describe --replication</code>으로 <strong>과반의 <code>Lag</code>가 충분히 작은지</strong> 확인하고,
+          ② <code>LastFetchTimestamp</code>와 <code>LastCaughtUpTimestamp</code>가 서로 가까운지 확인한 뒤,
+          ③ 그때 비로소 <code>kafka-storage.sh format</code>을 실행합니다.
+          combined 모드에서 메타데이터 디렉터리만 잃은 경우에 한해
+          <code>--ignore-formatted</code>를 쓸 수 있습니다. 그 외에는 쓰지 마세요.
+        </p>
+      </aside>
+
+      <h3 id="scenario-controller-membership">시나리오 2 — 컨트롤러를 3대에서 5대로 늘려야 한다</h3>
+
+      <p>이 절차가 list order 유형으로 자주 나옵니다. 순서를 바꾸면 쿼럼이 위험해집니다.</p>
+
+      <ol>
+        <li><code>kafka-features.sh describe</code>로 <strong>동적 쿼럼(<code>kraft.version</code> 1 이상)</strong>인지 확인합니다. 정적이면 먼저 업그레이드해야 합니다.</li>
+        <li>새 컨트롤러 노드를 <code>--no-initial-controllers</code>로 포맷합니다.</li>
+        <li>새 컨트롤러를 <strong>기동</strong>합니다. 이 시점에는 아직 voter가 아니라 observer입니다.</li>
+        <li><code>describe --replication</code>으로 <strong>새 노드가 리더를 따라잡았는지</strong> 확인합니다.</li>
+        <li>따라잡은 뒤 <code>add-controller</code>로 <strong>쿼럼에 편입</strong>합니다.</li>
+        <li>한 대씩 반복합니다. 여러 대를 동시에 넣으면 과반 계산이 흔들립니다.</li>
+      </ol>
+
+      <p>
+        제거는 순서가 반대입니다. <strong><code>remove-controller</code>를 먼저 실행하고</strong> 그 다음에 노드를 내립니다.
+        노드를 먼저 내리면 쿼럼은 그 노드를 여전히 voter로 세면서 과반 계산에 포함합니다.
+      </p>
+
+      <h3 id="scenario-rack-imbalance">시나리오 3 — AZ 한 곳이 죽자 일부 토픽이 쓰기 불가가 되었다</h3>
+
+      <ol>
+        <li>랙 인식이 켜져 있었는지 확인합니다. <code>broker.rack</code>이 없으면 배치가 랙을 고려하지 않았습니다.</li>
+        <li><code>broker.rack</code>이 있어도 <strong>랙 인식은 배치 시점에만 적용</strong>됩니다.
+            나중에 <code>broker.rack</code>을 붙였다면 <strong>기존 파티션 배치는 바뀌지 않습니다.</strong></li>
+        <li><code>kafka-topics.sh --describe</code>로 문제 토픽의 레플리카가 어느 브로커에 있는지 확인합니다.</li>
+        <li>랙을 고려한 배치로 되돌리려면 <strong>파티션 재할당을 명시적으로 실행</strong>해야 합니다.</li>
+        <li>랙마다 브로커 수가 다르면 배치가 불균등해지므로, 그 기회에 랙별 브로커 수를 맞춥니다.</li>
+      </ol>
+
+      <h3 id="scenario-mm2-lag">시나리오 4 — MM2 복제가 계속 뒤처진다</h3>
+
+      <ol>
+        <li><code>tasks.max</code>가 기본값 1인지 확인합니다. 공식 권고는 <strong>최소 2, 가능하면 더 크게</strong>입니다.</li>
+        <li>복제 토픽의 파티션 수를 확인합니다. 태스크는 <strong>토픽-파티션 단위로</strong> 나뉩니다.</li>
+        <li>WAN이라면 <code>socket.send.buffer.bytes</code>·<code>socket.receive.buffer.bytes</code>를 대역폭·지연 곱에 맞춰 올립니다.</li>
+        <li>대상 클러스터 쪽 프로듀서 압축(<code>{target}.producer.compression.type</code>)으로 전송량을 줄입니다.</li>
+        <li>새로 만든 토픽이 늦게 복제된다면 <code>refresh.topics.interval.seconds</code>(기본 600)를 확인합니다. 탐지 주기 문제입니다.</li>
+      </ol>
+
+      <aside class="note note--warn" data-label="MM2 페일오버 함정">
+        <p>
+          Active/Passive에서 페일오버할 때, 컨슈머가 대상 클러스터에서 <strong>정확히 이어서</strong>
+          읽게 하려면 오프셋이 동기화되어 있어야 합니다.
+          그런데 <code>sync.group.offsets.enabled</code>의 기본값은 <strong><code>false</code></strong>입니다.
+          기본 상태에서는 체크포인트만 기록되고 대상 클러스터의 <code>__consumer_offsets</code>는 갱신되지 않습니다.
+          "페일오버했더니 컨슈머가 처음부터 읽었다"의 원인이 대개 이것입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">자주 나오는 함정</h2>
+
+      <aside class="note note--warn" data-label="함정 1">
+        <p>
+          <strong>"컨트롤러를 4대 두면 3대보다 안전하다"</strong> — 아닙니다.
+          4대의 과반은 3이므로 <strong>견딜 수 있는 동시 장애는 1건으로 3대와 같습니다.</strong>
+          비용만 늘어납니다. 항상 홀수(<code>2N+1</code>)로 둡니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 2">
+        <p>
+          <strong>"combined 모드는 성능이 나빠서 권장되지 않는다"</strong> —
+          공식 문서가 드는 이유는 성능이 아니라 <strong>격리 부족과 독립 롤링·스케일 불가</strong>입니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 3">
+        <p>
+          <strong>"<code>broker.rack</code>을 나중에 붙이면 기존 파티션도 재배치된다"</strong> —
+          아닙니다. 랙 제약은 <strong>토픽 생성·수정·재배치 시점</strong>에만 적용됩니다.
+          기존 배치를 바꾸려면 재할당을 직접 실행해야 합니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 4">
+        <p>
+          <strong>"MM2는 클러스터 내부 복제의 확장이다"</strong> —
+          MM2는 <strong>클러스터 간</strong> 복제이고, 레플리카(클러스터 내부 복제)와는 완전히 다른 메커니즘입니다.
+          MM2로 복제된 토픽은 대상 클러스터에서 <strong>별개의 토픽</strong>이며 이름도 바뀝니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 5">
+        <p>
+          <strong>"MM2의 <code>replication.factor</code> 기본값은 3"</strong> — <strong>2</strong>입니다.
+          대상 클러스터에서 복제 토픽이 예상보다 약하게 만들어지는 원인입니다.
+          체크포인트·하트비트 토픽의 RF 기본값은 3이라 더 헷갈립니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="함정 6">
+        <p>
+          <strong>"<code>log.dirs</code>를 여러 개 주면 파티션이 분산 저장된다"</strong> —
+          파티션은 라운드로빈으로 <strong>디렉터리에 배정</strong>되지만
+          <strong>한 파티션이 여러 디렉터리에 걸치지는 않습니다.</strong>
+          파티션 크기가 고르지 않으면 디스크 사용량이 불균등해집니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="cases">
+      <h2 id="cases">관련 케이스 스터디</h2>
+      <ul>
+        <li><a href="../cases/case06.html">케이스 6 · RF=3인데 브로커 1대 죽자 유실됐다</a> — 배치와 <code>min.insync.replicas</code></li>
+        <li><a href="../cases/case03.html">케이스 3 · 브로커 장애 후 메시지가 유실됐다</a> — 복제 배치와 확인 조건</li>
+      </ul>
+      <p>
+        KRaft 구조의 배경은 <a href="../basics/ch03.html">3장 KRaft와 클러스터 메타데이터</a>,
+        업그레이드 경로와 레거시 대응은 <a href="../basics/appendix-legacy.html">부록</a>,
+        MM2 실습은 <a href="../practice/ex11.html">예제 11</a>에 있습니다.
+        구성 변경 절차는 <a href="domain-cluster-config.html">Cluster Configuration</a>과 이어집니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-107">
+        <figcaption>
+          업그레이드 경로 — 구버전에서 4.x로 올라가는 단계와 최소 경유 버전
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="quiz">
+      <h2 id="quiz">미니 퀴즈</h2>
+      <p>쿼럼 사이징 계산과 절차 배열이 중심입니다.</p>
+      <div class="quiz-embed" data-set="ccaak-deployment" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#kraft" rel="noopener noreferrer">KRaft</a> — <code>process.roles</code>, 컨트롤러 3 또는 5, <code>2N+1</code>, combined 모드 권장 사항, 정적·동적 쿼럼, 컨트롤러 추가·제거, 메모리·디스크 5GB</li>
+        <li><a href="https://kafka.apache.org/documentation/#hwandos" rel="noopener noreferrer">Hardware and OS</a> — 메모리 산정, 디스크·파일시스템, XFS·<code>noatime</code>, 파일 디스크립터, <code>vm.max_map_count</code>, flush 정책, 컨트롤러 디스크 교체 절차</li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops" rel="noopener noreferrer">Basic Kafka Operations</a> — <code>broker.rack</code>과 <code>min(랙 수, RF)</code>, 랙별 브로커 수 권고, 브로커 제거(cordon · unregister)</li>
+        <li><a href="https://kafka.apache.org/documentation/#datacenters" rel="noopener noreferrer">Datacenters</a> — DC별 클러스터 + 미러링 권장, 단일 클러스터 확장 비권장, 소켓 버퍼 튜닝</li>
+        <li><a href="https://kafka.apache.org/documentation/#georeplication" rel="noopener noreferrer">Geo-Replication (MirrorMaker 2)</a> — 복제 흐름 표기, <code>DefaultReplicationPolicy</code>, <code>tasks.max</code> 권고, exactly-once 3.5.0</li>
+        <li><a href="https://kafka.apache.org/documentation/#mirrormakerconfigs" rel="noopener noreferrer">MirrorMaker Configs</a> — <code>replication.factor</code>, <code>sync.group.offsets.enabled</code>, <code>refresh.topics.interval.seconds</code> 기본값</li>
+        <li><a href="https://kafka.apache.org/documentation/#java" rel="noopener noreferrer">Java Version</a> — Java 17 · 21 · 25</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

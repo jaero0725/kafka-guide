@@ -1,0 +1,98 @@
+<svg viewBox="0 0 720 396" role="img" class="kg-diagram"
+     aria-labelledby="d038-title d038-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d038-title">프로듀서 핵심 메트릭 지도 — 어느 메트릭이 어느 단계를 관측하는가</title>
+  <desc id="d038-desc">Producer 전송 파이프라인을 한 줄로 압축해 그리고, 그 아래에 네 개의 관측 지점을 번호로 표시한 그림입니다.
+    관측 지점 1 은 RecordAccumulator 버퍼이고 buffer-available-bytes 로 남은 버퍼를 봅니다.
+    이 값이 0 에 가까워지면 send() 가 max.block.ms 까지 블록되어 애플리케이션이 멈춥니다.
+    관측 지점 2 는 버퍼에서 Sender 로 넘어가는 경계이고 record-queue-time-avg 로 배치가 버퍼에 머문 평균 시간을 봅니다.
+    linger.ms 와 batch.size 를 조정한 결과가 여기 나타납니다.
+    관측 지점 3 은 Sender 와 브로커 사이의 요청 왕복이고 request-latency-avg 로 평균 요청 지연을 봅니다.
+    acks 가 all 이면 ISR 복제 대기 시간이 여기 포함됩니다.
+    관측 지점 4 는 응답과 콜백 단계이고 record-send-rate 로 초당 전송 성공 레코드 수를,
+    record-error-rate 로 초당 오류로 끝난 전송 수를 봅니다.
+    MBean 이름은 kafka.producer 타입 producer-metrics 이며 client-id 로 구분되고,
+    record-send-rate 와 record-error-rate 는 토픽별 producer-topic-metrics 로도 제공됩니다.</desc>
+
+  <defs>
+    <marker id="d038-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="dg-marker" d="M0,0 L10,5 L0,10 Z"/>
+    </marker>
+  </defs>
+
+  <text x="8" y="20" class="dg-fs-md dg-bold">메트릭 하나하나가 파이프라인의 어느 지점을 보는지 알면 원인 추적이 빨라집니다</text>
+
+  <!-- ─── 파이프라인 압축 ─── -->
+  <text x="8" y="46" class="dg-fs-sm dg-bold">전송 파이프라인 (D-030 축약)</text>
+
+  <rect class="dg-node" x="8" y="54" width="104" height="42" rx="4"/>
+  <text x="16" y="72" class="dg-fs-sm dg-mono">send()</text>
+  <text x="16" y="88" class="dg-fs-sm dg-muted">앱 스레드</text>
+
+  <rect class="dg-node" x="120" y="54" width="124" height="42" rx="4"/>
+  <text x="128" y="72" class="dg-fs-sm">직렬화</text>
+  <text x="128" y="88" class="dg-fs-sm">파티셔너</text>
+
+  <rect class="dg-node dg-node--accent" x="252" y="54" width="140" height="42" rx="4"/>
+  <text x="260" y="72" class="dg-fs-sm dg-bold">배치 버퍼</text>
+  <text x="260" y="88" class="dg-fs-sm dg-mono">Accumulator</text>
+
+  <rect class="dg-node dg-node--alt" x="400" y="54" width="96" height="42" rx="4"/>
+  <text x="408" y="72" class="dg-fs-sm dg-bold">Sender</text>
+  <text x="408" y="88" class="dg-fs-sm dg-muted">I/O 스레드</text>
+
+  <rect class="dg-node dg-node--alt" x="504" y="54" width="96" height="42" rx="4"/>
+  <text x="512" y="72" class="dg-fs-sm dg-bold">브로커</text>
+  <text x="512" y="88" class="dg-fs-sm dg-muted">append</text>
+
+  <rect class="dg-node dg-node--alt" x="608" y="54" width="104" height="42" rx="4"/>
+  <text x="616" y="72" class="dg-fs-sm dg-bold">응답</text>
+  <text x="616" y="88" class="dg-fs-sm">→ 콜백</text>
+
+  <!-- 관측 지점 배지 -->
+  <circle class="dg-node dg-node--accent" cx="322" cy="116" r="11"/>
+  <text x="322" y="121" class="dg-fs-sm dg-bold" text-anchor="middle">1</text>
+  <line class="dg-edge dg-edge--accent dg-edge--dotted" x1="322" y1="105" x2="322" y2="96"/>
+
+  <circle class="dg-node dg-node--accent" cx="396" cy="116" r="11"/>
+  <text x="396" y="121" class="dg-fs-sm dg-bold" text-anchor="middle">2</text>
+  <line class="dg-edge dg-edge--accent dg-edge--dotted" x1="396" y1="105" x2="396" y2="96"/>
+
+  <circle class="dg-node dg-node--accent" cx="500" cy="116" r="11"/>
+  <text x="500" y="121" class="dg-fs-sm dg-bold" text-anchor="middle">3</text>
+  <line class="dg-edge dg-edge--accent dg-edge--dotted" x1="500" y1="105" x2="500" y2="96"/>
+
+  <circle class="dg-node dg-node--accent" cx="660" cy="116" r="11"/>
+  <text x="660" y="121" class="dg-fs-sm dg-bold" text-anchor="middle">4</text>
+  <line class="dg-edge dg-edge--accent dg-edge--dotted" x1="660" y1="105" x2="660" y2="96"/>
+
+  <!-- ─── 카드 ─── -->
+  <rect class="dg-node" x="8" y="140" width="348" height="80" rx="4"/>
+  <text x="18" y="160" class="dg-fs-sm dg-bold">1 · <tspan class="dg-mono">buffer-available-bytes</tspan></text>
+  <text x="18" y="180" class="dg-fs-sm">쓰지 않고 남아 있는 버퍼 바이트 수</text>
+  <text x="18" y="198" class="dg-fs-sm">0 에 가까우면 <tspan class="dg-mono">send()</tspan> 가 블록됩니다</text>
+  <text x="18" y="214" class="dg-fs-sm dg-muted">→ 브로커 지연 · <tspan class="dg-mono">buffer.memory</tspan> 부족을 의심</text>
+
+  <rect class="dg-node" x="364" y="140" width="348" height="80" rx="4"/>
+  <text x="374" y="160" class="dg-fs-sm dg-bold">2 · <tspan class="dg-mono">record-queue-time-avg</tspan></text>
+  <text x="374" y="180" class="dg-fs-sm">배치가 전송 버퍼에 머문 평균 시간(ms)</text>
+  <text x="374" y="198" class="dg-fs-sm"><tspan class="dg-mono">linger.ms</tspan>·<tspan class="dg-mono">batch.size</tspan> 조정 결과가 보입니다</text>
+  <text x="374" y="214" class="dg-fs-sm dg-muted">→ 크게 튀면 Sender 가 못 따라가는 상태</text>
+
+  <rect class="dg-node" x="8" y="228" width="348" height="80" rx="4"/>
+  <text x="18" y="248" class="dg-fs-sm dg-bold">3 · <tspan class="dg-mono">request-latency-avg</tspan></text>
+  <text x="18" y="268" class="dg-fs-sm">요청 하나의 평균 왕복 시간(ms)</text>
+  <text x="18" y="286" class="dg-fs-sm"><tspan class="dg-mono">acks=all</tspan> 이면 ISR 복제 대기가 포함됩니다</text>
+  <text x="18" y="302" class="dg-fs-sm dg-muted">→ 브로커·네트워크·ISR 상태를 봅니다</text>
+
+  <rect class="dg-node" x="364" y="228" width="348" height="80" rx="4"/>
+  <text x="374" y="248" class="dg-fs-sm dg-bold">4 · <tspan class="dg-mono">record-send-rate</tspan> / <tspan class="dg-mono">record-error-rate</tspan></text>
+  <text x="374" y="268" class="dg-fs-sm">초당 전송 레코드 수 / 초당 오류로 끝난 수</text>
+  <text x="374" y="286" class="dg-fs-sm">처리량 기준선과 실패율을 함께 봅니다</text>
+  <text x="374" y="302" class="dg-fs-sm dg-muted">→ error-rate 는 0 이 아니면 바로 조사</text>
+
+  <!-- 정리 -->
+  <line class="dg-grid" x1="8" y1="328" x2="712" y2="328"/>
+  <text x="8" y="346" class="dg-fs-sm">MBean: <tspan class="dg-mono">kafka.producer:type=producer-metrics,client-id="{client-id}"</tspan></text>
+  <text x="8" y="364" class="dg-fs-sm"><tspan class="dg-mono">record-send-rate</tspan>·<tspan class="dg-mono">record-error-rate</tspan> 는 토픽별 <tspan class="dg-mono">producer-topic-metrics</tspan> 로도 나옵니다.</text>
+  <text x="8" y="382" class="dg-fs-sm dg-muted">함께 보면 좋은 값: <tspan class="dg-mono">batch-size-avg</tspan> (배치가 실제로 커졌는지) · <tspan class="dg-mono">compression-rate-avg</tspan> (압축 효과)</text>
+</svg>

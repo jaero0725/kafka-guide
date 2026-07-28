@@ -1,0 +1,1219 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>7장 · 스토리지·리텐션·컴팩션 — Kafka Guide</title>
+  <meta name="description" content="Apache Kafka 4.3 기준 로그 세그먼트의 물리 구조와 활성 세그먼트, 세그먼트 단위로 일어나는 리텐션 삭제, cleanup.policy=compact와 tombstone, min.cleanable.dirty.ratio·delete.retention.ms·min/max.compaction.lag.ms, compact와 delete의 조합, Tiered Storage, 디스크 용량 산정, 페이지 캐시와 zero-copy를 정리합니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="basics" data-page="ch07"></div>
+
+  <main id="main" class="page" data-page-id="basics/ch07">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="ch01.html">기본개념</a></li>
+        <li><span aria-current="page">7장 · 스토리지·리텐션·컴팩션</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">기본개념 · 7장</p>
+      <h1>스토리지·리텐션·컴팩션</h1>
+      <p class="page__lead">
+        Kafka의 저장 계층은 단순합니다 — 파티션 하나가 디렉터리 하나이고, 그 안에 세그먼트 파일들이 있습니다.
+        그런데 이 단순함에서 실무 사고가 나옵니다. <strong>리텐션 삭제는 레코드 단위가 아니라 세그먼트 단위로 일어나고,
+        컴팩션은 활성 세그먼트를 건드리지 않으며, 즉시 실행되지도 않습니다.</strong>
+        이 세 가지를 정확히 알면 "보관 기간을 1시간으로 줄였는데 디스크가 안 줄어든다",
+        "컴팩션 토픽인데 중복 키가 보인다" 같은 문의가 사라집니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>로그 세그먼트의 파일 구성과 <strong>활성 세그먼트</strong>의 특별한 지위를 설명할 수 있습니다.</li>
+        <li>삭제가 <strong>세그먼트 단위</strong>로 일어난다는 점에서 <code>segment.ms</code>/<code>segment.bytes</code>가 실제 보관량을 좌우하는 이유를 설명할 수 있습니다.</li>
+        <li>컴팩션의 대상·시점·제외 조건을 정확히 말하고, tombstone의 수명을 설명할 수 있습니다.</li>
+        <li><code>compact,delete</code> 조합이 무엇을 하는지 알고, 언제 쓰는지 판단할 수 있습니다.</li>
+        <li>Tiered Storage의 설정 축과 <strong>제약(컴팩션 토픽 미지원)</strong>을 알 수 있습니다.</li>
+        <li>디스크 용량을 산정하고, 페이지 캐시와 zero-copy가 성능에 기여하는 원리를 설명할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="segment-anatomy">
+      <h2 id="segment-anatomy">로그 세그먼트의 물리 구조</h2>
+
+      <p>
+        공식 구현 문서는 저장 구조를 이렇게 설명합니다.
+        파티션이 두 개인 <code>my-topic</code>이라는 토픽의 로그는
+        <strong><code>my-topic-0</code>과 <code>my-topic-1</code> 두 디렉터리</strong>로 구성됩니다.
+        각 로그 파일은 <strong>자신이 담고 있는 첫 메시지의 오프셋으로 이름이 지어지며</strong>,
+        그래서 처음 생성되는 파일은 <code>00000000000000000000.log</code>가 됩니다.
+        이후 파일은 설정된 최대 로그 파일 크기(<var>S</var>)만큼 떨어진 정수 이름을 갖습니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-060">
+        <figcaption>
+          로그 세그먼트 물리 구조 — 파티션 디렉터리 안의 봉인된 세그먼트들과 하나뿐인 활성 세그먼트,
+          그리고 각 세그먼트에 딸린 인덱스 파일들의 관계
+        </figcaption>
+      </figure>
+
+      <figure class="code">
+        <figcaption>파티션 디렉터리의 실제 내용 — 세그먼트마다 파일 세트가 있습니다</figcaption>
+        <pre><code class="lang-bash">$ ls -1 /var/lib/kafka/data/orders-0/
+00000000000000000000.index                 # 오프셋 → 파일 위치 인덱스
+00000000000000000000.log                   # 레코드 배치 본문
+00000000000000000000.timeindex             # 타임스탬프 → 오프셋 인덱스
+00000000000000000000.snapshot              # 프로듀서 상태 스냅샷 (멱등성/트랜잭션용)
+00000000000000451209.index
+00000000000000451209.log
+00000000000000451209.timeindex
+00000000000000451209.snapshot
+00000000000000902688.index                 # ← 활성 세그먼트 (지금 append 되는 곳)
+00000000000000902688.log
+00000000000000902688.timeindex
+leader-epoch-checkpoint                    # 리더 에포크 기록
+partition.metadata</code></pre>
+      </figure>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>세그먼트를 구성하는 파일과 역할</caption>
+          <thead>
+            <tr><th scope="col">파일</th><th scope="col">역할</th><th scope="col">관련 설정</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>.log</code></th>
+              <td>레코드 배치 본문. 프로듀서가 보낸 형식 그대로 저장되어 <strong>변환 없이 네트워크로 전송</strong>할 수 있습니다</td>
+              <td><code>segment.bytes</code> · <code>segment.ms</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>.index</code></th>
+              <td>오프셋 → 파일 내 물리 위치 매핑. <strong>희소(sparse) 인덱스</strong>입니다</td>
+              <td><code>segment.index.bytes</code> · <code>index.interval.bytes</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>.timeindex</code></th>
+              <td>타임스탬프 → 오프셋 매핑. <code>--to-datetime</code> 오프셋 리셋과 시간 기반 리텐션에 쓰입니다</td>
+              <td><code>index.interval.bytes</code> (타임스탬프가 직전 인덱스보다 클 때만 기록)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>.snapshot</code></th>
+              <td>프로듀서 상태(PID·시퀀스 번호) 스냅샷. 멱등성·트랜잭션 복구에 사용됩니다</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>leader-epoch-checkpoint</code></th>
+              <td>리더 에포크 기록. 리더 교체 시 로그 절단(truncation) 지점을 정확히 판단하는 데 씁니다</td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="인덱스가 희소한 이유">
+        <p>
+          <code>index.interval.bytes</code>의 기본값은 <strong>4096</strong>입니다.
+          공식 문서는 이 기본값이 <strong>"대략 4096 바이트마다 메시지 하나를 인덱싱"</strong>하도록 만든다고 설명하고,
+          <strong>"바꿀 필요가 거의 없다"</strong>고 명시합니다.
+          더 자주 인덱싱하면 읽기가 정확한 위치에 더 가깝게 점프할 수 있지만 인덱스 파일이 커집니다.
+          모든 레코드를 인덱싱하지 않는 대신, 조회는 <strong>인덱스로 근처까지 점프한 뒤 순차 스캔</strong>합니다.
+        </p>
+      </aside>
+
+      <h3 id="active-segment">활성 세그먼트 — 하나뿐이고 특별합니다</h3>
+      <p>
+        파티션마다 <strong>지금 append되고 있는 세그먼트가 정확히 하나</strong> 있습니다. 이것이 <strong>활성 세그먼트</strong>입니다.
+        공식 문서는 쓰기에 대해 <strong>"로그는 항상 마지막 파일로 가는 순차 append를 허용한다"</strong>고 서술합니다.
+        활성 세그먼트가 특별한 이유는 두 가지입니다.
+      </p>
+      <ul>
+        <li><strong>리텐션 삭제 대상이 아닙니다.</strong> 삭제는 봉인된(rolled) 세그먼트에 대해서만 일어납니다.</li>
+        <li><strong>컴팩션 대상이 아닙니다.</strong> 공식 문서 표현 그대로
+          <strong>"마지막 세그먼트, 즉 현재 쓰여지고 있는 세그먼트를 제외한 모든 로그 세그먼트가 컴팩션 대상"</strong>이며,
+          <strong>"활성 세그먼트는 그 안의 모든 메시지가 최소 컴팩션 시간 lag보다 오래되었더라도 컴팩션되지 않습니다."</strong></li>
+      </ul>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>
+          <strong>활성 세그먼트는 리텐션 삭제도, 컴팩션도 적용받지 않습니다.</strong>
+          이 사실이 두 가지 현상을 설명합니다.
+        </p>
+        <ul>
+          <li><code>retention.ms=1000</code>처럼 극단적으로 짧게 줘도 <strong>활성 세그먼트의 데이터는 남아 있습니다.</strong>
+            세그먼트가 롤(roll)되어야 삭제 후보가 됩니다.</li>
+          <li>컴팩션 토픽에서 <strong>최근에 쓴 중복 키가 그대로 보입니다.</strong>
+            활성 세그먼트에 있기 때문입니다.</li>
+        </ul>
+        <p>
+          "컴팩션 토픽이니 키마다 값이 하나만 있어야 한다"는 전제로 만든 코드는 여기서 깨집니다.
+        </p>
+      </aside>
+
+      <h3 id="dump-log">세그먼트 내부를 직접 열어 보기</h3>
+      <figure class="code">
+        <figcaption><code>kafka-dump-log.sh</code> — 세그먼트와 인덱스 디코딩</figcaption>
+        <pre><code class="lang-bash"># 레코드 배치 헤더만 (본문 없이 구조 확인)
+bin/kafka-dump-log.sh --files /var/lib/kafka/data/orders-0/00000000000000000000.log
+
+# 레코드 본문까지 출력
+bin/kafka-dump-log.sh --print-data-log \
+  --files /var/lib/kafka/data/orders-0/00000000000000000000.log
+
+# 인덱스 파일 검증
+bin/kafka-dump-log.sh --index-sanity-check \
+  --files /var/lib/kafka/data/orders-0/00000000000000000000.index
+
+# 클러스터 메타데이터 로그 디코딩 (KRaft)
+bin/kafka-dump-log.sh --cluster-metadata-decoder \
+  --files metadata_log_dir/__cluster_metadata-0/00000000000000000000.log</code></pre>
+      </figure>
+
+      <aside class="note" data-label="로그 복구">
+        <p>
+          공식 문서는 기동 시 복구 절차를 설명합니다.
+          <strong>가장 최신 로그 세그먼트의 모든 메시지를 순회하며 각 엔트리가 유효한지 검증</strong>합니다.
+          엔트리가 유효하려면 크기와 오프셋의 합이 파일 길이보다 작고,
+          <strong>메시지 페이로드의 CRC32가 저장된 CRC와 일치</strong>해야 합니다.
+          손상이 감지되면 <strong>마지막 유효 오프셋까지 로그를 절단</strong>합니다.
+          이 복구를 병렬화하는 설정이 <code>num.recovery.threads.per.data.dir</code>(기본 2)입니다 —
+          디스크가 많은 노드에서 재시작 시간을 좌우합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="retention">
+      <h2 id="retention">리텐션 — 삭제는 세그먼트 단위입니다</h2>
+
+      <aside class="note note--danger" data-label="이 절의 핵심">
+        <p>
+          공식 구현 문서의 첫 문장이 전부입니다.
+          <strong>"데이터는 한 번에 하나의 로그 세그먼트 단위로 삭제된다(Data is deleted one log segment at a time)."</strong>
+          Kafka는 <strong>레코드를 개별적으로 지우지 않습니다.</strong>
+          그래서 <strong>세그먼트가 얼마나 크고 얼마나 자주 롤되는지가 실제 보관량을 결정</strong>합니다.
+        </p>
+      </aside>
+
+      <h3 id="retention-metrics">두 가지 삭제 기준</h3>
+      <p>공식 문서는 로그 매니저가 삭제 대상 세그먼트를 고르는 두 지표를 설명합니다.</p>
+      <ul>
+        <li><strong>시간 기준</strong> — 레코드 타임스탬프를 봅니다.
+          중요한 세부사항: <strong>세그먼트 파일 안의 가장 큰 타임스탬프가 그 세그먼트 전체의 리텐션 시간을 정합니다</strong>
+          (레코드 순서는 무관). 즉 세그먼트에 하나라도 최신 레코드가 있으면 그 세그먼트 전체가 남습니다.</li>
+        <li><strong>크기 기준</strong> — <strong>기본적으로 비활성화</strong>되어 있습니다(<code>retention.bytes=-1</code>).
+          활성화하면 파티션 전체 크기가 한도 안으로 들어올 때까지 가장 오래된 세그먼트를 계속 지웁니다.</li>
+      </ul>
+      <p>
+        두 정책이 동시에 켜져 있으면 <strong>어느 한쪽으로든 삭제 대상이 된 세그먼트는 삭제됩니다.</strong>
+      </p>
+
+      <figure class="diagram" data-diagram="D-061">
+        <figcaption>
+          retention 삭제 단위 — 세그먼트 단위로 삭제되기 때문에 <code>segment.ms</code>/<code>segment.bytes</code>가
+          실제 디스크 보관량을 좌우합니다. 기본값(1 GiB / 7일)에서 왜 "보관 기간을 줄여도 디스크가 안 줄어드는지" 보여줍니다.
+        </figcaption>
+      </figure>
+
+      <h3 id="retention-configs">리텐션과 세그먼트 설정</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>리텐션·세그먼트 토픽 설정 (Apache Kafka 4.3 기본값)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">기본값</th>
+              <th scope="col">설명</th>
+              <th scope="col">튜닝 포인트</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>retention.ms</code></th>
+              <td>604800000<br>(7일)</td>
+              <td><code>delete</code> 정책에서 로그를 보관하는 최대 시간. <code>-1</code>이면 무제한</td>
+              <td>공식 문서 표현으로 <strong>"컨슈머가 데이터를 얼마나 빨리 읽어야 하는지에 대한 SLA"</strong>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>retention.bytes</code></th>
+              <td><strong>-1</strong><br>(비활성)</td>
+              <td><strong>파티션 하나</strong>가 커질 수 있는 최대 크기</td>
+              <td><strong>파티션 레벨입니다.</strong> 토픽 전체 한도를 계산하려면 파티션 수를 곱하세요</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>segment.bytes</code></th>
+              <td>1073741824<br>(1 GiB)</td>
+              <td>세그먼트 파일 하나의 최대 크기</td>
+              <td>최소값이 1048576(1 MiB)입니다. 공식 문서: <strong>"세그먼트가 크면 파일이 적지만 리텐션 제어가 덜 세밀해집니다"</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>segment.ms</code></th>
+              <td>604800000<br>(7일)</td>
+              <td>세그먼트가 꽉 차지 않아도 <strong>강제로 롤</strong>하는 주기</td>
+              <td><strong>리텐션이 짧은 토픽에서 반드시 함께 줄여야 하는 값</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>segment.jitter.ms</code></th>
+              <td>0</td>
+              <td>예정된 롤 시각에서 무작위로 뺄 최대 지터</td>
+              <td>세그먼트 롤이 한꺼번에 몰리는 thundering herd를 완화합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>segment.index.bytes</code></th>
+              <td>10485760<br>(10 MiB)</td>
+              <td>오프셋 인덱스 최대 크기. <strong>미리 할당</strong>되고 롤 시에만 축소됩니다</td>
+              <td>공식 문서: <strong>"바꿀 필요가 거의 없습니다"</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>file.delete.delay.ms</code></th>
+              <td>60000<br>(1분)</td>
+              <td>파일시스템에서 실제로 지우기 전 대기 시간</td>
+              <td>세그먼트가 삭제 표시된 뒤 실제 용량이 즉시 줄지 않는 이유입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>index.interval.bytes</code></th>
+              <td>4096</td>
+              <td>인덱스 엔트리를 추가하는 간격</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>preallocate</code></th>
+              <td>false</td>
+              <td>새 세그먼트 생성 시 파일을 미리 할당</td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="retention.ms 만 줄이면 안 되는 이유">
+        <p>
+          기본값 조합을 그대로 두고 <code>retention.ms=3600000</code>(1시간)으로 바꿨다고 가정합니다.
+          <code>segment.bytes=1 GiB</code>, <code>segment.ms=7일</code>이므로,
+          <strong>트래픽이 적은 토픽은 1 GiB를 채우는 데도, 7일이 지나는 데도 오래 걸립니다.</strong>
+          그 사이 세그먼트는 계속 활성 상태이고, <strong>활성 세그먼트는 삭제되지 않습니다.</strong>
+          결과적으로 <strong>1시간 리텐션을 걸었는데 며칠 치 데이터가 남아 있습니다.</strong>
+        </p>
+        <p>
+          처방은 <strong><code>segment.ms</code>를 리텐션과 같은 자릿수로 함께 줄이는 것</strong>입니다.
+          경험적으로 <code>segment.ms</code>를 <code>retention.ms</code>의 <strong>1/4 ~ 1/10</strong> 정도로 두면
+          보관량이 목표에 근접합니다. 대신 세그먼트 파일 수와 열린 파일 핸들이 늘어납니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>짧은 리텐션 토픽 — 세그먼트 설정을 함께 조정</figcaption>
+        <pre><code class="lang-bash"># ✕ 이것만으로는 부족합니다
+bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+  --alter --entity-type topics --entity-name short-lived \
+  --add-config retention.ms=3600000
+
+# ✓ 세그먼트 롤 주기와 크기를 함께 줄입니다
+bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+  --alter --entity-type topics --entity-name short-lived \
+  --add-config 'retention.ms=3600000,segment.ms=600000,segment.bytes=134217728'
+#                보관 1시간          세그먼트 10분 롤    세그먼트 128MiB
+
+# 현재 적용된 설정 확인 (동적 설정만 보입니다)
+bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+  --describe --entity-type topics --entity-name short-lived</code></pre>
+      </figure>
+
+      <aside class="note" data-label="브로커 레벨 대응 설정">
+        <p>
+          토픽 설정에는 브로커 레벨의 대응 설정(<em>Server Default Property</em>)이 있습니다.
+          토픽에 오버라이드가 없으면 브로커 값이 쓰입니다.
+        </p>
+        <div class="table-scroll">
+          <table class="config-table config-table--plain">
+            <tbody>
+              <tr><th scope="row"><code>retention.ms</code></th><td><code>log.retention.ms</code> (<code>log.retention.hours</code> 기본 168시간이 3차 후순위)</td></tr>
+              <tr><th scope="row"><code>retention.bytes</code></th><td><code>log.retention.bytes</code></td></tr>
+              <tr><th scope="row"><code>segment.bytes</code></th><td><code>log.segment.bytes</code> (기본 1073741824)</td></tr>
+              <tr><th scope="row"><code>segment.ms</code></th><td><code>log.roll.ms</code></td></tr>
+              <tr><th scope="row"><code>cleanup.policy</code></th><td><code>log.cleanup.policy</code></td></tr>
+              <tr><th scope="row"><code>max.message.bytes</code></th><td><code>message.max.bytes</code> (기본 1048588)</td></tr>
+              <tr><th scope="row"><code>file.delete.delay.ms</code></th><td><code>log.segment.delete.delay.ms</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>리텐션 관련 출제 지점입니다.</p>
+        <ul>
+          <li><code>retention.ms</code> 기본값 <strong>604800000(7일)</strong>, <code>retention.bytes</code> 기본값 <strong>-1(비활성)</strong>.
+            <strong>크기 기준 리텐션은 기본적으로 꺼져 있습니다.</strong></li>
+          <li><code>retention.bytes</code>는 <strong>파티션 단위</strong>입니다. 토픽 전체가 아닙니다.</li>
+          <li><strong>삭제는 세그먼트 단위</strong>이고, <strong>활성 세그먼트는 대상이 아닙니다.</strong></li>
+          <li>시간 기준 판정은 <strong>세그먼트 안의 가장 큰 타임스탬프</strong>로 합니다.</li>
+          <li>두 정책이 함께 켜져 있으면 <strong>어느 한쪽 조건이라도 충족하면 삭제</strong>됩니다.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="compaction">
+      <h2 id="compaction">로그 컴팩션</h2>
+
+      <p>
+        컴팩션의 보장은 한 문장입니다. 공식 문서 표현으로
+        <strong>"로그 컴팩션은 단일 토픽 파티션의 로그 안에서 각 메시지 키에 대해
+        최소한 마지막으로 알려진 값을 항상 보존한다"</strong>는 것입니다.
+        시간 기반 리텐션이 <strong>거친(coarse-grained)</strong> 보관이라면,
+        컴팩션은 <strong>레코드별로 더 세밀한(finer-grained) 보관</strong>을 제공합니다.
+      </p>
+      <p>
+        용도는 명확합니다 — <strong>애플리케이션 크래시나 시스템 장애 후 상태 복원</strong>,
+        <strong>운영 중 재시작 후 캐시 재적재</strong>입니다.
+        공식 문서는 컴팩션 덕분에 <strong>"로그가 최근에 변경된 키뿐 아니라 모든 키의 최종 값에 대한
+        완전한 스냅샷을 담게 된다"</strong>고 설명합니다.
+        그래서 다운스트림 컨슈머가 <strong>전체 변경 이력을 보관하지 않고도</strong> 자신의 상태를 복원할 수 있습니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-062">
+        <figcaption>
+          컴팩션 before/after — 키가 중복된 로그가 컴팩션을 거쳐 키별 최신값만 남는 과정.
+          tombstone 처리와 <strong>활성 세그먼트가 제외되는 것</strong>을 함께 표시합니다.
+          버튼으로 컴팩션을 실행해 로그 head와 tail의 변화를 관찰합니다.
+        </figcaption>
+      </figure>
+
+      <h3 id="head-and-tail">head 와 tail</h3>
+      <p>
+        컴팩션을 이해하는 열쇠는 로그를 <strong>head</strong>와 <strong>tail</strong>로 나누어 보는 것입니다.
+      </p>
+      <ul>
+        <li><strong>head</strong> — 기존 Kafka 로그와 동일합니다. <strong>오프셋이 촘촘하고 순차적</strong>이며 모든 메시지를 보존합니다.
+          이 구간이 "아직 정리되지 않은(dirty)" 부분입니다.</li>
+        <li><strong>tail</strong> — 컴팩션이 적용된 구간입니다. 키별 최신 값만 남습니다.</li>
+      </ul>
+      <p>
+        공식 문서가 강조하는 세부사항 두 개입니다.
+      </p>
+      <ul>
+        <li><strong>tail의 메시지는 처음 쓰였을 때 부여된 오프셋을 그대로 유지합니다.</strong> 오프셋은 절대 바뀌지 않습니다.</li>
+        <li><strong>모든 오프셋은 여전히 유효한 위치입니다.</strong>
+          컴팩션으로 사라진 오프셋에서 읽기를 시작하면 <strong>그 다음으로 존재하는 오프셋의 메시지부터</strong> 반환됩니다.
+          공식 문서 예시: 오프셋 36, 37, 38이 모두 동등한 위치이고, 그중 어디서 시작해도 38부터 시작하는 메시지 세트를 받습니다.</li>
+      </ul>
+
+      <h3 id="compaction-guarantees">컴팩션이 보장하는 4가지</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>공식 문서가 명시하는 컴팩션 보장</caption>
+          <thead>
+            <tr><th scope="col">보장</th><th scope="col">내용</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">① head를 따라잡은 컨슈머는 모든 메시지를 봅니다</th>
+              <td>head 구간 안에 머무는 컨슈머는 쓰인 모든 메시지를 <strong>순차 오프셋으로</strong> 봅니다.
+                <code>min.compaction.lag.ms</code>로 <strong>head에 최소 얼마나 남을지</strong>를 보장할 수 있고,
+                <code>max.compaction.lag.ms</code>로 <strong>컴팩션 대상이 되기까지의 최대 지연</strong>을 보장할 수 있습니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">② 순서는 항상 유지됩니다</th>
+              <td>컴팩션은 <strong>메시지를 재정렬하지 않습니다.</strong> 일부를 제거할 뿐입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">③ 오프셋은 절대 바뀌지 않습니다</th>
+              <td>오프셋은 로그 안의 위치에 대한 영구 식별자입니다.</td>
+            </tr>
+            <tr>
+              <th scope="row">④ 처음부터 읽는 컨슈머는 모든 키의 최종 상태를 봅니다</th>
+              <td>추가로, <strong><code>delete.retention.ms</code>보다 짧은 시간 안에 head에 도달하면</strong>
+                삭제된 레코드의 tombstone도 모두 봅니다.
+                <strong>그보다 뒤처지면 tombstone을 놓칠 수 있습니다</strong> — tombstone 제거가 읽기와 동시에 진행되기 때문입니다.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="tombstone">tombstone — null value 로 삭제를 표현합니다</h3>
+      <p>
+        공식 문서 정의입니다. <strong>키가 있고 페이로드가 null인 메시지는 로그에서의 삭제로 취급</strong>되며,
+        이런 레코드를 <strong>tombstone</strong>이라고 부릅니다.
+        이 삭제 마커는 <strong>그 키의 이전 메시지를 모두 제거</strong>합니다(이후에 오는 같은 키의 메시지도 마찬가지).
+      </p>
+      <p>
+        그런데 tombstone 자체도 영원히 남지 않습니다.
+        <strong>일정 시간이 지나면 공간을 회수하기 위해 tombstone도 로그에서 정리</strong>됩니다.
+        그 시점을 정하는 것이 <code>delete.retention.ms</code>(기본 <strong>86400000</strong>, 1일)입니다.
+      </p>
+
+      <aside class="note note--warn" data-label="delete.retention.ms 의 진짜 의미">
+        <p>
+          공식 문서의 설명은 단순히 "tombstone 보관 기간"이 아닙니다.
+          <strong>"이 설정은 컨슈머가 오프셋 0부터 읽기 시작했을 때
+          최종 상태의 유효한 스냅샷을 얻으려면 읽기를 얼마나 안에 끝내야 하는지에 대한 상한을 준다"</strong>는 것입니다.
+        </p>
+        <p>
+          즉 <strong>초기 적재(bootstrap)에 <code>delete.retention.ms</code>보다 오래 걸리는 컨슈머는
+          tombstone을 놓쳐 이미 삭제된 키를 살아 있다고 착각할 수 있습니다.</strong>
+          컴팩션 토픽에서 대량 초기 적재를 하는 애플리케이션이라면
+          이 값을 적재 소요 시간보다 넉넉하게 잡아야 합니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>tombstone 전송 — value 를 null 로</figcaption>
+        <pre><code class="lang-java">// 키는 반드시 있어야 합니다. value 만 null 입니다.
+producer.send(new ProducerRecord&lt;String, String&gt;("user-profiles", userId, null));
+
+// ✕ 키가 null 이면 tombstone 이 아닙니다 — 컴팩션이 대상으로 삼을 키가 없습니다.
+producer.send(new ProducerRecord&lt;String, String&gt;("user-profiles", null, null));</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="컴팩션에는 키가 필수입니다">
+        <p>
+          컴팩션은 <strong>키별로 최신 값을 남기는</strong> 동작이므로
+          <strong>키가 없는(null key) 레코드에는 적용할 수 없습니다.</strong>
+          <code>cleanup.policy=compact</code> 토픽에 키 없는 레코드를 보내면
+          정리 기준이 없어 로그가 계속 자랍니다.
+          컴팩션 토픽으로 설계하는 순간 <strong>프로듀서가 항상 키를 지정하도록</strong> 강제해야 합니다.
+        </p>
+      </aside>
+
+      <h3 id="cleaner-scheduling">언제 컴팩션이 일어나는가 — 즉시가 아닙니다</h3>
+      <p>
+        컴팩션은 <strong>로그 클리너(log cleaner)</strong>가 처리합니다.
+        공식 문서 정의로는 <strong>"로그 세그먼트 파일을 재복사하면서,
+        키가 로그 head에 다시 나타나는 레코드를 제거하는 백그라운드 스레드 풀"</strong>입니다.
+        각 클리너 스레드는 다음과 같이 동작합니다.
+      </p>
+      <ol>
+        <li><strong>log head 대 log tail 비율이 가장 높은 로그</strong>를 고릅니다.</li>
+        <li>head에 있는 각 키의 <strong>마지막 오프셋에 대한 간결한 요약</strong>을 만듭니다.</li>
+        <li>로그를 처음부터 끝까지 재복사하면서, <strong>뒤에 다시 나타나는 키를 제거</strong>합니다.
+          새로 만든 깨끗한 세그먼트는 즉시 로그에 교체(swap)되므로,
+          <strong>추가로 필요한 디스크 공간은 세그먼트 하나 분량</strong>입니다(로그 전체 복사가 아닙니다).</li>
+      </ol>
+      <p>
+        공식 문서는 요약 자료구조가 <strong>엔트리당 정확히 24바이트</strong>를 쓰는 해시 테이블이라고 밝힙니다.
+        그래서 <strong>8 GB 클리너 버퍼로 한 번의 반복에 약 366 GB의 log head를 정리</strong>할 수 있습니다(1 kB 메시지 기준).
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>컴팩션 관련 설정 (Apache Kafka 4.3 기본값)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">레벨</th>
+              <th scope="col">기본값</th>
+              <th scope="col">의미</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>cleanup.policy</code></th>
+              <td><span class="badge">topic</span></td>
+              <td><code>delete</code></td>
+              <td><code>delete</code> / <code>compact</code> / <code>delete,compact</code>. <strong>빈 목록이면 무한 보관</strong>(어떤 정리도 하지 않음)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>min.cleanable.dirty.ratio</code></th>
+              <td><span class="badge">topic</span></td>
+              <td><strong>0.5</strong></td>
+              <td>정리 대상이 되기 위한 dirty 비율 하한. 공식 문서 표현: <strong>"로그의 50% 넘게 컴팩션된 로그는 정리하지 않습니다"</strong> — 최대 낭비 공간을 50%로 묶습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>min.compaction.lag.ms</code></th>
+              <td><span class="badge">topic</span></td>
+              <td><strong>0</strong></td>
+              <td>메시지가 <strong>최소 이만큼은 uncompacted 상태로</strong> head에 남습니다. head를 따라잡은 컨슈머가 모든 변경을 볼 수 있게 보장합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>max.compaction.lag.ms</code></th>
+              <td><span class="badge">topic</span></td>
+              <td>9223372036854775807<br>(사실상 무제한)</td>
+              <td>메시지가 컴팩션 대상이 되지 않은 채 남을 수 있는 <strong>최대 시간</strong>. <strong>생산량이 적은 토픽</strong>이 무한정 정리되지 않는 것을 막습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>delete.retention.ms</code></th>
+              <td><span class="badge">topic</span></td>
+              <td>86400000<br>(1일)</td>
+              <td>tombstone 마커 보관 시간. 초기 적재 소요 시간의 상한이기도 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.cleaner.threads</code></th>
+              <td><span class="badge">broker</span></td>
+              <td><strong>1</strong></td>
+              <td>클리너 백그라운드 스레드 수. <strong>컴팩션 토픽이 많으면 늘려야 합니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.cleaner.io.max.bytes.per.second</code></th>
+              <td><span class="badge">broker</span></td>
+              <td>사실상 무제한</td>
+              <td>클리너의 읽기+쓰기 I/O 합계 상한. 프로듀서·컨슈머에 영향을 주지 않도록 <strong>스로틀</strong>할 수 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>log.cleaner.backoff.ms</code></th>
+              <td><span class="badge">broker</span></td>
+              <td>15000</td>
+              <td>정리할 로그가 없을 때의 대기 시간</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        공식 문서는 <code>min.cleanable.dirty.ratio</code>와 두 lag 설정의 <strong>결합 규칙</strong>을 정확히 서술합니다.
+        lag 설정이 함께 지정되면, 로그는 다음 중 <strong>하나라도</strong> 충족하는 즉시 컴팩션 대상이 됩니다.
+      </p>
+      <ol>
+        <li><strong>dirty 비율 임계값을 충족했고</strong>, 로그에 dirty 레코드가 <strong>최소 <code>min.compaction.lag.ms</code> 동안</strong> 있었을 때</li>
+        <li>로그에 dirty 레코드가 <strong>최대 <code>max.compaction.lag.ms</code> 기간 동안</strong> 있었을 때</li>
+      </ol>
+      <p>
+        <code>max.compaction.lag.ms</code>가 <strong>설정되지 않으면
+        <code>min.cleanable.dirty.ratio</code>를 넘지 않는 로그는 컴팩션되지 않습니다.</strong>
+        그리고 이 마감은 <strong>강한 보장이 아닙니다</strong> — 클리너 스레드 가용성과 실제 컴팩션 시간에 좌우됩니다.
+        공식 문서는 <code>uncleanable-partitions-count</code>,
+        <code>max-clean-time-secs</code>, <code>max-compaction-delay-secs</code> 메트릭을 모니터링하라고 권고합니다.
+      </p>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>컴팩션 관련 출제 지점을 모았습니다.</p>
+        <ul>
+          <li><strong>컴팩션은 중복을 즉시 제거하지 않습니다.</strong> 백그라운드 클리너가
+            <code>min.cleanable.dirty.ratio</code>(기본 <strong>0.5</strong>) 등의 조건을 만족할 때 수행합니다.</li>
+          <li><strong>활성 세그먼트는 컴팩션 대상이 아닙니다.</strong></li>
+          <li><strong>tombstone = 키 있음 + value null.</strong> <code>delete.retention.ms</code>(기본 <strong>1일</strong>) 후 제거됩니다.</li>
+          <li><strong>키가 없으면 컴팩션이 불가능</strong>합니다.</li>
+          <li><strong>오프셋은 바뀌지 않고</strong>, 사라진 오프셋으로 읽으면 <strong>다음 존재하는 오프셋</strong>부터 반환됩니다.</li>
+          <li><strong>순서는 재정렬되지 않습니다.</strong></li>
+          <li><code>min.compaction.lag.ms</code>는 <strong>하한</strong>(head 최소 체류), <code>max.compaction.lag.ms</code>는 <strong>상한</strong>(최대 미정리 시간)입니다.</li>
+        </ul>
+      </aside>
+
+      <h3 id="compact-delete">compact,delete 조합</h3>
+      <p>
+        <code>cleanup.policy</code>는 <strong>목록</strong>이므로 두 정책을 함께 지정할 수 있습니다.
+        공식 문서의 설명은 정확합니다 —
+        <strong>"이 경우 오래된 세그먼트는 리텐션 시간·크기 설정에 따라 폐기되고,
+        남아 있는 세그먼트는 컴팩션된다."</strong>
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>cleanup.policy</code> 값별 동작과 용도</caption>
+          <thead>
+            <tr><th scope="col">값</th><th scope="col">동작</th><th scope="col">대표 용도</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>delete</code> <span class="badge">기본값</span></th>
+              <td>리텐션 시간·크기를 넘긴 세그먼트를 폐기</td>
+              <td>이벤트 스트림, 로그, 메트릭</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compact</code></th>
+              <td>키별 최신 값을 보존. <strong>시간이 지나도 데이터가 사라지지 않습니다</strong></td>
+              <td>상태 저장 토픽, Streams changelog, Connect 내부 토픽, <code>__consumer_offsets</code></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>compact,delete</code></th>
+              <td>컴팩션 + <strong>오래된 세그먼트 폐기</strong>. 키별 최신 값도 리텐션이 지나면 사라집니다</td>
+              <td><strong>키 공간이 무한히 늘어나는</strong> 상태 토픽(예: 세션 ID, 주문 ID 키). 컴팩션만으로는 영원히 자랍니다</td>
+            </tr>
+            <tr>
+              <th scope="row">빈 목록</th>
+              <td><strong>어떤 정리도 하지 않습니다.</strong> 무한 보관</td>
+              <td>감사 로그 등 절대 지우면 안 되는 경우 (디스크 관리를 직접 해야 합니다)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="cleanup.policy 변경은 소급 적용되지 않습니다">
+        <p>
+          <code>delete</code>로 운영하던 토픽을 <code>compact</code>로 바꾸면
+          <strong>이미 리텐션으로 삭제된 데이터는 돌아오지 않습니다.</strong>
+          반대로 <code>compact</code>였던 토픽을 <code>delete</code>로 바꾸면
+          <strong>키별 최신 값이 리텐션 기준으로 지워지기 시작합니다</strong> —
+          상태 복원의 근거가 사라집니다.
+          이 변경으로 상태 저장 애플리케이션이 복구 불가에 빠지는 사고는
+          <a href="../cases/case08.html">케이스 8</a>에서 다룹니다.
+        </p>
+        <p>
+          그리고 <code>cleanup.policy=compact</code>인 토픽을 쓰려면
+          브로커의 로그 클리너가 켜져 있어야 합니다. <code>log.cleaner.enable</code>은 기본 <code>true</code>이며,
+          공식 문서는 이 설정이 <strong>deprecated이고 Kafka 5.0에서 제거될 예정</strong>이므로
+          <strong><code>false</code>로 설정하지 말라</strong>고 명시합니다.
+          끄면 <code>__consumer_offsets</code>를 포함한 컴팩션 토픽이 정리되지 않고 계속 자랍니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>컴팩션 토픽 생성과 전환</figcaption>
+        <pre><code class="lang-bash"># 생성 시 지정
+bin/kafka-topics.sh --create --topic user-profiles \
+  --bootstrap-server localhost:9092 \
+  --partitions 12 --replication-factor 3 \
+  --config cleanup.policy=compact \
+  --config min.cleanable.dirty.ratio=0.1 \
+  --config delete.retention.ms=604800000 \
+  --config segment.ms=3600000
+
+# 키 공간이 계속 늘어나는 상태 토픽 → compact,delete 로
+bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+  --alter --entity-type topics --entity-name session-state \
+  --add-config 'cleanup.policy=compact,delete,retention.ms=2592000000'
+#                컴팩션 + 30일 지난 세그먼트는 폐기</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="tiered-storage">
+      <h2 id="tiered-storage">Tiered Storage</h2>
+
+      <p>
+        공식 문서가 설명하는 동기는 명확합니다.
+        <strong>Kafka 데이터는 대부분 tail read로 소비되며, tail read는 디스크 대신 OS 페이지 캐시가 처리합니다.</strong>
+        오래된 데이터는 백필이나 장애 복구 목적으로 <strong>드물게</strong> 디스크에서 읽힙니다.
+        그렇다면 그 오래된 데이터를 굳이 브로커 로컬 디스크에 둘 이유가 없습니다.
+      </p>
+      <p>
+        Tiered Storage는 클러스터를 <strong>로컬 계층과 원격 계층</strong>으로 나눕니다.
+        로컬 계층은 지금까지와 같은 브로커 로컬 디스크이고,
+        원격 계층은 HDFS나 S3 같은 외부 스토리지에 <strong>완료된(봉인된) 로그 세그먼트</strong>를 저장합니다(KIP-405).
+      </p>
+
+      <figure class="diagram" data-diagram="D-063">
+        <figcaption>
+          Tiered Storage — 로컬 디스크의 최근 세그먼트와 원격 스토리지의 오래된 세그먼트가 이루는 두 계층.
+          <code>local.retention.*</code>과 <code>retention.*</code>이 각각 어느 경계를 담당하는지 보여줍니다.
+        </figcaption>
+      </figure>
+
+      <h3 id="tiered-configs">설정 축 — 로컬과 전체가 따로입니다</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>Tiered Storage 설정 (Apache Kafka 4.3)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">레벨</th>
+              <th scope="col">기본값</th>
+              <th scope="col">의미</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>remote.log.storage.system.enable</code></th>
+              <td><span class="badge">broker</span></td>
+              <td><strong>false</strong></td>
+              <td>브로커에서 tiered storage 기능 전체를 켭니다. <strong>기본은 꺼져 있습니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>remote.log.storage.manager.class.name</code></th>
+              <td><span class="badge">broker</span></td>
+              <td>—</td>
+              <td><code>RemoteStorageManager</code> 구현 클래스. <strong>Apache Kafka는 구현체를 제공하지 않습니다</strong> — 반드시 지정해야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>remote.log.metadata.manager.class.name</code></th>
+              <td><span class="badge">broker</span></td>
+              <td>내부 토픽 기반 구현</td>
+              <td>원격 세그먼트 메타데이터의 수명 관리. 기본 구현은 내부 토픽을 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>remote.log.metadata.manager.listener.name</code></th>
+              <td><span class="badge">broker</span></td>
+              <td>—</td>
+              <td>기본 내부 토픽 구현을 쓸 때 <strong>필수</strong>입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>remote.storage.enable</code></th>
+              <td><span class="badge">topic</span></td>
+              <td><strong>false</strong></td>
+              <td>토픽 단위 스위치. 끌 때는 <code>remote.log.delete.on.disable=true</code>도 함께 설정해야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>local.retention.ms</code></th>
+              <td><span class="badge">topic</span></td>
+              <td><strong>-2</strong></td>
+              <td>로컬 세그먼트 보관 시간. <strong><code>-2</code>는 <code>retention.ms</code> 값을 쓴다는 뜻</strong>입니다. 유효값은 항상 <code>retention.ms</code> 이하여야 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>local.retention.bytes</code></th>
+              <td><span class="badge">topic</span></td>
+              <td><strong>-2</strong></td>
+              <td>로컬 세그먼트 보관 크기. <code>-2</code>는 <code>retention.bytes</code>를 씁니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>remote.fetch.max.wait.ms</code></th>
+              <td><span class="badge">broker</span></td>
+              <td>500</td>
+              <td>원격 fetch 파티션이 포함된 요청의 응답 대기 상한. <strong>모든 원격 파티션이 완료·실패하거나 이 시간이 지나야 응답</strong>합니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="핵심 구조">
+        <p>
+          <code>local.*</code> 접두어가 붙은 설정은 <strong>"로컬 파일이 원격으로 옮겨진 뒤 삭제되기까지"</strong>의
+          시간·크기를 정하고, 접두어가 없는 <code>retention.*</code>는 <strong>원격까지 포함한 전체 보관</strong>을 정합니다.
+          미설정이면 <code>retention.ms</code>/<code>retention.bytes</code> 값이 그대로 쓰입니다.
+        </p>
+        <p>
+          그리고 공식 문서가 짚는 중요한 조건 —
+          <strong>로컬 세그먼트는 원격에 업로드된 뒤에야 삭제 대상이 됩니다.</strong>
+          업로드가 밀리면 <code>local.retention.ms</code>를 짧게 줘도 로컬 디스크가 줄지 않습니다.
+        </p>
+      </aside>
+
+      <h3 id="tiered-limitations">제약 — 시험과 실무 모두에서 중요합니다</h3>
+
+      <aside class="note note--danger" data-label="공식 문서가 명시하는 제약">
+        <ul>
+          <li><strong>컴팩션 토픽을 지원하지 않습니다</strong> (No support for compacted topics).</li>
+          <li>브로커 레벨에서 tiered storage를 끄기 전에 <strong>활성화된 모든 토픽에서 먼저 비활성화</strong>해야 합니다.
+            그러지 않으면 <strong>기동 시 예외</strong>가 발생합니다.</li>
+          <li>tiered storage 관련 관리 작업은 <strong>3.0 이상 클라이언트</strong>에서만 지원됩니다.</li>
+          <li><strong>프로듀서 스냅샷 파일이 없는 로그 세그먼트를 지원하지 않습니다.</strong>
+            2.8.0 이전에 생성된 토픽에서 발생할 수 있습니다.</li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>
+          Tiered Storage에서 가장 자주 물어보는 것은 <strong>"컴팩션 토픽에는 쓸 수 없다"</strong>는 제약과
+          <strong><code>local.retention.*</code>의 기본값 <code>-2</code>가 "상위 <code>retention.*</code>를 따른다"는
+          의미</strong>입니다. 그리고 <strong>Apache Kafka는 <code>RemoteStorageManager</code> 구현체를 제공하지 않습니다</strong> —
+          "설정만 켜면 S3에 저장된다"는 선택지는 오답입니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>토픽 단위 tiered storage 켜기·끄기</figcaption>
+        <pre><code class="lang-bash"># 브로커 쪽이 이미 remote.log.storage.system.enable=true 인 상태에서
+bin/kafka-topics.sh --create --topic tiered-events \
+  --bootstrap-server localhost:9092 \
+  --config remote.storage.enable=true \
+  --config local.retention.ms=3600000 \
+  --config retention.ms=2592000000
+#          로컬 1시간            전체(원격 포함) 30일
+
+# 원격 로그를 읽기 전용으로 만들고 더 이상 업로드하지 않기
+bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+  --alter --entity-type topics --entity-name tiered-events \
+  --add-config 'remote.storage.enable=true,remote.log.copy.disable=true,local.retention.ms=-2,local.retention.bytes=-2'
+# ↑ local.retention 을 -2 로 되돌리는 이유: 복사가 꺼지면 로컬 리텐션 정책이
+#   더 이상 적용되지 않아 예상치 못한 디스크 풀이 생길 수 있습니다 (공식 문서 경고)
+
+# tiered storage 를 완전히 끄고 원격 로그도 삭제
+bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+  --alter --entity-type topics --entity-name tiered-events \
+  --add-config 'remote.storage.enable=false,remote.log.delete.on.disable=true'</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="capacity-planning">
+      <h2 id="capacity-planning">디스크 용량 산정</h2>
+
+      <p>
+        용량 산정의 기본 식은 단순합니다. 다만 <strong>실제로 필요한 값보다 항상 크게 나오는</strong> 항목들이 있어
+        그 부분을 빠뜨리면 배포 후에 디스크가 부족해집니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>기본 산정 식</figcaption>
+        <pre><code class="lang-text">파티션당 저장량 = 초당 유입 바이트 / 파티션 수 × 보관 기간(초) × (1 - 압축률)
+브로커당 필요 용량 = 파티션당 저장량 × 복제 계수 × (브로커당 파티션 수) + 여유
+
+전체 클러스터 필요 용량
+  = 초당 유입 바이트 × 보관 기간(초) × 복제 계수 × (1 - 압축률) × (1 + 여유율)
+
+예) 유입 50 MB/s, 보관 7일, RF=3, 압축률 70%(=0.7), 여유 30%
+    50 MB/s × 604800 s = 30,240,000 MB ≈ 30.24 TB   (원본, 압축 전)
+    30.24 TB × (1 - 0.7) = 9.07 TB                  (압축 후)
+    9.07 TB × 3 = 27.2 TB                           (복제 포함)
+    27.2 TB × 1.3 = 35.4 TB                         (여유 30%)
+    → 브로커 6대면 대당 약 5.9 TB</code></pre>
+      </figure>
+
+      <figure class="diagram" data-diagram="D-064">
+        <figcaption>
+          디스크 산정 계산기 — 처리량 · 보관 기간 · 복제 계수 · 압축률을 조절해
+          필요한 클러스터 용량과 브로커당 용량이 어떻게 변하는지 확인합니다.
+        </figcaption>
+      </figure>
+
+      <h3 id="capacity-gotchas">산정에서 빠뜨리기 쉬운 항목</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>기본 식에 더해야 하는 항목</caption>
+          <thead>
+            <tr><th scope="col">항목</th><th scope="col">왜 필요한가</th><th scope="col">권장</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">세그먼트 롤 오차</th>
+              <td>삭제가 세그먼트 단위이므로 <strong>항상 리텐션보다 조금 더</strong> 보관됩니다. 최악의 경우 세그먼트 하나 분량이 파티션마다 여분으로 남습니다</td>
+              <td><code>segment.bytes</code> × 파티션 수를 더하세요</td>
+            </tr>
+            <tr>
+              <th scope="row">인덱스 파일</th>
+              <td><code>segment.index.bytes</code>(기본 10 MiB)가 <strong>미리 할당</strong>되고 롤 시점에만 축소됩니다. 활성 세그먼트마다 오프셋 인덱스와 타임 인덱스가 있습니다</td>
+              <td>파티션 수 × 20 MiB 정도를 여유로</td>
+            </tr>
+            <tr>
+              <th scope="row">컴팩션 작업 공간</th>
+              <td>클리너가 세그먼트를 재복사하며 <strong>세그먼트 하나 분량의 추가 공간</strong>을 씁니다</td>
+              <td>컴팩션 토픽이 있으면 <code>segment.bytes</code> × 클리너 스레드 수</td>
+            </tr>
+            <tr>
+              <th scope="row">복구 여유</th>
+              <td>브로커 한 대가 빠지면 <strong>남은 브로커가 그 파티션의 리더/팔로워를 인수</strong>합니다</td>
+              <td>디스크 사용률을 <strong>60~70% 이하</strong>로 유지</td>
+            </tr>
+            <tr>
+              <th scope="row">파티션 재할당 중 이중 보관</th>
+              <td><code>kafka-reassign-partitions</code> 실행 중에는 <strong>기존 위치와 새 위치에 동시에</strong> 데이터가 존재합니다</td>
+              <td>이동시킬 파티션 크기만큼 여유 확보</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>file.delete.delay.ms</code></th>
+              <td>삭제 표시 후 기본 <strong>1분</strong> 동안 파일이 그대로 있습니다</td>
+              <td>급격한 유입 스파이크에서는 이 지연도 계산에 넣으세요</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="압축률을 낙관하지 마세요">
+        <p>
+          압축률은 데이터에 크게 좌우됩니다. JSON처럼 반복이 많은 텍스트는 70~80%까지 줄지만,
+          이미 압축된 바이너리나 랜덤한 ID 문자열은 거의 줄지 않습니다.
+          그리고 <strong>토픽의 <code>compression.type</code> 기본값은 <code>producer</code></strong>이므로
+          <strong>프로듀서가 압축하지 않으면 브로커도 압축하지 않습니다</strong>
+          (프로듀서의 <code>compression.type</code> 기본값은 <code>none</code>).
+          "압축이 켜져 있다고 생각했는데 아니었다"는 상황이 실제로 흔합니다.
+          압축 방식별 트레이드오프는 <a href="ch04.html">4장</a>에서 다룹니다.
+        </p>
+      </aside>
+
+      <figure class="code">
+        <figcaption>실제 사용량 확인 — <code>kafka-log-dirs</code></figcaption>
+        <pre><code class="lang-bash">bin/kafka-log-dirs.sh --bootstrap-server localhost:9092 \
+  --describe --topic-list orders,payments
+
+# 파티션별 size 가 JSON 으로 나옵니다. 브로커별 편중을 여기서 확인합니다.</code></pre>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pagecache-zerocopy">
+      <h2 id="pagecache-zerocopy">페이지 캐시와 zero-copy</h2>
+
+      <p>
+        Kafka가 JVM 위에서 동작하면서도 높은 처리량을 내는 이유는
+        <strong>자체 캐시를 만들지 않고 OS에 맡긴 설계</strong>에 있습니다.
+        공식 설계 문서의 서술을 따라가면 근거가 분명합니다.
+      </p>
+
+      <h3 id="pagecache">페이지 캐시 — 캐시를 직접 만들지 않는 선택</h3>
+      <p>
+        현대 OS는 <strong>남는 메모리 전부를 디스크 캐시로 돌리는 데 거의 주저하지 않습니다.</strong>
+        모든 디스크 읽기와 쓰기는 이 통합 캐시를 통과하고, 직접 I/O를 쓰지 않으면 이 기능을 끌 수 없습니다.
+        따라서 프로세스가 자체 캐시를 유지하면 <strong>같은 데이터가 OS 페이지 캐시에 중복 저장</strong>됩니다.
+      </p>
+      <p>공식 문서가 정리하는 결론은 세 가지입니다.</p>
+      <ul>
+        <li>남는 메모리 전체를 자동으로 쓸 수 있으므로 <strong>가용 캐시가 최소 2배</strong>가 됩니다.</li>
+        <li>개별 객체가 아니라 <strong>간결한 바이트 구조</strong>를 저장하므로 다시 2배 가까이 이득입니다.
+          공식 문서 예: <strong>32 GB 머신에서 GC 부담 없이 28~30 GB 캐시</strong>를 얻습니다.</li>
+        <li><strong>서비스가 재시작해도 캐시가 warm</strong>하게 유지됩니다.
+          in-process 캐시는 재구축해야 하며(10 GB 캐시면 10분이 걸릴 수 있음) 아니면 완전히 cold하게 시작합니다.</li>
+      </ul>
+      <p>
+        그래서 Kafka의 설계는 뒤집혀 있습니다 —
+        <strong>메모리에 최대한 담아 두고 공간이 부족해질 때 허둥지둥 flush하는 대신,
+        모든 데이터를 즉시 파일시스템의 영속 로그에 씁니다</strong>(반드시 디스크로 flush하지는 않고).
+        실질적으로는 커널의 페이지 캐시로 전달되는 것입니다.
+      </p>
+
+      <aside class="note" data-label="운영 함의">
+        <p>
+          이 설계에서 두 가지 운영 지침이 나옵니다.
+        </p>
+        <ul>
+          <li><strong>JVM 힙을 크게 잡을 이유가 없습니다.</strong>
+            데이터 캐싱은 페이지 캐시가 하므로, 힙을 키우면 오히려 페이지 캐시가 줄어듭니다.</li>
+          <li><strong><code>flush.messages</code>/<code>flush.ms</code>를 설정하지 마세요.</strong>
+            공식 문서가 직접 권고합니다 — <strong>"일반적으로 이를 설정하지 말고 내구성은 복제로 확보하며
+            OS의 백그라운드 flush 기능에 맡기라"</strong>는 것입니다. 그것이 더 효율적입니다.
+            두 설정의 기본값이 <code>9223372036854775807</code>(사실상 무제한)인 이유입니다.</li>
+        </ul>
+      </aside>
+
+      <h3 id="zerocopy">zero-copy — sendfile 로 복사 4번을 1번으로</h3>
+      <p>
+        브로커가 유지하는 메시지 로그는 <strong>프로듀서와 컨슈머가 쓰는 것과 같은 형식</strong>의
+        메시지 세트가 순차적으로 쓰인 파일 디렉터리일 뿐입니다.
+        이 <strong>공통 형식</strong>이 가장 중요한 최적화를 가능하게 합니다 —
+        <strong>페이지 캐시에서 소켓으로의 네트워크 전송</strong>입니다.
+        Linux에서는 <code>sendfile</code> 시스템 콜이 이를 담당합니다.
+      </p>
+      <p>공식 문서가 대조하는 두 경로입니다.</p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>파일 → 소켓 전송 경로 비교 (공식 설계 문서)</caption>
+          <thead>
+            <tr><th scope="col">방식</th><th scope="col">복사 횟수</th><th scope="col">경로</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">일반 경로</th>
+              <td><strong>4회 복사 + 시스템 콜 2회</strong></td>
+              <td>디스크 → 커널 페이지 캐시 → 유저 공간 버퍼 → 커널 소켓 버퍼 → NIC 버퍼</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>sendfile</code> (zero-copy)</th>
+              <td><strong>NIC 버퍼로의 마지막 복사만</strong></td>
+              <td>커널 페이지 캐시 → NIC 버퍼 (OS가 직접 전송)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        효과가 특히 큰 경우는 <strong>한 토픽에 컨슈머가 여럿</strong>일 때입니다.
+        <strong>데이터는 페이지 캐시로 정확히 한 번만 복사되고 소비마다 재사용</strong>되므로,
+        유저 공간으로 매번 복사할 필요가 없습니다.
+        공식 문서 표현으로 <strong>"메시지 소비 속도가 네트워크 연결의 한계에 근접"</strong>합니다.
+        그리고 <strong>컨슈머가 대체로 따라잡은 클러스터에서는 디스크 읽기 활동이 전혀 관찰되지 않습니다</strong> —
+        전부 캐시에서 서빙되기 때문입니다.
+      </p>
+
+      <aside class="note note--warn" data-label="SSL 을 켜면 zero-copy 가 꺼집니다">
+        <p>
+          공식 문서가 명시하는 중요한 제약입니다.
+          <strong>TLS/SSL 라이브러리는 유저 공간에서 동작하며, 커널 내 <code>SSL_sendfile</code>은
+          현재 Kafka에서 지원되지 않습니다.</strong>
+          이 제약 때문에 <strong>SSL이 활성화되면 <code>sendfile</code>이 사용되지 않습니다.</strong>
+        </p>
+        <p>
+          즉 <strong>보안을 켜는 것은 처리량 비용을 수반합니다.</strong>
+          "평문에서는 잘 나오던 처리량이 SASL_SSL로 바꾸자 떨어졌다"는 현상의 근본 원인이 이것입니다.
+          용량 산정과 벤치마크는 <strong>실제 운영과 같은 보안 설정</strong>에서 해야 합니다.
+        </p>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <p>
+          출제 지점 세 개입니다.
+        </p>
+        <ul>
+          <li>Kafka의 성능 근거는 <strong>순차 디스크 I/O + OS 페이지 캐시 + <code>sendfile</code> zero-copy</strong>입니다.
+            <strong>"인메모리 캐시를 크게 잡아서 빠르다"는 설명은 틀립니다.</strong></li>
+          <li><strong>프로듀서·브로커·컨슈머가 같은 레코드 배치 형식을 쓰기 때문에</strong>
+            브로커가 변환·재복사 없이 그대로 전송할 수 있습니다.</li>
+          <li><strong>SSL을 켜면 zero-copy가 비활성화됩니다.</strong></li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">흔한 오해</h2>
+
+      <aside class="note note--warn" data-label="오해 1">
+        <p>
+          <strong>"컴팩션은 중복을 즉시 제거한다"</strong> —
+          아닙니다. 컴팩션은 <strong>백그라운드 로그 클리너</strong>가 수행하며,
+          <code>min.cleanable.dirty.ratio</code>(기본 <strong>0.5</strong>)를 넘어야 대상이 됩니다.
+          게다가 <strong>활성 세그먼트는 아예 제외</strong>됩니다.
+          그래서 컴팩션 토픽을 처음부터 읽으면 <strong>같은 키가 여러 번 나오는 것이 정상</strong>입니다.
+          컨슈머는 <strong>"나중 값이 이긴다"는 전제로 항상 upsert</strong>해야 합니다 —
+          "키마다 한 건씩 온다"고 가정한 코드는 반드시 깨집니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="오해 2">
+        <p>
+          <strong>"<code>retention.ms</code>를 줄이면 디스크가 그만큼 줄어든다"</strong> —
+          아닙니다. <strong>삭제는 세그먼트 단위</strong>이고 <strong>활성 세그먼트는 대상이 아닙니다.</strong>
+          기본값 <code>segment.bytes=1 GiB</code>, <code>segment.ms=7일</code>을 그대로 둔 채
+          리텐션만 1시간으로 줄이면, 트래픽이 적은 토픽은 <strong>여전히 며칠 치를 들고 있습니다.</strong>
+          <code>segment.ms</code>를 함께 줄여야 합니다.
+          그리고 <code>file.delete.delay.ms</code>(기본 1분) 때문에 <strong>삭제 표시 후에도
+          잠시 파일이 남아</strong> 있습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="오해 3">
+        <p>
+          <strong>"<code>retention.bytes</code>는 토픽 전체 크기 한도다"</strong> —
+          <strong>파티션 단위</strong>입니다. 공식 문서가 직접 명시합니다 —
+          <strong>"이 한도는 파티션 레벨에서 적용되므로, 토픽의 바이트 리텐션을 계산하려면 파티션 수를 곱하라."</strong>
+          파티션 24개 토픽에 <code>retention.bytes=10737418240</code>(10 GiB)를 걸면
+          토픽 전체는 <strong>240 GiB</strong>까지 자랄 수 있고, 여기에 복제 계수까지 곱해야 실제 디스크 사용량이 나옵니다.
+          그리고 <strong>기본값은 <code>-1</code>로 비활성</strong>입니다 —
+          "크기 제한이 기본으로 걸려 있다"는 전제도 틀립니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="오해 4">
+        <p>
+          <strong>"<code>cleanup.policy</code>를 <code>compact</code>로 바꾸면 지금 있는 중복이 정리된다"</strong> —
+          앞으로 정리되기 시작할 뿐이고, <strong>이미 리텐션으로 삭제된 데이터는 돌아오지 않습니다.</strong>
+          반대 방향이 더 위험합니다 — <code>compact</code>였던 상태 토픽을 <code>delete</code>로 바꾸면
+          <strong>키별 최신 값이 리텐션 기준으로 사라지기 시작</strong>해 상태 복원이 불가능해집니다.
+          그리고 <strong>Tiered Storage는 컴팩션 토픽을 지원하지 않으므로</strong>
+          두 기능을 같은 토픽에 함께 쓸 수 없습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트 요약</h2>
+
+      <aside class="note note--exam" data-label="CCDAK · Fundamentals">
+        <p>7장 범위의 출제 지점을 한 곳에 모았습니다.</p>
+        <ul>
+          <li><strong>삭제는 세그먼트 단위</strong>. <strong>활성 세그먼트는 삭제도 컴팩션도 대상이 아닙니다.</strong></li>
+          <li><code>retention.ms</code> <strong>604800000</strong>(7일) / <code>retention.bytes</code> <strong>-1</strong>(비활성, <strong>파티션 단위</strong>)</li>
+          <li><code>segment.bytes</code> <strong>1073741824</strong>(1 GiB) / <code>segment.ms</code> <strong>604800000</strong>(7일)</li>
+          <li><code>cleanup.policy</code> 기본 <strong><code>delete</code></strong>. <code>compact</code>, <code>compact,delete</code> 조합 가능. <strong>빈 목록이면 무한 보관</strong></li>
+          <li><code>min.cleanable.dirty.ratio</code> <strong>0.5</strong> / <code>delete.retention.ms</code> <strong>86400000</strong>(1일) / <code>min.compaction.lag.ms</code> <strong>0</strong> / <code>max.compaction.lag.ms</code> <strong>사실상 무제한</strong></li>
+          <li><strong>tombstone = 키 있음 + value <code>null</code></strong>. 컴팩션에는 <strong>키가 필수</strong></li>
+          <li><strong>오프셋은 절대 바뀌지 않고 순서도 재정렬되지 않습니다.</strong> 컴팩션으로 사라진 오프셋에서 읽으면 <strong>다음 존재하는 오프셋</strong>부터 반환됩니다</li>
+          <li>세그먼트 파일: <code>.log</code> / <code>.index</code> / <code>.timeindex</code> / <code>.snapshot</code> + <code>leader-epoch-checkpoint</code></li>
+          <li>Tiered Storage: <code>remote.log.storage.system.enable</code>(브로커, 기본 <strong>false</strong>) + <code>remote.storage.enable</code>(토픽, 기본 <strong>false</strong>), <code>local.retention.ms/bytes</code> 기본 <strong>-2</strong>(상위 <code>retention.*</code>를 따름). <strong>컴팩션 토픽 미지원</strong></li>
+          <li>성능 근거는 <strong>순차 I/O + 페이지 캐시 + <code>sendfile</code></strong>. <strong>SSL을 켜면 zero-copy가 꺼집니다</strong></li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="CCDAK · Fundamentals — 크기 5종 정합">
+        <p>
+          메시지 크기 관련 설정은 <strong>5개가 서로 정합해야</strong> 합니다.
+          이 장에서 나오는 것은 브로커·토픽 쪽 둘입니다.
+        </p>
+        <div class="table-scroll">
+          <table class="config-table config-table--plain">
+            <tbody>
+              <tr><th scope="row"><code>message.max.bytes</code></th><td><span class="badge">broker</span> 기본 <strong>1048588</strong> — 허용되는 <strong>최대 레코드 배치</strong> 크기(<strong>압축 후</strong>)</td></tr>
+              <tr><th scope="row"><code>max.message.bytes</code></th><td><span class="badge">topic</span> 기본 <strong>1048588</strong> — 토픽 레벨 오버라이드</td></tr>
+              <tr><th scope="row"><code>max.request.size</code></th><td><span class="badge">producer</span> 기본 <strong>1048576</strong> — 요청 최대 크기이며 <strong>비압축 배치 크기의 상한</strong> 역할</td></tr>
+              <tr><th scope="row"><code>fetch.max.bytes</code></th><td><span class="badge">consumer</span> 기본 <strong>52428800</strong></td></tr>
+              <tr><th scope="row"><code>max.partition.fetch.bytes</code></th><td><span class="badge">consumer</span> 기본 <strong>1048576</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          <strong><code>message.max.bytes</code>는 1048576(1 MiB)이 아니라 1048588</strong>입니다.
+          경계값 문항에서 이 차이가 정답을 가릅니다. 5개가 어긋났을 때의 장애는
+          <a href="../cases/case10.html">케이스 10</a>에서 다룹니다.
+        </p>
+      </aside>
+
+      <aside class="note note--exam" data-label="CCAAK · Troubleshooting">
+        <p>
+          운영 쪽에서는 <strong>컴팩션이 밀리는 상황</strong>이 출제 대상입니다.
+          <code>log.cleaner.threads</code> 기본값이 <strong>1</strong>이라는 점이 핵심입니다 —
+          컴팩션 토픽이 많은 클러스터에서는 클리너가 따라가지 못해
+          <code>__consumer_offsets</code>를 포함한 내부 토픽이 계속 자랍니다.
+          공식 문서가 권고하는 모니터링 메트릭은 <code>uncleanable-partitions-count</code>,
+          <code>max-clean-time-secs</code>, <code>max-compaction-delay-secs</code>입니다.
+          클리너의 I/O가 클라이언트에 영향을 준다면
+          <code>log.cleaner.io.max.bytes.per.second</code>로 스로틀할 수 있습니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="check-quiz">
+      <h2 id="check-quiz">확인 문제</h2>
+      <p>
+        세그먼트 단위 삭제, 활성 세그먼트의 예외성, tombstone과 <code>delete.retention.ms</code>,
+        <code>retention.bytes</code>가 파티션 단위라는 점이 집중적으로 나옵니다.
+      </p>
+      <div class="quiz-embed" data-set="basics-ch07" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="ch08.html">
+          <span class="card__title">8장 · 스키마와 직렬화</span>
+          <span class="card__desc">Schema Registry, wire format, 호환성 매트릭스와 배포 순서.</span>
+          <span class="card__meta">CCDAK Fundamentals</span>
+        </a></li>
+        <li><a class="card" href="ch02.html">
+          <span class="card__title">2장 · 아키텍처와 핵심 개념</span>
+          <span class="card__desc">토픽·파티션·세그먼트 계층과 오프셋 4종, 복제와 ISR.</span>
+          <span class="card__meta">CCDAK Fundamentals</span>
+        </a></li>
+        <li><a class="card" href="../cases/case08.html">
+          <span class="card__title">케이스 8 · cleanup.policy 를 잘못 바꿨다</span>
+          <span class="card__desc">컴팩션 토픽을 delete 로 바꿨을 때 상태 복원이 불가능해진 사고.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../cases/case10.html">
+          <span class="card__title">케이스 10 · 메시지 크기 설정 5종의 불일치</span>
+          <span class="card__desc">브로커·토픽·프로듀서·컨슈머 설정이 어긋나 전송이 실패하는 과정.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc">토픽·브로커 설정 전체 표와 처리량/지연/내구성 프리셋.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../ccdak/domain-fundamentals.html">
+          <span class="card__title">CCDAK · Fundamentals</span>
+          <span class="card__desc">23% 도메인의 압축 정리와 외워야 할 기본값 표.</span>
+          <span class="card__meta">자격증</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>이 장의 설정 기본값·동작·인용 문장은 모두 아래에서 확인했습니다 (Apache Kafka 4.3 문서 기준).</p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#log" rel="noopener noreferrer">Implementation — Log</a> — 파티션 디렉터리 구조, 세그먼트 파일 이름 규칙, "데이터는 로그 세그먼트 단위로 삭제된다", 시간 기준 판정에 세그먼트의 최대 타임스탬프를 쓴다는 점, 크기 기준 리텐션이 기본 비활성, CRC 기반 복구</li>
+        <li><a href="https://kafka.apache.org/documentation/#compaction" rel="noopener noreferrer">Design — Log Compaction</a> — 컴팩션의 정의와 용도, head/tail 구조, 오프셋 불변성, tombstone과 delete retention point, 4가지 보장, 로그 클리너 동작 3단계와 24바이트 요약 테이블, <strong>활성 세그먼트가 컴팩션 대상이 아니라는 서술</strong>, lag 설정의 결합 규칙, 권장 모니터링 메트릭</li>
+        <li><a href="https://kafka.apache.org/documentation/#persistence" rel="noopener noreferrer">Design — Persistence</a> — 페이지 캐시 중심 설계, 32 GB 머신에서 28~30 GB 캐시, 재시작 후 warm 캐시</li>
+        <li><a href="https://kafka.apache.org/documentation/#maximizingefficiency" rel="noopener noreferrer">Design — Efficiency</a> — <code>sendfile</code>과 복사 4회 → 1회, 다중 컨슈머에서의 재사용, <strong>SSL 활성 시 <code>sendfile</code> 미사용</strong></li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs" rel="noopener noreferrer">Topic Configs</a> — <code>retention.ms</code>(604800000), <code>retention.bytes</code>(-1, 파티션 단위), <code>segment.bytes</code>(1073741824), <code>segment.ms</code>(604800000), <code>segment.index.bytes</code>(10485760), <code>index.interval.bytes</code>(4096), <code>cleanup.policy</code>(delete), <code>min.cleanable.dirty.ratio</code>(0.5), <code>delete.retention.ms</code>(86400000), <code>min/max.compaction.lag.ms</code>, <code>file.delete.delay.ms</code>(60000), <code>max.message.bytes</code>(1048588), <code>local.retention.ms/bytes</code>(-2), <code>remote.storage.enable</code>(false), <code>compression.type</code>(producer), <code>flush.messages</code>/<code>flush.ms</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> — <code>log.segment.bytes</code>, <code>log.retention.hours</code>(168), <code>log.cleaner.threads</code>(1), <code>log.cleaner.enable</code>(true, deprecated), <code>log.cleaner.io.max.bytes.per.second</code>, <code>log.cleaner.backoff.ms</code>(15000), <code>num.recovery.threads.per.data.dir</code>(2), <code>remote.log.storage.system.enable</code>(false), <code>remote.fetch.max.wait.ms</code>(500)</li>
+        <li><a href="https://kafka.apache.org/documentation/#tiered_storage" rel="noopener noreferrer">Operations — Tiered Storage</a> — tail read 동기, 로컬/원격 2계층, KIP-405, <code>RemoteStorageManager</code>를 Apache Kafka가 제공하지 않는다는 점, 원격 업로드 후에야 로컬 삭제 가능, 끄기 절차, <strong>제약 4가지(컴팩션 토픽 미지원 포함)</strong></li>
+        <li><a href="https://kafka.apache.org/documentation/#basic_ops_modify_topic" rel="noopener noreferrer">Operations — Basic Kafka Operations</a> — <code>kafka-configs.sh</code>·<code>kafka-log-dirs.sh</code> 사용법</li>
+        <li><a href="https://kafka.apache.org/documentation/#kraft_debug" rel="noopener noreferrer">Operations — KRaft (Debugging)</a> — <code>kafka-dump-log.sh</code>의 <code>--cluster-metadata-decoder</code> 사용법</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

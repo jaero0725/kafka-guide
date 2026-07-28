@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>케이스 3 · 브로커 장애 후 메시지가 유실됐다 — Kafka Guide</title>
+  <meta name="description" content="acks=1과 unclean.leader.election.enable=true 조합이 브로커 한 대의 장애를 데이터 유실로 바꾼 사고. 4.x 기본값 확인, ISR 축소·unclean 리더 선출 로그, 로그 트렁케이션, Eligible Leader Replicas까지 다룹니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="cases" data-page="case03"></div>
+
+  <main id="main" class="page" data-page-id="cases/case03">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="case01.html">실수 케이스</a></li>
+        <li><span aria-current="page">케이스 3 · 브로커 장애 후 유실</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">실수 케이스 · 3</p>
+      <h1>브로커 장애 후 메시지가 유실됐다</h1>
+      <p class="page__lead">
+        복제 계수 3에 브로커 3대. 그중 한 대가 디스크 장애로 내려갔을 뿐인데
+        <strong>결제 알림 이벤트 4만여 건이 사라졌습니다.</strong>
+        프로듀서는 성공 응답을 받았고 애플리케이션 로그에는 실패 기록이 하나도 없었습니다.
+        원인은 <code>acks=1</code>과 <code>unclean.leader.election.enable=true</code>라는
+        서로 무관해 보이는 두 설정의 조합이었습니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">이 케이스에서 얻어 갈 것</h2>
+      <ul>
+        <li><code>acks=1</code>이 <strong>"리더가 자기 로그에 썼다"</strong>까지만 보장하고 복제를 보장하지 않는다는 것을 설명할 수 있습니다.</li>
+        <li><code>unclean.leader.election.enable</code>의 <strong>Kafka 4.3 기본값</strong>과, 그것을 <code>true</code>로 바꿀 때 무엇을 포기하는지 알 수 있습니다.</li>
+        <li>ISR 축소·unclean 리더 선출·로그 트렁케이션이 로그에 어떻게 남는지 읽을 수 있습니다.</li>
+        <li>4.x의 Eligible Leader Replicas(KIP-966)가 이 문제를 어디까지 완화하는지 압니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="situation">
+      <h2 id="situation">상황</h2>
+
+      <p>
+        결제 알림 파이프라인입니다. <code>payment-events</code> 토픽은
+        <strong>파티션 12개, 복제 계수 3</strong>, 브로커 3대에서 <strong>일 200만 건</strong>을 받습니다.
+        결제 게이트웨이의 웹훅을 받아 이 토픽에 넣고, 알림·정산·리스크 세 서비스가 각각 소비합니다.
+      </p>
+      <p>
+        프로듀서 설정은 3년 전 다른 팀에서 복사해 온 것이었습니다.
+        <code>acks=1</code>과 <code>retries=3</code>이 명시되어 있었고 아무도 다시 검토하지 않았습니다.
+        더 중요한 것은 클러스터 쪽입니다. 운영팀은 예전 런북에 따라
+        <strong>"가용성 우선"</strong>이라는 이유로 <code>unclean.leader.election.enable=true</code>를
+        클러스터 전역 동적 설정으로 켜 두고 있었습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>사고 당시 설정 — 세 줄이 모여 유실 조건을 완성합니다</figcaption>
+        <pre><code class="lang-properties"># producer.properties (결제 웹훅 수신기)
+acks=1
+retries=3
+enable.idempotence=false      # acks=1 을 쓰려고 명시적으로 껐음
+
+# 브로커 동적 설정 (클러스터 전역)
+unclean.leader.election.enable=true
+
+# 토픽 payment-events
+#   min.insync.replicas 미설정 → 기본값 1</code></pre>
+      </figure>
+
+      <p>
+        화요일 03:12, <code>kafka-3</code>의 데이터 디스크에서 I/O 오류가 발생했습니다.
+        브로커 프로세스는 살아 있었지만 로그 디렉터리 쓰기가 느려졌고 03:14에 ISR에서 빠졌습니다.
+        03:19에 프로세스가 죽었고, 03:21에는 <code>kafka-1</code>도 같은 스토리지 볼륨 그룹 문제로 재시작됐습니다.
+      </p>
+      <p>
+        03:23에 클러스터는 정상으로 복귀했습니다. 알림은 다시 나갔고 lag도 정상이었습니다.
+        문제는 09:00 정산 대조에서 드러났습니다.
+        <strong>03:10~03:21 사이 결제 게이트웨이가 보낸 웹훅 중 41,882건이 <code>payment-events</code>에 없었습니다.</strong>
+        게이트웨이 전송 로그에는 전부 200 응답이 남아 있었습니다.
+      </p>
+
+      <aside class="note note--danger" data-label="유실이 일어난 두 지점">
+        <p>
+          <strong>1. <code>acks=1</code> — 복제되지 않은 구간</strong><br>
+          리더가 자기 로그에 쓰고 즉시 성공을 응답합니다. 그 시점에 팔로워는 아직 그 레코드를 받지 못했을 수 있습니다.
+          리더가 그 상태로 죽으면 그 구간은 <strong>어디에도 없습니다.</strong>
+          프로듀서는 이미 성공을 받았으므로 재시도도 하지 않습니다.
+        </p>
+        <p>
+          <strong>2. <code>unclean.leader.election.enable=true</code> — 뒤처진 레플리카가 리더가 됨</strong><br>
+          ISR에서 빠진(= 뒤처진) 레플리카가 리더가 되면 그 레플리카의 로그가 새로운 진실이 됩니다.
+          다른 레플리카는 복귀할 때 <strong>자기 로그를 새 리더 기준으로 잘라냅니다(truncate).</strong>
+          이미 커밋되어 컨슈머에게 보였던 데이터도 사라질 수 있습니다.
+        </p>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-112">
+        <figcaption>
+          <code>acks=1</code> + unclean 리더 선출이 유실을 만드는 순서 —
+          정상 복제 구간, 리더만 기록한 구간, 그리고 뒤처진 레플리카가 리더가 되어 로그가 잘리는 시점
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="symptoms">
+      <h2 id="symptoms">관측된 증상</h2>
+
+      <h3 id="metrics-shape">메트릭이 어떻게 보였는가</h3>
+      <ul>
+        <li><strong><code>UnderReplicatedPartitions</code></strong>: 03:14에 0에서 4로, 03:19에 12로 올라갔습니다. 이 지표에는 알림이 걸려 있었고 정상적으로 울렸습니다.</li>
+        <li><strong><code>OfflinePartitionsCount</code></strong>: 03:21~03:22 사이 짧게 3까지 올랐습니다.</li>
+        <li><strong><code>ActiveControllerCount</code></strong>: 항상 1. 컨트롤러 쿼럼 자체는 정상이었습니다.</li>
+        <li><strong>파티션 log-end-offset</strong>: 이것이 결정적입니다. <code>payment-events-7</code>의 log-end-offset이
+          03:21에 <strong>88213904에서 88208442로 감소</strong>했습니다.
+          오프셋은 단조 증가해야 하므로 <strong>줄어들었다면 로그가 잘렸다는 뜻</strong>입니다.</li>
+        <li><strong>프로듀서 <code>record-error-rate</code></strong>: 0. 프로듀서는 실패를 하나도 겪지 않았습니다.</li>
+      </ul>
+
+      <h3 id="broker-log-isr">브로커 로그 — ISR 축소</h3>
+      <p>
+        리더 브로커가 팔로워를 ISR에서 제거할 때 남기는 로그입니다.
+        <code>Partition</code> 클래스가 출력하며 뒤처진 레플리카의 <code>endOffset</code>과
+        <code>lastCaughtUpTimeMs</code>를 함께 찍어 줍니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>kafka-2 server.log 03:14 — 팔로워 3이 ISR에서 빠집니다</figcaption>
+        <pre><code class="lang-bash">INFO [Partition payment-events-7 broker=2] Shrinking ISR from 2,1,3 to 2,1. Leader: (highWatermark: 88210110, endOffset: 88213904). Out of sync replicas: (brokerId: 3, endOffset: 88208442, lastCaughtUpTimeMs: 1761023641118).
+INFO [Partition payment-events-4 broker=2] Shrinking ISR from 2,3,1 to 2,1. Leader: (highWatermark: 88109770, endOffset: 88112390). Out of sync replicas: (brokerId: 3, endOffset: 88106001, lastCaughtUpTimeMs: 1761023641131).</code></pre>
+      </figure>
+
+      <aside class="note" data-label="이 로그에서 읽을 것">
+        <p>
+          <code>highWatermark: 88210110</code>과 <code>endOffset: 88213904</code>의 차이 <strong>3794건</strong>이
+          "리더는 썼지만 아직 ISR 전원이 복제하지 못한" 구간입니다.
+          <code>acks=all</code>이었다면 프로듀서는 이 구간에 대해 <strong>아직 성공 응답을 받지 못한 상태</strong>였고,
+          리더가 죽으면 재시도로 복구되었을 것입니다.
+          <code>acks=1</code>이었기 때문에 프로듀서는 이미 성공을 받아 버렸습니다.
+        </p>
+        <p>
+          <code>replica.lag.time.max.ms</code>의 기본값은 <strong>30000</strong>(30초)입니다.
+          팔로워가 이 시간 동안 fetch 요청을 보내지 않거나 리더의 log end offset까지 따라오지 못하면
+          리더가 ISR에서 제거합니다.
+        </p>
+      </aside>
+
+      <h3 id="controller-log">컨트롤러 로그 — unclean 리더 선출</h3>
+      <p>
+        여기가 핵심입니다. KRaft 컨트롤러는 <strong>clean 선출은 TRACE로만</strong> 남기고,
+        <strong>unclean 선출은 데이터 유실을 유발할 수 있으므로 반드시 INFO로</strong> 남깁니다.
+        소스 주석에도 그 이유가 적혀 있습니다. 즉 이 줄이 보이면 유실을 의심해야 합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>액티브 컨트롤러 로그 03:21 — 이 줄이 유실의 확정 증거입니다</figcaption>
+        <pre><code class="lang-bash">INFO [QuorumController id=2] Setting new leader for topicId hR9pQ2vLT4ac-5Wm0eXpZQ, partition 7 to 3 using an unclean election. Previous partition: PartitionRegistration(replicas=[2, 1, 3], isr=[2], leader=2, leaderEpoch=41, ...), change record: PartitionChangeRecord(partitionId=7, topicId=hR9pQ2vLT4ac-5Wm0eXpZQ, isr=[3], leader=3, leaderRecoveryState=1, ...)</code></pre>
+      </figure>
+
+      <aside class="note note--danger" data-label="change record 에서 읽을 것">
+        <p>
+          <code>isr=[3]</code> — unclean 선출이 일어나면 컨트롤러는
+          <strong>ISR을 새 리더 하나로 강제 설정</strong>합니다. 나머지는 전부 ISR에서 빠집니다.
+        </p>
+        <p>
+          <code>leaderRecoveryState=1</code> — <code>RECOVERING</code> 상태입니다.
+          이 파티션이 unclean 선출로 리더를 얻었다는 표시입니다.
+        </p>
+      </aside>
+
+      <h3 id="follower-truncate">팔로워 로그 — 트렁케이션</h3>
+      <p>
+        기존 리더였던 브로커 2가 복귀하면 새 리더(브로커 3)를 따라야 하므로 자기 로그를 잘라냅니다.
+        <code>UnifiedLog</code>가 아래 형태로 남깁니다.
+        high watermark 아래로 자르는 WARN은 <strong>"이미 컨슈머에게 보였던 데이터를 버린다"</strong>는 뜻입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>kafka-2 server.log 03:22</figcaption>
+        <pre><code class="lang-bash">WARN [UnifiedLog partition=payment-events-7, dir=/var/lib/kafka/data] Truncating payment-events-7 to offset 88208442 below high watermark 88210110
+INFO [UnifiedLog partition=payment-events-7, dir=/var/lib/kafka/data] Truncating to offset 88208442</code></pre>
+      </figure>
+
+      <h3 id="consumer-log">컨슈머 로그 — 오프셋이 범위를 벗어난다</h3>
+      <p>
+        이미 88210500까지 읽고 커밋한 컨슈머는 로그가 88208442로 잘린 뒤
+        자기 커밋 오프셋이 로그 끝보다 큰 상태가 됩니다. <code>FetchCollector</code>가 이를 감지합니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>notification-service 로그 03:23</figcaption>
+        <pre><code class="lang-bash">INFO [Consumer clientId=notifier-1, groupId=payment-notifier] Fetch position FetchPosition{offset=88210500, offsetEpoch=Optional[41], currentLeader=LeaderAndEpoch{leader=Optional[kafka-3:9092 (id: 3 rack: null)], epoch=42}} is out of range for partition payment-events-7, resetting offset</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="이 로그가 사고를 한 번 더 키웁니다">
+        <p>
+          이 컨슈머의 <code>auto.offset.reset</code>이 <code>earliest</code>였다면
+          잘린 로그의 시작부터 <strong>전체를 다시 처리</strong>합니다 (중복 알림 발송).
+          <code>latest</code>였다면 <strong>잘린 지점부터 새 데이터만</strong> 읽습니다 (추가 누락).
+          어느 쪽이든 사고입니다. 이 분기의 상세는 <a href="case01.html">케이스 1</a>을 보세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="root-cause">
+      <h2 id="root-cause">원인 분석</h2>
+
+      <h3 id="step1-topic-describe">1단계 — 토픽 상태를 본다</h3>
+      <p>
+        <code>kafka-topics --describe</code>는 4.x에서 <code>Elr</code>·<code>LastKnownElr</code> 컬럼을 함께 출력합니다.
+        ISR이 리더 하나로 줄어든 파티션이 바로 보입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>토픽 상태 — <code>Isr</code>이 한 대뿐인 파티션이 위험 구간입니다</figcaption>
+        <pre><code class="lang-bash">$ kafka-topics.sh --bootstrap-server kafka-1:9092 --describe --topic payment-events
+
+Topic: payment-events	TopicId: hR9pQ2vLT4ac-5Wm0eXpZQ	PartitionCount: 12	ReplicationFactor: 3	Configs: retention.ms=604800000
+	Topic: payment-events	Partition: 0	Leader: 1	Replicas: 1,2,3	Isr: 1,2,3	Elr: N/A	LastKnownElr: N/A
+	Topic: payment-events	Partition: 4	Leader: 3	Replicas: 2,3,1	Isr: 3	Elr: N/A	LastKnownElr: N/A
+	Topic: payment-events	Partition: 7	Leader: 3	Replicas: 2,1,3	Isr: 3	Elr: N/A	LastKnownElr: N/A
+
+$ # 위험 파티션만 골라 보는 옵션
+$ kafka-topics.sh --bootstrap-server kafka-1:9092 --describe --under-replicated-partitions
+$ kafka-topics.sh --bootstrap-server kafka-1:9092 --describe --unavailable-partitions
+$ kafka-topics.sh --bootstrap-server kafka-1:9092 --describe --at-min-isr-partitions</code></pre>
+      </figure>
+
+      <h3 id="step2-configs">2단계 — 그 설정이 정말 켜져 있었는지 확인한다</h3>
+      <p>
+        <code>unclean.leader.election.enable</code>은 클러스터 전역 동적 설정으로도, 토픽별로도 지정할 수 있습니다.
+        둘 다 확인해야 합니다. <code>--all</code>을 붙이면 값의 출처(synonyms)까지 보여 주므로
+        <strong>기본값과 오버라이드를 구분</strong>할 수 있습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>설정 조회 — synonyms 에서 기본값이 무엇인지 확인합니다</figcaption>
+        <pre><code class="lang-bash">$ kafka-configs.sh --bootstrap-server kafka-1:9092 \
+    --entity-type brokers --entity-default --describe
+
+Dynamic configs for broker default are:
+  unclean.leader.election.enable=true sensitive=false synonyms={DYNAMIC_DEFAULT_BROKER_CONFIG:unclean.leader.election.enable=true}
+
+$ kafka-configs.sh --bootstrap-server kafka-1:9092 \
+    --entity-type topics --entity-name payment-events --describe --all
+
+All configs for topic payment-events are:
+  min.insync.replicas=1 sensitive=false synonyms={DEFAULT_CONFIG:min.insync.replicas=1}
+  unclean.leader.election.enable=true sensitive=false synonyms={DYNAMIC_DEFAULT_BROKER_CONFIG:unclean.leader.election.enable=true, DEFAULT_CONFIG:unclean.leader.election.enable=false}</code></pre>
+      </figure>
+
+      <aside class="note note--version" data-label="버전 노트 — 4.x 기본값을 정확히">
+        <p>
+          <strong>Apache Kafka 4.3에서 <code>unclean.leader.election.enable</code>의 기본값은
+          <code>false</code>입니다.</strong> 브로커 설정과 토픽 설정 양쪽 모두 <code>false</code>입니다.
+          위 출력의 <code>DEFAULT_CONFIG:unclean.leader.election.enable=false</code>가 그 근거이고,
+          이 사고에서는 <code>DYNAMIC_DEFAULT_BROKER_CONFIG</code>가 그것을 <code>true</code>로 덮어쓰고 있었습니다.
+        </p>
+        <p>
+          Kafka는 <strong>0.11.0.0부터</strong> "일관성 있는 레플리카를 기다린다"를 기본 전략으로 삼았습니다.
+          즉 기본값이 <code>true</code>였던 시절은 아주 오래전이고,
+          "가용성 우선이니 켜 두자"는 런북은 그 시절의 유물입니다.
+        </p>
+        <p>
+          4.x KRaft 모드에서 이 설정을 <strong>동적으로 켤 때</strong>는 주의할 점이 있습니다.
+          unclean 리더 선출 스레드가 주기적으로(기본 5분) 동작하므로 즉시 반영되지 않습니다.
+          즉시 선출이 필요하면 <code>kafka-leader-election.sh</code>를 <code>unclean</code> 옵션으로 실행해야 합니다.
+        </p>
+      </aside>
+
+      <h3 id="step3-acks">3단계 — <code>acks</code>가 무엇을 보장하는지 정리한다</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>acks</code> 값별 보장 범위. 프로듀서 <code>acks</code> 기본값은 Kafka 3.0부터 <code>all</code>입니다.</caption>
+          <thead>
+            <tr>
+              <th scope="col">값</th>
+              <th scope="col">응답 시점</th>
+              <th scope="col">리더 장애 시</th>
+              <th scope="col"><code>min.insync.replicas</code> 상호작용</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>0</code></th>
+              <td>소켓 버퍼에 넣은 즉시. 서버 응답을 기다리지 않음</td>
+              <td>유실. <strong><code>retries</code>도 동작하지 않음</strong>(실패를 알 수 없음). 반환 오프셋은 항상 <code>-1</code></td>
+              <td class="t-center"><span class="mark-no">없음</span></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>1</code></th>
+              <td>리더가 자기 로그에 쓴 직후</td>
+              <td><strong>복제되지 않은 구간 유실.</strong> 프로듀서는 이미 성공을 받아 재시도하지 않음</td>
+              <td class="t-center"><span class="mark-no">없음</span></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>all</code> (= <code>-1</code>)<br><span class="badge">기본값</span></th>
+              <td>현재 ISR의 <strong>모든</strong> 레플리카가 기록한 뒤</td>
+              <td>미응답 구간은 재시도로 복구 가능. 응답을 받은 것은 다른 ISR 멤버에도 존재</td>
+              <td class="t-center"><span class="mark-ok">있음</span> — ISR이 부족하면 쓰기 거부</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="acks=all 도 그 자체로 무손실이 아닙니다">
+        <p>
+          <code>acks=all</code>의 기준은 <strong>"현재 ISR 전원"</strong>입니다.
+          ISR이 리더 하나로 줄어든 상태에서는 <code>acks=all</code>도 실질적으로 <code>acks=1</code>과 같습니다.
+          그래서 <code>min.insync.replicas</code>를 2 이상으로 올려
+          <strong>"ISR이 부족하면 쓰기를 거부"</strong>하게 만들어야 조합이 완성됩니다.
+          이 부분만 빠뜨린 사고는 <a href="case06.html">케이스 6 · RF=3인데 브로커 1대 죽자 유실됐다</a>에서 따로 다룹니다.
+        </p>
+      </aside>
+
+      <h3 id="step4-elr">4단계 — 4.x의 Eligible Leader Replicas</h3>
+      <aside class="note note--version" data-label="버전 노트 — KIP-966 (4.0 도입)">
+        <p>
+          Apache Kafka <strong>4.0부터 Eligible Leader Replicas(ELR)</strong>가 제공되고,
+          <strong>4.1 이후 새로 만든 클러스터에서는 기본 활성화</strong>됩니다.
+          "strict min ISR" 규칙(ISR 크기가 <code>min.insync.replicas</code>보다 작으면 high watermark가 전진하지 않음) 덕분에
+          <strong>ISR에 없어도 리더가 되어도 안전한 레플리카</strong>가 존재하며,
+          KRaft 컨트롤러가 이를 <code>Eligible Leader Replicas</code> 필드로 추적합니다.
+          리더 선출 순서는 다음과 같습니다.
+        </p>
+        <ol>
+          <li>ISR이 비어 있지 않으면 그중에서 선출</li>
+          <li>ELR이 비어 있지 않으면 fenced 되지 않은 것 중에서 선출</li>
+          <li>마지막으로 알려진 리더가 unfenced면 그것을 선출 (모든 레플리카가 오프라인일 때의 4.0 이전 동작과 유사)</li>
+        </ol>
+        <p>
+          업그레이드한 기존 클러스터에서는 서버에 <code>eligible.leader.replicas.version=1</code>을 설정해 활성화합니다
+          (<code>0</code>으로 되돌리는 다운그레이드도 안전합니다).
+          <strong>ELR은 unclean 선출의 필요성을 줄여 주지만,
+          <code>unclean.leader.election.enable=true</code>를 안전하게 만들어 주지는 않습니다.</strong>
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="ELR 을 켤 때의 min.insync.replicas 제약">
+        <p>공식 문서가 명시하는 제약입니다. 운영 변경 계획을 세울 때 반드시 확인하세요.</p>
+        <ul>
+          <li>클러스터 레벨 <code>min.insync.replicas</code>가 없으면 자동 추가되며, 값은 액티브 컨트롤러의 정적 설정과 같습니다.</li>
+          <li>클러스터 레벨 <code>min.insync.replicas</code>의 <strong>제거는 허용되지 않습니다.</strong></li>
+          <li>클러스터 레벨 값을 갱신하면 값이 같더라도 <strong>모든 ELR 상태가 초기화</strong>됩니다.</li>
+          <li>브로커 레벨의 기존 <code>min.insync.replicas</code>는 제거되고 <strong>브로커 레벨 변경도 허용되지 않습니다.</strong> 필요하면 클러스터 레벨에서 설정합니다.</li>
+          <li>토픽의 <code>min.insync.replicas</code>를 바꾸면 그 토픽의 ELR 상태가 초기화됩니다.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="reproduce">
+      <h2 id="reproduce">재현 방법</h2>
+
+      <p>
+        3노드 KRaft 클러스터가 필요합니다. 아래 compose는 Apache Kafka가 배포하는 공식 3노드 combined 모드 예제를
+        YAML 앵커로 축약한 것입니다. 더 자세한 구성은 <a href="../practice/ex01.html">예제 1 · 로컬 KRaft 클러스터</a>에 있습니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>docker-compose.yml — 3노드 KRaft, unclean 선출을 일부러 켠 구성</figcaption>
+        <pre><code class="lang-yaml">x-kafka-env: &amp;kenv
+  KAFKA_PROCESS_ROLES: 'broker,controller'
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+  KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093'
+  KAFKA_LISTENERS: 'PLAINTEXT://:19092,CONTROLLER://:9093,PLAINTEXT_HOST://:9092'
+  KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+  KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+  CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+  # 재현 포인트 — 4.x 기본값은 false 입니다. 일부러 켭니다.
+  KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: 'true'
+
+services:
+  kafka-1:
+    image: apache/kafka:4.3.1
+    hostname: kafka-1
+    container_name: kafka-1
+    ports: ['29092:9092']
+    environment:
+      &lt;&lt;: *kenv
+      KAFKA_NODE_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-1:19092,PLAINTEXT_HOST://localhost:29092'
+  kafka-2:
+    image: apache/kafka:4.3.1
+    hostname: kafka-2
+    container_name: kafka-2
+    ports: ['39092:9092']
+    environment:
+      &lt;&lt;: *kenv
+      KAFKA_NODE_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-2:19092,PLAINTEXT_HOST://localhost:39092'
+  kafka-3:
+    image: apache/kafka:4.3.1
+    hostname: kafka-3
+    container_name: kafka-3
+    ports: ['49092:9092']
+    environment:
+      &lt;&lt;: *kenv
+      KAFKA_NODE_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-3:19092,PLAINTEXT_HOST://localhost:49092'</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>재현 절차 — log-end-offset 이 <strong>감소</strong>하는 것을 확인하는 것이 목표입니다</figcaption>
+        <pre><code class="lang-bash">docker compose up -d
+K=/opt/kafka/bin
+
+# 1. RF=3, min.insync.replicas 는 기본값 1
+docker exec -it kafka-1 $K/kafka-topics.sh --create --topic loss-demo \
+  --partitions 1 --replication-factor 3 --bootstrap-server localhost:9092
+docker exec -it kafka-1 $K/kafka-topics.sh --describe --topic loss-demo \
+  --bootstrap-server localhost:9092
+#   → Leader 와 Isr 를 기록합니다. 아래는 Leader=1, Isr=1,2,3 을 가정합니다.
+
+# 2. acks=1 로 5000건 적재
+seq 1 5000 | docker exec -i kafka-1 $K/kafka-console-producer.sh --topic loss-demo \
+  --bootstrap-server localhost:9092 --producer-property acks=1
+
+# 3. 팔로워 두 대를 내린다 → ISR 이 리더 하나로 줄어든다
+docker stop kafka-2 kafka-3
+docker exec -it kafka-1 $K/kafka-topics.sh --describe --topic loss-demo \
+  --bootstrap-server localhost:9092
+#   → Isr: 1
+
+# 4. 리더만 살아 있는 상태에서 4000건 더 적재
+#    acks=1 이므로 프로듀서는 전부 성공을 받습니다. 어디에도 복제되지 않습니다.
+seq 5001 9000 | docker exec -i kafka-1 $K/kafka-console-producer.sh --topic loss-demo \
+  --bootstrap-server localhost:9092 --producer-property acks=1
+
+docker exec -it kafka-1 $K/kafka-get-offsets.sh --topic loss-demo \
+  --bootstrap-server localhost:9092
+#   → loss-demo:0:9000
+
+# 5. 리더를 내리고 뒤처진 팔로워만 올린다
+docker stop kafka-1
+docker start kafka-2
+sleep 60      # unclean 선출 스레드 주기를 기다립니다
+
+docker logs kafka-2 2>&amp;1 | grep -i "unclean election"
+#   → Setting new leader for topicId ..., partition 0 to 2 using an unclean election. ...
+
+# 6. 오프셋을 다시 본다 — 줄어들어 있습니다
+docker exec -it kafka-2 $K/kafka-get-offsets.sh --topic loss-demo \
+  --bootstrap-server localhost:9092
+#   → loss-demo:0:5000   (4000건이 사라졌습니다)
+
+# 7. 예전 리더를 복귀시키면 트렁케이션 로그가 남습니다
+docker start kafka-1
+docker logs kafka-1 2>&amp;1 | grep -i "Truncating"</code></pre>
+      </figure>
+
+      <aside class="note note--warn" data-label="즉시 선출이 필요하면">
+        <p>
+          5단계에서 60초를 기다리는 대신 <code>kafka-leader-election.sh</code>를 직접 실행할 수 있습니다.
+          KRaft 모드에서 이 설정을 동적으로 켜면 선출 스레드 주기(기본 5분)를 기다려야 하므로,
+          재현에서는 명시적으로 트리거하는 편이 빠릅니다.
+        </p>
+        <p>
+          <code>kafka-leader-election.sh --bootstrap-server localhost:9092 --election-type unclean --topic loss-demo --partition 0</code>
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="fix">
+      <h2 id="fix">해결</h2>
+
+      <h3 id="immediate">즉시 조치 — unclean 선출을 끈다</h3>
+      <p>
+        장애 대응 중이라면 순서가 중요합니다. <strong>먼저 unclean 선출을 끄고</strong>,
+        그다음에 프로듀서 설정을 고칩니다. 반대로 하면 그사이 또 유실됩니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>즉시 조치 — 재배포 없이 동적 설정으로 처리합니다</figcaption>
+        <pre><code class="lang-bash"># 1. 클러스터 전역 오버라이드를 삭제해 기본값(false)으로 되돌린다
+kafka-configs.sh --bootstrap-server kafka-1:9092 \
+  --entity-type brokers --entity-default \
+  --alter --delete-config unclean.leader.election.enable
+
+# 2. 확인 — DEFAULT_CONFIG:false 만 남아야 합니다
+kafka-configs.sh --bootstrap-server kafka-1:9092 \
+  --entity-type topics --entity-name payment-events --describe --all
+
+# 3. 중요한 토픽에는 min.insync.replicas 를 명시한다
+kafka-configs.sh --bootstrap-server kafka-1:9092 \
+  --entity-type topics --entity-name payment-events \
+  --alter --add-config min.insync.replicas=2
+
+# 4. 리더 쏠림을 정리한다 (preferred leader 로 복귀)
+kafka-leader-election.sh --bootstrap-server kafka-1:9092 \
+  --election-type preferred --all-topic-partitions</code></pre>
+      </figure>
+
+      <h3 id="root-fix">근본 해결 — 프로듀서와 토픽을 같이 고친다</h3>
+
+      <div class="diff">
+        <div class="diff__before">
+          <p>
+            프로듀서는 복제를 기다리지 않고, 브로커는 뒤처진 레플리카를 리더로 승격할 수 있습니다.
+            <strong>어느 한쪽만 고쳐도 유실은 남습니다.</strong>
+          </p>
+          <figure class="code">
+            <figcaption>변경 전</figcaption>
+            <pre><code class="lang-properties"># producer
+acks=1
+retries=3
+enable.idempotence=false
+
+# 토픽 payment-events
+min.insync.replicas=1        # 기본값 방치
+
+# 브로커 (동적 기본값)
+unclean.leader.election.enable=true</code></pre>
+          </figure>
+        </div>
+        <div class="diff__after">
+          <p>
+            프로듀서는 ISR 전원의 기록을 기다리고, 브로커는 ISR이 2 미만이면 쓰기를 거부하고,
+            뒤처진 레플리카는 리더가 되지 못합니다.
+          </p>
+          <figure class="code">
+            <figcaption>변경 후</figcaption>
+            <pre><code class="lang-properties"># producer — 4.x 기본값이 이미 안전한 조합입니다
+acks=all
+enable.idempotence=true
+max.in.flight.requests.per.connection=5
+delivery.timeout.ms=120000
+# retries 는 명시하지 않습니다 (기본 2147483647 + delivery.timeout.ms 로 통제)
+
+# 토픽 payment-events
+min.insync.replicas=2        # RF=3 에서 브로커 1대 손실을 견딘다
+
+# 브로커
+unclean.leader.election.enable=false   # 4.x 기본값. 오버라이드하지 않는다</code></pre>
+          </figure>
+        </div>
+      </div>
+
+      <aside class="note note--ok" data-label="4.x 기본값이 이미 안전합니다">
+        <p>
+          Kafka 3.0부터 <code>acks</code> 기본값은 <code>all</code>, <code>enable.idempotence</code> 기본값은
+          <code>true</code>입니다. 즉 <strong>프로듀서 설정을 아무것도 하지 않는 것이
+          <code>acks=1</code>을 명시하는 것보다 안전합니다.</strong>
+          이 사고의 프로듀서 설정은 <strong>2.x 시절 자료를 그대로 복사한 결과</strong>였습니다.
+          <code>retries</code>를 직접 지정하는 습관도 같은 유래입니다 —
+          지금은 <code>delivery.timeout.ms</code>(기본 120000)로 재시도 총 시간을 통제하는 것이 권장 방식입니다.
+        </p>
+      </aside>
+
+      <p>
+        무손실 프로듀서 설정 조합의 전체 배경은 <a href="../basics/ch04.html">4장 Producer 심화</a>와
+        <a href="../practice/ex03.html">예제 3 · 안전한 Producer 설정</a>에 있습니다.
+        복제·ISR의 원리는 <a href="../basics/ch02.html">2장 아키텍처와 핵심 개념</a>을 보세요.
+      </p>
+
+      <h3 id="tradeoff">가용성과 일관성의 실제 트레이드오프</h3>
+      <p>
+        <code>unclean.leader.election.enable=false</code>는 공짜가 아닙니다.
+        ISR의 모든 레플리카가 내려가면 그 파티션은 <strong>리더가 없어 읽기·쓰기 모두 불가</strong>가 됩니다.
+        공식 설계 문서는 이를 "가용성과 일관성의 단순한 트레이드오프"라고 설명하며,
+        Kafka가 기본으로 일관성을 택했다고 명시합니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>내구성 우선 / 가용성 우선 설정 조합의 결과 비교 (RF=3, 브로커 3대 기준)</caption>
+          <thead>
+            <tr>
+              <th scope="col">상황</th>
+              <th scope="col">내구성 우선<br><code>acks=all</code>, <code>min.insync=2</code>, unclean=false</th>
+              <th scope="col">가용성 우선<br><code>acks=1</code>, <code>min.insync=1</code>, unclean=true</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">브로커 1대 손실</th>
+              <td>정상 동작 (ISR 2 유지)</td>
+              <td>정상 동작</td>
+            </tr>
+            <tr>
+              <th scope="row">브로커 2대 손실</th>
+              <td><strong>쓰기 거부</strong> — <code>NotEnoughReplicasException</code>. 프로듀서가 재시도하며 버팀</td>
+              <td>쓰기 계속. <strong>그 구간은 복제 없음 → 유실 위험</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">뒤처진 레플리카만 남음</th>
+              <td>파티션 오프라인. <strong>데이터는 보존</strong></td>
+              <td>그 레플리카가 리더. <strong>차이만큼 유실 + 트렁케이션</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">복구 후 데이터</th>
+              <td>커밋된 것은 모두 존재</td>
+              <td>커밋되었던 것도 사라질 수 있음</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note" data-label="어떤 토픽에 무엇을 적용할까">
+        <p>
+          클러스터 전역으로 하나를 고르는 것보다 <strong>토픽별로 결정</strong>하는 편이 현실적입니다.
+          결제·주문·정산처럼 유실이 금전 손실인 토픽은 내구성 우선,
+          메트릭·로그·클릭스트림처럼 일부 손실을 감수할 수 있는 토픽은 가용성 우선으로 둡니다.
+          <code>unclean.leader.election.enable</code>은 <strong>토픽 레벨 설정도 가능</strong>하므로
+          전역을 <code>false</code>로 두고 필요한 토픽만 예외 처리하세요.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="prevention">
+      <h2 id="prevention">예방 체크리스트</h2>
+
+      <ul>
+        <li><label><input type="checkbox"> <code>unclean.leader.election.enable</code>이 <strong>기본값(<code>false</code>)</strong>임을 확인했다. 브로커 동적 기본값·브로커별·토픽별 오버라이드를 모두 조회했다</label></li>
+        <li><label><input type="checkbox"> 프로듀서 <code>acks</code>를 <code>1</code>이나 <code>0</code>으로 <strong>내려 놓은 설정이 없다</strong> (있다면 그 이유가 문서화되어 있다)</label></li>
+        <li><label><input type="checkbox"> <code>enable.idempotence</code>를 <code>false</code>로 끈 곳이 없다</label></li>
+        <li><label><input type="checkbox"> 중요 토픽의 <code>min.insync.replicas</code>가 명시되어 있다 (기본값 1 방치 아님)</label></li>
+        <li><label><input type="checkbox"> <code>RF &gt; min.insync.replicas</code>다. 같으면 브로커 1대 손실로 쓰기가 멈춥니다</label></li>
+        <li><label><input type="checkbox"> <code>UnderReplicatedPartitions</code>·<code>UnderMinIsrPartitionCount</code>·<code>OfflinePartitionsCount</code>에 알림이 걸려 있다 (정상값 0)</label></li>
+        <li><label><input type="checkbox"> 로그에서 <code>using an unclean election</code>과 <code>Truncating ... below high watermark</code>를 알림 대상으로 잡았다</label></li>
+        <li><label><input type="checkbox"> 파티션 log-end-offset이 <strong>감소</strong>하는 것을 감지하는 알림이 있다</label></li>
+        <li><label><input type="checkbox"> 브로커가 여러 대 동시에 영향받을 수 있는 <strong>공유 스토리지·랙·AZ 구성</strong>을 검토했다 (<code>broker.rack</code> 설정 포함)</label></li>
+        <li><label><input type="checkbox"> ELR(<code>eligible.leader.replicas.version</code>) 활성화 여부를 알고 있고, 켤 때의 <code>min.insync.replicas</code> 제약을 검토했다</label></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트</h2>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Fundamentals">
+        <ul>
+          <li>
+            <code>unclean.leader.election.enable</code> 기본값은 <strong><code>false</code></strong>입니다.
+            "기본값이 <code>true</code>"라고 적은 자료가 많지만 아주 오래된 서술입니다.
+            <code>true</code>로 두면 <strong>가용성을 얻고 일관성(내구성)을 잃습니다.</strong>
+          </li>
+          <li>
+            <code>acks=0</code>일 때 <strong><code>retries</code>가 동작하지 않고</strong> 반환 오프셋이 <code>-1</code>이라는 점.
+          </li>
+          <li>
+            <code>acks=1</code>은 "리더가 로그에 썼다"까지만 보장합니다.
+            <strong>"과반이 받았다"가 아닙니다.</strong> 과반 개념은 <code>min.insync.replicas=2</code>(RF=3)와 <code>acks=all</code>의 조합에서 나옵니다.
+          </li>
+          <li>
+            <code>replica.lag.time.max.ms</code> 기본값 <strong>30000</strong>. 팔로워가 이 시간 안에 따라오지 못하면 ISR에서 제거됩니다.
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · CCAAK Cluster Configuration / Troubleshooting">
+        <ul>
+          <li>
+            "브로커 장애 후 데이터가 유실됐다. 원인 후보를 모두 고르라" →
+            <code>acks</code>가 <code>all</code>이 아님, <code>min.insync.replicas=1</code>,
+            <code>unclean.leader.election.enable=true</code>. 세 가지가 전형적인 정답 세트입니다.
+          </li>
+          <li>
+            <strong>정상값이 0이어야 하는 메트릭</strong>:
+            <code>UnderReplicatedPartitions</code>, <code>UnderMinIsrPartitionCount</code>, <code>OfflinePartitionsCount</code>.
+            <code>AtMinIsrPartitionCount</code>도 0이 정상값입니다(ISR = min ISR인 파티션 수).
+          </li>
+          <li>
+            <code>kafka-topics --describe</code>의 <code>--under-replicated-partitions</code>,
+            <code>--unavailable-partitions</code>, <code>--at-min-isr-partitions</code> 옵션 용도.
+          </li>
+          <li>
+            unclean 선출을 즉시 트리거하는 도구는 <code>kafka-leader-election.sh</code>이고,
+            <code>preferred</code>와 <code>unclean</code> 두 가지 election type이 있습니다.
+          </li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="시험 포인트 · 4.x 신규 (KIP-966)">
+        <p>
+          ELR은 4.0에 도입되어 <strong>4.1 이후 새 클러스터에서 기본 활성화</strong>됩니다.
+          리더 선출 우선순위는 <strong>ISR → ELR(unfenced) → 마지막으로 알려진 리더(unfenced)</strong> 순입니다.
+          "strict min ISR" 규칙 때문에 ISR이 <code>min.insync.replicas</code>보다 작으면
+          <strong>high watermark가 전진하지 않는다</strong>는 전제도 함께 나옵니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="../basics/ch02.html">
+          <span class="card__title">2장 · 아키텍처와 핵심 개념</span>
+          <span class="card__desc">복제, ISR, high watermark, 리더 선출의 원리.</span>
+          <span class="card__meta">CCDAK Fundamentals</span>
+        </a></li>
+        <li><a class="card" href="case06.html">
+          <span class="card__title">케이스 6 · RF=3인데 브로커 1대 죽자 유실됐다</span>
+          <span class="card__desc"><code>min.insync.replicas</code>만 방치했을 때 무엇이 일어나는가.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../basics/ch04.html">
+          <span class="card__title">4장 · Producer 심화</span>
+          <span class="card__desc"><code>acks</code>, 멱등성, 재시도와 순서 보장.</span>
+          <span class="card__meta">CCDAK Application Development</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex03.html">
+          <span class="card__title">예제 3 · 안전한 Producer 설정</span>
+          <span class="card__desc">무손실 조합을 실제로 검증하는 코드와 절차.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/config.html">
+          <span class="card__title">설정 치트시트</span>
+          <span class="card__desc">내구성 우선 / 처리량 우선 / 지연 우선 프리셋 비교.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+        <li><a class="card" href="../cheatsheet/metrics.html">
+          <span class="card__title">JMX 메트릭 치트시트</span>
+          <span class="card__desc">복제·ISR 관련 MBean과 임계값.</span>
+          <span class="card__meta">빠른참조</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>설정 기본값·설계 설명은 Apache Kafka 4.3 문서에서, 로그 문자열은 4.3 소스에서 확인했습니다.</p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs_unclean.leader.election.enable" rel="noopener noreferrer">Broker Configs — <code>unclean.leader.election.enable</code></a> — <strong>기본값 <code>false</code></strong>, KRaft 동적 활성화 시 선출 스레드 주기 주의사항</li>
+        <li><a href="https://kafka.apache.org/documentation/#topicconfigs_unclean.leader.election.enable" rel="noopener noreferrer">Topic Configs — <code>unclean.leader.election.enable</code></a> — 토픽 레벨 기본값도 <code>false</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs_acks" rel="noopener noreferrer">Producer Configs — <code>acks</code></a> — 0/1/all 각각의 보장 범위</li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs_replica.lag.time.max.ms" rel="noopener noreferrer">Broker Configs — <code>replica.lag.time.max.ms</code></a> — 기본값 30000</li>
+        <li><a href="https://kafka.apache.org/documentation/#design_uncleanleader" rel="noopener noreferrer">Design — Unclean leader election</a> — 0.11.0.0부터 일관성 우선을 기본으로 선택</li>
+        <li><a href="https://kafka.apache.org/documentation/#eligible_leader_replicas" rel="noopener noreferrer">Operations — Eligible Leader Replicas</a> — KIP-966, 4.1 이후 기본 활성화, 선출 순서, <code>min.insync.replicas</code> 제약</li>
+        <li><a href="https://kafka.apache.org/documentation/#monitoring" rel="noopener noreferrer">Monitoring</a> — <code>UnderReplicatedPartitions</code>, <code>UnderMinIsrPartitionCount</code>, <code>AtMinIsrPartitionCount</code>, <code>OfflinePartitionsCount</code></li>
+        <li><a href="https://github.com/apache/kafka" rel="noopener noreferrer">Apache Kafka 소스 (4.3)</a> — <code>Partition</code>(ISR 축소), <code>PartitionChangeBuilder</code>(unclean 선출), <code>UnifiedLog</code>(트렁케이션), <code>FetchCollector</code>의 로그 문자열</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

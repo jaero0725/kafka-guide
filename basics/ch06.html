@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>6장 · 전달 보장과 트랜잭션 — Kafka Guide</title>
+  <meta name="description" content="Apache Kafka 4.3 기준 at-most-once / at-least-once / exactly-once의 정확한 정의와 설정 조합, 멱등 프로듀서와 트랜잭션의 차이, transactional.id와 트랜잭션 코디네이터, consume-transform-produce 패턴, isolation.level=read_committed와 LSO, 그리고 EOS가 Kafka 내부에서만 성립한다는 경계를 정리합니다.">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="stylesheet" href="../assets/css/code.css">
+  <link rel="stylesheet" href="../assets/css/viz.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">본문 바로가기</a>
+  <div id="sidebar-mount" data-section="basics" data-page="ch06"></div>
+
+  <main id="main" class="page" data-page-id="basics/ch06">
+    <nav class="breadcrumb" aria-label="경로">
+      <ol>
+        <li><a href="../index.html">홈</a></li>
+        <li><a href="ch01.html">기본개념</a></li>
+        <li><span aria-current="page">6장 · 전달 보장과 트랜잭션</span></li>
+      </ol>
+    </nav>
+
+    <header class="page__header">
+      <p class="page__eyebrow">기본개념 · 6장</p>
+      <h1>전달 보장과 트랜잭션</h1>
+      <p class="page__lead">
+        "Kafka는 exactly-once를 지원한다"는 문장은 맞지만, 그 문장만으로는 아무것도 설계할 수 없습니다.
+        중요한 것은 <strong>어디까지가 그 보장의 경계인가</strong>입니다.
+        이 장은 세 가지 전달 보장의 정확한 정의에서 출발해, 멱등 프로듀서와 트랜잭션이 각각 무엇을 해결하는지 구분하고,
+        <strong>Kafka 내부에서는 EOS가 성립하지만 외부 DB·API 호출에는 성립하지 않는다</strong>는
+        경계를 확정합니다. 이 경계를 아는 것이 이 장의 실질적 가치입니다.
+      </p>
+    </header>
+
+    <section class="objectives" aria-labelledby="objectives-h">
+      <h2 id="objectives-h">학습 목표</h2>
+      <ul>
+        <li>at-most-once · at-least-once · exactly-once를 정의하고, 각각을 만드는 <strong>설정 조합</strong>을 쓸 수 있습니다.</li>
+        <li>중복이 어디서 생기고 유실이 어디서 생기는지 — 재시도와 커밋 순서로 나누어 설명할 수 있습니다.</li>
+        <li>멱등 프로듀서(파티션 단위 중복 제거)와 트랜잭션(원자적 다중 파티션 쓰기)의 차이를 구분할 수 있습니다.</li>
+        <li><code>isolation.level=read_committed</code>와 LSO의 관계, 그리고 그것이 만드는 지연을 설명할 수 있습니다.</li>
+        <li><strong>EOS가 어디서 끝나는지</strong> 판단하고, 외부 시스템에 대한 멱등성을 직접 설계할 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="three-guarantees">
+      <h2 id="three-guarantees">세 가지 전달 보장</h2>
+
+      <p>공식 설계 문서는 세 가지를 다음과 같이 정의합니다.</p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>전달 보장의 정의 (공식 설계 문서 · Message Delivery Semantics)</caption>
+          <thead>
+            <tr><th scope="col">보장</th><th scope="col">정의</th><th scope="col">감당해야 하는 것</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">at-most-once</th>
+              <td>메시지가 <strong>유실될 수 있지만 재전달되지는 않습니다</strong></td>
+              <td>데이터 누락</td>
+            </tr>
+            <tr>
+              <th scope="row">at-least-once</th>
+              <td>메시지가 <strong>유실되지 않지만 재전달될 수 있습니다</strong></td>
+              <td>중복 처리</td>
+            </tr>
+            <tr>
+              <th scope="row">exactly-once</th>
+              <td>각 메시지가 <strong>정확히 한 번</strong> 처리됩니다</td>
+              <td>복잡도와 지연 — 그리고 <strong>경계 제약</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        공식 문서는 곧바로 중요한 단서를 붙입니다.
+        <strong>"이것은 두 개의 문제로 갈라진다"</strong> — 메시지를 발행할 때의 내구성 보장과,
+        메시지를 소비할 때의 보장입니다. 그리고 exactly-once를 주장하는 많은 시스템에 대해
+        <strong>"작은 글씨를 읽어야 한다"</strong>고 경고합니다.
+        컨슈머나 프로듀서가 실패하는 경우, 컨슈머 프로세스가 여러 개인 경우,
+        디스크에 쓴 데이터가 유실될 수 있는 경우로 번역되지 않는 주장이 흔하다는 것입니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-050">
+        <figcaption>
+          3가지 전달 보장 비교 — 프로듀서 설정과 컨슈머 커밋 시점의 조합이 어떻게
+          at-most-once / at-least-once / exactly-once로 갈라지는지, 각 경우의 유실·중복 지점을 함께 표시합니다.
+        </figcaption>
+      </figure>
+
+      <h3 id="where-duplicates-come-from">중복은 재시도에서, 유실은 커밋 순서에서</h3>
+
+      <p>
+        두 문제는 발생 지점이 다릅니다. 섞어서 생각하면 처방이 엉킵니다.
+      </p>
+
+      <p>
+        <strong>중복 — 프로듀서 쪽 재시도.</strong>
+        프로듀서가 메시지를 보낸 뒤 네트워크 오류를 만나면, 그 오류가
+        <strong>커밋 전에 발생한 것인지 커밋 후에 발생한 것인지 알 수 없습니다.</strong>
+        공식 문서는 이를 "자동 생성 키가 있는 데이터베이스 테이블에 insert하는 것과 비슷한 상황"으로 설명합니다.
+        재전송하면 중복이 생기고, 재전송하지 않으면 유실이 생깁니다.
+        <strong>0.11.0.0부터는 멱등 프로듀서가 이 딜레마를 해소합니다</strong> —
+        브로커가 프로듀서마다 ID를 부여하고 시퀀스 번호로 중복을 제거합니다.
+      </p>
+
+      <p>
+        <strong>유실과 중복 — 컨슈머 쪽 커밋 순서.</strong>
+        공식 문서가 드는 두 가지 선택입니다.
+      </p>
+
+      <ol>
+        <li>
+          <strong>읽고 → 위치를 저장하고 → 처리한다.</strong>
+          위치 저장 후 처리 결과 저장 전에 크래시하면, 인수한 프로세스가 저장된 위치부터 시작하므로
+          그 앞의 몇 건은 <strong>처리되지 않은 채 건너뛰어집니다</strong>. → <strong>at-most-once</strong>
+        </li>
+        <li>
+          <strong>읽고 → 처리하고 → 위치를 저장한다.</strong>
+          처리 후 위치 저장 전에 크래시하면, 인수한 프로세스가 <strong>이미 처리한 몇 건을 다시 받습니다</strong>.
+          → <strong>at-least-once</strong>
+        </li>
+      </ol>
+
+      <p>
+        공식 문서는 2번에 대해 <strong>"많은 경우 메시지에 기본 키가 있어 갱신이 멱등적이다"</strong>
+        (같은 메시지를 두 번 받아도 같은 레코드를 덮어쓰는 것뿐)라고 덧붙입니다.
+        이것이 실무에서 at-least-once + 컨슈머 멱등성이 가장 널리 쓰이는 조합인 이유입니다.
+      </p>
+
+      <aside class="note" data-label="Kafka의 기본 동작">
+        <p>
+          공식 문서의 결론 문장입니다. <strong>"Kafka는 기본적으로 at-least-once 전달을 보장하며,
+          프로듀서의 재시도를 끄고 컨슈머가 배치 처리 전에 오프셋을 커밋하도록 하면
+          사용자가 at-most-once 전달을 구현할 수 있다."</strong>
+          즉 <strong>at-least-once가 기본이고, at-most-once는 의도적으로 만들어야 하는 상태</strong>입니다.
+        </p>
+      </aside>
+
+      <h3 id="config-combinations">보장별 설정 조합</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>전달 보장을 만드는 설정 조합 (Apache Kafka 4.3 기준)</caption>
+          <thead>
+            <tr>
+              <th scope="col">보장</th>
+              <th scope="col">프로듀서</th>
+              <th scope="col">컨슈머</th>
+              <th scope="col">토픽·브로커</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">at-most-once</th>
+              <td><code>acks=0</code> 또는 <code>acks=1</code><br>재시도 비활성<br><code>enable.idempotence=false</code></td>
+              <td><strong>처리 전에</strong> 커밋<br>(또는 자동 커밋에 맡김)</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <th scope="row">at-least-once<br><span class="badge">기본</span></th>
+              <td><code>acks=all</code><span class="badge">기본값</span><br><code>enable.idempotence=true</code><span class="badge">기본값</span><br><code>delivery.timeout.ms=120000</code></td>
+              <td><code>enable.auto.commit=false</code><br><strong>처리 후에</strong> <code>commitSync()</code>/<code>commitAsync()</code></td>
+              <td><code>replication.factor=3</code><br><code>min.insync.replicas=2</code></td>
+            </tr>
+            <tr>
+              <th scope="row">exactly-once<br>(Kafka 내부)</th>
+              <td><code>transactional.id</code> 지정<br>→ <code>enable.idempotence</code> 자동 활성<br><code>transaction.timeout.ms</code></td>
+              <td><strong><code>isolation.level=read_committed</code></strong><br><strong><code>enable.auto.commit=false</code></strong><br>오프셋은 <code>sendOffsetsToTransaction()</code>으로</td>
+              <td><code>replication.factor</code> 최소 3<br><code>min.insync.replicas=2</code><br>브로커 최소 3대(기본 요구)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          EOS 컨슈머 설정으로 공식 문서가 <strong>명시적으로 요구하는 두 가지</strong>입니다 —
+          <strong><code>isolation.level=read_committed</code>와 <code>enable.auto.commit=false</code></strong>.
+          그리고 프로듀서는 <strong><code>transactional.id</code>를 반드시 설정</strong>해야 합니다.
+          공식 문서 문장 그대로 <strong>"<code>transactional.id</code> 설정은 프로듀서에만 있습니다"</strong> —
+          컨슈머에 <code>transactional.id</code>를 넣는 선택지는 오답입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="idempotence-vs-transactions">
+      <h2 id="idempotence-vs-transactions">멱등 프로듀서와 트랜잭션은 다른 것입니다</h2>
+
+      <p>
+        둘 다 "중복을 막는다"고 설명되지만 해결하는 문제가 다릅니다.
+        <strong>멱등성은 재시도로 인한 중복을 없애고, 트랜잭션은 여러 쓰기를 원자적으로 묶습니다.</strong>
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>멱등 프로듀서 vs 트랜잭션</caption>
+          <thead>
+            <tr>
+              <th scope="col">관점</th>
+              <th scope="col">멱등 프로듀서</th>
+              <th scope="col">트랜잭션</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">켜는 방법</th><td><code>enable.idempotence=true</code> (4.x 기본값)</td><td><code>transactional.id</code> 지정 → 멱등성 자동 활성</td></tr>
+            <tr><th scope="row">해결하는 문제</th><td><strong>프로듀서 재시도로 인한 중복 기록</strong></td><td><strong>여러 파티션·토픽에 대한 원자적 쓰기</strong> + 오프셋 커밋의 원자적 포함</td></tr>
+            <tr><th scope="row">중복 제거 범위</th><td><strong>파티션 단위</strong>, 그리고 <strong>단일 프로듀서 세션 안에서만</strong></td><td>트랜잭션 경계 안의 모든 쓰기 (다중 파티션)</td></tr>
+            <tr><th scope="row">메커니즘</th><td>브로커가 프로듀서 ID(PID) + 파티션별 <strong>시퀀스 번호</strong>로 중복 판별</td><td>트랜잭션 코디네이터 + <code>__transaction_state</code> + <strong>트랜잭션 마커 레코드</strong></td></tr>
+            <tr><th scope="row">컨슈머 쪽 요구</th><td>없음</td><td><strong><code>isolation.level=read_committed</code></strong>가 있어야 실질적 의미</td></tr>
+            <tr><th scope="row">세션 경계를 넘는가</th><td><strong>아니요.</strong> 프로세스가 재시작하면 새 PID</td><td><strong>예.</strong> <code>transactional.id</code>가 세션을 가로질러 이전 트랜잭션을 정리합니다</td></tr>
+            <tr><th scope="row">비용</th><td>거의 없음 (4.x 기본값)</td><td>커밋 지연 + 코디네이터 왕복 + <code>read_committed</code>의 가시성 지연</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="idempotence-constraints">멱등성이 요구하는 것</h3>
+      <p>
+        공식 문서는 <code>enable.idempotence=true</code>가 세 가지를 요구한다고 명시합니다.
+      </p>
+      <ul>
+        <li><code>max.in.flight.requests.per.connection</code>이 <strong>5 이하</strong> — 이유가 명확합니다.
+          <strong>브로커가 프로듀서마다 최대 5개의 배치만 보관</strong>하기 때문입니다.
+          5를 넘으면 이전 배치가 브로커 쪽에서 제거되어 중복 판별을 할 수 없습니다.</li>
+        <li><code>retries</code>가 <strong>0보다 커야</strong> 합니다.</li>
+        <li><code>acks</code>가 <strong><code>all</code></strong>이어야 합니다.</li>
+      </ul>
+      <p>
+        충돌하는 설정이 있고 멱등성을 명시적으로 켜지 <strong>않았다면 멱등성이 비활성화</strong>됩니다.
+        명시적으로 켰는데 충돌 설정이 있으면 <strong>설정 오류</strong>가 됩니다 — 조용히 꺼지지 않습니다.
+      </p>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          단골 문항입니다. <strong><code>max.in.flight.requests.per.connection</code>의 상한이 5인 이유</strong>는
+          "성능 때문"이 아니라 <strong>브로커가 프로듀서당 최대 5개 배치만 보관하기 때문</strong>입니다.
+          그리고 이 값이 <strong>1이 아니라 5까지도 순서가 보장</strong>됩니다 —
+          멱등성이 켜져 있으면 시퀀스 번호로 브로커가 순서를 복원하기 때문입니다.
+          "순서를 보장하려면 in-flight를 1로 낮춰야 한다"는 선택지는 3.0 이전 기준의 함정입니다.
+          자세한 프로듀서 쪽 서술은 <a href="ch04.html">4장</a>에 있습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="멱등성의 한계">
+        <p>
+          공식 문서가 직접 경고하는 두 가지입니다.
+        </p>
+        <ul>
+          <li><strong>애플리케이션 레벨의 재전송은 중복 제거되지 않습니다.</strong>
+            멱등성은 클라이언트 내부의 재시도만 커버합니다.
+            애플리케이션이 <code>send()</code>를 두 번 호출하면 두 건이 기록됩니다.</li>
+          <li><strong>단일 세션 안에서만 멱등성이 보장됩니다.</strong>
+            프로세스가 재시작하면 새 PID를 받으므로, 재시작 전에 보낸 것과의 중복은 판별할 수 없습니다.
+            <strong>이 경계를 넘으려면 <code>transactional.id</code>가 필요합니다.</strong></li>
+        </ul>
+        <p>
+          또한 공식 문서는 멱등성을 쓸 때 <strong><code>retries</code>를 설정하지 말고 기본값
+          <code>Integer.MAX_VALUE</code>로 두라</strong>고 권고합니다. 무한 재시도에도 실패했다면
+          (예: 버퍼에서 만료) 프로듀서를 종료하고 마지막 메시지의 중복 여부를 확인하라고 합니다.
+        </p>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-051">
+        <figcaption>
+          트랜잭션 흐름 — <code>initTransactions()</code> → <code>beginTransaction()</code> →
+          <code>send()</code>/<code>sendOffsetsToTransaction()</code> → <code>commitTransaction()</code>/<code>abortTransaction()</code>.
+          트랜잭션 코디네이터와 <code>__transaction_state</code> 내부 토픽, 그리고 파티션마다 기록되는 트랜잭션 마커를 포함합니다.
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="transactions">
+      <h2 id="transactions">트랜잭션 — API와 코디네이터</h2>
+
+      <p>
+        공식 문서는 Kafka 트랜잭션이 다른 메시징 시스템의 트랜잭션과 다르다는 점을 먼저 짚습니다.
+        <strong>Kafka에서는 컨슈머와 프로듀서가 분리되어 있고, 트랜잭션은 프로듀서만 갖습니다.</strong>
+        다만 프로듀서가 <strong>컨슈머의 위치(committed offset)를 트랜잭션 안에서 갱신</strong>할 수 있고,
+        바로 이것이 전체적인 exactly-once 동작을 만들어 냅니다.
+      </p>
+
+      <h3 id="transactional-id">transactional.id 의 역할</h3>
+      <p>
+        공식 문서의 정의입니다. <code>transactional.id</code>의 목적은
+        <strong>"단일 프로듀서 인스턴스의 여러 세션에 걸친 트랜잭션 복구를 가능하게 하는 것"</strong>입니다.
+        같은 <code>transactional.id</code>를 쓰는 트랜잭션이 <strong>새 트랜잭션 시작 전에 완료되었음을 보장</strong>하기 때문입니다.
+        재시작한 애플리케이션이 이전 인스턴스의 진행 중 트랜잭션을 <strong>중단(abort)시키는</strong> 효과도 여기서 나옵니다.
+      </p>
+      <p>
+        따라서 이 값은 <strong>파티션된 상태 저장 애플리케이션의 샤드 식별자에서 유도</strong>하는 것이 전형적이고,
+        <strong>애플리케이션 안에서 실행되는 프로듀서 인스턴스마다 유일</strong>해야 합니다.
+      </p>
+
+      <aside class="note note--danger" data-label="transactional.id 를 잘못 주면">
+        <p>
+          여러 인스턴스가 <strong>같은 <code>transactional.id</code></strong>를 쓰면
+          나중에 <code>initTransactions()</code>를 호출한 쪽이 앞의 것을 <strong>펜싱(fencing)</strong>합니다.
+          앞의 인스턴스는 다음 트랜잭션 작업에서 <code>ProducerFencedException</code>을 받고
+          <strong>복구할 수 없습니다</strong> — 프로듀서를 닫고 종료하는 것이 유일한 선택입니다.
+          공식 문서 예시 코드가 <code>ProducerFencedException</code>을 복구 불가로 처리하는 이유입니다.
+        </p>
+        <p>
+          반대로 <strong>인스턴스마다 매번 랜덤한 ID를 주면</strong> 세션을 가로지르는 복구가 성립하지 않습니다.
+          재시작 후에도 <strong>같은 샤드에는 같은 ID</strong>가 오도록 결정적으로 만들어야 합니다.
+        </p>
+      </aside>
+
+      <h3 id="transaction-api">API 호출 순서</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>트랜잭션 API (Apache Kafka 4.3 <code>Producer</code> 인터페이스)</caption>
+          <thead>
+            <tr><th scope="col">호출</th><th scope="col">언제</th><th scope="col">비고</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>initTransactions()</code></th>
+              <td>프로듀서 생성 직후 <strong>한 번만</strong></td>
+              <td>PID를 확보하고 <strong>같은 <code>transactional.id</code>의 진행 중 트랜잭션을 정리</strong>합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>beginTransaction()</code></th>
+              <td>트랜잭션 시작</td>
+              <td><strong>프로듀서당 열린 트랜잭션은 하나</strong>뿐입니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>send(record)</code></th>
+              <td>트랜잭션 안의 모든 쓰기</td>
+              <td><code>transactional.id</code>가 설정되면 <strong>프로듀서의 모든 전송이 트랜잭션에 속해야</strong> 합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>sendOffsetsToTransaction(offsets, groupMetadata)</code></th>
+              <td>consume-transform-produce에서 <strong>입력 오프셋</strong>을 트랜잭션에 포함</td>
+              <td>4.x에는 <strong><code>ConsumerGroupMetadata</code>를 받는 시그니처만</strong> 있습니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>commitTransaction()</code></th>
+              <td>커밋</td>
+              <td>파티션마다 <strong>커밋 마커</strong>가 기록됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>abortTransaction()</code></th>
+              <td>중단</td>
+              <td>이미 성공한 쓰기도 <strong>abort로 표시</strong>되어 <code>read_committed</code> 컨슈머에게 보이지 않습니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p><strong><code>sendOffsetsToTransaction(Map, String consumerGroupId)</code>는 제거되었습니다</strong></p>
+        <p>
+          Kafka 4.3의 <code>Producer</code> 인터페이스에는
+          <code>sendOffsetsToTransaction(Map&lt;TopicPartition, OffsetAndMetadata&gt;, ConsumerGroupMetadata)</code>
+          <strong>하나만</strong> 존재합니다. 그룹 ID 문자열을 받던 예전 오버로드는 없습니다.
+          <code>consumer.groupMetadata()</code>를 넘겨야 합니다 —
+          그래야 브로커가 <strong>제너레이션까지 검증해 좀비 컨슈머의 오프셋 커밋을 차단</strong>할 수 있습니다.
+          예전 자료를 그대로 복사하면 컴파일되지 않습니다.
+        </p>
+      </aside>
+
+      <p>
+        공식 문서는 <strong>"모든 트랜잭션 API는 블로킹이며 실패 시 예외를 던진다"</strong>고 명시하고,
+        <code>send()</code>에 콜백을 지정하거나 <code>Future.get()</code>을 호출할 <strong>필요가 없다</strong>고 합니다.
+        트랜잭션 중에 복구 불가한 오류가 발생하면 <code>KafkaException</code>이 던져지기 때문입니다.
+      </p>
+
+      <figure class="code">
+        <figcaption>공식 문서 기준 트랜잭션 프로듀서 패턴</figcaption>
+        <pre><code class="lang-java">Properties props = new Properties();
+props.put("bootstrap.servers", "kafka-1:9092,kafka-2:9092,kafka-3:9092");
+// 이 값이 세션을 가로지르는 복구의 열쇠입니다. 샤드 식별자에서 결정적으로 유도하세요.
+props.put("transactional.id", "order-enricher-shard-3");
+Producer&lt;String, String&gt; producer =
+        new KafkaProducer&lt;&gt;(props, new StringSerializer(), new StringSerializer());
+
+// 한 번만 호출합니다. 같은 transactional.id 의 진행 중 트랜잭션을 정리합니다.
+producer.initTransactions();
+
+try {
+    producer.beginTransaction();
+    for (int i = 0; i &lt; 100; i++) {
+        producer.send(new ProducerRecord&lt;&gt;("orders-enriched",
+                Integer.toString(i), Integer.toString(i)));
+    }
+    producer.commitTransaction();
+} catch (ProducerFencedException | OutOfOrderSequenceException | AuthorizationException e) {
+    // 복구 불가 — 프로듀서를 닫고 종료하는 것이 유일한 선택입니다.
+    producer.close();
+} catch (KafkaException e) {
+    // 그 밖의 예외는 트랜잭션을 중단하고 다시 시도합니다.
+    // abort 를 호출해야 이미 성공한 쓰기가 abort 로 표시됩니다.
+    producer.abortTransaction();
+}
+producer.close();</code></pre>
+      </figure>
+
+      <h3 id="transaction-error-categories">4.x의 표준화된 예외 분류</h3>
+      <p>
+        Apache Kafka 4.x에서 <strong>트랜잭션 프로듀서의 오류 처리가 표준화</strong>되었습니다.
+        공식 문서가 정의하는 여섯 개 범주입니다. 어느 것이 애플리케이션까지 올라오는지가 핵심입니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>트랜잭션 프로듀서 예외 범주 (공식 문서 · Using Transactions)</caption>
+          <thead>
+            <tr>
+              <th scope="col">범주</th>
+              <th scope="col">애플리케이션까지 올라오는가</th>
+              <th scope="col">필요한 조치</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>RetriableException</code></th><td><strong>아니요</strong></td><td>클라이언트가 자동 재시도합니다</td></tr>
+            <tr><th scope="row"><code>RefreshRetriableException</code></th><td><strong>아니요</strong></td><td>클라이언트가 메타데이터를 갱신한 뒤 재시도합니다</td></tr>
+            <tr><th scope="row"><code>AbortableException</code></th><td>예</td><td><strong>트랜잭션을 abort하고 컨슈머 위치를 되돌려 재처리</strong>합니다</td></tr>
+            <tr><th scope="row"><code>ApplicationRecoverableException</code></th><td>예</td><td>애플리케이션이 복구 전략을 구현해야 하며, <strong>프로듀서 재시작을 포함</strong>해야 합니다</td></tr>
+            <tr><th scope="row"><code>InvalidConfigurationException</code></th><td>예</td><td>설정 문제. <strong>프로듀서 재시작은 필요하지 않습니다</strong></td></tr>
+            <tr><th scope="row"><code>KafkaException</code></th><td>예</td><td>위에 속하지 않는 일반 예외</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--warn" data-label="abort 후에 해야 할 일">
+        <p>
+          공식 문서가 강조하는 지점입니다. 트랜잭션이 중단되면
+          <strong>애플리케이션의 상태, 특히 컨슈머의 현재 위치를 명시적으로 되돌려야</strong>
+          중단된 트랜잭션이 처리하던 레코드를 다시 처리할 수 있습니다.
+          <code>abortTransaction()</code>만 호출하고 컨슈머를 그대로 두면
+          <strong>그 구간의 레코드가 유실됩니다</strong> — 오프셋 커밋도 함께 롤백되었지만
+          컨슈머의 <em>메모리상</em> 위치는 앞으로 나가 있기 때문입니다.
+          공식 문서 표현으로는 <strong>"컨슈머가 자동으로 되감기지 않으므로 커밋된 오프셋을 다시 fetch해야 한다"</strong>입니다.
+        </p>
+      </aside>
+
+      <h3 id="transaction-configs">트랜잭션 관련 설정</h3>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>트랜잭션 설정 (Apache Kafka 4.3 기본값)</caption>
+          <thead>
+            <tr>
+              <th scope="col">설정</th>
+              <th scope="col">위치</th>
+              <th scope="col">기본값</th>
+              <th scope="col">설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>transactional.id</code></th>
+              <td><span class="badge">producer</span></td>
+              <td>null</td>
+              <td>미설정이면 트랜잭션을 쓸 수 없습니다(멱등성만). 설정하면 <strong>멱등성이 자동 활성</strong>됩니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.timeout.ms</code></th>
+              <td><span class="badge">producer</span></td>
+              <td>60000<br>(1분)</td>
+              <td>코디네이터가 선제적으로 abort하기까지 트랜잭션이 열려 있을 수 있는 최대 시간. <strong>첫 파티션이 추가된 시점부터</strong> 셉니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.max.timeout.ms</code></th>
+              <td><span class="badge">broker</span></td>
+              <td>900000<br>(15분)</td>
+              <td>클라이언트 요청이 이보다 크면 <code>InitProducerIdRequest</code>가 오류를 반환합니다(<code>InvalidTxnTimeoutException</code>)</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.state.log.replication.factor</code></th>
+              <td><span class="badge">broker</span></td>
+              <td>3</td>
+              <td><code>__transaction_state</code>의 복제 계수. <strong>클러스터가 이를 충족하지 못하면 내부 토픽 생성이 실패</strong>합니다</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transaction.state.log.min.isr</code></th>
+              <td><span class="badge">broker</span></td>
+              <td>2</td>
+              <td><code>__transaction_state</code> 쓰기에 필요한 최소 ISR</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>transactional.id.expiration.ms</code></th>
+              <td><span class="badge">broker</span></td>
+              <td>604800000<br>(7일)</td>
+              <td>상태 갱신 없이 이 시간이 지나면 코디네이터가 <code>transactional.id</code>를 만료시킵니다. <strong>진행 중 트랜잭션이 있으면 만료되지 않습니다</strong></td>
+            </tr>
+            <tr>
+              <th scope="row"><code>isolation.level</code></th>
+              <td><span class="badge">consumer</span></td>
+              <td><strong>read_uncommitted</strong></td>
+              <td>아래 <a href="#read-committed">별도 절</a>에서 다룹니다</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="note note--danger" data-label="개발 환경에서 트랜잭션이 안 되는 이유">
+        <p>
+          공식 문서가 직접 밝히는 사실입니다. <strong>트랜잭션은 기본적으로 최소 3대의 브로커를 요구</strong>합니다
+          (<code>transaction.state.log.replication.factor=3</code>).
+          단일 노드 개발 환경에서 트랜잭션을 쓰면 <strong><code>__transaction_state</code> 생성 자체가 실패</strong>합니다.
+          개발용으로는 <code>transaction.state.log.replication.factor=1</code>,
+          <code>transaction.state.log.min.isr=1</code>로 낮춰야 합니다.
+          동작하는 3노드 구성은 <a href="../practice/ex01.html">예제 1</a>, EOS 예제는
+          <a href="../practice/ex05.html">예제 5</a>에 있습니다.
+        </p>
+      </aside>
+
+      <aside class="note note--version" data-label="버전 노트">
+        <p><strong>Transactions Server Side Defense (KIP-890) — Kafka 4.0</strong></p>
+        <p>
+          Apache Kafka 4.0부터 강화된 트랜잭션 프로토콜이 도입되었습니다.
+          활성화되고 4.0 이상 프로듀서를 쓰면 <strong>매 트랜잭션마다 프로듀서 에포크가 올라가</strong>
+          각 트랜잭션이 의도한 메시지만 포함하고 <strong>중복이 다음 트랜잭션에 섞여 들어가지 않도록</strong> 보장합니다.
+        </p>
+        <p>
+          서버 쪽은 4.0부터 자동 활성이며 <code>transaction.version</code> 피처 플래그로 제어합니다
+          (새 클러스터는 storage 도구로, 기존 클러스터는 features 도구로 <code>transaction.version=2</code> 설정).
+          <strong>프로듀서 클라이언트는 재시작할 필요가 없습니다</strong> —
+          브로커에 재연결하는 시점에 동적으로 업그레이드되며, 트랜잭션 중간에는 전환하지 않고
+          다음 트랜잭션 시작 시점에 반영됩니다. 다운그레이드도 같은 방식으로 안전합니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="consume-transform-produce">
+      <h2 id="consume-transform-produce">consume-transform-produce 패턴</h2>
+
+      <p>
+        Kafka 토픽을 읽어 처리하고 다른 Kafka 토픽에 쓰는 파이프라인이 EOS가 성립하는 <strong>정확한 범위</strong>입니다.
+        공식 문서는 그 원리를 이렇게 설명합니다 —
+        <strong>컨슈머의 위치가 내부 토픽의 메시지로 저장되므로,
+        출력 토픽에 쓰는 것과 같은 트랜잭션 안에서 오프셋을 Kafka에 쓸 수 있습니다.</strong>
+        트랜잭션이 중단되면 컨슈머의 저장된 위치는 이전 값으로 되돌아가고,
+        출력 토픽에 쓰인 데이터는 <code>read_committed</code> 컨슈머에게 보이지 않습니다.
+      </p>
+
+      <figure class="diagram" data-diagram="D-053">
+        <figcaption>
+          consume-transform-produce — 입력 토픽의 오프셋 커밋이 출력 토픽 쓰기와 <strong>같은 트랜잭션</strong>에
+          포함되는 구조. 이 원자성이 Kafka 내부 EOS의 근거입니다.
+        </figcaption>
+      </figure>
+
+      <h3 id="eos-three-aspects">공식 문서가 드는 세 가지 요건</h3>
+      <p>프로듀서와 컨슈머를 직접 써서 exactly-once 처리를 만들 때 필요한 것입니다.</p>
+      <ol>
+        <li><strong>컨슈머는 파티션 할당을 통해</strong> 자신이 그 파티션을 처리하는 그룹 내 유일한 컨슈머임을 보장받습니다.</li>
+        <li><strong>프로듀서는 트랜잭션을 사용해</strong> 자신이 생산하는 모든 레코드와
+          컨슈머를 대신해 갱신하는 오프셋을 <strong>원자적으로</strong> 처리합니다.</li>
+        <li><strong>리밸런싱과의 조합을 올바르게 다루기 위해,
+          컨슈머 인스턴스마다 프로듀서 인스턴스를 하나씩 쓰는 것이 권장</strong>됩니다.
+          더 복잡하고 효율적인 방식도 가능하지만 복잡도가 올라갑니다.</li>
+      </ol>
+
+      <figure class="code">
+        <figcaption>consume-transform-produce — 완전한 루프</figcaption>
+        <pre><code class="lang-java">// ---- 컨슈머: 공식 문서가 요구하는 두 설정 ----
+Properties cp = new Properties();
+cp.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-1:9092");
+cp.put(ConsumerConfig.GROUP_ID_CONFIG, "order-enricher");
+cp.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");   // 필수
+cp.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");         // 필수
+cp.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+cp.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+
+// ---- 프로듀서: 컨슈머 인스턴스마다 하나 ----
+Properties pp = new Properties();
+pp.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-1:9092");
+pp.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "order-enricher-shard-3");
+pp.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+pp.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(cp);
+KafkaProducer&lt;String, String&gt; producer = new KafkaProducer&lt;&gt;(pp);
+
+producer.initTransactions();
+consumer.subscribe(List.of("orders"));
+
+while (running) {
+    ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(500));
+    if (records.isEmpty()) continue;
+
+    try {
+        producer.beginTransaction();
+
+        Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets = new HashMap&lt;&gt;();
+        for (ConsumerRecord&lt;String, String&gt; record : records) {
+            producer.send(new ProducerRecord&lt;&gt;("orders-enriched",
+                    record.key(), enrich(record.value())));
+            // 커밋할 오프셋은 "다음에 읽을 위치" = 현재 오프셋 + 1
+            offsets.put(new TopicPartition(record.topic(), record.partition()),
+                    new OffsetAndMetadata(record.offset() + 1));
+        }
+
+        // 오프셋 커밋을 트랜잭션에 포함시킵니다.
+        // groupMetadata() 를 넘겨야 브로커가 제너레이션까지 검증해 좀비를 펜싱합니다.
+        producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());
+
+        producer.commitTransaction();
+
+    } catch (ProducerFencedException | OutOfOrderSequenceException | AuthorizationException e) {
+        // 복구 불가 — 종료합니다.
+        producer.close();
+        consumer.close();
+        throw e;
+    } catch (KafkaException e) {
+        producer.abortTransaction();
+        // ★ 중요: abort 후 컨슈머 위치를 커밋된 오프셋으로 되돌려야 재처리됩니다.
+        //   자동으로 되감기지 않습니다.
+        resetToLastCommitted(consumer, records.partitions());
+    }
+}
+
+// 커밋된 오프셋을 다시 읽어 컨슈머 위치를 되돌립니다.
+static void resetToLastCommitted(KafkaConsumer&lt;?, ?&gt; consumer,
+                                 Set&lt;TopicPartition&gt; partitions) {
+    Map&lt;TopicPartition, OffsetAndMetadata&gt; committed = consumer.committed(partitions);
+    for (TopicPartition tp : partitions) {
+        OffsetAndMetadata om = committed.get(tp);
+        if (om != null) {
+            consumer.seek(tp, om.offset());
+        } else {
+            consumer.seekToBeginning(List.of(tp));
+        }
+    }
+}</code></pre>
+      </figure>
+
+      <h3 id="streams-eos">Kafka Streams — processing.guarantee</h3>
+      <p>
+        공식 문서는 <strong>"Kafka에서 exactly-once 의미론을 얻는 가장 간단한 방법은 Kafka Streams를 쓰는 것"</strong>이라고
+        명시합니다. 위의 루프를 직접 쓰는 대신 설정 하나로 같은 결과를 얻습니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>processing.guarantee</code> (Kafka Streams)</caption>
+          <thead>
+            <tr><th scope="col">값</th><th scope="col">상태</th><th scope="col">요구사항</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>at_least_once</code></th><td><strong>기본값</strong></td><td>—</td></tr>
+            <tr><th scope="row"><code>exactly_once_v2</code></th><td>현행 EOS</td><td>브로커 2.5 이상</td></tr>
+            <tr><th scope="row"><code>exactly_once</code></th><td><strong>deprecated</strong> (EOS alpha)</td><td>브로커 0.11.0 이상</td></tr>
+            <tr><th scope="row"><code>exactly_once_beta</code></th><td><strong>deprecated</strong> (v2와 동일)</td><td>브로커 2.5 이상</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        <code>exactly_once_v2</code>를 켜면 공식 문서 기준으로 다음이 <strong>자동으로 바뀝니다</strong>.
+      </p>
+      <ul>
+        <li><code>commit.interval.ms</code> 기본값이 <strong>100ms로 변경</strong>됩니다.</li>
+        <li>컨슈머에 <strong><code>isolation.level=read_committed</code></strong>가 설정됩니다.</li>
+        <li>프로듀서에 <strong><code>enable.idempotence=true</code></strong>가 설정됩니다.</li>
+      </ul>
+      <p>
+        그리고 <strong>기본적으로 최소 3대의 브로커</strong>가 필요합니다. 개발용으로는
+        <code>transaction.state.log.replication.factor</code>와 <code>transaction.state.log.min.isr</code>를
+        브로커 수에 맞춰 낮춰야 합니다. Streams 상세는 <a href="ch10.html">10장</a>에서 다룹니다.
+      </p>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Kafka Streams">
+        <p>
+          <code>processing.guarantee</code>의 <strong>기본값은 <code>at_least_once</code></strong>이고,
+          현행 EOS 값은 <strong><code>exactly_once_v2</code></strong>입니다.
+          <code>exactly_once</code>와 <code>exactly_once_beta</code>는 <strong>deprecated</strong>입니다.
+          그리고 EOS를 켜면 <code>commit.interval.ms</code>가 <strong>100ms로 바뀐다</strong>는 점이
+          "EOS를 켰는데 처리량이 떨어졌다"는 시나리오 문항의 근거입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="read-committed">
+      <h2 id="read-committed">isolation.level 과 LSO</h2>
+
+      <aside class="note note--danger" data-label="가장 먼저 기억할 것">
+        <p>
+          <strong><code>isolation.level</code>은 컨슈머 설정입니다.</strong> 프로듀서 설정이 아닙니다.
+          그리고 <strong>기본값은 <code>read_uncommitted</code></strong>입니다.
+          즉 아무 설정도 하지 않은 컨슈머는 <strong>중단된(aborted) 트랜잭션의 메시지까지 봅니다.</strong>
+          프로듀서 쪽에서 트랜잭션을 완벽하게 구현해도, 컨슈머가 <code>read_committed</code>가 아니면
+          EOS는 성립하지 않습니다.
+        </p>
+      </aside>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption><code>isolation.level</code>의 두 값 (공식 문서 Consumer Configs)</caption>
+          <thead>
+            <tr><th scope="col">값</th><th scope="col"><code>poll()</code>이 반환하는 것</th><th scope="col">읽기 상한</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><code>read_uncommitted</code> <span class="badge">기본값</span></th>
+              <td>모든 메시지. <strong>중단된 트랜잭션의 메시지도 포함</strong>됩니다</td>
+              <td>high watermark</td>
+            </tr>
+            <tr>
+              <th scope="row"><code>read_committed</code></th>
+              <td><strong>커밋된 트랜잭션 메시지</strong>와 비트랜잭션 메시지만</td>
+              <td><strong>LSO (Last Stable Offset)</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        비트랜잭션 메시지는 <strong>두 모드 모두에서 무조건 반환</strong>됩니다.
+        그리고 메시지는 <strong>항상 오프셋 순서로</strong> 반환됩니다 — 이 두 사실이 다음 절의 근거입니다.
+      </p>
+
+      <h3 id="lso">LSO — Last Stable Offset</h3>
+      <p>
+        공식 문서의 정의입니다. <strong>LSO는 "가장 처음 열려 있는 트랜잭션의 오프셋보다 1 작은 값"</strong>입니다.
+        <code>read_committed</code> 모드의 <code>poll()</code>은 <strong>LSO까지만</strong> 반환합니다.
+      </p>
+      <p>
+        여기서 실무적으로 가장 중요한 결론이 나옵니다.
+        <strong>진행 중인 트랜잭션에 속한 메시지 뒤에 오는 메시지는, 그 자체가 이미 커밋되었더라도
+        해당 트랜잭션이 완료될 때까지 보류됩니다.</strong>
+        메시지가 오프셋 순서로만 반환되므로 중간을 뛰어넘을 수 없기 때문입니다.
+        그 결과 공식 문서 표현대로 <strong>"진행 중인 트랜잭션이 있으면 <code>read_committed</code> 컨슈머는
+        high watermark까지 읽을 수 없습니다."</strong>
+      </p>
+
+      <figure class="diagram" data-diagram="D-052">
+        <figcaption>
+          <code>read_committed</code>와 LSO — 진행 중인 트랜잭션 하나 때문에 그 뒤에 있는
+          <strong>이미 커밋된 메시지까지 보이지 않는</strong> 상황. LSO와 high watermark의 간격이 곧 가시성 지연입니다.
+        </figcaption>
+      </figure>
+
+      <aside class="note note--warn" data-label="지연이 늘어나는 구조">
+        <p>
+          트랜잭션이 오래 열려 있으면 <strong>LSO가 앞으로 나가지 못하고</strong>
+          그 파티션을 읽는 모든 <code>read_committed</code> 컨슈머의 lag이 늘어납니다.
+          <strong>단 하나의 느린 트랜잭션 프로듀서가 파티션 전체의 가시성을 붙잡습니다.</strong>
+          처방은 두 방향입니다.
+        </p>
+        <ul>
+          <li><strong>트랜잭션을 짧게 유지</strong>합니다. 한 트랜잭션에 담는 레코드 수를 제한하세요.</li>
+          <li><code>transaction.timeout.ms</code>(기본 60000)를 요구 지연에 맞춰 조정합니다.
+            브로커의 <code>transaction.max.timeout.ms</code>(기본 900000)가 상한입니다.
+            공식 문서는 이 브로커 설정의 목적이 <strong>"클라이언트가 지나치게 큰 타임아웃을 잡아
+            트랜잭션에 포함된 토픽을 읽는 컨슈머를 정지시키는 것을 막는 것"</strong>이라고 밝힙니다.</li>
+        </ul>
+      </aside>
+
+      <h3 id="control-records">컨트롤 레코드와 seekToEnd</h3>
+      <p>
+        트랜잭션이 커밋 또는 중단되면 <strong>트랜잭션 마커 레코드</strong>가 각 파티션에 기록됩니다.
+        <code>read_committed</code> 컨슈머는 이 마커를 보고 중단된 트랜잭션의 레코드를 걸러 냅니다.
+        이 마커는 <strong>애플리케이션에 반환되지 않습니다</strong> — 하지만 <strong>오프셋 공간은 차지합니다.</strong>
+      </p>
+
+      <aside class="note note--warn" data-label="오프셋에 구멍이 보이는 이유">
+        <p>
+          트랜잭션 토픽에서 컨슈머가 받는 레코드의 오프셋이 <strong>연속하지 않을 수 있습니다.</strong>
+          컨트롤 레코드가 오프셋을 소비하고, 중단된 트랜잭션의 레코드도 오프셋을 이미 차지했기 때문입니다.
+          <strong>"오프셋이 5, 6, 9로 건너뛰었으니 메시지가 유실됐다"는 판단은 틀립니다.</strong>
+          lag 계산 시 <code>LOG-END-OFFSET − CURRENT-OFFSET</code>이
+          <strong>실제 미처리 건수보다 크게 나오는</strong> 원인도 이것입니다.
+        </p>
+      </aside>
+
+      <p>
+        공식 문서가 명시하는 또 하나의 차이입니다.
+        <strong><code>read_committed</code> 모드에서 <code>seekToEnd()</code>는 high watermark가 아니라
+        LSO를 반환합니다.</strong> "끝으로 이동"의 의미가 모드에 따라 달라집니다.
+      </p>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          <code>isolation.level</code> 관련 출제 포인트를 정리하면 다음과 같습니다.
+        </p>
+        <ul>
+          <li><strong>컨슈머 설정</strong>입니다. 기본값은 <strong><code>read_uncommitted</code></strong>입니다.</li>
+          <li><code>read_committed</code>는 <strong>LSO까지만</strong> 읽습니다. LSO = <strong>가장 처음 열린 트랜잭션의 오프셋 − 1</strong>.</li>
+          <li>진행 중 트랜잭션이 있으면 <strong>그 뒤의 커밋된 메시지도 보이지 않습니다</strong> → 지연 증가.</li>
+          <li><strong>비트랜잭션 메시지는 두 모드 모두에서 무조건 반환</strong>됩니다.</li>
+          <li>컨트롤 레코드는 <strong>애플리케이션에 노출되지 않지만 오프셋을 차지</strong>합니다.</li>
+          <li><code>read_committed</code>에서 <code>seekToEnd()</code>는 <strong>LSO를 반환</strong>합니다.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="eos-boundary">
+      <h2 id="eos-boundary">EOS의 경계 — 이 장에서 가장 중요한 절</h2>
+
+      <p>
+        여기까지의 모든 장치는 <strong>Kafka 토픽을 읽어 Kafka 토픽에 쓰는 경계 안에서만</strong> 성립합니다.
+        공식 문서의 결론 문장을 그대로 인용하면 이렇습니다.
+      </p>
+
+      <aside class="note note--danger" data-label="공식 문서의 결론">
+        <p>
+          <strong>"Kafka는 Kafka Streams에서 exactly-once 전달을 지원하며, 트랜잭션 프로듀서와
+          read-committed 격리 수준을 쓰는 컨슈머는 <em>Kafka 토픽에서 데이터를 읽고 처리하고 쓸 때</em>
+          exactly-once 전달을 제공하는 데 일반적으로 사용할 수 있습니다.
+          <em>다른 목적지 시스템에 대한 exactly-once 전달은 일반적으로 그 시스템과의 협력이 필요합니다.</em>"</strong>
+        </p>
+      </aside>
+
+      <figure class="diagram" data-diagram="D-054">
+        <figcaption>
+          EOS의 경계 — Kafka 토픽 사이에서는 트랜잭션이 원자성을 보장하지만,
+          외부 DB나 결제 API 호출은 그 트랜잭션에 포함되지 않습니다.
+          경계 밖에서는 <strong>컨슈머 쪽 멱등성을 직접 구현</strong>해야 합니다.
+        </figcaption>
+      </figure>
+
+      <h3 id="why-external-fails">왜 외부 시스템에는 성립하지 않는가</h3>
+      <p>
+        공식 문서가 설명하는 이유는 명확합니다. 외부 시스템에 쓸 때의 제약은
+        <strong>"컨슈머의 위치와 실제로 저장된 출력을 조율해야 하는 필요"</strong>에 있습니다.
+        고전적 해법은 컨슈머 위치 저장과 출력 저장 사이의 <strong>2단계 커밋(two-phase commit)</strong>인데,
+        공식 문서는 <strong>"컨슈머가 쓰려는 많은 출력 시스템이 2단계 커밋을 지원하지 않는다"</strong>고 지적합니다.
+      </p>
+      <p>
+        결국 Kafka 트랜잭션은 <strong>Kafka 안의 파티션들과 <code>__consumer_offsets</code>에 대해서만</strong>
+        원자성을 만듭니다. HTTP 요청 하나, SQL <code>INSERT</code> 하나는 그 원자성 안에 들어갈 방법이 없습니다.
+        트랜잭션이 abort되어 Kafka 쪽이 전부 되돌아가도 <strong>이미 나간 HTTP 요청은 되돌아오지 않습니다.</strong>
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>EOS가 성립하는 범위와 성립하지 않는 범위</caption>
+          <thead>
+            <tr><th scope="col">시나리오</th><th scope="col">EOS</th><th scope="col">필요한 조치</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Kafka 토픽 → 처리 → Kafka 토픽</th>
+              <td><span class="mark-ok">성립</span></td>
+              <td>트랜잭션 프로듀서 + <code>sendOffsetsToTransaction</code> + <code>read_committed</code>. 또는 Kafka Streams <code>exactly_once_v2</code></td>
+            </tr>
+            <tr>
+              <th scope="row">Kafka 토픽 → 처리 → <strong>외부 RDBMS</strong></th>
+              <td><span class="mark-no">성립하지 않음</span></td>
+              <td>DB 쪽 <strong>멱등 upsert</strong>(유니크 키) 또는 <strong>오프셋을 DB에 함께 저장</strong>해 트랜잭션으로 묶기</td>
+            </tr>
+            <tr>
+              <th scope="row">Kafka 토픽 → 처리 → <strong>외부 HTTP/결제 API</strong></th>
+              <td><span class="mark-no">성립하지 않음</span></td>
+              <td>API의 <strong>idempotency key</strong> 지원에 의존. 없으면 <strong>처리 이력 테이블</strong>로 직접 중복 차단</td>
+            </tr>
+            <tr>
+              <th scope="row">Kafka 토픽 → <strong>이메일·SMS 발송</strong></th>
+              <td><span class="mark-no">성립하지 않음</span></td>
+              <td>되돌릴 수 없는 부수효과입니다. <strong>발송 이력을 먼저 확정한 뒤 발송</strong>하는 순서로 설계</td>
+            </tr>
+            <tr>
+              <th scope="row">Kafka Connect sink → 외부 시스템</th>
+              <td>커넥터에 따라 다름</td>
+              <td>공식 문서 예: HDFS 커넥터처럼 <strong>데이터와 오프셋을 같은 곳에 함께 저장</strong>하는 커넥터는 원자성을 얻습니다(<a href="ch09.html">9장</a>)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="consumer-idempotence">그래서 컨슈머 멱등성을 직접 만듭니다</h3>
+      <p>
+        공식 문서가 제시하는 일반적 해법은 <strong>"컨슈머가 자신의 오프셋을 출력과 같은 곳에 저장하게 하는 것"</strong>입니다.
+        2단계 커밋보다 단순하고 범용적이기 때문입니다. 실무에서는 다음 세 가지 형태로 나타납니다.
+      </p>
+
+      <div class="table-scroll">
+        <table class="config-table">
+          <caption>외부 시스템에 대한 멱등성 구현 패턴</caption>
+          <thead>
+            <tr><th scope="col">패턴</th><th scope="col">방법</th><th scope="col">쓰는 곳</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">① 멱등 upsert</th>
+              <td>메시지의 비즈니스 키를 <strong>유니크 제약</strong>으로 걸고 <code>UPSERT</code>/<code>MERGE</code>로 씁니다. 같은 메시지를 두 번 받아도 결과가 같습니다</td>
+              <td>상태 갱신형(재고, 프로필, 잔액). 공식 문서가 언급하는 "기본 키가 있어 갱신이 멱등적인" 경우</td>
+            </tr>
+            <tr>
+              <th scope="row">② 오프셋 동거</th>
+              <td>처리 결과와 <strong>오프셋을 같은 DB 트랜잭션</strong>에 저장합니다. 컨슈머는 <code>assign()</code> + <code>seek()</code>로 DB의 오프셋에서 시작합니다</td>
+              <td>진짜 EOS가 필요하고 DB 트랜잭션을 쓸 수 있는 경우. Kafka에 오프셋을 커밋하지 않습니다</td>
+            </tr>
+            <tr>
+              <th scope="row">③ 처리 이력 테이블</th>
+              <td><code>(topic, partition, offset)</code> 또는 메시지 ID를 <strong>유니크 키로 기록</strong>하고, 이미 있으면 건너뜁니다. 이력 기록과 부수효과를 한 트랜잭션에 묶습니다</td>
+              <td>부수효과가 멱등적이지 않은 경우(발송, 외부 API 호출)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure class="code">
+        <figcaption>패턴 ② 오프셋 동거 — 결과와 오프셋을 같은 DB 트랜잭션에</figcaption>
+        <pre><code class="lang-java">// Kafka 에 오프셋을 커밋하지 않습니다. DB 가 진실의 원천입니다.
+consumer.subscribe(List.of("orders"), new ConsumerRebalanceListener() {
+    @Override public void onPartitionsRevoked(Collection&lt;TopicPartition&gt; partitions) { }
+    @Override public void onPartitionsAssigned(Collection&lt;TopicPartition&gt; partitions) {
+        for (TopicPartition tp : partitions) {
+            // DB 에 저장된 오프셋에서 재개합니다.
+            Long offset = dao.loadOffset(tp.topic(), tp.partition());
+            if (offset != null) consumer.seek(tp, offset);
+            else consumer.seekToBeginning(List.of(tp));
+        }
+    }
+});
+
+while (running) {
+    ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(500));
+
+    try (Connection conn = dataSource.getConnection()) {
+        conn.setAutoCommit(false);
+        for (ConsumerRecord&lt;String, String&gt; record : records) {
+            dao.upsertOrder(conn, record.value());
+            // 결과와 오프셋이 같은 트랜잭션에 들어갑니다 → 둘 다 저장되거나 둘 다 안 됩니다.
+            dao.saveOffset(conn, record.topic(), record.partition(), record.offset() + 1);
+        }
+        conn.commit();
+    } catch (SQLException e) {
+        // 롤백되었으므로 다음 루프에서 같은 오프셋을 다시 읽습니다.
+        log.error("DB 트랜잭션 실패 — 재처리됩니다", e);
+    }
+}</code></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption>패턴 ③ 처리 이력 테이블 — 되돌릴 수 없는 부수효과 앞에서</figcaption>
+        <pre><code class="lang-sql">-- 유니크 제약이 중복 처리를 물리적으로 차단합니다.
+CREATE TABLE processed_records (
+    topic       VARCHAR(255) NOT NULL,
+    partition_id INT         NOT NULL,
+    record_offset BIGINT     NOT NULL,
+    processed_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (topic, partition_id, record_offset)
+);
+
+-- 부수효과보다 먼저 이력을 확정합니다.
+-- INSERT 가 유니크 위반으로 실패하면 이미 처리한 것이므로 건너뜁니다.
+INSERT INTO processed_records (topic, partition_id, record_offset)
+VALUES ('payments', 3, 981274);</code></pre>
+      </figure>
+
+      <aside class="note note--exam" data-label="시험 포인트 · Application Development">
+        <p>
+          가장 자주 나오는 시나리오 문항입니다.
+          <strong>"트랜잭션 프로듀서와 <code>read_committed</code> 컨슈머로 EOS를 구성했는데,
+          컨슈머가 처리 중 호출하는 외부 결제 API에서 중복 결제가 발생했다. 원인은?"</strong>
+        </p>
+        <p>
+          답은 <strong>설정 문제가 아니라 EOS의 범위 문제</strong>입니다.
+          Kafka 트랜잭션은 <strong>Kafka 토픽과 <code>__consumer_offsets</code>에 대해서만</strong> 원자적입니다.
+          외부 API 호출은 트랜잭션에 포함되지 않으므로,
+          트랜잭션이 abort되고 재처리되면 <strong>API는 두 번 호출됩니다.</strong>
+          해결은 <strong>애플리케이션 레벨의 멱등성</strong>(idempotency key, 처리 이력 테이블)입니다.
+          "<code>isolation.level</code>을 바꾼다", "<code>transactional.id</code>를 바꾼다" 같은 선택지는 모두 오답입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="pitfalls">
+      <h2 id="pitfalls">흔한 오해</h2>
+
+      <aside class="note note--warn" data-label="오해 1">
+        <p>
+          <strong>"EOS를 켜면 DB 중복도 막힌다"</strong> —
+          이 장에서 가장 중요한 오해입니다. Kafka의 exactly-once는
+          <strong>Kafka 토픽을 읽고 Kafka 토픽에 쓰는 경계 안에서만</strong> 성립합니다.
+          외부 데이터베이스나 결제 API를 호출하는 순간 그 보장은 끝납니다.
+          공식 문서 표현대로 <strong>"다른 목적지 시스템에 대한 exactly-once는 그 시스템과의 협력이 필요"</strong>합니다.
+          <strong>컨슈머 쪽 멱등성은 EOS를 켜도 여전히 필요합니다.</strong>
+          이 착각이 만드는 장애는 <a href="../cases/case07.html">케이스 7</a>에서 다룹니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="오해 2">
+        <p>
+          <strong>"프로듀서에 <code>isolation.level=read_committed</code>를 넣어야 한다"</strong> —
+          <code>isolation.level</code>은 <strong>컨슈머 설정</strong>입니다.
+          프로듀서에 넣으면 아무 효과도 없이 무시됩니다.
+          그리고 <strong>기본값이 <code>read_uncommitted</code></strong>라는 점이 함정입니다 —
+          프로듀서 쪽에서 트랜잭션을 완벽하게 구현해도 <strong>컨슈머가 기본 설정이면
+          중단된 트랜잭션의 메시지까지 읽습니다.</strong>
+          EOS는 <strong>프로듀서와 컨슈머 양쪽 설정이 맞아야</strong> 성립합니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="오해 3">
+        <p>
+          <strong>"멱등 프로듀서를 켜면 애플리케이션이 같은 메시지를 두 번 보내도 한 번만 기록된다"</strong> —
+          아닙니다. 멱등성은 <strong>클라이언트 내부 재시도로 인한 중복</strong>만 제거합니다.
+          공식 문서가 직접 경고합니다 —
+          <strong>"애플리케이션 레벨의 재전송은 중복 제거될 수 없으므로 반드시 피해야 한다."</strong>
+          그리고 멱등성은 <strong>단일 프로듀서 세션 안에서만</strong> 유효합니다.
+          프로세스가 재시작하면 새 PID를 받으므로 재시작 전에 보낸 것과의 중복은 판별할 수 없습니다 —
+          이 경계를 넘으려면 <code>transactional.id</code>가 필요합니다.
+        </p>
+      </aside>
+
+      <aside class="note note--warn" data-label="오해 4">
+        <p>
+          <strong>"<code>read_committed</code>로 바꿨는데 lag이 늘었다. 버그다"</strong> —
+          정상 동작입니다. <code>read_committed</code> 컨슈머는 <strong>LSO까지만</strong> 읽습니다.
+          진행 중인 트랜잭션이 하나라도 있으면 <strong>그 뒤의 커밋된 메시지까지 보류</strong>되므로
+          high watermark 기준으로 계산한 lag이 커집니다.
+          그리고 <strong>컨트롤 레코드가 오프셋을 차지</strong>하기 때문에
+          lag 숫자가 실제 미처리 건수보다 큽니다.
+          처방은 <strong>트랜잭션을 짧게 유지</strong>하는 것입니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="exam-points">
+      <h2 id="exam-points">시험 포인트 요약</h2>
+
+      <aside class="note note--exam" data-label="CCDAK · Application Development">
+        <p>6장 범위의 출제 지점을 한 곳에 모았습니다.</p>
+        <ul>
+          <li>Kafka의 <strong>기본 동작은 at-least-once</strong>입니다. at-most-once는 <strong>재시도를 끄고 처리 전에 커밋</strong>해서 의도적으로 만듭니다.</li>
+          <li><strong>중복은 프로듀서 재시도에서, 유실/중복은 컨슈머 커밋 순서에서</strong> 나옵니다.</li>
+          <li><strong>멱등 프로듀서 = 파티션 단위 · 단일 세션 내</strong> 중복 제거. <strong>트랜잭션 = 다중 파티션 원자적 쓰기 + 오프셋 포함 + 세션 경계 넘기</strong>.</li>
+          <li><code>enable.idempotence=true</code>는 <code>max.in.flight.requests.per.connection ≤ 5</code>, <code>retries &gt; 0</code>, <code>acks=all</code>을 요구합니다. <strong>5인 이유는 브로커가 프로듀서당 5개 배치만 보관</strong>하기 때문입니다.</li>
+          <li><strong><code>transactional.id</code>는 프로듀서 설정</strong>입니다. 설정하면 멱등성이 자동 활성됩니다. 인스턴스마다 유일해야 하고, 중복 시 <code>ProducerFencedException</code>(복구 불가).</li>
+          <li>EOS 컨슈머 요구 설정: <strong><code>isolation.level=read_committed</code> + <code>enable.auto.commit=false</code></strong>.</li>
+          <li><strong><code>isolation.level</code>은 컨슈머 설정, 기본값은 <code>read_uncommitted</code></strong>. <code>read_committed</code>는 <strong>LSO까지만</strong> 읽습니다.</li>
+          <li>API 순서: <code>initTransactions</code>(한 번) → <code>beginTransaction</code> → <code>send</code>/<code>sendOffsetsToTransaction</code> → <code>commitTransaction</code>/<code>abortTransaction</code>.</li>
+          <li>4.x의 <code>sendOffsetsToTransaction</code>은 <strong><code>ConsumerGroupMetadata</code>를 받는 시그니처만</strong> 존재합니다.</li>
+          <li><strong>abort 후에는 컨슈머 위치를 직접 되돌려야</strong> 재처리됩니다. 자동으로 되감기지 않습니다.</li>
+          <li><strong>EOS는 Kafka 내부에서만</strong> 성립합니다. 외부 시스템에는 <strong>컨슈머 멱등성이 필요</strong>합니다.</li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="CCDAK · Fundamentals">
+        <p>
+          내부 토픽과 브로커 요구사항이 Fundamentals 쪽에서 나옵니다.
+        </p>
+        <ul>
+          <li>트랜잭션 상태는 <strong><code>__transaction_state</code></strong>에, 오프셋은 <strong><code>__consumer_offsets</code></strong>에 저장됩니다.</li>
+          <li><code>transaction.state.log.replication.factor</code> 기본 <strong>3</strong>, <code>transaction.state.log.min.isr</code> 기본 <strong>2</strong>.
+            <strong>브로커가 3대 미만이면 내부 토픽 생성이 실패</strong>합니다 — 단일 노드 개발 환경에서 트랜잭션이 안 되는 이유입니다.</li>
+          <li><code>transaction.timeout.ms</code>(프로듀서) 기본 <strong>60000</strong>, <code>transaction.max.timeout.ms</code>(브로커) 기본 <strong>900000</strong>.
+            초과 요청은 <code>InvalidTxnTimeoutException</code>.</li>
+          <li><strong>컨트롤 레코드는 애플리케이션에 노출되지 않지만 오프셋을 차지</strong>합니다.</li>
+        </ul>
+      </aside>
+
+      <aside class="note note--exam" data-label="CCDAK · Kafka Streams">
+        <p>
+          <code>processing.guarantee</code>의 기본값은 <strong><code>at_least_once</code></strong>,
+          현행 EOS 값은 <strong><code>exactly_once_v2</code></strong>(브로커 2.5+),
+          <code>exactly_once</code>·<code>exactly_once_beta</code>는 <strong>deprecated</strong>입니다.
+          EOS를 켜면 <code>commit.interval.ms</code>가 <strong>100ms</strong>로 바뀌고,
+          컨슈머에 <code>read_committed</code>, 프로듀서에 <code>enable.idempotence=true</code>가 자동 설정됩니다.
+        </p>
+      </aside>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="check-quiz">
+      <h2 id="check-quiz">확인 문제</h2>
+      <p>
+        EOS의 경계, <code>isolation.level</code>이 어느 쪽 설정인지,
+        멱등성과 트랜잭션의 구분이 집중적으로 나옵니다.
+      </p>
+      <div class="quiz-embed" data-set="basics-ch06" data-count="10"></div>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="related">
+      <h2 id="related">이어서 볼 곳</h2>
+      <ul class="card-grid">
+        <li><a class="card" href="ch05.html">
+          <span class="card__title">5장 · Consumer 심화</span>
+          <span class="card__desc">커밋 방식과 타임아웃 4종 — 이 장의 전제가 되는 내용입니다.</span>
+          <span class="card__meta">CCDAK Application Development</span>
+        </a></li>
+        <li><a class="card" href="ch04.html">
+          <span class="card__title">4장 · Producer 심화</span>
+          <span class="card__desc">acks와 멱등성, 재시도 예산 — 프로듀서 쪽 상세.</span>
+          <span class="card__meta">CCDAK Application Development</span>
+        </a></li>
+        <li><a class="card" href="../cases/case07.html">
+          <span class="card__title">케이스 7 · EOS를 켰는데 중복 결제가 났다</span>
+          <span class="card__desc">EOS의 경계를 잘못 이해한 파이프라인의 실제 전개.</span>
+          <span class="card__meta">실수 케이스</span>
+        </a></li>
+        <li><a class="card" href="../practice/ex05.html">
+          <span class="card__title">예제 5 · consume-transform-produce EOS</span>
+          <span class="card__desc">동작하는 트랜잭션 파이프라인 전체 코드.</span>
+          <span class="card__meta">실무 예제</span>
+        </a></li>
+        <li><a class="card" href="ch10.html">
+          <span class="card__title">10장 · Kafka Streams</span>
+          <span class="card__desc"><code>exactly_once_v2</code>로 같은 보장을 설정 하나로 얻는 방법.</span>
+          <span class="card__meta">CCDAK Kafka Streams</span>
+        </a></li>
+        <li><a class="card" href="../ccdak/traps.html">
+          <span class="card__title">CCDAK 함정 사전</span>
+          <span class="card__desc">멱등성 vs 트랜잭션, read_uncommitted vs read_committed 비교표.</span>
+          <span class="card__meta">자격증</span>
+        </a></li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <section aria-labelledby="sources">
+      <h2 id="sources">공식 문서 출처</h2>
+      <p>이 장의 정의·설정 기본값·API 시그니처는 모두 아래에서 확인했습니다 (Apache Kafka 4.3 문서 기준).</p>
+      <ul>
+        <li><a href="https://kafka.apache.org/documentation/#semantics" rel="noopener noreferrer">Design — Message Delivery Semantics</a> — 세 보장의 정의, 중복/유실의 발생 지점, "기본은 at-least-once", 외부 시스템에 대한 EOS의 제약과 2단계 커밋 서술</li>
+        <li><a href="https://kafka.apache.org/documentation/#usingtransactions" rel="noopener noreferrer">Design — Using Transactions</a> — 프로듀서만 트랜잭션을 갖는 구조, EOS 3요건, 필수 설정(<code>read_committed</code> + <code>enable.auto.commit=false</code> + <code>transactional.id</code>), 4.x 표준화된 예외 6범주, abort 후 위치 리셋 요구</li>
+        <li><a href="https://kafka.apache.org/documentation/#transaction_protocol" rel="noopener noreferrer">Operations — Transaction Protocol</a> — KIP-890 Transactions Server Side Defense, <code>transaction.version</code> 피처 플래그, 업그레이드/다운그레이드 동작</li>
+        <li><a href="https://kafka.apache.org/documentation/#producerconfigs" rel="noopener noreferrer">Producer Configs</a> — <code>transactional.id</code>, <code>transaction.timeout.ms</code>(60000), <code>enable.idempotence</code>(true)와 그 요구사항, <code>max.in.flight.requests.per.connection</code>(5)의 상한 이유, <code>acks</code></li>
+        <li><a href="https://kafka.apache.org/documentation/#consumerconfigs" rel="noopener noreferrer">Consumer Configs</a> — <code>isolation.level</code>(<code>read_uncommitted</code>), LSO 정의, <code>seekToEnd</code>의 동작 차이</li>
+        <li><a href="https://kafka.apache.org/documentation/#brokerconfigs" rel="noopener noreferrer">Broker Configs</a> — <code>transaction.state.log.replication.factor</code>(3), <code>transaction.state.log.min.isr</code>(2), <code>transaction.max.timeout.ms</code>(900000), <code>transactional.id.expiration.ms</code>(604800000)</li>
+        <li><a href="https://kafka.apache.org/documentation/#streamsconfigs" rel="noopener noreferrer">Kafka Streams Configs</a> — <code>processing.guarantee</code>의 값과 기본값, EOS 시 <code>commit.interval.ms</code> 100ms 변경, 자동 설정되는 컨슈머·프로듀서 설정, 브로커 3대 요구</li>
+        <li><a href="https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html" rel="noopener noreferrer">Javadoc — KafkaProducer</a> — 트랜잭션 예시 코드, <code>transactional.id</code>의 목적과 유일성 요구, <code>ProducerFencedException</code> 처리, 멱등성의 세션 경계와 애플리케이션 재전송 경고</li>
+        <li><a href="https://kafka.apache.org/43/javadoc/org/apache/kafka/clients/producer/Producer.html" rel="noopener noreferrer">Javadoc — Producer</a> — <code>sendOffsetsToTransaction(Map, ConsumerGroupMetadata)</code> 시그니처</li>
+      </ul>
+    </section>
+
+    <nav class="pager" aria-label="이전/다음"></nav>
+  </main>
+
+  <script src="../assets/js/progress.js" defer></script>
+  <script src="../assets/js/highlight.js" defer></script>
+  <script src="../assets/js/viz.js" defer></script>
+  <script src="../assets/js/app.js" defer></script>
+  <script src="../assets/js/quiz.js" defer></script>
+</body>
+</html>

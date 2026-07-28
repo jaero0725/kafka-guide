@@ -1,0 +1,82 @@
+<svg viewBox="0 0 720 322" role="img" class="kg-diagram"
+     aria-labelledby="d060-title d060-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="d060-title">로그 세그먼트 물리 구조 — 봉인된 세그먼트와 활성 세그먼트</title>
+  <desc id="d060-desc">파티션 디렉터리 orders-0 안에 세그먼트가 세 개 있는 모습을 그린 그림입니다.
+    각 세그먼트는 자신이 담은 첫 오프셋을 20자리 0 채움 숫자로 파일명에 쓰고,
+    같은 이름에 확장자만 다른 파일 세 개로 이루어집니다.
+    .log 는 레코드 배치 본문, .index 는 오프셋에서 파일 안 물리 위치로 가는 희소 인덱스,
+    .timeindex 는 타임스탬프에서 오프셋으로 가는 인덱스입니다.
+    트랜잭션이 쓰이면 .txnindex, 멱등 프로듀서 상태를 위해 .snapshot 파일도 함께 생깁니다.
+    앞의 두 세그먼트는 봉인되어 읽기 전용이고, 마지막 하나만 활성 세그먼트로 쓰기를 받습니다.
+    활성 세그먼트는 segment.bytes 기본값 1기비바이트에 도달하거나 segment.ms 기본값 7일이 지나면
+    새 세그먼트로 롤되고 봉인됩니다.
+    활성 세그먼트는 리텐션 삭제 대상도 아니고 컴팩션 대상도 아닙니다.</desc>
+
+  <text x="12" y="18" class="dg-fs-md dg-bold">로그 세그먼트 물리 구조 — 파티션 하나가 디스크에서 어떻게 생겼나</text>
+  <text x="12" y="40" class="dg-fs-sm dg-mono">/var/lib/kafka-logs/orders-0/</text>
+
+  <!-- ===== 세그먼트 1 (봉인) ===== -->
+  <g data-dg="segment-0">
+    <rect class="dg-node" x="12" y="52" width="222" height="138" rx="4"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="22" y="72">00000000000000000000</text>
+    <text class="dg-fs-sm dg-muted" x="22" y="89">오프셋 0 ~ 9131</text>
+    <line class="dg-grid" x1="22" y1="96" x2="224" y2="96"/>
+    <text class="dg-fs-sm dg-mono" x="22" y="114">.log</text>
+    <text class="dg-fs-sm dg-muted" x="120" y="114">레코드 배치</text>
+    <text class="dg-fs-sm dg-mono" x="22" y="132">.index</text>
+    <text class="dg-fs-sm dg-muted" x="120" y="132">오프셋 → 위치</text>
+    <text class="dg-fs-sm dg-mono" x="22" y="150">.timeindex</text>
+    <text class="dg-fs-sm dg-muted" x="120" y="150">시각 → 오프셋</text>
+    <rect class="dg-node dg-node--muted" x="22" y="162" width="94" height="20" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="69" y="176" text-anchor="middle">봉인 · 읽기전용</text>
+  </g>
+
+  <!-- ===== 세그먼트 2 (봉인) ===== -->
+  <g data-dg="segment-1">
+    <rect class="dg-node" x="248" y="52" width="222" height="138" rx="4"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="258" y="72">00000000000000009132</text>
+    <text class="dg-fs-sm dg-muted" x="258" y="89">오프셋 9132 ~ 18263</text>
+    <line class="dg-grid" x1="258" y1="96" x2="460" y2="96"/>
+    <text class="dg-fs-sm dg-mono" x="258" y="114">.log</text>
+    <text class="dg-fs-sm dg-mono" x="258" y="132">.index</text>
+    <text class="dg-fs-sm dg-mono" x="258" y="150">.timeindex</text>
+    <text class="dg-fs-sm dg-mono dg-muted" x="356" y="114">.txnindex</text>
+    <text class="dg-fs-sm dg-mono dg-muted" x="356" y="132">.snapshot</text>
+    <text class="dg-fs-sm dg-muted" x="356" y="150">필요할 때만</text>
+    <rect class="dg-node dg-node--muted" x="258" y="162" width="94" height="20" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="305" y="176" text-anchor="middle">봉인 · 읽기전용</text>
+  </g>
+
+  <!-- ===== 세그먼트 3 (활성 · 강조) ===== -->
+  <g data-dg="segment-active">
+    <rect class="dg-node dg-node--accent" x="484" y="52" width="222" height="138" rx="4"/>
+    <text class="dg-fs-sm dg-mono dg-bold" x="494" y="72">00000000000000018264</text>
+    <text class="dg-fs-sm" x="494" y="89">오프셋 18264 ~ (증가 중)</text>
+    <line class="dg-grid" x1="494" y1="96" x2="696" y2="96"/>
+    <text class="dg-fs-sm dg-mono" x="494" y="114">.log</text>
+    <text class="dg-fs-sm dg-bold" x="592" y="114">← 여기에만 append</text>
+    <text class="dg-fs-sm dg-mono" x="494" y="132">.index</text>
+    <text class="dg-fs-sm dg-mono" x="494" y="150">.timeindex</text>
+    <rect class="dg-node dg-node--accent" x="494" y="162" width="130" height="20" rx="3"/>
+    <text class="dg-fs-sm dg-bold" x="559" y="176" text-anchor="middle">활성 세그먼트 · 쓰기중</text>
+  </g>
+
+  <!-- 롤 조건 -->
+  <rect class="dg-node dg-node--alt" x="12" y="202" width="340" height="60" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="22" y="220">새 세그먼트로 롤되는 조건 (둘 중 먼저)</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="238">segment.bytes</text>
+  <text class="dg-fs-sm" x="150" y="238">기본 1073741824 (1 GiB)</text>
+  <text class="dg-fs-sm dg-mono" x="22" y="256">segment.ms</text>
+  <text class="dg-fs-sm" x="150" y="256">기본 604800000 (7일)</text>
+
+  <!-- 활성 세그먼트 예외 -->
+  <rect class="dg-node dg-node--warn" x="368" y="202" width="340" height="60" rx="4"/>
+  <text class="dg-fs-sm dg-bold" x="378" y="220">활성 세그먼트는 예외입니다</text>
+  <text class="dg-fs-sm" x="378" y="238">리텐션 삭제 대상이 아닙니다 <tspan class="dg-muted">(D-061)</tspan></text>
+  <text class="dg-fs-sm" x="378" y="256">컴팩션 대상도 아닙니다 <tspan class="dg-muted">(D-062)</tspan></text>
+
+  <!-- 각주 -->
+  <line class="dg-grid" x1="12" y1="274" x2="708" y2="274"/>
+  <text class="dg-fs-sm" x="12" y="292">파일명은 그 세그먼트가 담은 <tspan class="dg-bold">첫 오프셋</tspan>을 20자리로 채운 값입니다. 읽기는 이 이름으로 이진 탐색해 세그먼트를 고릅니다.</text>
+  <text class="dg-fs-sm dg-muted" x="12" y="312"><tspan class="dg-mono">.index</tspan> 는 모든 레코드가 아니라 일정 간격마다 기록하는 <tspan class="dg-bold">희소 인덱스</tspan>입니다 — <tspan class="dg-mono">segment.index.bytes</tspan> 기본 10485760 (10 MiB).</text>
+</svg>
