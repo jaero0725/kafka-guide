@@ -409,34 +409,34 @@
       "choices": [
         {
           "id": "A",
-          "text": "파티션이 적은 쪽 스트림에 `repartition()` 을 적용해 많은 쪽 파티션 수에 맞춘다."
-        },
-        {
-          "id": "B",
           "text": "참조 데이터가 작다면 그 쪽을 `GlobalKTable` 로 읽어 co-partitioning 요구를 없앤다."
         },
         {
-          "id": "C",
+          "id": "B",
           "text": "조인에 `JoinWindows` 를 추가해 시간 경계를 준다."
         },
         {
+          "id": "C",
+          "text": "`topology.optimization=all` 을 켜면 Streams 가 파티션 수를 자동으로 맞춘다."
+        },
+        {
           "id": "D",
-          "text": "`num.stream.threads` 를 파티션 수의 최소공배수로 맞춘다."
+          "text": "파티션이 적은 쪽 스트림에 `repartition()` 을 적용해 많은 쪽 파티션 수에 맞춘다."
         },
         {
           "id": "E",
-          "text": "`topology.optimization=all` 을 켜면 Streams 가 파티션 수를 자동으로 맞춘다."
+          "text": "`num.stream.threads` 를 파티션 수의 최소공배수로 맞춘다."
         }
       ],
       "answer": [
         "A",
-        "B"
+        "D"
       ],
       "explanation": "co-partitioning 을 만족시키는 방법은 파티션 배치를 실제로 바꾸거나, 배치 요구가 없는 조인 형태로 바꾸는 것입니다. 전자가 `repartition()` 이고 후자가 `GlobalKTable`(또는 KTable-KTable 외래키 조인)입니다. 문서는 병목을 피하기 위해 적은 쪽을 많은 쪽에 맞추라고 권고하며, stream-table 조인이라면 KTable 대신 KStream 을 리파티션하는 편이 상태 저장소를 하나 더 만들지 않아 유리합니다. 윈도우 추가나 스레드 수 조정은 파티션 배치와 무관합니다.",
       "distractorNotes": {
-        "C": "윈도우는 시간 경계를 정의할 뿐 파티션 배치를 바꾸지 않습니다. 테이블 조인에는 윈도우 자체가 없습니다.",
-        "D": "스레드 수는 한 인스턴스가 태스크를 몇 개 병렬로 돌릴지의 문제입니다. 조인 요구와 무관합니다.",
-        "E": "토폴로지 최적화는 불필요한 리파티션 토픽을 줄이는 기능이며 파티션 수를 맞추지 않습니다."
+        "B": "윈도우는 시간 경계를 정의할 뿐 파티션 배치를 바꾸지 않습니다. 테이블 조인에는 윈도우 자체가 없습니다.",
+        "C": "토폴로지 최적화는 불필요한 리파티션 토픽을 줄이는 기능이며 파티션 수를 맞추지 않습니다.",
+        "E": "스레드 수는 한 인스턴스가 태스크를 몇 개 병렬로 돌릴지의 문제입니다. 조인 요구와 무관합니다."
       },
       "refs": [
         {
@@ -614,15 +614,15 @@
       "choices": [
         {
           "id": "A",
-          "text": "`mapValues`"
-        },
-        {
-          "id": "B",
           "text": "`selectKey`"
         },
         {
+          "id": "B",
+          "text": "`peek`"
+        },
+        {
           "id": "C",
-          "text": "`filter`"
+          "text": "`mapValues`"
         },
         {
           "id": "D",
@@ -630,18 +630,18 @@
         },
         {
           "id": "E",
-          "text": "`peek`"
+          "text": "`filter`"
         }
       ],
       "answer": [
-        "B",
+        "A",
         "D"
       ],
       "explanation": "키를 바꿀 수 있는 연산만 스트림을 리파티션 필요로 표시합니다. `selectKey` 는 키 변경을 명시하는 연산이고 `groupBy` 는 새 그룹 키를 계산하므로 항상 리파티션을 유발합니다. `map`·`flatMap` 도 같은 부류입니다. 반면 `mapValues`·`flatMapValues`·`filter`·`filterNot`·`peek`·`foreach`·`groupByKey` 는 키를 건드리지 않으므로 배치가 유지됩니다.",
       "distractorNotes": {
-        "A": "값만 바꾸므로 키 기반 배치가 유지됩니다. `map` 과의 차이가 이 도메인 최다 출제 지점입니다.",
-        "C": "레코드를 통과시키거나 버릴 뿐 키를 바꾸지 않습니다.",
-        "E": "부수 효과만 실행하는 통과 연산이며 레코드를 변경하지 않습니다."
+        "B": "부수 효과만 실행하는 통과 연산이며 레코드를 변경하지 않습니다.",
+        "C": "값만 바꾸므로 키 기반 배치가 유지됩니다. `map` 과의 차이가 이 도메인 최다 출제 지점입니다.",
+        "E": "레코드를 통과시키거나 버릴 뿐 키를 바꾸지 않습니다."
       },
       "refs": [
         {
@@ -671,7 +671,7 @@
         },
         {
           "id": "B",
-          "text": "`aggregate`"
+          "text": "`flatMapValues`"
         },
         {
           "id": "C",
@@ -683,18 +683,18 @@
         },
         {
           "id": "E",
-          "text": "`flatMapValues`"
+          "text": "`aggregate`"
         }
       ],
       "answer": [
-        "B",
-        "D"
+        "D",
+        "E"
       ],
       "explanation": "stateful 연산은 과거 레코드의 정보를 유지해야 하는 연산이며, 로컬 상태 저장소와 changelog 토픽을 만듭니다. `count`·`reduce`·`aggregate`, 모든 윈도우 연산, 모든 조인, 그리고 중간 결과를 버퍼링하는 `suppress` 가 여기 속합니다. 반면 `branch`·`merge`·`flatMapValues` 는 레코드 하나만 보고 판단하므로 stateless 입니다. stateful 여부는 곧 \"복구 시간이 필요한가\"와 직결되므로 운영 관점에서도 중요합니다.",
       "distractorNotes": {
         "A": "조건에 따라 스트림을 나누는 연산이며 과거 레코드를 기억하지 않습니다.",
-        "C": "두 스트림을 하나로 합치는 통과 연산입니다. 상태가 없습니다.",
-        "E": "값 하나를 여러 값으로 펼치는 stateless 변환입니다."
+        "B": "값 하나를 여러 값으로 펼치는 stateless 변환입니다.",
+        "C": "두 스트림을 하나로 합치는 통과 연산입니다. 상태가 없습니다."
       },
       "refs": [
         {
@@ -873,19 +873,19 @@
       "choices": [
         {
           "id": "A",
-          "text": "KStream 에서 값이 null 인 레코드는 삭제(tombstone)로 해석된다."
+          "text": "GlobalKTable 은 크기 제약이 없어 대용량 테이블에 적합하다."
         },
         {
           "id": "B",
-          "text": "KTable 에서 값이 null 인 레코드는 그 키의 삭제로 해석된다."
-        },
-        {
-          "id": "C",
           "text": "KStream 은 같은 키의 레코드를 각각 독립된 이벤트로 취급한다."
         },
         {
+          "id": "C",
+          "text": "KStream 에서 값이 null 인 레코드는 삭제(tombstone)로 해석된다."
+        },
+        {
           "id": "D",
-          "text": "GlobalKTable 은 크기 제약이 없어 대용량 테이블에 적합하다."
+          "text": "KTable 에서 값이 null 인 레코드는 그 키의 삭제로 해석된다."
         },
         {
           "id": "E",
@@ -894,12 +894,12 @@
       ],
       "answer": [
         "B",
-        "C"
+        "D"
       ],
       "explanation": "KStream 은 레코드 스트림(append-only)이라 같은 키가 반복되면 각각 별개의 사실이고, null 값도 \"값이 null 인 이벤트\"일 뿐입니다. KTable 과 GlobalKTable 은 changelog 스트림이라 같은 키가 오면 갱신이고 null 은 tombstone 으로 삭제를 뜻합니다. 크기 제약은 GlobalKTable 쪽에 있습니다. 각 인스턴스가 전체를 적재해야 하므로 작은 참조 데이터에만 적합하고, 일반 KTable 은 파티션 단위로 분산되어 크기 제약이 없습니다.",
       "distractorNotes": {
-        "A": "tombstone 해석은 테이블 의미론입니다. KStream 에서는 값이 null 인 레코드일 뿐입니다.",
-        "D": "반대입니다. 전체 복제이므로 크기 제약이 가장 강한 추상입니다.",
+        "A": "반대입니다. 전체 복제이므로 크기 제약이 가장 강한 추상입니다.",
+        "C": "tombstone 해석은 테이블 의미론입니다. KStream 에서는 값이 null 인 레코드일 뿐입니다.",
         "E": "KTable 은 파티션 단위로 인스턴스에 분산됩니다. 전체 적재가 필요한 것은 GlobalKTable 입니다."
       },
       "refs": [
@@ -1026,34 +1026,34 @@
       "choices": [
         {
           "id": "A",
-          "text": "내부 토픽 이름은 `<application.id>-<operatorName>-<suffix>` 규칙을 따른다."
+          "text": "내부 토픽은 여러 애플리케이션이 `application.id` 와 무관하게 공유한다."
         },
         {
           "id": "B",
-          "text": "changelog 토픽을 삭제하면 다음 기동 시 입력 토픽에서 상태가 자동 재계산된다."
-        },
-        {
-          "id": "C",
           "text": "key-value 저장소의 changelog 는 `compact`, 윈도우 저장소의 changelog 는 `delete,compact` 다."
         },
         {
+          "id": "C",
+          "text": "changelog 토픽을 삭제하면 다음 기동 시 입력 토픽에서 상태가 자동 재계산된다."
+        },
+        {
           "id": "D",
-          "text": "입력·출력 토픽도 Streams 가 자동 생성하므로 미리 만들 필요가 없다."
+          "text": "내부 토픽 이름은 `<application.id>-<operatorName>-<suffix>` 규칙을 따른다."
         },
         {
           "id": "E",
-          "text": "내부 토픽은 여러 애플리케이션이 `application.id` 와 무관하게 공유한다."
+          "text": "입력·출력 토픽도 Streams 가 자동 생성하므로 미리 만들 필요가 없다."
         }
       ],
       "answer": [
-        "A",
-        "C"
+        "B",
+        "D"
       ],
       "explanation": "내부 토픽 이름에는 `application.id` 가 접두어로 붙으므로 애플리케이션마다 격리됩니다. 정책은 저장소 종류에 따라 갈리는데, key-value 저장소는 `compact`, 윈도우 저장소는 `delete,compact`(리텐션 24시간 + 윈도우 설정), 리파티션 토픽은 `delete`(리텐션 무한)입니다. changelog 를 삭제하면 상태를 재구성할 근거가 사라지며, 입력 토픽부터 다시 읽는 것은 오프셋 초기화까지 함께 해야 하는 별도 작업입니다. 사용자 토픽인 입력·출력 토픽은 사전에 직접 만들어 관리해야 합니다.",
       "distractorNotes": {
-        "B": "자동 재계산은 없습니다. 입력을 다시 읽으려면 리셋 도구로 오프셋과 내부 토픽을 함께 정리해야 합니다.",
-        "D": "입력·출력 토픽은 사용자 토픽이므로 사전에 만들어야 합니다. 브로커 자동 생성에 의존하지 말라고 권고됩니다.",
-        "E": "내부 토픽은 그 애플리케이션만 사용합니다. 이름에 `application.id` 가 들어가 격리됩니다."
+        "A": "내부 토픽은 그 애플리케이션만 사용합니다. 이름에 `application.id` 가 들어가 격리됩니다.",
+        "C": "자동 재계산은 없습니다. 입력을 다시 읽으려면 리셋 도구로 오프셋과 내부 토픽을 함께 정리해야 합니다.",
+        "E": "입력·출력 토픽은 사용자 토픽이므로 사전에 만들어야 합니다. 브로커 자동 생성에 의존하지 말라고 권고됩니다."
       },
       "refs": [
         {
@@ -1227,7 +1227,7 @@
       "choices": [
         {
           "id": "A",
-          "text": "Streams 의 기본 시간 기준은 레코드에 기록된 event time 이다."
+          "text": "grace period 는 processing time 기준으로만 적용된다."
         },
         {
           "id": "B",
@@ -1235,26 +1235,26 @@
         },
         {
           "id": "C",
-          "text": "grace period 를 늘리면 결과 확정이 늦어지고 상태 크기가 커진다."
+          "text": "`advanceWallClockTime()` 을 호출하면 event-time 윈도우가 닫힌다."
         },
         {
           "id": "D",
-          "text": "grace period 는 processing time 기준으로만 적용된다."
+          "text": "Streams 의 기본 시간 기준은 레코드에 기록된 event time 이다."
         },
         {
           "id": "E",
-          "text": "`advanceWallClockTime()` 을 호출하면 event-time 윈도우가 닫힌다."
+          "text": "grace period 를 늘리면 결과 확정이 늦어지고 상태 크기가 커진다."
         }
       ],
       "answer": [
-        "A",
-        "C"
+        "D",
+        "E"
       ],
       "explanation": "Streams 는 기본적으로 레코드 타임스탬프(event time)를 기준으로 윈도우를 배정하고 스트림 시각을 진행시킵니다. `default.timestamp.extractor` 의 기본값은 `FailOnInvalidTimestamp` 이며, 무효한 음수 타임스탬프를 만나면 예외를 던집니다. grace period 는 event time 기준으로 윈도우 끝 이후의 유예를 정의하고, 값을 늘리면 늦은 데이터를 더 받아들이는 대신 결과가 늦어지고 버퍼링해야 하는 상태가 커집니다. 레거시 데이터를 다룰 때는 `LogAndSkipOnInvalidTimestamp` 나 `WallclockTimestampExtractor` 로 바꾸는 선택지를 씁니다.",
       "distractorNotes": {
+        "A": "grace 는 event time 기준입니다. 스트림 시각이 윈도우 끝 + grace 를 지나면 윈도우가 닫힙니다.",
         "B": "기본값은 `FailOnInvalidTimestamp` 입니다. wall-clock 기준은 명시적으로 선택해야 합니다.",
-        "D": "grace 는 event time 기준입니다. 스트림 시각이 윈도우 끝 + grace 를 지나면 윈도우가 닫힙니다.",
-        "E": "`advanceWallClockTime()` 은 wall-clock punctuation 전용입니다. event-time 윈도우를 닫아 주지 않습니다."
+        "C": "`advanceWallClockTime()` 은 wall-clock punctuation 전용입니다. event-time 윈도우를 닫아 주지 않습니다."
       },
       "refs": [
         {
@@ -1283,32 +1283,32 @@
       "code": null,
       "items": [
         {
-          "id": "i3",
+          "id": "i2",
           "text": "grace period 동안 도착한 늦은 레코드도 그 윈도우에 반영된다"
         },
         {
-          "id": "i1",
+          "id": "i4",
           "text": "레코드가 자신의 event time 에 따라 해당 윈도우에 배정된다"
         },
         {
-          "id": "i4",
+          "id": "i1",
           "text": "grace period 가 끝나 윈도우가 닫히고, 이후 도착한 레코드는 버려진다"
         },
         {
-          "id": "i2",
+          "id": "i3",
           "text": "스트림 시각이 그 윈도우의 끝 시각을 지난다"
         }
       ],
       "answer": [
-        "i1",
-        "i2",
+        "i4",
         "i3",
-        "i4"
+        "i2",
+        "i1"
       ],
       "explanation": "윈도우 처리는 event time 을 좌표로 삼아 진행됩니다. 레코드는 자기 타임스탬프가 속하는 윈도우에 배정되고, 스트림 시각이 윈도우의 끝을 지나면 그때부터 grace period 가 흐릅니다. grace 동안 도착한 늦은 레코드까지 반영된 뒤에야 윈도우가 닫히고 결과가 확정되며, 그 이후에 온 레코드는 조용히 버려집니다. `…WithNoGrace(…)` 를 쓰면 두 번째와 네 번째 단계가 붙어 버리므로 지연 데이터가 전혀 반영되지 않습니다.",
       "distractorNotes": {
-        "i4": "\"윈도우 끝 시각에 닫힌다\"고 생각하기 쉽습니다. 닫히는 시점은 끝 시각 + grace period 입니다.",
-        "i3": "grace 를 윈도우 시작 전의 여유로 오해하기 쉽습니다. 윈도우가 끝난 뒤의 유예입니다."
+        "i1": "\"윈도우 끝 시각에 닫힌다\"고 생각하기 쉽습니다. 닫히는 시점은 끝 시각 + grace period 입니다.",
+        "i2": "grace 를 윈도우 시작 전의 여유로 오해하기 쉽습니다. 윈도우가 끝난 뒤의 유예입니다."
       },
       "refs": [
         {
@@ -1438,19 +1438,19 @@
       "choices": [
         {
           "id": "A",
-          "text": "`num.standby.replicas` 기본값이 0이므로 인스턴스 교체 시 changelog 를 전량 재생해야 한다."
-        },
-        {
-          "id": "B",
-          "text": "`state.dir` 기본값이 영속 경로이므로 컨테이너 재시작에도 상태가 유지된다."
-        },
-        {
-          "id": "C",
           "text": "태스크 수의 상한은 입력 토픽의 파티션 수다."
         },
         {
-          "id": "D",
+          "id": "B",
+          "text": "`num.standby.replicas` 기본값이 0이므로 인스턴스 교체 시 changelog 를 전량 재생해야 한다."
+        },
+        {
+          "id": "C",
           "text": "인스턴스를 늘리면 태스크 수도 함께 늘어난다."
+        },
+        {
+          "id": "D",
+          "text": "`state.dir` 기본값이 영속 경로이므로 컨테이너 재시작에도 상태가 유지된다."
         },
         {
           "id": "E",
@@ -1459,12 +1459,12 @@
       ],
       "answer": [
         "A",
-        "C"
+        "B"
       ],
       "explanation": "standby 레플리카 기본값이 0 이라는 것은 예비 사본이 없다는 뜻이므로, 태스크가 다른 인스턴스로 옮겨가면 changelog 를 처음부터 재생해 상태를 만들어야 하고 그 시간이 그대로 다운타임이 됩니다. 태스크 수는 파티션 수로 고정되므로 인스턴스를 늘리는 것은 태스크를 나눠 담을 자리를 늘리는 것일 뿐입니다. `state.dir` 의 기본값은 `${java.io.tmpdir}` 라서 컨테이너에서 그대로 쓰면 재시작마다 상태가 사라집니다. standby 는 상태만 따뜻하게 유지하며 결과를 출력하지 않습니다.",
       "distractorNotes": {
-        "B": "기본값은 임시 디렉터리입니다. 영속 볼륨 경로로 반드시 바꿔야 합니다.",
-        "D": "태스크 수는 파티션 수로 결정됩니다. 인스턴스 수와 무관합니다.",
+        "C": "태스크 수는 파티션 수로 결정됩니다. 인스턴스 수와 무관합니다.",
+        "D": "기본값은 임시 디렉터리입니다. 영속 볼륨 경로로 반드시 바꿔야 합니다.",
         "E": "standby 는 changelog 를 따라 상태만 복제합니다. 출력은 활성 태스크만 담당합니다."
       },
       "refs": [
@@ -1494,11 +1494,11 @@
       "code": null,
       "items": [
         {
-          "id": "i3",
+          "id": "i1",
           "text": "부족한 부분을 changelog 토픽에서 재생해 상태 저장소를 복원한다"
         },
         {
-          "id": "i1",
+          "id": "i3",
           "text": "리밸런스가 일어나 그 태스크가 다른 인스턴스에 재배정된다"
         },
         {
@@ -1511,9 +1511,9 @@
         }
       ],
       "answer": [
-        "i1",
-        "i2",
         "i3",
+        "i2",
+        "i1",
         "i4"
       ],
       "explanation": "복구는 태스크 재배정에서 시작합니다. 배정을 받은 인스턴스는 먼저 로컬 디스크에 남아 있는 상태를 확인해 재생할 양을 줄이려 하고, 없거나 부족한 부분만 changelog 에서 읽어 채웁니다. 복원이 `acceptable.recovery.lag`(기본 10000) 이내로 따라잡았다고 판단되면 그 태스크가 활성으로 전환되어 처리를 시작합니다. `state.dir` 가 임시 디렉터리이거나 standby 가 0이면 두 번째 단계에서 재사용할 것이 없어 전량 재생이 발생합니다.",
@@ -1665,11 +1665,11 @@
         },
         {
           "id": "C",
-          "text": "EOS 는 Kafka 토픽 읽기·쓰기와 상태 저장소 갱신 사이에서만 원자성을 보장한다."
+          "text": "EOS 를 켜면 리밸런스가 발생하지 않는다."
         },
         {
           "id": "D",
-          "text": "EOS 를 켜면 리밸런스가 발생하지 않는다."
+          "text": "EOS 는 Kafka 토픽 읽기·쓰기와 상태 저장소 갱신 사이에서만 원자성을 보장한다."
         },
         {
           "id": "E",
@@ -1678,12 +1678,12 @@
       ],
       "answer": [
         "A",
-        "C"
+        "D"
       ],
       "explanation": "기본값은 `at_least_once` 이므로 EOS 는 명시적으로 켜야 합니다. Streams 의 EOS 는 입력 오프셋 커밋, 상태 저장소 갱신, 출력 토픽 쓰기를 하나의 Kafka 트랜잭션으로 묶는 것이므로 보장 범위가 Kafka 경계 안으로 한정됩니다. 따라서 외부 시스템 호출은 롤백되지 않고, 그런 부수 효과가 필요하면 멱등한 설계로 만들어야 합니다. `exactly_once` 와 `exactly_once_beta` 는 deprecated 값이며 현행 값은 `exactly_once_v2` 입니다.",
       "distractorNotes": {
         "B": "외부 호출은 Kafka 트랜잭션 밖입니다. 롤백되지 않습니다.",
-        "D": "EOS 와 리밸런스는 별개 축입니다. 인스턴스 변화나 파티션 변화는 여전히 리밸런스를 유발합니다.",
+        "C": "EOS 와 리밸런스는 별개 축입니다. 인스턴스 변화나 파티션 변화는 여전히 리밸런스를 유발합니다.",
         "E": "`exactly_once` 는 deprecated 입니다. `exactly_once_v2` 를 씁니다."
       },
       "refs": [
@@ -1928,7 +1928,7 @@
       "code": null,
       "items": [
         {
-          "id": "i4",
+          "id": "i5",
           "text": "상태 변경이 changelog 토픽에 기록된다"
         },
         {
@@ -1936,7 +1936,7 @@
           "text": "Serde 가 키와 값을 Java 객체로 역직렬화한다"
         },
         {
-          "id": "i5",
+          "id": "i3",
           "text": "`commit.interval.ms` 주기가 되면 입력 오프셋이 커밋된다"
         },
         {
@@ -1944,21 +1944,21 @@
           "text": "내부 컨슈머가 입력 토픽에서 레코드를 poll 한다"
         },
         {
-          "id": "i3",
+          "id": "i4",
           "text": "토폴로지의 프로세서 노드들이 레코드를 처리하고 상태 저장소를 갱신한다"
         }
       ],
       "answer": [
         "i1",
         "i2",
-        "i3",
         "i4",
-        "i5"
+        "i5",
+        "i3"
       ],
       "explanation": "Streams 는 내부적으로 표준 컨슈머·프로듀서를 쓰므로 처리 흐름도 그 순서를 따릅니다. 바이트를 읽어 역직렬화한 뒤에야 프로세서 노드가 객체를 다룰 수 있고, 상태가 갱신되면 그 변경이 changelog 로 흘러 복구 근거가 만들어집니다. 오프셋 커밋은 커밋 주기마다 별도로 일어나며, at-least-once 에서는 30000ms, EOS 에서는 100ms 가 기본입니다. 역직렬화 단계에서 실패하면 `deserialization.exception.handler`(기본 `LogAndFailExceptionHandler`)에 따라 애플리케이션이 중단됩니다.",
       "distractorNotes": {
         "i2": "역직렬화를 처리 뒤로 두는 것으로 착각하기 쉽습니다. Serde 가 없으면 프로세서가 값을 다룰 수 없습니다.",
-        "i5": "레코드마다 커밋된다고 오해하기 쉽습니다. 커밋은 주기적으로 일어납니다."
+        "i3": "레코드마다 커밋된다고 오해하기 쉽습니다. 커밋은 주기적으로 일어납니다."
       },
       "refs": [
         {

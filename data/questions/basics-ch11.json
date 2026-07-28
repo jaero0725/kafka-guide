@@ -15,12 +15,26 @@
       "question": "클라이언트에 `security.protocol=SASL_SSL` 을 설정하는 의도로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "SASL로 전송을 암호화하고 SSL로 클라이언트를 인가한다." },
-        { "id": "B", "text": "SASL로 인증하고 TLS로 전송을 암호화한다." },
-        { "id": "C", "text": "인증 없이 TLS 암호화만 적용한다." },
-        { "id": "D", "text": "인증과 ACL 검사를 모두 활성화해 인가까지 처리한다." }
+        {
+          "id": "A",
+          "text": "SASL로 전송을 암호화하고 SSL로 클라이언트를 인가한다."
+        },
+        {
+          "id": "B",
+          "text": "SASL로 인증하고 TLS로 전송을 암호화한다."
+        },
+        {
+          "id": "C",
+          "text": "인증 없이 TLS 암호화만 적용한다."
+        },
+        {
+          "id": "D",
+          "text": "인증과 ACL 검사를 모두 활성화해 인가까지 처리한다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "값의 이름이 그대로 의미입니다 — SASL은 인증, SSL은 전송 암호화이므로 `SASL_SSL` 은 두 가지를 동시에 제공하는 프로덕션 권장 조합입니다. 네 값을 비교하면 `PLAINTEXT` 는 인증도 암호화도 없고, `SSL` 은 TLS 암호화에 선택적 mTLS 인증, `SASL_PLAINTEXT` 는 인증은 하지만 전송이 평문입니다. 이름에 PLAINTEXT가 들어간 값은 데이터가 평문으로 흐른다는 뜻이므로 `PLAIN` 메커니즘과 조합하면 자격증명까지 노출됩니다. 그리고 인증은 \"당신이 누구인가\"이고 인가는 ACL이 담당하는 별개 계층이라, 인증만 켜고 ACL을 두지 않으면 인증된 누구나 모든 것을 할 수 있습니다.",
       "distractorNotes": {
         "A": "역할이 뒤바뀌었습니다. 암호화가 TLS, 인증이 SASL이며 인가는 ACL의 몫입니다.",
@@ -28,10 +42,20 @@
         "D": "`security.protocol` 은 인가를 다루지 않습니다. 인가는 ACL 설정으로 따로 켭니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Security Overview", "url": "https://kafka.apache.org/documentation/#security_overview" },
-        { "title": "Apache Kafka — Authentication using SASL", "url": "https://kafka.apache.org/documentation/#security_sasl" }
+        {
+          "title": "Apache Kafka — Security Overview",
+          "url": "https://kafka.apache.org/documentation/#security_overview"
+        },
+        {
+          "title": "Apache Kafka — Authentication using SASL",
+          "url": "https://kafka.apache.org/documentation/#security_sasl"
+        }
       ],
-      "tags": ["security-protocol", "sasl", "encryption"]
+      "tags": [
+        "security-protocol",
+        "sasl",
+        "encryption"
+      ]
     },
     {
       "id": "basics-ch11-002",
@@ -43,12 +67,26 @@
       "question": "운영 중인 토픽의 파티션 수를 늘리려고 한다. 옳은 방법은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`kafka-topics.sh --alter --partitions` 를 쓴다. 재할당 도구는 레플리카 위치와 리더만 옮긴다." },
-        { "id": "B", "text": "`kafka-reassign-partitions.sh --generate` 로 파티션 수가 늘어난 계획을 만들어 `--execute` 한다." },
-        { "id": "C", "text": "`kafka-reassign-partitions.sh --additional` 로 파티션을 추가한다." },
-        { "id": "D", "text": "`kafka-configs.sh` 로 토픽의 `num.partitions` 를 올린다." }
+        {
+          "id": "A",
+          "text": "`kafka-topics.sh --alter --partitions` 를 쓴다. 재할당 도구는 레플리카 위치와 리더만 옮긴다."
+        },
+        {
+          "id": "B",
+          "text": "`kafka-reassign-partitions.sh --generate` 로 파티션 수가 늘어난 계획을 만들어 `--execute` 한다."
+        },
+        {
+          "id": "C",
+          "text": "`kafka-reassign-partitions.sh --additional` 로 파티션을 추가한다."
+        },
+        {
+          "id": "D",
+          "text": "`kafka-configs.sh` 로 토픽의 `num.partitions` 를 올린다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "`kafka-reassign-partitions.sh` 는 레플리카가 어느 브로커에 놓이는지와 리더를 옮기는 도구이며 파티션 수는 바꾸지 못합니다. 파티션 수 변경은 `kafka-topics.sh --alter --partitions` 의 몫이고, 늘릴 수만 있으며 줄일 수는 없습니다. 반대로 복제 계수는 재할당 도구로 바꿉니다 — 계획 JSON의 `replicas` 배열에 브로커를 추가해 `--execute` 하면 RF가 늘어나고, `kafka-topics.sh` 에는 RF 변경 옵션이 없습니다. 두 도구의 역할을 뒤바꿔 고르는 것이 대표적인 함정입니다.",
       "distractorNotes": {
         "B": "`--generate` 가 만드는 계획은 기존 파티션 수와 RF를 그대로 유지합니다.",
@@ -56,10 +94,20 @@
         "D": "`num.partitions` 는 자동 생성 토픽의 기본값을 정하는 브로커 설정이며 기존 토픽에 적용되지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Expanding Your Cluster", "url": "https://kafka.apache.org/documentation/#basic_ops_partitionassignment" },
-        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" }
+        {
+          "title": "Apache Kafka — Expanding Your Cluster",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_partitionassignment"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs"
+        }
       ],
-      "tags": ["partition-reassign", "kafka-topics", "cli"]
+      "tags": [
+        "partition-reassign",
+        "kafka-topics",
+        "cli"
+      ]
     },
     {
       "id": "basics-ch11-003",
@@ -71,12 +119,26 @@
       "question": "브로커는 기동되고 CLI도 동작하는데 애플리케이션만 접속하지 못한다. 세 리스너 설정의 역할로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`listeners` 가 클라이언트에게 광고할 주소이고 `advertised.listeners` 가 실제 바인딩 주소다." },
-        { "id": "B", "text": "`advertised.listeners` 를 비워 두면 브로커가 어떤 주소도 광고하지 않아 접속이 불가능해진다." },
-        { "id": "C", "text": "`listeners` 는 바인딩, `advertised.listeners` 는 광고, `listener.security.protocol.map` 은 이름↔프로토콜 매핑이다." },
-        { "id": "D", "text": "`listener.security.protocol.map` 이 클라이언트가 접속할 포트를 정하므로 이것만 고치면 된다." }
+        {
+          "id": "A",
+          "text": "`listeners` 가 클라이언트에게 광고할 주소이고 `advertised.listeners` 가 실제 바인딩 주소다."
+        },
+        {
+          "id": "B",
+          "text": "`advertised.listeners` 를 비워 두면 브로커가 어떤 주소도 광고하지 않아 접속이 불가능해진다."
+        },
+        {
+          "id": "C",
+          "text": "`listeners` 는 바인딩, `advertised.listeners` 는 광고, `listener.security.protocol.map` 은 이름↔프로토콜 매핑이다."
+        },
+        {
+          "id": "D",
+          "text": "`listener.security.protocol.map` 이 클라이언트가 접속할 포트를 정하므로 이것만 고치면 된다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "세 설정은 서로 다른 질문에 답합니다 — `listeners` 는 브로커가 어느 주소·포트에 소켓을 열지, `advertised.listeners` 는 클라이언트와 다른 브로커에게 어떤 주소를 알려 줄지, `listener.security.protocol.map` 은 각 리스너 이름이 어떤 보안 프로토콜을 쓰는지입니다. `advertised.listeners` 를 비우면 `listeners` 값이 그대로 광고되므로, 컨테이너나 NAT 뒤에서는 내부 주소가 광고되어 외부 클라이언트가 붙지 못합니다. 브로커 기동과 CLI 조회는 성공하는데 애플리케이션만 실패하는 증상의 원인이 거의 항상 이 광고 주소입니다. 같은 보안 프로토콜을 두 포트에서 쓰려면 리스너 이름을 따로 붙이는 것이 필수입니다.",
       "distractorNotes": {
         "A": "두 설정의 역할이 반대입니다. 바인딩이 `listeners` 입니다.",
@@ -84,10 +146,20 @@
         "D": "포트는 `listeners` 와 `advertised.listeners` 가 정합니다. 이 설정은 이름과 프로토콜의 매핑만 담당합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Listener Configuration", "url": "https://kafka.apache.org/documentation/#listener_configuration" },
-        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" }
+        {
+          "title": "Apache Kafka — Listener Configuration",
+          "url": "https://kafka.apache.org/documentation/#listener_configuration"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs"
+        }
       ],
-      "tags": ["listeners", "advertised.listeners", "security-protocol"]
+      "tags": [
+        "listeners",
+        "advertised.listeners",
+        "security-protocol"
+      ]
     },
     {
       "id": "basics-ch11-004",
@@ -99,12 +171,26 @@
       "question": "프로듀서의 `acks=all` 쓰기가 특정 파티션에서 거부되고 있다. 0이 아닌지 가장 먼저 확인해야 하는 브로커 메트릭은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`OfflinePartitionsCount`" },
-        { "id": "B", "text": "`IsrShrinksPerSec`" },
-        { "id": "C", "text": "`ActiveControllerCount`" },
-        { "id": "D", "text": "`UnderMinIsrPartitionCount`" }
+        {
+          "id": "A",
+          "text": "`OfflinePartitionsCount`"
+        },
+        {
+          "id": "B",
+          "text": "`IsrShrinksPerSec`"
+        },
+        {
+          "id": "C",
+          "text": "`ActiveControllerCount`"
+        },
+        {
+          "id": "D",
+          "text": "`UnderMinIsrPartitionCount`"
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "`UnderMinIsrPartitionCount` 는 ISR이 `min.insync.replicas` 에 미달인 파티션 수이며, 이 값이 0이 아니면 그 파티션의 `acks=all` 쓰기가 이미 거부되고 있다는 뜻입니다. `UnderReplicatedPartitions` 는 ISR이 전체 레플리카 수보다 작은 상태를 세므로 값이 0이 아니어도 쓰기는 성공할 수 있습니다 — 두 메트릭을 구분하는 것이 핵심입니다. `OfflinePartitionsCount` 가 0이 아니라면 리더 자체가 없어 읽기까지 불가능한 더 심각한 상태입니다. `IsrShrinksPerSec` 는 축소가 일어나는 비율이라 원인 추적에는 유용하지만 현재 쓰기 거부 여부를 직접 알려 주지는 않습니다.",
       "distractorNotes": {
         "A": "리더가 아예 없는 상태를 나타냅니다. 이때는 `acks` 와 무관하게 읽기·쓰기가 모두 실패합니다.",
@@ -112,10 +198,21 @@
         "C": "컨트롤러 수를 나타내는 값이며 클러스터 전체 합이 1이어야 합니다. 파티션별 쓰기와 무관합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs"
+        }
       ],
-      "tags": ["metrics", "monitoring", "min.insync.replicas", "isr"]
+      "tags": [
+        "metrics",
+        "monitoring",
+        "min.insync.replicas",
+        "isr"
+      ]
     },
     {
       "id": "basics-ch11-005",
@@ -127,12 +224,26 @@
       "question": "브로커 추가 후 `--throttle` 을 지정해 파티션 재할당을 실행했다. 재할당이 끝난 것을 확인한 뒤 `--verify` 를 실행하지 않으면 무슨 문제가 생기는가?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "throttle이 남아 평상시 복제 트래픽까지 제한되므로 ISR이 줄고 URP가 오를 수 있다." },
-        { "id": "B", "text": "재할당이 커밋되지 않아 레플리카가 원래 브로커로 되돌아간다." },
-        { "id": "C", "text": "재할당 계획 JSON이 삭제되지 않아 다음 재할당이 거부된다." },
-        { "id": "D", "text": "새 브로커가 클러스터에 등록되지 않아 리더를 받지 못한다." }
+        {
+          "id": "A",
+          "text": "throttle이 남아 평상시 복제 트래픽까지 제한되므로 ISR이 줄고 URP가 오를 수 있다."
+        },
+        {
+          "id": "B",
+          "text": "재할당이 커밋되지 않아 레플리카가 원래 브로커로 되돌아간다."
+        },
+        {
+          "id": "C",
+          "text": "재할당 계획 JSON이 삭제되지 않아 다음 재할당이 거부된다."
+        },
+        {
+          "id": "D",
+          "text": "새 브로커가 클러스터에 등록되지 않아 리더를 받지 못한다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "`--throttle` 은 재할당으로 발생하는 복제 트래픽이 운영 트래픽을 잠식하지 않도록 브로커·토픽 레벨에 제한을 걸어 둡니다. 이 제한은 자동으로 해제되지 않고 `--verify` 가 완료를 확인했을 때 제거되며, 공식 문서도 제때 제거하지 않으면 일반 복제 트래픽까지 throttle이 걸릴 수 있다고 경고합니다. 방치하면 팔로워가 리더를 따라잡지 못해 ISR이 줄고 `UnderReplicatedPartitions` 가 오릅니다. 남아 있는 값은 `kafka-configs.sh` 로 브로커의 `leader.replication.throttled.rate` 와 `follower.replication.throttled.rate` 를 조회해 확인할 수 있습니다.",
       "distractorNotes": {
         "B": "재할당은 `--execute` 시점에 시작되어 컨트롤러가 완료까지 진행합니다. `--verify` 는 확인과 throttle 해제 용도입니다.",
@@ -140,10 +251,21 @@
         "D": "브로커 등록은 기동 시 컨트롤러에 대해 이루어지며 재할당 절차와 무관합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Limiting Bandwidth Usage during Data Migration", "url": "https://kafka.apache.org/documentation/#rep-throttle" },
-        { "title": "Apache Kafka — Expanding Your Cluster", "url": "https://kafka.apache.org/documentation/#basic_ops_partitionassignment" }
+        {
+          "title": "Apache Kafka — Limiting Bandwidth Usage during Data Migration",
+          "url": "https://kafka.apache.org/documentation/#rep-throttle"
+        },
+        {
+          "title": "Apache Kafka — Expanding Your Cluster",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_partitionassignment"
+        }
       ],
-      "tags": ["partition-reassign", "throttle", "isr", "cli"]
+      "tags": [
+        "partition-reassign",
+        "throttle",
+        "isr",
+        "cli"
+      ]
     },
     {
       "id": "basics-ch11-006",
@@ -159,12 +281,26 @@
         "body": "process.roles=broker\nlisteners=BROKER://localhost:9092,CONTROLLER://localhost:9093\ninter.broker.listener.name=BROKER\ncontroller.listener.names=CONTROLLER"
       },
       "choices": [
-        { "id": "A", "text": "순수 브로커는 `controller.listener.names` 를 설정하면 안 된다." },
-        { "id": "B", "text": "컨트롤러 리스너를 `listeners` 에 넣으면 안 된다. 정의만 하고 바인딩하지 않는다." },
-        { "id": "C", "text": "`inter.broker.listener.name` 과 `controller.listener.names` 를 같은 값으로 맞춰야 한다." },
-        { "id": "D", "text": "`process.roles` 에 `controller` 를 추가해야 컨트롤러 리스너를 쓸 수 있다." }
+        {
+          "id": "A",
+          "text": "순수 브로커는 `controller.listener.names` 를 설정하면 안 된다."
+        },
+        {
+          "id": "B",
+          "text": "컨트롤러 리스너를 `listeners` 에 넣으면 안 된다. 정의만 하고 바인딩하지 않는다."
+        },
+        {
+          "id": "C",
+          "text": "`inter.broker.listener.name` 과 `controller.listener.names` 를 같은 값으로 맞춰야 한다."
+        },
+        {
+          "id": "D",
+          "text": "`process.roles` 에 `controller` 를 추가해야 컨트롤러 리스너를 쓸 수 있다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "순수 브로커도 컨트롤러에 요청을 보내야 하므로 `controller.listener.names` 를 반드시 정의합니다. 다만 그 리스너를 노출하지는 않으므로 `listeners` 에 넣어서는 안 되고, 실제 접속 대상은 `controller.quorum.bootstrap.servers` 가 정합니다. 컨트롤러 리스너를 `listeners` 에 포함하는 것은 combined 모드일 때만 맞습니다. 또한 컨트롤러 리스너는 브로커 간 리스너와 같은 값일 수 없고, `inter.broker.listener.name` 과 `security.inter.broker.protocol` 을 동시에 지정하면 오류입니다.",
       "distractorNotes": {
         "A": "순수 브로커도 이 값이 필요합니다. 없으면 컨트롤러에 어떤 리스너 이름으로 연결할지 알 수 없습니다.",
@@ -172,10 +308,20 @@
         "D": "역할을 추가하면 그 노드가 쿼럼 voter가 됩니다. 리스너를 정의하기 위해 역할을 바꾸는 것은 잘못된 대응입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Listener Configuration", "url": "https://kafka.apache.org/documentation/#listener_configuration" },
-        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" }
+        {
+          "title": "Apache Kafka — Listener Configuration",
+          "url": "https://kafka.apache.org/documentation/#listener_configuration"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs"
+        }
       ],
-      "tags": ["listeners", "kraft", "security-protocol"]
+      "tags": [
+        "listeners",
+        "kraft",
+        "security-protocol"
+      ]
     },
     {
       "id": "basics-ch11-007",
@@ -187,24 +333,52 @@
       "question": "Kafka 보안 설정에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`SASL_PLAINTEXT` 는 인증은 하지만 전송을 암호화하지 않으므로 메시지가 평문으로 흐른다." },
-        { "id": "B", "text": "`ssl.client.auth` 기본값이 `none` 이므로 `SSL` 만 켜도 클라이언트 인증이 강제되지는 않는다." },
-        { "id": "C", "text": "인증을 켜면 인가도 함께 적용되므로 ACL을 따로 설정할 필요가 없다." },
-        { "id": "D", "text": "`PLAINTEXT` 는 인증은 없지만 전송 암호화는 제공한다." },
-        { "id": "E", "text": "`SASL_SSL` 은 ACL 검사까지 포함하는 값이다." }
+        {
+          "id": "A",
+          "text": "`ssl.client.auth` 기본값이 `none` 이므로 `SSL` 만 켜도 클라이언트 인증이 강제되지는 않는다."
+        },
+        {
+          "id": "B",
+          "text": "인증을 켜면 인가도 함께 적용되므로 ACL을 따로 설정할 필요가 없다."
+        },
+        {
+          "id": "C",
+          "text": "`PLAINTEXT` 는 인증은 없지만 전송 암호화는 제공한다."
+        },
+        {
+          "id": "D",
+          "text": "`SASL_SSL` 은 ACL 검사까지 포함하는 값이다."
+        },
+        {
+          "id": "E",
+          "text": "`SASL_PLAINTEXT` 는 인증은 하지만 전송을 암호화하지 않으므로 메시지가 평문으로 흐른다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "E"
+      ],
       "explanation": "이름에 PLAINTEXT가 들어간 값은 전송이 암호화되지 않는다는 뜻입니다. `SASL_PLAINTEXT` 는 인증만 제공하므로 SCRAM을 쓰더라도 메시지 데이터는 평문으로 흐르고, `PLAIN` 메커니즘과 조합하면 비밀번호까지 노출됩니다. `SSL` 은 전송 암호화를 제공하지만 클라이언트 인증은 선택이며, 브로커의 `ssl.client.auth` 를 `required` 로 바꿔야 mTLS 인증이 강제됩니다. 인증과 인가는 별개 계층이라 ACL을 설정하지 않으면 인증된 주체가 모든 작업을 할 수 있습니다.",
       "distractorNotes": {
-        "C": "인증은 신원 확인, 인가는 권한 판정입니다. ACL이 없는 리소스는 super user만 접근하도록 두거나 명시적으로 권한을 부여해야 합니다.",
-        "D": "`PLAINTEXT` 는 인증도 암호화도 제공하지 않습니다.",
-        "E": "`security.protocol` 은 인가와 무관합니다. ACL은 인가자 설정으로 켭니다."
+        "B": "인증은 신원 확인, 인가는 권한 판정입니다. ACL이 없는 리소스는 super user만 접근하도록 두거나 명시적으로 권한을 부여해야 합니다.",
+        "C": "`PLAINTEXT` 는 인증도 암호화도 제공하지 않습니다.",
+        "D": "`security.protocol` 은 인가와 무관합니다. ACL은 인가자 설정으로 켭니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Security Overview", "url": "https://kafka.apache.org/documentation/#security_overview" },
-        { "title": "Apache Kafka — Authorization and ACLs", "url": "https://kafka.apache.org/documentation/#security_authz" }
+        {
+          "title": "Apache Kafka — Security Overview",
+          "url": "https://kafka.apache.org/documentation/#security_overview"
+        },
+        {
+          "title": "Apache Kafka — Authorization and ACLs",
+          "url": "https://kafka.apache.org/documentation/#security_authz"
+        }
       ],
-      "tags": ["security-protocol", "ssl.client.auth", "acl"]
+      "tags": [
+        "security-protocol",
+        "ssl.client.auth",
+        "acl"
+      ]
     },
     {
       "id": "basics-ch11-008",
@@ -216,24 +390,52 @@
       "question": "모니터링 메트릭에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "`UncleanLeaderElectionsPerSec` 가 0보다 크면 ISR 밖 레플리카가 리더가 되어 데이터 유실이 발생했다는 신호다." },
-        { "id": "B", "text": "`records-lag-max` 는 컨슈머가 발행하는 클라이언트 메트릭이므로 컨슈머가 죽으면 값 자체가 사라진다." },
-        { "id": "C", "text": "`ActiveControllerCount` 는 브로커마다 1이어야 하므로 5대 클러스터의 합은 5다." },
-        { "id": "D", "text": "`RequestHandlerAvgIdlePercent` 는 0에 가까울수록 여유가 많다는 뜻이다." },
-        { "id": "E", "text": "`UnderReplicatedPartitions` 가 0이 아니면 `acks=all` 쓰기가 항상 거부된다." }
+        {
+          "id": "A",
+          "text": "`UncleanLeaderElectionsPerSec` 가 0보다 크면 ISR 밖 레플리카가 리더가 되어 데이터 유실이 발생했다는 신호다."
+        },
+        {
+          "id": "B",
+          "text": "`records-lag-max` 는 컨슈머가 발행하는 클라이언트 메트릭이므로 컨슈머가 죽으면 값 자체가 사라진다."
+        },
+        {
+          "id": "C",
+          "text": "`RequestHandlerAvgIdlePercent` 는 0에 가까울수록 여유가 많다는 뜻이다."
+        },
+        {
+          "id": "D",
+          "text": "`UnderReplicatedPartitions` 가 0이 아니면 `acks=all` 쓰기가 항상 거부된다."
+        },
+        {
+          "id": "E",
+          "text": "`ActiveControllerCount` 는 브로커마다 1이어야 하므로 5대 클러스터의 합은 5다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "unclean leader election은 ISR에 없던 레플리카를 리더로 올리는 동작이므로 그 카운터가 오르는 것은 committed 메시지가 사라졌다는 뜻입니다. 기본 설정이 이를 금지하고 있으므로 정상값은 0입니다. 컨슈머 lag을 재는 `records-lag-max` 는 컨슈머 클라이언트가 발행하는 메트릭이라 프로세스가 죽으면 값이 함께 사라지는 사각지대가 있고, 그래서 CLI·클라이언트 JMX·AdminClient 계산 세 방법을 함께 씁니다. 브로커 메트릭으로 컨슈머 lag을 재려고 하면 잘못된 값을 보게 됩니다.",
       "distractorNotes": {
-        "C": "활성 컨트롤러는 하나뿐이므로 클러스터 전체 합이 1이어야 합니다. 2 이상이면 split-brain을 의심합니다.",
-        "D": "유휴 비율이므로 값이 클수록 여유가 있습니다. 0.3 아래로 떨어지면 I/O 스레드 포화를 검토합니다.",
-        "E": "이 메트릭은 ISR이 전체 레플리카 수보다 작은 상태를 셉니다. 쓰기 거부 여부는 `UnderMinIsrPartitionCount` 로 판단합니다."
+        "C": "유휴 비율이므로 값이 클수록 여유가 있습니다. 0.3 아래로 떨어지면 I/O 스레드 포화를 검토합니다.",
+        "D": "이 메트릭은 ISR이 전체 레플리카 수보다 작은 상태를 셉니다. 쓰기 거부 여부는 `UnderMinIsrPartitionCount` 로 판단합니다.",
+        "E": "활성 컨트롤러는 하나뿐이므로 클러스터 전체 합이 1이어야 합니다. 2 이상이면 split-brain을 의심합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Managing Consumer Groups", "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Managing Consumer Groups",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_consumer_group"
+        }
       ],
-      "tags": ["metrics", "monitoring", "consumer-lag"]
+      "tags": [
+        "metrics",
+        "monitoring",
+        "consumer-lag"
+      ]
     },
     {
       "id": "basics-ch11-009",
@@ -245,13 +447,37 @@
       "question": "각 브로커 JMX 메트릭을 그 의미와 연결하세요. 정답이 아닌 미끼 설명이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`UnderReplicatedPartitions`", "right": "ISR 크기가 전체 레플리카 수보다 작은 파티션 수" },
-        { "id": "p2", "left": "`UnderMinIsrPartitionCount`", "right": "ISR이 `min.insync.replicas` 에 미달인 파티션 수" },
-        { "id": "p3", "left": "`OfflinePartitionsCount`", "right": "리더가 없어 읽기·쓰기가 모두 불가한 파티션 수" },
-        { "id": "p4", "left": "`ActiveControllerCount`", "right": "클러스터 전체 합이 정확히 1이어야 하는 값" },
-        { "id": "p5", "left": "`RequestHandlerAvgIdlePercent`", "right": "I/O 스레드 유휴 비율. 0.3 초과가 이상적" }
+        {
+          "id": "p1",
+          "left": "`UnderReplicatedPartitions`",
+          "right": "ISR 크기가 전체 레플리카 수보다 작은 파티션 수"
+        },
+        {
+          "id": "p2",
+          "left": "`UnderMinIsrPartitionCount`",
+          "right": "ISR이 `min.insync.replicas` 에 미달인 파티션 수"
+        },
+        {
+          "id": "p3",
+          "left": "`OfflinePartitionsCount`",
+          "right": "리더가 없어 읽기·쓰기가 모두 불가한 파티션 수"
+        },
+        {
+          "id": "p4",
+          "left": "`ActiveControllerCount`",
+          "right": "클러스터 전체 합이 정확히 1이어야 하는 값"
+        },
+        {
+          "id": "p5",
+          "left": "`RequestHandlerAvgIdlePercent`",
+          "right": "I/O 스레드 유휴 비율. 0.3 초과가 이상적"
+        }
       ],
-      "extraRights": ["컨슈머가 발행하는 파티션별 최대 lag", "ISR 밖 레플리카가 리더로 선출된 횟수", "브로커가 컨트롤러에 하트비트를 보낸 횟수"],
+      "extraRights": [
+        "컨슈머가 발행하는 파티션별 최대 lag",
+        "ISR 밖 레플리카가 리더로 선출된 횟수",
+        "브로커가 컨트롤러에 하트비트를 보낸 횟수"
+      ],
       "explanation": "복제 이상을 나타내는 세 메트릭은 심각도가 다릅니다 — `UnderReplicatedPartitions` 는 사본이 부족한 상태, `UnderMinIsrPartitionCount` 는 이미 `acks=all` 쓰기가 거부되는 상태, `OfflinePartitionsCount` 는 리더가 없어 읽기까지 막힌 상태입니다. `ActiveControllerCount` 는 노드마다 0 또는 1을 보고하고 클러스터 전체 합이 1이어야 하며, 0이면 컨트롤러 부재, 2 이상이면 split-brain을 의심합니다. `RequestHandlerAvgIdlePercent` 는 요청 처리 스레드의 여유를 보여 주므로 값이 낮을 때 `num.io.threads` 를 검토합니다. 미끼 중 컨슈머 lag은 브로커가 아니라 컨슈머가 발행하는 메트릭이라는 점도 함께 구분해야 합니다.",
       "distractorNotes": {
         "p1": "`UnderMinIsrPartitionCount` 와 섞이기 쉽습니다. 기준선이 전체 레플리카 수인 쪽이 이 메트릭입니다.",
@@ -259,10 +485,20 @@
         "p5": "\"idle\"을 나쁜 신호로 착각하기 쉽지만 값이 높은 것이 정상입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Monitoring", "url": "https://kafka.apache.org/documentation/#monitoring" },
-        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" }
+        {
+          "title": "Apache Kafka — Monitoring",
+          "url": "https://kafka.apache.org/documentation/#monitoring"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs"
+        }
       ],
-      "tags": ["metrics", "monitoring", "isr"]
+      "tags": [
+        "metrics",
+        "monitoring",
+        "isr"
+      ]
     },
     {
       "id": "basics-ch11-010",
@@ -274,22 +510,49 @@
       "question": "브로커를 추가한 뒤 `kafka-reassign-partitions.sh` 로 파티션을 옮기는 절차를 순서대로 배열하세요.",
       "code": null,
       "items": [
-        { "id": "i3", "text": "`--execute` 로 계획을 적용한다. 이때 `--throttle` 로 복제 대역폭을 제한한다" },
-        { "id": "i1", "text": "옮길 토픽 목록을 담은 JSON 파일을 작성한다" },
-        { "id": "i4", "text": "`--verify` 로 완료를 확인하고 throttle을 해제한다" },
-        { "id": "i2", "text": "`--generate` 로 후보 계획을 만들고 현재 할당 출력을 롤백용으로 저장한다" }
+        {
+          "id": "i1",
+          "text": "`--execute` 로 계획을 적용한다. 이때 `--throttle` 로 복제 대역폭을 제한한다"
+        },
+        {
+          "id": "i2",
+          "text": "옮길 토픽 목록을 담은 JSON 파일을 작성한다"
+        },
+        {
+          "id": "i4",
+          "text": "`--verify` 로 완료를 확인하고 throttle을 해제한다"
+        },
+        {
+          "id": "i3",
+          "text": "`--generate` 로 후보 계획을 만들고 현재 할당 출력을 롤백용으로 저장한다"
+        }
       ],
-      "answer": ["i1", "i2", "i3", "i4"],
+      "answer": [
+        "i2",
+        "i3",
+        "i1",
+        "i4"
+      ],
       "explanation": "이 도구는 데이터 분포를 자동으로 분석해 주지 않으므로 어떤 토픽을 옮길지 먼저 JSON으로 지정해야 합니다. `--generate` 는 후보 계획만 만들고 실제로 옮기지 않으며, 이때 함께 출력되는 \"Current partition replica assignment\" 를 저장해 두는 것이 사실상의 롤백 계획입니다. `--execute` 는 계획을 적용하는 단계이고 운영 트래픽을 지키려면 `--throttle` 을 함께 지정합니다. 마지막 `--verify` 는 진행 상태를 확인하고 완료된 경우 throttle을 제거하므로, 이 단계를 생략하면 평상시 복제까지 제한이 남습니다.",
       "distractorNotes": {
-        "i2": "`--generate` 가 곧바로 재할당을 시작한다고 착각하기 쉽습니다. 계획 출력만 만듭니다.",
+        "i3": "`--generate` 가 곧바로 재할당을 시작한다고 착각하기 쉽습니다. 계획 출력만 만듭니다.",
         "i4": "`--verify` 를 단순 확인용으로 보고 생략하기 쉽지만 throttle 해제가 이 단계에 묶여 있습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Expanding Your Cluster", "url": "https://kafka.apache.org/documentation/#basic_ops_partitionassignment" },
-        { "title": "Apache Kafka — Limiting Bandwidth Usage during Data Migration", "url": "https://kafka.apache.org/documentation/#rep-throttle" }
+        {
+          "title": "Apache Kafka — Expanding Your Cluster",
+          "url": "https://kafka.apache.org/documentation/#basic_ops_partitionassignment"
+        },
+        {
+          "title": "Apache Kafka — Limiting Bandwidth Usage during Data Migration",
+          "url": "https://kafka.apache.org/documentation/#rep-throttle"
+        }
       ],
-      "tags": ["partition-reassign", "throttle", "cli"]
+      "tags": [
+        "partition-reassign",
+        "throttle",
+        "cli"
+      ]
     }
   ]
 }

@@ -15,12 +15,26 @@
       "question": "Kafka의 리텐션 삭제 동작에 대한 설명으로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "리텐션이 지난 레코드를 개별로 찾아 하나씩 삭제한다." },
-        { "id": "B", "text": "삭제는 세그먼트 파일 단위로 이루어지며, 지금 append 중인 활성 세그먼트는 대상이 아니다." },
-        { "id": "C", "text": "삭제는 세그먼트 단위지만 활성 세그먼트도 리텐션이 지나면 함께 삭제된다." },
-        { "id": "D", "text": "컨슈머가 모두 읽은 레코드를 브로커가 즉시 삭제한다." }
+        {
+          "id": "A",
+          "text": "리텐션이 지난 레코드를 개별로 찾아 하나씩 삭제한다."
+        },
+        {
+          "id": "B",
+          "text": "삭제는 세그먼트 파일 단위로 이루어지며, 지금 append 중인 활성 세그먼트는 대상이 아니다."
+        },
+        {
+          "id": "C",
+          "text": "삭제는 세그먼트 단위지만 활성 세그먼트도 리텐션이 지나면 함께 삭제된다."
+        },
+        {
+          "id": "D",
+          "text": "컨슈머가 모두 읽은 레코드를 브로커가 즉시 삭제한다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "공식 구현 문서는 데이터가 한 번에 하나의 로그 세그먼트 단위로 삭제된다고 명시합니다. 개별 레코드를 지우는 경로는 없으므로, 세그먼트가 얼마나 크고 얼마나 자주 롤되는지가 실제 보관량을 결정합니다. 파티션마다 지금 append되고 있는 활성 세그먼트가 정확히 하나 있고 이 세그먼트는 삭제도 컴팩션도 대상이 아닙니다. 시간 기준 판정은 세그먼트 안의 가장 큰 타임스탬프를 보므로, 세그먼트에 최신 레코드가 하나라도 있으면 그 세그먼트 전체가 남습니다.",
       "distractorNotes": {
         "A": "레코드 단위 삭제는 지원되지 않습니다. 키 단위로 정리하려면 컴팩션을 씁니다.",
@@ -28,10 +42,20 @@
         "D": "소비는 삭제와 무관합니다. 삭제 시점은 보관 정책만이 결정합니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Implementation: Log", "url": "https://kafka.apache.org/documentation/#log" },
-        { "title": "Apache Kafka — Topic Configs", "url": "https://kafka.apache.org/documentation/#topicconfigs" }
+        {
+          "title": "Apache Kafka — Implementation: Log",
+          "url": "https://kafka.apache.org/documentation/#log"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        }
       ],
-      "tags": ["retention", "segments", "storage"]
+      "tags": [
+        "retention",
+        "segments",
+        "storage"
+      ]
     },
     {
       "id": "basics-ch07-002",
@@ -43,12 +67,26 @@
       "question": "컴팩션 토픽에서 특정 키를 삭제하려면 어떤 레코드를 보내야 하는가?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "키는 그대로 두고 value를 `null` 로 보낸다." },
-        { "id": "B", "text": "키와 value를 모두 `null` 로 보낸다." },
-        { "id": "C", "text": "value에 빈 문자열을 넣어 보낸다." },
-        { "id": "D", "text": "`kafka-delete-records.sh` 로 그 키의 레코드를 지정해 삭제한다." }
+        {
+          "id": "A",
+          "text": "키는 그대로 두고 value를 `null` 로 보낸다."
+        },
+        {
+          "id": "B",
+          "text": "키와 value를 모두 `null` 로 보낸다."
+        },
+        {
+          "id": "C",
+          "text": "value에 빈 문자열을 넣어 보낸다."
+        },
+        {
+          "id": "D",
+          "text": "`kafka-delete-records.sh` 로 그 키의 레코드를 지정해 삭제한다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "키가 있고 페이로드가 `null` 인 레코드는 로그에서의 삭제로 취급되며 이를 tombstone이라고 부릅니다. 이 마커는 그 키의 이전 메시지를 모두 제거하고, 자신도 `delete.retention.ms`(기본 86400000, 1일)가 지나면 정리됩니다. 그래서 오프셋 0부터 전체를 적재하는 컨슈머는 이 시간 안에 읽기를 끝내야 삭제된 키를 살아 있다고 착각하지 않습니다. 키가 `null` 이면 정리 기준이 없어 tombstone이 될 수 없으므로, 컴팩션 토픽에서는 프로듀서가 항상 키를 지정해야 합니다.",
       "distractorNotes": {
         "B": "키가 없으면 어떤 키를 지우라는 뜻인지 알 수 없습니다. tombstone이 되지 않습니다.",
@@ -56,10 +94,20 @@
         "D": "이 도구는 파티션의 특정 오프셋 앞을 잘라내는 용도이며 키 단위 삭제 수단이 아닙니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Log Compaction", "url": "https://kafka.apache.org/documentation/#compaction" },
-        { "title": "Apache Kafka — Topic Configs", "url": "https://kafka.apache.org/documentation/#topicconfigs" }
+        {
+          "title": "Apache Kafka — Log Compaction",
+          "url": "https://kafka.apache.org/documentation/#compaction"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        }
       ],
-      "tags": ["compaction", "tombstone", "delete.retention.ms"]
+      "tags": [
+        "compaction",
+        "tombstone",
+        "delete.retention.ms"
+      ]
     },
     {
       "id": "basics-ch07-003",
@@ -71,12 +119,26 @@
       "question": "`cleanup.policy` 에 대한 설명으로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "기본값은 `compact` 이므로 별도 설정 없이 키별 최신 값이 보존된다." },
-        { "id": "B", "text": "`delete` 와 `compact` 중 하나만 지정할 수 있고 동시 지정은 불가능하다." },
-        { "id": "C", "text": "기본값은 `delete` 이며 `compact,delete` 처럼 두 정책을 함께 지정할 수 있다." },
-        { "id": "D", "text": "값을 비워 두면 브로커 기본값인 `delete` 가 적용된다." }
+        {
+          "id": "A",
+          "text": "기본값은 `compact` 이므로 별도 설정 없이 키별 최신 값이 보존된다."
+        },
+        {
+          "id": "B",
+          "text": "`delete` 와 `compact` 중 하나만 지정할 수 있고 동시 지정은 불가능하다."
+        },
+        {
+          "id": "C",
+          "text": "기본값은 `delete` 이며 `compact,delete` 처럼 두 정책을 함께 지정할 수 있다."
+        },
+        {
+          "id": "D",
+          "text": "값을 비워 두면 브로커 기본값인 `delete` 가 적용된다."
+        }
       ],
-      "answer": ["C"],
+      "answer": [
+        "C"
+      ],
       "explanation": "`cleanup.policy` 의 기본값은 `delete` 이므로 상태 저장 용도의 토픽은 명시적으로 `compact` 로 바꿔야 합니다. 이 설정은 목록이라서 `compact,delete` 로 두 정책을 함께 쓸 수 있고, 이때 오래된 세그먼트는 리텐션 기준으로 폐기되고 남은 세그먼트는 컴팩션됩니다. 세션 ID처럼 키 공간이 무한히 늘어나는 상태 토픽에서 이 조합이 필요합니다 — 컴팩션만으로는 키가 계속 쌓여 로그가 영원히 자랍니다. 값을 빈 목록으로 두면 어떤 정리도 하지 않는 무한 보관이 되므로 디스크를 직접 관리해야 합니다.",
       "distractorNotes": {
         "A": "기본값은 `delete` 입니다. `compact` 는 명시해야 적용됩니다.",
@@ -84,10 +146,21 @@
         "D": "빈 목록은 \"정리하지 않음\"을 뜻하며 `delete` 로 대체되지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Topic Configs", "url": "https://kafka.apache.org/documentation/#topicconfigs" },
-        { "title": "Apache Kafka — Log Compaction", "url": "https://kafka.apache.org/documentation/#compaction" }
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        },
+        {
+          "title": "Apache Kafka — Log Compaction",
+          "url": "https://kafka.apache.org/documentation/#compaction"
+        }
       ],
-      "tags": ["cleanup.policy", "compaction", "retention", "defaults"]
+      "tags": [
+        "cleanup.policy",
+        "compaction",
+        "retention",
+        "defaults"
+      ]
     },
     {
       "id": "basics-ch07-004",
@@ -103,12 +176,26 @@
         "body": "retention.ms=3600000\nsegment.bytes=1073741824\nsegment.ms=604800000"
       },
       "choices": [
-        { "id": "A", "text": "`retention.bytes` 를 함께 낮춰 크기 기준 삭제를 활성화한다." },
-        { "id": "B", "text": "`min.cleanable.dirty.ratio` 를 낮춰 정리를 자주 일어나게 한다." },
-        { "id": "C", "text": "`file.delete.delay.ms` 를 0으로 두어 즉시 삭제되게 한다." },
-        { "id": "D", "text": "`segment.ms` 를 리텐션과 같은 자릿수로 줄여 세그먼트가 빨리 봉인되게 한다." }
+        {
+          "id": "A",
+          "text": "`retention.bytes` 를 함께 낮춰 크기 기준 삭제를 활성화한다."
+        },
+        {
+          "id": "B",
+          "text": "`min.cleanable.dirty.ratio` 를 낮춰 정리를 자주 일어나게 한다."
+        },
+        {
+          "id": "C",
+          "text": "`file.delete.delay.ms` 를 0으로 두어 즉시 삭제되게 한다."
+        },
+        {
+          "id": "D",
+          "text": "`segment.ms` 를 리텐션과 같은 자릿수로 줄여 세그먼트가 빨리 봉인되게 한다."
+        }
       ],
-      "answer": ["D"],
+      "answer": [
+        "D"
+      ],
       "explanation": "삭제 단위가 세그먼트이고 활성 세그먼트는 대상이 아니므로, 세그먼트가 봉인되지 않으면 리텐션을 아무리 짧게 걸어도 데이터가 남습니다. 트래픽이 적은 토픽은 기본값 1 GiB를 채우는 데 오래 걸리고 `segment.ms` 기본값도 7일이라 세그먼트가 계속 활성 상태로 남습니다. 그래서 `segment.ms` 를 `retention.ms` 의 1/4~1/10 수준으로 함께 줄이는 것이 표준 처방이며, 대신 세그먼트 파일 수와 열린 파일 핸들이 늘어납니다. 삭제 표시 후에도 `file.delete.delay.ms`(기본 1분) 동안 파일이 남아 용량이 즉시 줄지 않는다는 점도 함께 기억해야 합니다.",
       "distractorNotes": {
         "A": "크기 기준도 결국 세그먼트 단위로 삭제하므로 활성 세그먼트 문제는 그대로입니다.",
@@ -116,10 +203,21 @@
         "C": "이 값은 삭제 표시 후 실제 파일 제거를 늦추는 안전장치일 뿐이며, 며칠 치가 남는 원인이 아닙니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Topic Configs", "url": "https://kafka.apache.org/documentation/#topicconfigs" },
-        { "title": "Apache Kafka — Implementation: Log", "url": "https://kafka.apache.org/documentation/#log" }
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        },
+        {
+          "title": "Apache Kafka — Implementation: Log",
+          "url": "https://kafka.apache.org/documentation/#log"
+        }
       ],
-      "tags": ["retention", "segment.ms", "storage", "segments"]
+      "tags": [
+        "retention",
+        "segment.ms",
+        "storage",
+        "segments"
+      ]
     },
     {
       "id": "basics-ch07-005",
@@ -131,12 +229,26 @@
       "question": "`cleanup.policy=compact` 토픽을 처음부터 읽었더니 같은 키가 여러 번 나온다. 가장 적절한 판단은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "정상이다. 컴팩션은 백그라운드 작업이고 활성 세그먼트는 대상이 아니므로 컨슈머는 upsert로 처리해야 한다." },
-        { "id": "B", "text": "`cleanup.policy` 가 실제로 적용되지 않은 것이므로 토픽 설정을 다시 확인해야 한다." },
-        { "id": "C", "text": "컴팩션이 오프셋을 재정렬해 같은 키가 중복 노출된 것이므로 오프셋 기준 중복 제거가 필요하다." },
-        { "id": "D", "text": "키가 `null` 인 레코드가 섞여 있어 컴팩션이 실패한 것이다." }
+        {
+          "id": "A",
+          "text": "정상이다. 컴팩션은 백그라운드 작업이고 활성 세그먼트는 대상이 아니므로 컨슈머는 upsert로 처리해야 한다."
+        },
+        {
+          "id": "B",
+          "text": "`cleanup.policy` 가 실제로 적용되지 않은 것이므로 토픽 설정을 다시 확인해야 한다."
+        },
+        {
+          "id": "C",
+          "text": "컴팩션이 오프셋을 재정렬해 같은 키가 중복 노출된 것이므로 오프셋 기준 중복 제거가 필요하다."
+        },
+        {
+          "id": "D",
+          "text": "키가 `null` 인 레코드가 섞여 있어 컴팩션이 실패한 것이다."
+        }
       ],
-      "answer": ["A"],
+      "answer": [
+        "A"
+      ],
       "explanation": "컴팩션은 즉시 일어나는 동작이 아니라 로그 클리너가 백그라운드로 수행하는 작업입니다. 대상 판정에는 `min.cleanable.dirty.ratio`(기본 0.5) 같은 조건이 걸려 있고, 활성 세그먼트는 아예 제외되므로 아직 정리되지 않은 head 구간에는 같은 키가 여러 번 남아 있습니다. 따라서 컴팩션 토픽의 컨슈머는 \"나중 값이 이긴다\"는 전제로 항상 upsert해야 하며, \"키마다 한 건씩 온다\"고 가정한 코드는 반드시 깨집니다. 컴팩션이 보장하는 것은 처음부터 읽는 컨슈머가 모든 키의 최종 상태를 본다는 것이지, 키당 레코드가 하나라는 것이 아닙니다.",
       "distractorNotes": {
         "B": "설정이 적용되어 있어도 head 구간에는 중복이 남습니다. 설정 문제로 결론 내릴 근거가 없습니다.",
@@ -144,10 +256,20 @@
         "D": "키 없는 레코드는 그 자체가 정리되지 않을 뿐이며, 다른 키의 컴팩션을 실패시키지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Log Compaction", "url": "https://kafka.apache.org/documentation/#compaction" },
-        { "title": "Apache Kafka — Topic Configs", "url": "https://kafka.apache.org/documentation/#topicconfigs" }
+        {
+          "title": "Apache Kafka — Log Compaction",
+          "url": "https://kafka.apache.org/documentation/#compaction"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        }
       ],
-      "tags": ["compaction", "min.cleanable.dirty.ratio", "segments"]
+      "tags": [
+        "compaction",
+        "min.cleanable.dirty.ratio",
+        "segments"
+      ]
     },
     {
       "id": "basics-ch07-006",
@@ -159,12 +281,26 @@
       "question": "파티션 24개 토픽에 `retention.bytes=10737418240`(10 GiB)를 설정했다. 이 설정의 의미로 옳은 것은?",
       "code": null,
       "choices": [
-        { "id": "A", "text": "토픽 전체 크기가 10 GiB를 넘지 않도록 제한되며 파티션 수는 계산에 무관하다." },
-        { "id": "B", "text": "파티션 하나당 10 GiB이므로 토픽 전체는 240 GiB까지 자랄 수 있다." },
-        { "id": "C", "text": "브로커 하나당 10 GiB이므로 클러스터 전체 한도는 브로커 수를 곱해 계산한다." },
-        { "id": "D", "text": "레플리카를 포함한 모든 사본의 합이 10 GiB로 제한되므로 실제 데이터는 약 3.4 GiB다." }
+        {
+          "id": "A",
+          "text": "토픽 전체 크기가 10 GiB를 넘지 않도록 제한되며 파티션 수는 계산에 무관하다."
+        },
+        {
+          "id": "B",
+          "text": "파티션 하나당 10 GiB이므로 토픽 전체는 240 GiB까지 자랄 수 있다."
+        },
+        {
+          "id": "C",
+          "text": "브로커 하나당 10 GiB이므로 클러스터 전체 한도는 브로커 수를 곱해 계산한다."
+        },
+        {
+          "id": "D",
+          "text": "레플리카를 포함한 모든 사본의 합이 10 GiB로 제한되므로 실제 데이터는 약 3.4 GiB다."
+        }
       ],
-      "answer": ["B"],
+      "answer": [
+        "B"
+      ],
       "explanation": "공식 문서는 이 한도가 파티션 레벨에서 적용되므로 토픽의 바이트 리텐션을 계산하려면 파티션 수를 곱하라고 명시합니다. 파티션 24개라면 토픽 전체는 240 GiB까지 자랄 수 있고, 복제 계수가 3이면 클러스터 전체 디스크 사용량은 그 세 배가 됩니다. 기본값은 -1로 크기 기준 삭제가 비활성 상태이므로 \"크기 제한이 기본으로 걸려 있다\"는 전제도 틀립니다. 시간 기준과 크기 기준이 함께 켜져 있으면 어느 한쪽에서라도 대상이 된 세그먼트가 삭제됩니다.",
       "distractorNotes": {
         "A": "토픽 전체 한도로 착각하는 것이 대표적인 오해입니다. 단위는 파티션입니다.",
@@ -172,10 +308,20 @@
         "D": "레플리카는 각자 자신의 로그에 이 한도를 적용합니다. 사본의 합을 제한하지 않습니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Topic Configs", "url": "https://kafka.apache.org/documentation/#topicconfigs" },
-        { "title": "Apache Kafka — Implementation: Log", "url": "https://kafka.apache.org/documentation/#log" }
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        },
+        {
+          "title": "Apache Kafka — Implementation: Log",
+          "url": "https://kafka.apache.org/documentation/#log"
+        }
       ],
-      "tags": ["retention", "retention.bytes", "capacity-planning"]
+      "tags": [
+        "retention",
+        "retention.bytes",
+        "capacity-planning"
+      ]
     },
     {
       "id": "basics-ch07-007",
@@ -187,24 +333,52 @@
       "question": "로그 컴팩션이 보장하는 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "레코드의 오프셋은 바뀌지 않으며 컴팩션으로 사라진 오프셋에서 읽으면 그다음 존재하는 오프셋부터 반환된다." },
-        { "id": "B", "text": "메시지 순서는 재정렬되지 않는다. 일부 레코드가 제거될 뿐이다." },
-        { "id": "C", "text": "컴팩션 후에는 각 키에 대해 정확히 하나의 레코드만 로그에 남는다." },
-        { "id": "D", "text": "컴팩션이 완료되면 오프셋이 다시 촘촘하게 재부여된다." },
-        { "id": "E", "text": "tombstone은 컴팩션 대상이 아니므로 로그에 영구히 남는다." }
+        {
+          "id": "A",
+          "text": "컴팩션 후에는 각 키에 대해 정확히 하나의 레코드만 로그에 남는다."
+        },
+        {
+          "id": "B",
+          "text": "컴팩션이 완료되면 오프셋이 다시 촘촘하게 재부여된다."
+        },
+        {
+          "id": "C",
+          "text": "tombstone은 컴팩션 대상이 아니므로 로그에 영구히 남는다."
+        },
+        {
+          "id": "D",
+          "text": "메시지 순서는 재정렬되지 않는다. 일부 레코드가 제거될 뿐이다."
+        },
+        {
+          "id": "E",
+          "text": "레코드의 오프셋은 바뀌지 않으며 컴팩션으로 사라진 오프셋에서 읽으면 그다음 존재하는 오프셋부터 반환된다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "D",
+        "E"
+      ],
       "explanation": "공식 문서가 명시하는 보장은 네 가지이고 그중 둘이 오프셋 불변과 순서 유지입니다. 오프셋은 로그 안 위치의 영구 식별자이므로 컴팩션으로 레코드가 제거되어도 남은 레코드의 오프셋은 그대로이고, 사라진 오프셋을 지정해 읽으면 그다음으로 존재하는 오프셋부터 반환됩니다. 나머지 두 보장은 head를 따라잡은 컨슈머가 모든 메시지를 본다는 것과, 처음부터 읽는 컨슈머가 모든 키의 최종 상태를 본다는 것입니다. tombstone도 `delete.retention.ms` 가 지나면 정리되므로 영구히 남지 않습니다.",
       "distractorNotes": {
-        "C": "활성 세그먼트와 아직 정리되지 않은 head 구간에는 같은 키가 여러 번 남을 수 있습니다.",
-        "D": "오프셋 재부여는 일어나지 않습니다. 그래서 컴팩션 토픽의 오프셋은 띄엄띄엄해집니다.",
-        "E": "tombstone은 `delete.retention.ms`(기본 1일) 후 제거되어 공간이 회수됩니다."
+        "A": "활성 세그먼트와 아직 정리되지 않은 head 구간에는 같은 키가 여러 번 남을 수 있습니다.",
+        "B": "오프셋 재부여는 일어나지 않습니다. 그래서 컴팩션 토픽의 오프셋은 띄엄띄엄해집니다.",
+        "C": "tombstone은 `delete.retention.ms`(기본 1일) 후 제거되어 공간이 회수됩니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Log Compaction", "url": "https://kafka.apache.org/documentation/#compaction" },
-        { "title": "Apache Kafka — Implementation: Log", "url": "https://kafka.apache.org/documentation/#log" }
+        {
+          "title": "Apache Kafka — Log Compaction",
+          "url": "https://kafka.apache.org/documentation/#compaction"
+        },
+        {
+          "title": "Apache Kafka — Implementation: Log",
+          "url": "https://kafka.apache.org/documentation/#log"
+        }
       ],
-      "tags": ["compaction", "offsets", "tombstone"]
+      "tags": [
+        "compaction",
+        "offsets",
+        "tombstone"
+      ]
     },
     {
       "id": "basics-ch07-008",
@@ -216,24 +390,52 @@
       "question": "브로커·토픽의 메시지 크기 설정에 대한 설명으로 옳은 것을 모두 고르세요. (2개 선택)",
       "code": null,
       "choices": [
-        { "id": "A", "text": "브로커 설정은 `message.max.bytes`, 토픽 레벨 오버라이드는 `max.message.bytes` 로 이름의 어순이 반대다." },
-        { "id": "B", "text": "이 한도는 압축이 적용된 뒤의 레코드 배치 크기를 기준으로 평가된다." },
-        { "id": "C", "text": "브로커 기본값은 정확히 1048576바이트, 즉 1 MiB다." },
-        { "id": "D", "text": "토픽 레벨 설정은 브로커 설정보다 항상 작아야 하며 크면 거부된다." },
-        { "id": "E", "text": "프로듀서의 `max.request.size` 는 브로커 한도와 같은 값이므로 따로 맞출 필요가 없다." }
+        {
+          "id": "A",
+          "text": "브로커 설정은 `message.max.bytes`, 토픽 레벨 오버라이드는 `max.message.bytes` 로 이름의 어순이 반대다."
+        },
+        {
+          "id": "B",
+          "text": "이 한도는 압축이 적용된 뒤의 레코드 배치 크기를 기준으로 평가된다."
+        },
+        {
+          "id": "C",
+          "text": "프로듀서의 `max.request.size` 는 브로커 한도와 같은 값이므로 따로 맞출 필요가 없다."
+        },
+        {
+          "id": "D",
+          "text": "토픽 레벨 설정은 브로커 설정보다 항상 작아야 하며 크면 거부된다."
+        },
+        {
+          "id": "E",
+          "text": "브로커 기본값은 정확히 1048576바이트, 즉 1 MiB다."
+        }
       ],
-      "answer": ["A", "B"],
+      "answer": [
+        "A",
+        "B"
+      ],
       "explanation": "이름의 어순이 반대라는 점이 자주 틀리는 지점입니다 — 브로커는 `message.max.bytes`, 토픽은 `max.message.bytes` 이고 둘 다 기본값이 1048588입니다. 판정 기준은 개별 메시지가 아니라 압축 후 레코드 배치 크기이므로, \"메시지 하나가 1 MiB 이하면 괜찮다\"는 판단은 틀립니다. 1048576(1 MiB)은 프로듀서 `max.request.size` 의 기본값이라서 두 숫자를 뒤바꾸기 쉽습니다. 큰 메시지를 다루려면 프로듀서·브로커·토픽·컨슈머 쪽 설정을 함께 정합해야 합니다.",
       "distractorNotes": {
-        "C": "브로커 기본값은 1048588이며 1 MiB보다 12바이트 큽니다. 경계값 문항에서 이 차이가 정답을 가릅니다.",
+        "C": "`max.request.size` 기본값은 1048576으로 브로커 값과 다릅니다. 별도로 맞춰야 합니다.",
         "D": "토픽 레벨 값이 브로커 값을 오버라이드하므로 더 크게 설정할 수 있습니다.",
-        "E": "`max.request.size` 기본값은 1048576으로 브로커 값과 다릅니다. 별도로 맞춰야 합니다."
+        "E": "브로커 기본값은 1048588이며 1 MiB보다 12바이트 큽니다. 경계값 문항에서 이 차이가 정답을 가릅니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" },
-        { "title": "Apache Kafka — Topic Configs", "url": "https://kafka.apache.org/documentation/#topicconfigs" }
+        {
+          "title": "Apache Kafka — Broker Configs",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs"
+        },
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        }
       ],
-      "tags": ["message-size", "message.max.bytes", "defaults"]
+      "tags": [
+        "message-size",
+        "message.max.bytes",
+        "defaults"
+      ]
     },
     {
       "id": "basics-ch07-009",
@@ -245,13 +447,38 @@
       "question": "각 토픽 설정을 Apache Kafka 4.3 기준 기본값과 연결하세요. 정답이 아닌 미끼 값이 섞여 있습니다.",
       "code": null,
       "pairs": [
-        { "id": "p1", "left": "`retention.ms`", "right": "604800000" },
-        { "id": "p2", "left": "`retention.bytes`", "right": "-1 (비활성)" },
-        { "id": "p3", "left": "`segment.bytes`", "right": "1073741824" },
-        { "id": "p4", "left": "`min.cleanable.dirty.ratio`", "right": "0.5" },
-        { "id": "p5", "left": "`delete.retention.ms`", "right": "86400000" }
+        {
+          "id": "p1",
+          "left": "`retention.ms`",
+          "right": "604800000"
+        },
+        {
+          "id": "p2",
+          "left": "`retention.bytes`",
+          "right": "-1 (비활성)"
+        },
+        {
+          "id": "p3",
+          "left": "`segment.bytes`",
+          "right": "1073741824"
+        },
+        {
+          "id": "p4",
+          "left": "`min.cleanable.dirty.ratio`",
+          "right": "0.5"
+        },
+        {
+          "id": "p5",
+          "left": "`delete.retention.ms`",
+          "right": "86400000"
+        }
       ],
-      "extraRights": ["0", "-2 (상위 설정을 따름)", "1048576", "0.1"],
+      "extraRights": [
+        "0",
+        "-2 (상위 설정을 따름)",
+        "1048576",
+        "0.1"
+      ],
       "explanation": "`retention.ms` 는 7일에 해당하는 604800000ms이고 `segment.ms` 도 같은 값이라서, 리텐션만 줄이면 보관량이 목표에 닿지 않습니다. `retention.bytes` 는 -1로 크기 기준 삭제가 꺼져 있으며 파티션 단위로 적용됩니다. `min.cleanable.dirty.ratio` 는 0.5이므로 로그의 절반 넘게 정리된 파티션은 다시 정리하지 않아 낭비 공간이 최대 50%로 묶입니다. `delete.retention.ms` 는 86400000ms(1일)이며 tombstone 보관 시간이자, 전체 적재를 하는 컨슈머가 유효한 스냅샷을 얻기 위해 읽기를 끝내야 하는 상한입니다.",
       "distractorNotes": {
         "p2": "\"기본으로 크기 제한이 걸려 있다\"고 오해해 숫자를 고르기 쉽습니다. 기본은 비활성입니다.",
@@ -259,10 +486,21 @@
         "p5": "`min.compaction.lag.ms` 의 기본값인 0과 섞이기 쉽습니다. tombstone 보관은 1일입니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Topic Configs", "url": "https://kafka.apache.org/documentation/#topicconfigs" },
-        { "title": "Apache Kafka — Log Compaction", "url": "https://kafka.apache.org/documentation/#compaction" }
+        {
+          "title": "Apache Kafka — Topic Configs",
+          "url": "https://kafka.apache.org/documentation/#topicconfigs"
+        },
+        {
+          "title": "Apache Kafka — Log Compaction",
+          "url": "https://kafka.apache.org/documentation/#compaction"
+        }
       ],
-      "tags": ["defaults", "retention", "compaction", "delete.retention.ms"]
+      "tags": [
+        "defaults",
+        "retention",
+        "compaction",
+        "delete.retention.ms"
+      ]
     },
     {
       "id": "basics-ch07-010",
@@ -274,22 +512,49 @@
       "question": "로그 클리너 스레드가 하나의 파티션을 컴팩션할 때 수행하는 단계를 순서대로 배열하세요.",
       "code": null,
       "items": [
-        { "id": "i3", "text": "로그를 처음부터 끝까지 재복사하면서 뒤에 다시 나타나는 키의 레코드를 제거한다" },
-        { "id": "i1", "text": "log head 대 log tail 비율이 가장 높은 로그를 고른다" },
-        { "id": "i4", "text": "새로 만든 깨끗한 세그먼트를 기존 세그먼트와 교체(swap)한다" },
-        { "id": "i2", "text": "head에 있는 각 키의 마지막 오프셋을 담은 요약 구조를 만든다" }
+        {
+          "id": "i4",
+          "text": "로그를 처음부터 끝까지 재복사하면서 뒤에 다시 나타나는 키의 레코드를 제거한다"
+        },
+        {
+          "id": "i1",
+          "text": "log head 대 log tail 비율이 가장 높은 로그를 고른다"
+        },
+        {
+          "id": "i3",
+          "text": "새로 만든 깨끗한 세그먼트를 기존 세그먼트와 교체(swap)한다"
+        },
+        {
+          "id": "i2",
+          "text": "head에 있는 각 키의 마지막 오프셋을 담은 요약 구조를 만든다"
+        }
       ],
-      "answer": ["i1", "i2", "i3", "i4"],
+      "answer": [
+        "i1",
+        "i2",
+        "i4",
+        "i3"
+      ],
       "explanation": "클리너는 정리 효과가 가장 큰 대상을 먼저 고르기 위해 dirty 비율이 높은 로그를 선택합니다. 그다음 head 구간을 스캔해 각 키의 마지막 오프셋을 기록한 요약 해시 테이블을 만드는데, 공식 문서는 이 구조가 엔트리당 24바이트를 쓴다고 밝힙니다. 이 요약을 기준으로 로그를 재복사하면서 뒤에 같은 키가 다시 나오는 레코드를 걸러 내고, 완성된 세그먼트를 즉시 교체합니다. 세그먼트를 하나씩 교체하기 때문에 추가로 필요한 디스크 공간이 로그 전체가 아니라 세그먼트 하나 분량이라는 점이 이 설계의 이점입니다.",
       "distractorNotes": {
         "i2": "요약 없이 곧바로 재복사한다고 생각하기 쉽지만, 어느 레코드가 최신인지 알아야 제거 판단을 할 수 있습니다.",
-        "i4": "교체를 마지막에 한 번에 몰아서 한다고 오해하기 쉽습니다. 세그먼트 단위로 즉시 교체됩니다."
+        "i3": "교체를 마지막에 한 번에 몰아서 한다고 오해하기 쉽습니다. 세그먼트 단위로 즉시 교체됩니다."
       },
       "refs": [
-        { "title": "Apache Kafka — Log Compaction", "url": "https://kafka.apache.org/documentation/#compaction" },
-        { "title": "Apache Kafka — Broker Configs", "url": "https://kafka.apache.org/documentation/#brokerconfigs" }
+        {
+          "title": "Apache Kafka — Log Compaction",
+          "url": "https://kafka.apache.org/documentation/#compaction"
+        },
+        {
+          "title": "Apache Kafka — Broker Configs",
+          "url": "https://kafka.apache.org/documentation/#brokerconfigs"
+        }
       ],
-      "tags": ["compaction", "log-cleaner", "segments"]
+      "tags": [
+        "compaction",
+        "log-cleaner",
+        "segments"
+      ]
     }
   ]
 }

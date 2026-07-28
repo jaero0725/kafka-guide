@@ -165,11 +165,11 @@
       "choices": [
         {
           "id": "A",
-          "text": "`buffer-available-bytes` — 0 에 가까우면 버퍼 공간을 기다리며 블로킹된다."
+          "text": "`records-per-request-avg` — 요청당 레코드가 적으면 블로킹된다."
         },
         {
           "id": "B",
-          "text": "`record-send-rate` — 전송 속도가 높으면 블로킹된다."
+          "text": "`buffer-available-bytes` — 0 에 가까우면 버퍼 공간을 기다리며 블로킹된다."
         },
         {
           "id": "C",
@@ -177,7 +177,7 @@
         },
         {
           "id": "D",
-          "text": "`records-per-request-avg` — 요청당 레코드가 적으면 블로킹된다."
+          "text": "`record-send-rate` — 전송 속도가 높으면 블로킹된다."
         },
         {
           "id": "E",
@@ -185,14 +185,14 @@
         }
       ],
       "answer": [
-        "A",
+        "B",
         "E"
       ],
       "explanation": "`send()` 는 비동기지만 완전히 논블로킹은 아닙니다. 레코드를 담을 버퍼 공간이 없거나 대상 토픽의 메타데이터가 아직 없으면 `max.block.ms`(기본 60000) 까지 호출 스레드를 붙잡습니다. 따라서 남은 버퍼 메모리와 브로커 응답 지연을 함께 봐야 원인이 완성됩니다. 브로커 응답이 느려지면 배치가 accumulator 를 떠나지 못해 버퍼가 차고, 그 결과 호출 스레드가 막히는 연쇄가 만들어집니다.",
       "distractorNotes": {
-        "B": "전송 속도가 높은 것 자체는 건강한 신호입니다. 블로킹은 오히려 전송이 막혀 버퍼가 찰 때 생깁니다.",
+        "A": "요청당 레코드 수는 배치 효율 지표입니다. 값이 작으면 처리량이 낮아질 뿐 블로킹의 원인은 아닙니다.",
         "C": "압축률은 네트워크·디스크 효율 지표이며 호출 블로킹과 인과관계가 없습니다.",
-        "D": "요청당 레코드 수는 배치 효율 지표입니다. 값이 작으면 처리량이 낮아질 뿐 블로킹의 원인은 아닙니다."
+        "D": "전송 속도가 높은 것 자체는 건강한 신호입니다. 블로킹은 오히려 전송이 막혀 버퍼가 찰 때 생깁니다."
       },
       "refs": [
         {
@@ -280,15 +280,15 @@
       "choices": [
         {
           "id": "A",
-          "text": "`record-retry-rate` — 재시도 가능한 실패가 누적되고 있는지 확인한다."
+          "text": "`records-consumed-rate` — 소비 속도가 낮으면 프로듀서가 실패한다."
         },
         {
           "id": "B",
-          "text": "`compression-rate-avg` — 압축 효율이 실패율을 좌우한다."
+          "text": "브로커의 `UnderMinIsrPartitionCount` — `acks=all` 쓰기가 거부되는 상태인지 확인한다."
         },
         {
           "id": "C",
-          "text": "브로커의 `UnderMinIsrPartitionCount` — `acks=all` 쓰기가 거부되는 상태인지 확인한다."
+          "text": "`record-retry-rate` — 재시도 가능한 실패가 누적되고 있는지 확인한다."
         },
         {
           "id": "D",
@@ -296,18 +296,18 @@
         },
         {
           "id": "E",
-          "text": "`records-consumed-rate` — 소비 속도가 낮으면 프로듀서가 실패한다."
+          "text": "`compression-rate-avg` — 압축 효율이 실패율을 좌우한다."
         }
       ],
       "answer": [
-        "A",
+        "B",
         "C"
       ],
       "explanation": "전송 실패의 원인은 크게 재시도 가능한 일시 장애와 재시도 불가능한 영구 오류로 갈립니다. `record-retry-rate` 가 함께 오르고 있으면 리더 이동·ISR 부족·네트워크 같은 일시 장애 계열이고, 브로커의 `UnderMinIsrPartitionCount` 가 0이 아니면 `acks=all` 요청이 이미 거부되는 상태입니다. 반대로 재시도 없이 곧바로 실패가 쌓이면 레코드 크기 초과나 직렬화·인가 오류처럼 재시도해도 소용없는 원인입니다. 컨슈머 쪽 지표는 프로듀서 실패와 인과관계가 없습니다.",
       "distractorNotes": {
-        "B": "압축은 전송 크기와 CPU에 영향을 주지만 실패율의 원인 지표는 아닙니다.",
+        "A": "같은 이유로 무관합니다. 컨슈머 처리량은 프로듀서 실패와 연결되지 않습니다.",
         "D": "Kafka는 소비와 생산을 분리합니다. 소비가 밀려도 프로듀서 전송은 실패하지 않습니다.",
-        "E": "같은 이유로 무관합니다. 컨슈머 처리량은 프로듀서 실패와 연결되지 않습니다."
+        "E": "압축은 전송 크기와 CPU에 영향을 주지만 실패율의 원인 지표는 아닙니다."
       },
       "refs": [
         {
@@ -701,34 +701,34 @@
       "choices": [
         {
           "id": "A",
-          "text": "클라이언트 JMX `records-lag-max` 만으로 감시하면 컨슈머 사망을 감지할 수 없다."
-        },
-        {
-          "id": "B",
           "text": "`kafka-consumer-groups --describe` 는 컨슈머 프로세스에 붙어 실시간 위치를 읽는다."
         },
         {
-          "id": "C",
-          "text": "CLI 출력에서 `CONSUMER-ID` 가 `-` 인 파티션은 현재 할당된 컨슈머가 없는 상태다."
-        },
-        {
-          "id": "D",
+          "id": "B",
           "text": "브로커의 `FetcherLagMetrics` 값을 애플리케이션 lag 알림 기준으로 쓰면 된다."
         },
         {
-          "id": "E",
+          "id": "C",
           "text": "lag 알림 임계값은 Kafka 공식 문서가 권장 수치를 제시하므로 그대로 쓰면 된다."
+        },
+        {
+          "id": "D",
+          "text": "클라이언트 JMX `records-lag-max` 만으로 감시하면 컨슈머 사망을 감지할 수 없다."
+        },
+        {
+          "id": "E",
+          "text": "CLI 출력에서 `CONSUMER-ID` 가 `-` 인 파티션은 현재 할당된 컨슈머가 없는 상태다."
         }
       ],
       "answer": [
-        "A",
-        "C"
+        "D",
+        "E"
       ],
       "explanation": "클라이언트 JMX 기반 감시의 구조적 한계는 프로세스가 사라지면 지표도 사라진다는 점이며, 그래서 커밋 오프셋 기반 관측을 반드시 병행합니다. CLI 출력에서 `CONSUMER-ID` 가 비어 있는 행은 그 파티션을 맡은 멤버가 없다는 뜻이므로 리밸런스 중이거나 컨슈머 수가 부족한 상태를 나타냅니다. `FetcherLagMetrics` 는 복제 지연 지표이므로 애플리케이션 lag 알림 기준이 될 수 없습니다. 그리고 공식 문서는 URP 처럼 \"0이어야 한다\" 수준의 방향성만 제시하고 lag 의 구체적 임계 수치는 제시하지 않습니다.",
       "distractorNotes": {
-        "B": "이 명령은 브로커에 저장된 커밋 오프셋과 로그 끝 위치를 조회합니다. 컨슈머 프로세스에 붙지 않습니다.",
-        "D": "이름만 `ConsumerLag` 이고 실제로는 팔로워 복제 지연입니다.",
-        "E": "lag 임계값에 대한 공식 권장 수치는 없습니다. 서비스의 처리 속도와 SLA 로부터 직접 정해야 합니다."
+        "A": "이 명령은 브로커에 저장된 커밋 오프셋과 로그 끝 위치를 조회합니다. 컨슈머 프로세스에 붙지 않습니다.",
+        "B": "이름만 `ConsumerLag` 이고 실제로는 팔로워 복제 지연입니다.",
+        "C": "lag 임계값에 대한 공식 권장 수치는 없습니다. 서비스의 처리 속도와 SLA 로부터 직접 정해야 합니다."
       },
       "refs": [
         {
@@ -966,7 +966,7 @@
       "choices": [
         {
           "id": "A",
-          "text": "`heartbeat-rate`"
+          "text": "`poll-idle-ratio-avg`"
         },
         {
           "id": "B",
@@ -974,26 +974,26 @@
         },
         {
           "id": "C",
-          "text": "`last-heartbeat-seconds-ago`"
+          "text": "`commit-latency-avg`"
         },
         {
           "id": "D",
-          "text": "`poll-idle-ratio-avg`"
+          "text": "`last-heartbeat-seconds-ago`"
         },
         {
           "id": "E",
-          "text": "`commit-latency-avg`"
+          "text": "`heartbeat-rate`"
         }
       ],
       "answer": [
-        "B",
-        "D"
+        "A",
+        "B"
       ],
       "explanation": "컨슈머가 그룹에서 빠지는 경로는 두 개입니다. 하트비트가 `session.timeout.ms`(기본 45000) 안에 오지 않는 경로와, 두 poll 사이 간격이 `max.poll.interval.ms`(기본 300000)를 넘는 경로입니다. 전자는 프로세스 정지·장기 GC·네트워크 문제이고 후자는 레코드 처리가 느린 문제이므로 처방이 완전히 다릅니다. poll 축을 보는 지표가 `time-between-poll-max`·`last-poll-seconds-ago`·`poll-idle-ratio-avg` 이며, 이 축의 문제에 `session.timeout.ms` 를 올리면 장애 감지만 늦어집니다.",
       "distractorNotes": {
-        "A": "하트비트 축 지표입니다. `session.timeout.ms` 와 짝을 이룹니다.",
-        "C": "역시 하트비트 축 지표로, 마지막 하트비트 이후 경과 시간을 봅니다.",
-        "E": "커밋 지연 지표로, 두 축 어느 쪽의 제거 조건과도 직접 대응하지 않습니다."
+        "C": "커밋 지연 지표로, 두 축 어느 쪽의 제거 조건과도 직접 대응하지 않습니다.",
+        "D": "역시 하트비트 축 지표로, 마지막 하트비트 이후 경과 시간을 봅니다.",
+        "E": "하트비트 축 지표입니다. `session.timeout.ms` 와 짝을 이룹니다."
       },
       "refs": [
         {
@@ -1133,34 +1133,34 @@
       "choices": [
         {
           "id": "A",
-          "text": "`UnderReplicatedPartitions` 가 0보다 커진다."
-        },
-        {
-          "id": "B",
           "text": "`UnderMinIsrPartitionCount` 가 0보다 커져 `acks=all` 쓰기가 이미 거부된다."
         },
         {
-          "id": "C",
-          "text": "`AtMinIsrPartitionCount` 가 0보다 커지며, 한 대만 더 빠지면 쓰기가 실패한다."
-        },
-        {
-          "id": "D",
+          "id": "B",
           "text": "`OfflinePartitionsCount` 가 0보다 커져 읽기도 불가능해진다."
         },
         {
-          "id": "E",
+          "id": "C",
           "text": "세 ISR 관련 지표 모두 0으로 유지된다."
+        },
+        {
+          "id": "D",
+          "text": "`UnderReplicatedPartitions` 가 0보다 커진다."
+        },
+        {
+          "id": "E",
+          "text": "`AtMinIsrPartitionCount` 가 0보다 커지며, 한 대만 더 빠지면 쓰기가 실패한다."
         }
       ],
       "answer": [
-        "A",
-        "C"
+        "D",
+        "E"
       ],
       "explanation": "ISR 이 3에서 2로 줄었으므로 복제 계수보다 작아져 `UnderReplicatedPartitions` 가 올라갑니다. 동시에 ISR 크기가 `min.insync.replicas` 와 정확히 같으므로 `AtMinIsrPartitionCount` 가 올라가고, 아직 미달은 아니므로 `UnderMinIsrPartitionCount` 는 0 입니다. 이 조합은 \"쓰기는 되지만 여유가 없다\"는 경계 상태이므로 즉시 조치가 필요합니다. 한 대가 더 빠지면 ISR 이 1이 되어 `UnderMinIsr` 이 올라가고 `acks=all` 쓰기가 거부됩니다.",
       "distractorNotes": {
-        "B": "ISR 이 2로 `min.insync.replicas` 를 만족하므로 아직 쓰기는 성공합니다. 이 지표는 0입니다.",
-        "D": "리더가 남아 있으므로 읽기는 정상입니다. 리더 부재일 때만 이 지표가 올라갑니다.",
-        "E": "ISR 이 복제 계수보다 작아지면 URP 와 AtMinIsr 이 반응합니다. 모두 0일 수 없습니다."
+        "A": "ISR 이 2로 `min.insync.replicas` 를 만족하므로 아직 쓰기는 성공합니다. 이 지표는 0입니다.",
+        "B": "리더가 남아 있으므로 읽기는 정상입니다. 리더 부재일 때만 이 지표가 올라갑니다.",
+        "C": "ISR 이 복제 계수보다 작아지면 URP 와 AtMinIsr 이 반응합니다. 모두 0일 수 없습니다."
       },
       "refs": [
         {
@@ -1500,19 +1500,19 @@
       "choices": [
         {
           "id": "A",
-          "text": "`ConsumerInterceptor.onConsume()` 은 `poll()` 이 레코드를 반환하기 직전에 호출된다."
-        },
-        {
-          "id": "B",
-          "text": "`interceptor.classes` 기본값은 `JmxReporter` 이므로 항상 하나가 동작한다."
-        },
-        {
-          "id": "C",
           "text": "여러 인터셉터를 등록하면 `interceptor.classes` 에 나열한 순서대로 체인처럼 호출된다."
         },
         {
-          "id": "D",
+          "id": "B",
+          "text": "`ConsumerInterceptor.onConsume()` 은 `poll()` 이 레코드를 반환하기 직전에 호출된다."
+        },
+        {
+          "id": "C",
           "text": "인터셉터는 브로커에 설치하며 모든 클라이언트에 자동 적용된다."
+        },
+        {
+          "id": "D",
+          "text": "`interceptor.classes` 기본값은 `JmxReporter` 이므로 항상 하나가 동작한다."
         },
         {
           "id": "E",
@@ -1521,12 +1521,12 @@
       ],
       "answer": [
         "A",
-        "C"
+        "B"
       ],
       "explanation": "`ConsumerInterceptor.onConsume()` 은 `poll()` 이 결과를 돌려주기 바로 전에 호출되므로 레코드를 수정하거나 필터링할 수 있고, `onCommit()` 은 오프셋 커밋 시점에 호출됩니다. 인터셉터를 여러 개 등록하면 설정에 적은 순서대로 체인이 형성되어 앞 인터셉터의 결과가 다음 인터셉터의 입력이 됩니다. `interceptor.classes` 의 기본값은 빈 목록이므로 기본 상태에서는 인터셉터가 없고, 인터셉터는 브로커가 아니라 클라이언트 애플리케이션에 설정합니다. 이 확장점은 추적 헤더 주입이나 감사 로깅 같은 횡단 관심사에 씁니다.",
       "distractorNotes": {
-        "B": "`JmxReporter` 는 `metric.reporters` 의 기본값입니다. `interceptor.classes` 의 기본값은 빈 목록입니다.",
-        "D": "인터셉터는 클라이언트 측 설정입니다. 브로커에 설치할 수 없습니다.",
+        "C": "인터셉터는 클라이언트 측 설정입니다. 브로커에 설치할 수 없습니다.",
+        "D": "`JmxReporter` 는 `metric.reporters` 의 기본값입니다. `interceptor.classes` 의 기본값은 빈 목록입니다.",
         "E": "수정과 필터링이 모두 허용됩니다. 반환하는 레코드 수에 제한도 없습니다."
       },
       "refs": [
@@ -1660,11 +1660,11 @@
       "code": null,
       "items": [
         {
-          "id": "i3",
+          "id": "i1",
           "text": "수집기가 익스포터 종단점을 주기적으로 스크레이프해 시계열 DB에 저장한다"
         },
         {
-          "id": "i1",
+          "id": "i2",
           "text": "클라이언트 JVM 에 JMX 를 노출한다 (JMX 포트 또는 exporter 에이전트)"
         },
         {
@@ -1672,19 +1672,19 @@
           "text": "시계열 DB 위에 대시보드 패널과 알림 규칙을 구성한다"
         },
         {
-          "id": "i2",
+          "id": "i3",
           "text": "익스포터가 MBean 값을 읽어 시계열 형식으로 변환해 제공한다"
         }
       ],
       "answer": [
-        "i1",
         "i2",
         "i3",
+        "i1",
         "i4"
       ],
       "explanation": "JMX 는 프로세스 내부 메트릭을 꺼낼 수 있게 하는 인터페이스일 뿐이므로, 노출 없이는 어떤 도구도 값을 읽을 수 없습니다. 그 다음 단계로 MBean 값을 외부 수집 형식으로 바꾸는 변환 계층이 필요하고, 수집기가 그 종단점을 스크레이프해 시계열로 저장합니다. 대시보드와 알림은 저장된 시계열 위에서만 만들 수 있으므로 마지막입니다. Kafka 클라이언트에는 `metric.reporters` 설정도 있어 커스텀 리포터로 이 경로를 대체할 수 있습니다.",
       "distractorNotes": {
-        "i1": "\"수집기를 먼저 세운다\"고 생각하기 쉽지만, 노출되지 않은 메트릭은 수집할 수 없습니다.",
+        "i2": "\"수집기를 먼저 세운다\"고 생각하기 쉽지만, 노출되지 않은 메트릭은 수집할 수 없습니다.",
         "i4": "알림 규칙을 먼저 정의해도 데이터가 없으면 평가되지 않습니다. 메트릭 부재 조건도 저장된 시계열 위에서 정의합니다."
       },
       "refs": [
@@ -1711,34 +1711,34 @@
       "choices": [
         {
           "id": "A",
-          "text": "`metric.reporters` 의 기본값은 `JmxReporter` 이므로 별도 설정 없이 JMX 로 노출된다."
-        },
-        {
-          "id": "B",
           "text": "`KafkaProducer.metrics()` / `KafkaConsumer.metrics()` 로 코드에서 같은 값을 읽을 수 있다."
         },
         {
-          "id": "C",
-          "text": "클라이언트 메트릭은 브로커의 `__consumer_offsets` 에 주기적으로 기록된다."
-        },
-        {
-          "id": "D",
+          "id": "B",
           "text": "`metrics.recording.level` 기본값은 `DEBUG` 이므로 모든 세부 지표가 기본 노출된다."
         },
         {
-          "id": "E",
+          "id": "C",
           "text": "MBean 이름에는 `client-id` 가 포함되지 않는다."
+        },
+        {
+          "id": "D",
+          "text": "`metric.reporters` 의 기본값은 `JmxReporter` 이므로 별도 설정 없이 JMX 로 노출된다."
+        },
+        {
+          "id": "E",
+          "text": "클라이언트 메트릭은 브로커의 `__consumer_offsets` 에 주기적으로 기록된다."
         }
       ],
       "answer": [
         "A",
-        "B"
+        "D"
       ],
       "explanation": "클라이언트는 기본적으로 `JmxReporter` 를 등록하므로 JVM 에 JMX 접근 경로만 열어 주면 메트릭을 볼 수 있습니다. 같은 값들을 `metrics()` 메서드로 애플리케이션 코드에서 직접 읽을 수도 있어서, 자체 헬스 엔드포인트를 만들 때 유용합니다. `metrics.recording.level` 의 기본값은 `INFO` 이며 `DEBUG`·`TRACE` 로 올리면 더 세부적인 지표가 켜집니다. MBean 이름에는 `client-id` 가 포함되므로 이 값을 지정하지 않으면 대시보드에서 클라이언트를 구분할 수 없습니다.",
       "distractorNotes": {
-        "C": "`__consumer_offsets` 는 오프셋 저장 전용입니다. 클라이언트 메트릭은 여기에 기록되지 않습니다.",
-        "D": "기본값은 `INFO` 입니다. 더 세부 지표가 필요하면 명시적으로 올려야 합니다.",
-        "E": "MBean 이름에 `client-id` 가 포함됩니다. 그래서 `client.id` 지정이 중요합니다."
+        "B": "기본값은 `INFO` 입니다. 더 세부 지표가 필요하면 명시적으로 올려야 합니다.",
+        "C": "MBean 이름에 `client-id` 가 포함됩니다. 그래서 `client.id` 지정이 중요합니다.",
+        "E": "`__consumer_offsets` 는 오프셋 저장 전용입니다. 클라이언트 메트릭은 여기에 기록되지 않습니다."
       },
       "refs": [
         {
@@ -1820,19 +1820,19 @@
       "choices": [
         {
           "id": "A",
-          "text": "DLQ 토픽 지정과 `errors.deadletterqueue.context.headers.enable=true`"
-        },
-        {
-          "id": "B",
           "text": "`total-records-skipped` 에 대한 알림"
         },
         {
+          "id": "B",
+          "text": "DLQ 토픽 지정과 `errors.deadletterqueue.context.headers.enable=true`"
+        },
+        {
           "id": "C",
-          "text": "`tasks.max` 를 파티션 수와 동일하게 맞추기"
+          "text": "`offset.flush.interval.ms` 를 1000 이하로 낮추기"
         },
         {
           "id": "D",
-          "text": "`offset.flush.interval.ms` 를 1000 이하로 낮추기"
+          "text": "`tasks.max` 를 파티션 수와 동일하게 맞추기"
         },
         {
           "id": "E",
@@ -1845,8 +1845,8 @@
       ],
       "explanation": "`errors.tolerance=all` 은 태스크를 살려 두는 대신 문제 레코드를 조용히 버립니다. 따라서 버려진 레코드를 보관할 DLQ 와 원인을 담는 컨텍스트 헤더, 그리고 버려진 양을 알려 주는 `total-records-skipped` 알림이 함께 있어야 데이터 유실을 조기에 발견할 수 있습니다. 이 조합이 없으면 커넥터는 계속 초록불인데 데이터가 몇 주째 빠지고 있는 상태가 됩니다. `deadletterqueue-produce-requests` 와 `total-record-errors` 를 함께 보면 격리가 실제로 동작하는지도 확인할 수 있습니다.",
       "distractorNotes": {
-        "C": "병렬성 설정은 처리량과 관계가 있지만 에러 허용의 부작용을 막아 주지 않습니다.",
-        "D": "오프셋 커밋 주기는 source 쪽 설정이며 sink 의 레코드 유실과 무관합니다.",
+        "C": "오프셋 커밋 주기는 source 쪽 설정이며 sink 의 레코드 유실과 무관합니다.",
+        "D": "병렬성 설정은 처리량과 관계가 있지만 에러 허용의 부작용을 막아 주지 않습니다.",
         "E": "리밸런스 프로토콜은 에러 처리와 무관하고, 구 프로토콜로 되돌리는 것은 오히려 손해입니다."
       },
       "refs": [
@@ -1982,7 +1982,7 @@
       "code": null,
       "items": [
         {
-          "id": "i4",
+          "id": "i1",
           "text": "그 워커 노드의 로컬 로그 파일에서 전체 스택트레이스를 확인한다"
         },
         {
@@ -1990,11 +1990,11 @@
           "text": "`GET /connectors/{name}/status` 로 어느 태스크가 FAILED 인지와 `worker_id` 를 확인한다"
         },
         {
-          "id": "i5",
+          "id": "i4",
           "text": "조사가 끝나면 로그 레벨을 원래 값으로 되돌린다"
         },
         {
-          "id": "i1",
+          "id": "i5",
           "text": "알림에서 문제 커넥터 이름을 확인한다"
         },
         {
@@ -2003,16 +2003,16 @@
         }
       ],
       "answer": [
-        "i1",
+        "i5",
         "i2",
         "i3",
-        "i4",
-        "i5"
+        "i1",
+        "i4"
       ],
       "explanation": "메트릭 알림은 \"어느 커넥터가 아프다\"까지만 알려 주므로 다음 단계는 REST 상태 조회로 태스크와 워커를 특정하는 것입니다. Connect의 로그는 노드 로컬이므로 `worker_id` 를 알기 전에는 어느 파일을 열어야 할지 알 수 없습니다. 세부 정보가 부족하면 그 워커의 로그 레벨을 런타임에 올려 재현 로그를 확보하고, 조사가 끝나면 반드시 원래 레벨로 되돌려 로그 폭증을 막습니다. 이 절차가 관측(메트릭) → 조회(REST) → 심층(로그)의 표준 흐름입니다.",
       "distractorNotes": {
-        "i4": "먼저 아무 워커의 로그를 뒤지는 것이 가장 흔한 시간 낭비입니다. `worker_id` 확인이 선행되어야 합니다.",
-        "i5": "되돌리기를 잊는 것이 실제 사고로 이어집니다. DEBUG 를 남겨 두면 디스크와 로그 비용이 폭증합니다."
+        "i1": "먼저 아무 워커의 로그를 뒤지는 것이 가장 흔한 시간 낭비입니다. `worker_id` 확인이 선행되어야 합니다.",
+        "i4": "되돌리기를 잊는 것이 실제 사고로 이어집니다. DEBUG 를 남겨 두면 디스크와 로그 비용이 폭증합니다."
       },
       "refs": [
         {
@@ -2201,19 +2201,19 @@
       "code": null,
       "items": [
         {
-          "id": "i3",
+          "id": "i1",
           "text": "특정 파티션에만 lag 이 몰렸는지(키 편중) 전체가 균등하게 밀렸는지 판단한다"
         },
         {
-          "id": "i1",
+          "id": "i3",
           "text": "컨슈머 인스턴스가 살아 있고 `assigned-partitions` 가 0이 아닌지 확인한다"
         },
         {
-          "id": "i5",
+          "id": "i2",
           "text": "판단된 원인에 맞춰 `max.poll.records` 축소 또는 파티션·컨슈머 증설을 적용한다"
         },
         {
-          "id": "i2",
+          "id": "i5",
           "text": "`kafka-consumer-groups --describe` 로 파티션별 LAG 분포를 확인한다"
         },
         {
@@ -2222,16 +2222,16 @@
         }
       ],
       "answer": [
-        "i1",
-        "i2",
         "i3",
+        "i5",
+        "i1",
         "i4",
-        "i5"
+        "i2"
       ],
       "explanation": "가장 먼저 확인할 것은 소비 주체가 존재하는지입니다. 컨슈머가 죽었거나 파티션을 하나도 할당받지 못한 상태라면 이후의 처리 성능 분석이 모두 무의미합니다. 그 다음 파티션별 분포를 봐야 hot partition 문제와 전반적 처리 지연을 구분할 수 있고, 전반적 지연으로 판단된 경우에만 poll 관련 지표로 병목을 좁힙니다. 처방은 원인 판단이 끝난 뒤에 적용해야 하는데, 편중 문제에 컨슈머를 늘리면 아무 효과가 없기 때문입니다.",
       "distractorNotes": {
-        "i5": "증설을 먼저 시도하는 것이 가장 흔한 실수입니다. hot partition 이거나 처리 병목이면 효과가 없습니다.",
-        "i3": "분포 확인 없이 전체 지연으로 단정하면 편중 문제를 놓칩니다. 파티션별 LAG 을 먼저 봐야 합니다."
+        "i2": "증설을 먼저 시도하는 것이 가장 흔한 실수입니다. hot partition 이거나 처리 병목이면 효과가 없습니다.",
+        "i1": "분포 확인 없이 전체 지연으로 단정하면 편중 문제를 놓칩니다. 파티션별 LAG 을 먼저 봐야 합니다."
       },
       "refs": [
         {

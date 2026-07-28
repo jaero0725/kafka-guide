@@ -383,19 +383,19 @@
       "choices": [
         {
           "id": "A",
-          "text": "CLI의 `LAG` 열은 `LOG-END-OFFSET − CURRENT-OFFSET` 이므로 처리했지만 아직 커밋하지 않은 분량이 lag으로 보인다."
-        },
-        {
-          "id": "B",
           "text": "브로커의 `LogEndOffset` 만으로는 lag이 나오지 않으며 커밋 오프셋을 따로 가져와 계산해야 한다."
         },
         {
-          "id": "C",
+          "id": "B",
           "text": "컨슈머 JMX의 `records-lag-max` 는 커밋 오프셋 기준이므로 CLI 값과 항상 동일하다."
         },
         {
-          "id": "D",
+          "id": "C",
           "text": "CLI 조회는 컨슈머에 에이전트를 붙여야 동작한다."
+        },
+        {
+          "id": "D",
+          "text": "CLI의 `LAG` 열은 `LOG-END-OFFSET − CURRENT-OFFSET` 이므로 처리했지만 아직 커밋하지 않은 분량이 lag으로 보인다."
         },
         {
           "id": "E",
@@ -404,12 +404,12 @@
       ],
       "answer": [
         "A",
-        "B"
+        "D"
       ],
       "explanation": "CLI 경로는 커밋된 오프셋을 기준으로 계산하므로 커밋 주기가 길면 실제 처리 진행보다 lag이 크게 보입니다. 브로커 측 경로는 토픽의 끝 오프셋만 알려 주므로 그것만으로는 lag이 되지 않고 커밋 오프셋과 조합해야 하며, 대신 컨슈머가 없어도 유입 속도를 볼 수 있다는 장점이 있습니다. 컨슈머 JMX 경로는 실시간 상태를 보여 주지만 컨슈머가 죽으면 메트릭이 사라진다는 한계가 있습니다. 세 경로가 보는 것이 조금씩 다르므로 운영에서는 최소 두 경로를 함께 씁니다.",
       "distractorNotes": {
-        "C": "이 메트릭은 컨슈머가 실제로 읽은 위치 기준이며 커밋 기준이 아닙니다. 그래서 CLI 값과 어긋날 수 있습니다.",
-        "D": "CLI는 브로커에 admin 요청을 보내 조회하므로 컨슈머 쪽에 아무것도 설치하지 않습니다.",
+        "B": "이 메트릭은 컨슈머가 실제로 읽은 위치 기준이며 커밋 기준이 아닙니다. 그래서 CLI 값과 어긋날 수 있습니다.",
+        "C": "CLI는 브로커에 admin 요청을 보내 조회하므로 컨슈머 쪽에 아무것도 설치하지 않습니다.",
         "E": "브로커는 그룹별 lag을 직접 노출하지 않습니다. 커밋 오프셋과 끝 오프셋을 조합해야 합니다."
       },
       "refs": [
@@ -444,30 +444,30 @@
         },
         {
           "id": "B",
-          "text": "`KafkaController,name=MetadataErrorCount`"
-        },
-        {
-          "id": "C",
           "text": "`KafkaController,name=PreferredReplicaImbalanceCount`"
         },
         {
+          "id": "C",
+          "text": "`KafkaController,name=MetadataErrorCount`"
+        },
+        {
           "id": "D",
-          "text": "`ReplicaFetcherManager,name=MaxLag,clientId=Replica`"
+          "text": "`KafkaController,name=LastCommittedRecordOffset`"
         },
         {
           "id": "E",
-          "text": "`KafkaController,name=LastCommittedRecordOffset`"
+          "text": "`ReplicaFetcherManager,name=MaxLag,clientId=Replica`"
         }
       ],
       "answer": [
         "A",
-        "B"
+        "C"
       ],
       "explanation": "unclean 선출 카운터는 0이 아니게 되는 순간 ISR 밖 레플리카가 리더가 되어 데이터가 확정적으로 유실되었음을 뜻하므로 사후 확인이 아니라 알림 대상입니다. 메타데이터 오류 카운터는 그 노드가 메타데이터 로그 처리 중 오류를 만났다는 뜻이므로 손상 가능성을 안고 즉시 조사해야 합니다. 반면 preferred 리더 불균형은 롤링 재시작 직후 일시적으로 오르는 것이 정상이고 자동 복구를 기다리면 됩니다. 팔로워 최대 lag은 produce 배치 크기에 비례해 항상 어느 정도 값을 가지므로 절대값이 아니라 추세로 판단합니다.",
       "distractorNotes": {
-        "C": "롤링 재시작 후 일시적으로 오르며 `auto.leader.rebalance.enable=true` 라면 점검 주기에 따라 자동 복구됩니다.",
-        "D": "정상 운영에서도 0이 아닌 값을 가집니다. 계속 커지는 추세일 때만 문제입니다.",
-        "E": "커밋된 메타데이터 오프셋을 나타내는 단조 증가 값이므로 0이 아닌 것이 정상입니다."
+        "B": "롤링 재시작 후 일시적으로 오르며 `auto.leader.rebalance.enable=true` 라면 점검 주기에 따라 자동 복구됩니다.",
+        "D": "커밋된 메타데이터 오프셋을 나타내는 단조 증가 값이므로 0이 아닌 것이 정상입니다.",
+        "E": "정상 운영에서도 0이 아닌 값을 가집니다. 계속 커지는 추세일 때만 문제입니다."
       },
       "refs": [
         {
@@ -617,11 +617,11 @@
       "code": null,
       "items": [
         {
-          "id": "i2",
+          "id": "i3",
           "text": "`UnderMinIsrPartitionCount` > 0 — acks=all 쓰기가 이미 거부되는 중"
         },
         {
-          "id": "i4",
+          "id": "i2",
           "text": "`UnderReplicatedPartitions` > 0 — 복제가 뒤처졌지만 쓰기는 계속됨"
         },
         {
@@ -629,20 +629,20 @@
           "text": "`OfflinePartitionsCount` > 0 — 리더가 없어 읽기·쓰기 모두 불가"
         },
         {
-          "id": "i3",
+          "id": "i4",
           "text": "`AtMinIsrPartitionCount` > 0 — 경계에 걸려 한 대만 더 빠지면 중단"
         }
       ],
       "answer": [
         "i1",
-        "i2",
         "i3",
-        "i4"
+        "i4",
+        "i2"
       ],
       "explanation": "대응 순서는 서비스에 미치는 영향 범위로 결정됩니다. 리더가 없는 파티션은 읽기와 쓰기가 모두 막히므로 가장 앞에 오고, 그다음이 쓰기가 실제로 거부되고 있는 상태입니다. 경계에 걸린 상태는 아직 정상 동작 중이지만 한 대만 더 잃으면 즉시 사고가 되므로 뒤처짐 경고보다 우선합니다. 뒤처짐 자체는 쓰기·읽기가 유지되므로 마지막이며, 이 순서를 알림 심각도에 그대로 반영하면 알림 피로를 줄일 수 있습니다.",
       "distractorNotes": {
-        "i3": "이미 문제가 생긴 상태로 오해해 UnderMinIsr보다 앞에 두기 쉽습니다. 경계에 걸린 것이지 아직 쓰기는 성공합니다.",
-        "i4": "URP를 가장 심각한 지표로 보기 쉽지만, 쓰기와 읽기가 모두 유지되므로 네 지표 중 가장 뒤입니다."
+        "i4": "이미 문제가 생긴 상태로 오해해 UnderMinIsr보다 앞에 두기 쉽습니다. 경계에 걸린 것이지 아직 쓰기는 성공합니다.",
+        "i2": "URP를 가장 심각한 지표로 보기 쉽지만, 쓰기와 읽기가 모두 유지되므로 네 지표 중 가장 뒤입니다."
       },
       "refs": [
         {

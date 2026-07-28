@@ -338,30 +338,30 @@
         },
         {
           "id": "B",
-          "text": "윈도우 집계"
+          "text": "`branch`"
         },
         {
           "id": "C",
-          "text": "`filterNot`"
+          "text": "윈도우 집계"
         },
         {
           "id": "D",
-          "text": "`flatMapValues`"
+          "text": "`filterNot`"
         },
         {
           "id": "E",
-          "text": "`branch`"
+          "text": "`flatMapValues`"
         }
       ],
       "answer": [
         "A",
-        "B"
+        "C"
       ],
       "explanation": "stateful 연산은 `count`·`reduce`·`aggregate`, 모든 윈도우 연산, 모든 조인, 그리고 `suppress` 입니다. 이들은 로컬 상태 저장소를 만들고 그 내용을 changelog 토픽에 백업하므로, 인스턴스가 죽어도 다른 인스턴스가 changelog를 재생해 상태를 복원할 수 있습니다. `filter`·`filterNot`·`map`·`mapValues`·`flatMapValues`·`branch`·`merge`·`peek`·`selectKey` 는 상태를 갖지 않는 stateless 연산입니다. 상태 여부와 리파티션 유발 여부는 서로 독립된 축이라는 점을 함께 기억해야 합니다.",
       "distractorNotes": {
-        "C": "조건에 따라 레코드를 걸러 낼 뿐 이전 레코드를 기억하지 않습니다.",
-        "D": "값 하나를 여러 값으로 펼치는 stateless 연산입니다.",
-        "E": "스트림을 여러 갈래로 나누는 stateless 연산입니다. `peek` 도 같은 부류입니다."
+        "B": "스트림을 여러 갈래로 나누는 stateless 연산입니다. `peek` 도 같은 부류입니다.",
+        "D": "조건에 따라 레코드를 걸러 낼 뿐 이전 레코드를 기억하지 않습니다.",
+        "E": "값 하나를 여러 값으로 펼치는 stateless 연산입니다."
       },
       "refs": [
         {
@@ -391,11 +391,11 @@
       "choices": [
         {
           "id": "A",
-          "text": "레코드의 타임스탬프가 어떤 윈도우에 속하더라도 stream time이 윈도우 끝 + grace period를 넘었다면 그 레코드는 폐기된다."
+          "text": "윈도우 상태 저장소의 보관 기간은 grace period와 별개이며 `Materialized#withRetention()` 으로 조정한다."
         },
         {
           "id": "B",
-          "text": "윈도우 상태 저장소의 보관 기간은 grace period와 별개이며 `Materialized#withRetention()` 으로 조정한다."
+          "text": "grace period 안에 도착한 레코드는 새 윈도우를 하나 더 만들어 별도로 집계된다."
         },
         {
           "id": "C",
@@ -407,18 +407,18 @@
         },
         {
           "id": "E",
-          "text": "grace period 안에 도착한 레코드는 새 윈도우를 하나 더 만들어 별도로 집계된다."
+          "text": "레코드의 타임스탬프가 어떤 윈도우에 속하더라도 stream time이 윈도우 끝 + grace period를 넘었다면 그 레코드는 폐기된다."
         }
       ],
       "answer": [
         "A",
-        "B"
+        "E"
       ],
       "explanation": "grace period는 특정 윈도우에 대해 순서가 어긋난 레코드를 얼마나 더 기다릴지를 정합니다. 판정 규칙은 stream time이 그 윈도우의 끝 + grace period를 넘었는지이며, 넘었다면 레코드는 폐기되고 윈도우에 반영되지 않습니다. 윈도우 상태 저장소의 보관 기간은 이와 별개의 개념이라 기본값이 1일이고 `Materialized#withRetention()` 으로 바꿉니다. 순서 어긋남은 event time에서만 의미가 있으므로 grace period도 event time 기준으로 판정됩니다.",
       "distractorNotes": {
+        "B": "늦게 도착한 레코드는 원래 속한 윈도우에 반영됩니다. 새 윈도우를 만들지 않습니다.",
         "C": "두 값은 독립적으로 설정됩니다. 자동 연동되지 않습니다.",
-        "D": "processing time에는 순서 어긋남이라는 개념이 성립하지 않습니다.",
-        "E": "늦게 도착한 레코드는 원래 속한 윈도우에 반영됩니다. 새 윈도우를 만들지 않습니다."
+        "D": "processing time에는 순서 어긋남이라는 개념이 성립하지 않습니다."
       },
       "refs": [
         {
@@ -511,32 +511,32 @@
       "code": null,
       "items": [
         {
-          "id": "i3",
+          "id": "i4",
           "text": "Streams가 내부 리파티션 토픽에 새 키로 레코드를 다시 쓴다"
         },
         {
-          "id": "i1",
+          "id": "i2",
           "text": "`selectKey` 가 키를 바꾸면서 스트림을 리파티션 필요로 표시한다"
         },
         {
-          "id": "i4",
+          "id": "i1",
           "text": "리파티션 토픽을 다시 읽어 같은 키가 같은 태스크에 모인 상태로 집계한다"
         },
         {
-          "id": "i2",
+          "id": "i3",
           "text": "뒤이어 오는 `groupByKey` 가 실제 재분배를 트리거한다"
         }
       ],
       "answer": [
-        "i1",
         "i2",
         "i3",
-        "i4"
+        "i4",
+        "i1"
       ],
       "explanation": "키를 바꾸는 연산은 표시만 남기고 재분배를 미룹니다. 표시된 스트림에 그룹화나 조인이 오는 순간 실제 재분배가 트리거되고, Streams가 관리하는 내부 리파티션 토픽에 새 키로 레코드를 다시 씁니다. 그 토픽을 다시 읽으면 같은 키가 같은 파티션, 따라서 같은 태스크로 모이므로 집계와 조인이 성립합니다. 이 왕복이 비용이므로 키를 바꿀 필요가 없다면 `mapValues` 와 `groupByKey` 를 쓰는 것이 곧 성능 개선입니다.",
       "distractorNotes": {
-        "i2": "키를 바꾸는 순간 토픽이 만들어진다고 착각하기 쉽습니다. 트리거는 뒤의 그룹화·조인입니다.",
-        "i3": "리파티션 토픽을 사용자가 만들어야 한다고 오해하기 쉽지만 Streams가 생성·관리합니다."
+        "i3": "키를 바꾸는 순간 토픽이 만들어진다고 착각하기 쉽습니다. 트리거는 뒤의 그룹화·조인입니다.",
+        "i4": "리파티션 토픽을 사용자가 만들어야 한다고 오해하기 쉽지만 Streams가 생성·관리합니다."
       },
       "refs": [
         {
