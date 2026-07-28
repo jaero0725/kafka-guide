@@ -5,6 +5,50 @@
 
 ---
 
+## 최우선 목표: CCDAK 합격
+
+이 프로젝트의 **1순위 목표는 CCDAK 합격**이다. 나머지는 이 목표에 종속된다.
+자원 배분·품질 기준·검증 강도를 모두 여기에 맞춘다.
+
+| 우선순위 | 대상 | 배분 원칙 |
+|:--:|---|---|
+| **1** | **CCDAK** | 문항 60%, 다이어그램 ★★★+★★ 62개, 전용 학습 도구(진단·플래시카드·벼락치기) |
+| 2 | 기본개념 11장 | CCDAK 도메인이 요구하는 깊이까지. ch04·ch05·ch06·ch08 최우선 |
+| 3 | 실무 예제 · 케이스 스터디 | CCDAK 시나리오 문항의 배경 지식 제공 역할 |
+| 4 | 치트시트 | 시험 직전 복습용 |
+| 5 | CCAAK | 정확하게, 그러나 CCDAK만큼의 밀도는 아님 |
+
+### CCDAK 도메인별 투자 강도
+
+Confluent 가중치를 그대로 자원 배분에 반영한다.
+
+| 도메인 | 가중치 | 문항 | 다이어그램 | 담당 챕터 |
+|---|:--:|---:|:--:|---|
+| **Application Development** | **28%** | **90** | **17** | ch04, ch05, ch06 |
+| **Fundamentals** | **23%** | **74** | **14** | ch02, ch07, ch08 |
+| Kafka Connect | 15% | 48 | 5 | ch09 |
+| Application Observability | 13% | 42 | 4 | ch11(일부), ch04·ch05 메트릭 |
+| Kafka Streams | 12% | 38 | 7 | ch10 |
+| Application Testing | 8% | 26 | 2 | ch10, practice |
+
+> Application Development(28%) + Fundamentals(23%) = **51%**.
+> 이 두 도메인에서 실점하면 합격이 불가능하다. **여기에 가장 많은 자원을 넣는다.**
+
+### CCDAK 전용 학습 도구 (신규)
+
+합격률을 실제로 올리는 장치들. 단순 문제은행 이상을 만든다.
+
+| 도구 | 경로 | 목적 |
+|---|---|---|
+| **진단 테스트** | `quiz/diagnostic.html` | 30문항으로 6개 도메인 취약점 진단 → **개인별 학습 순서 자동 생성** |
+| **플래시카드** | `ccdak/flashcards.html` | 설정명·기본값·개념 쌍 암기. 간격 반복(3회 연속 정답 시 졸업) |
+| **벼락치기 요약** | `ccdak/cram.html` | 시험 D-1용 단일 페이지 전체 요약. 인쇄 가능 |
+| **함정 사전** | `ccdak/traps.html` | 헷갈리는 개념 쌍 40개 비교표 + 오답 유도 패턴 분석 |
+| **설정값 관계도** | D-133 (인터랙티브) | 전체 설정이 어떻게 얽히는지 한 장. 시험 직전 최고 효율 |
+| **도메인별 숙련도 추적** | 홈 대시보드 | 도메인 정답률 → 80% 미달 도메인을 계속 노출 |
+
+---
+
 ## 0. 기준 정보 (2026-07 조사 결과)
 
 계획의 전제가 되는 사실 확인 내용. **모든 콘텐츠는 이 기준을 따른다.**
@@ -92,13 +136,17 @@ kafka-guide/
 │   ├── css/
 │   │   ├── tokens.css             # 디자인 토큰 (색/타이포/간격/다크모드)
 │   │   ├── main.css               # 레이아웃 · 컴포넌트
+│   │   ├── viz.css                # 다이어그램 토큰 (--dg-*) · 인터랙티브 컨트롤
 │   │   └── code.css               # 코드 하이라이팅 테마
 │   ├── js/
-│   │   ├── app.js                 # 사이드바 · 검색 · 다크모드 · 목차
+│   │   ├── app.js                 # 사이드바 · 검색 · 다크모드 · 목차 · 다이어그램 주입
 │   │   ├── quiz.js                # 문제풀이 엔진
 │   │   ├── progress.js            # localStorage 진도/오답노트
+│   │   ├── viz.js                 # 인터랙티브 다이어그램 프리미티브
+│   │   ├── flashcard.js           # 플래시카드 (간격 반복)
 │   │   └── highlight.js           # 경량 신택스 하이라이터 (자체 구현, CDN 금지)
-│   └── img/diagrams/*.svg         # 인라인 SVG 다이어그램
+│   └── diagrams/                  # 다이어그램 83개 (독립 SVG, 시각화 에이전트 소유)
+│       └── D-001-*.svg ~ D-134-*.svg
 │
 ├── basics/          ch01.html ~ ch11.html          # 기본개념 11장
 │                    appendix-legacy.html           # 버전 표기·2.x/3.x 레거시 부록
@@ -108,8 +156,12 @@ kafka-guide/
 │                    troubleshooting.html, security.html,
 │                    streams.html, connect.html      # 빠른참조
 ├── ccdak/           index.html, domain-*.html, exam-tips.html
+│                    flashcards.html                 # ★ 암기 카드 (간격 반복)
+│                    cram.html                       # ★ 벼락치기 단일 페이지 요약
+│                    traps.html                      # ★ 함정 사전 (헷갈리는 쌍 40개)
 ├── ccaak/           index.html, domain-*.html, exam-tips.html
 ├── quiz/            index.html                      # 문제풀이 허브
+│                    diagnostic.html                 # ★ 30문항 취약점 진단
 │                    review.html                     # 오답노트
 │                    result.html                     # 결과 리포트
 │
@@ -124,11 +176,13 @@ kafka-guide/
 │
 ├── tools/
 │   ├── build-index.mjs            # 검색 인덱스 · TOC 생성
-│   └── validate.mjs               # 링크/스키마/중복 검증
+│   ├── inline-diagrams.mjs        # 플레이스홀더 → SVG 정적 치환 (배포 필수)
+│   └── validate.mjs               # 링크/스키마/다이어그램/중복 검증
 │
 └── docs/
     ├── CONTENT_STYLE_GUIDE.md     # 모든 에이전트 공통 규칙
     ├── VERSION_POLICY.md          # 버전 기준·2.13 혼동·레거시 병기 규칙
+    ├── DIAGRAM_CATALOG.md         # 다이어그램 83개 카탈로그 + 작성 규칙
     ├── QUESTION_SCHEMA.md         # 문제 JSON 스키마
     ├── CCDAK_TOPIC_CHECKLIST.md   # 필수 출제 토픽 24개 + 태그 규약
     └── agent-prompts/             # 멀티에이전트 프롬프트 (본 계획의 실행 단위)
@@ -250,16 +304,42 @@ kafka-guide/
 
 ### 3-1. 문제은행 규모 (목표)
 
-| 세트 | 문항 수 |
-|---|---|
-| 기본개념 챕터별 확인문제 | (11장 + 부록) × 10 = **120** |
-| CCDAK 도메인별 연습 | **150** (도메인 가중치 비례 배분) |
-| CCAAK 도메인별 연습 | **120** |
-| CCDAK 모의고사 2세트 | 60 × 2 = **120** |
-| CCAAK 모의고사 2세트 | 60 × 2 = **120** |
-| **합계** | **약 630문항** |
+**CCDAK 우선 원칙에 따라 재배분했다. 전체의 60%가 CCDAK다.**
+
+| 세트 | 문항 수 | 비중 |
+|---|---:|---:|
+| 기본개념 챕터별 확인문제 | (11장 + 부록) × 10 = **120** | 15% |
+| **CCDAK 도메인별 연습** | **318** (가중치 비례) | 40% |
+| **CCDAK 모의고사 4세트** | 60 × 4 = **240** | 30% |
+| **CCDAK 진단 테스트** | **30** | 4% |
+| CCAAK 도메인별 연습 | **84** | 11% |
+| CCAAK 모의고사 1세트 | **60** | 8% |
+| **합계** | **약 852문항** | |
+
+### CCDAK 도메인별 연습 318문항 배분 (가중치 비례)
+
+| 도메인 | 가중치 | 문항 |
+|---|:--:|---:|
+| Application Development | 28% | **90** |
+| Fundamentals | 23% | **74** |
+| Kafka Connect | 15% | 48 |
+| Application Observability | 13% | 42 |
+| Kafka Streams | 12% | 38 |
+| Application Testing | 8% | 26 |
+
+**CCDAK 모의고사를 4세트로 늘린 이유**: 실전 감각은 반복 응시로만 생긴다. 2세트는 두 번째 응시에서 이미 기억으로 풀리기 시작한다. 4세트면 240문항 × 90분 훈련이 가능하다.
 
 > 모의고사 세트는 도메인별 연습 문제와 **중복되지 않는 별도 문항**으로 생성한다.
+> 4세트 간에도 서로 중복되지 않아야 한다 (B6이 감사).
+
+### 진단 테스트 (30문항)
+
+6개 도메인 × 5문항. 결과에 따라 **개인별 학습 순서를 자동 생성**한다.
+- 도메인 정답률 60% 미달 → "집중 학습" 그룹 → 해당 챕터 + 도메인 연습 전량
+- 60~80% → "보강" 그룹 → 함정 사전 + 도메인 연습 절반
+- 80% 이상 → "유지" 그룹 → 모의고사에서만 점검
+
+가중치가 큰 도메인(App Development, Fundamentals)이 약하면 학습 순서 최상단에 배치한다.
 
 ### 3-2. 문제 JSON 스키마
 
@@ -308,6 +388,9 @@ kafka-guide/
 | **도메인 연습** | 특정 도메인만 필터링, 문항 수 선택 |
 | **오답 노트** | 틀린 문항만 재출제, 3회 연속 정답 시 졸업 |
 | **랜덤 챌린지** | 전체 은행에서 N문항 무작위 |
+| **★ 진단 모드** | 30문항 → 도메인별 취약점 분석 → 개인별 학습 순서 생성 |
+| **★ 약점 집중** | 정답률 80% 미달 도메인에서만 출제 (가중치 큰 도메인 우선) |
+| **★ 플래시카드** | 설정명↔기본값, 개념↔정의 쌍. 간격 반복. 별도 UI (`flashcard.js`) |
 
 **결과 리포트**: 총점 / 도메인별 정답률 바차트(순수 CSS·SVG) / 취약 도메인 → 해당 챕터 링크 / 오답 목록 / 소요 시간
 
@@ -334,37 +417,56 @@ kg:settings           → theme, fontSize
 
 ```
 Wave 0 · 기반 구축            [단독, 순차]        1 agent
-  └─ 디자인 토큰 · shell · CSS · JS · 퀴즈 엔진 · 스키마 · 샘플 페이지 1개
+  └─ 디자인 토큰 · viz 토큰 · shell · 퀴즈 엔진 · 플래시카드 · 툴링 · 레퍼런스 페이지
 
-Wave 1 · 본문 콘텐츠          [병렬]              8 agents
-  ├─ A1  기본개념 ch01–04
-  ├─ A2  기본개념 ch05–08
-  ├─ A3  기본개념 ch09–11
+Wave 1 · 본문 + 시각화        [병렬]             11 agents
+  콘텐츠 (8)
+  ├─ A1  기본개념 ch02–04                    ← ★ CCDAK App Dev 핵심
+  ├─ A2  기본개념 ch05–08                    ← ★ App Dev + Fundamentals 핵심
+  ├─ A3  기본개념 ch09–11 + 레거시 부록
   ├─ A4  실무 예제 12개
   ├─ A5  실수 케이스 10개
   ├─ A6  치트시트 7종
-  ├─ A7  CCDAK 챕터
+  ├─ A7  CCDAK 챕터 + 플래시카드/벼락치기/함정사전  ← ★ 최우선
   └─ A8  CCAAK 챕터
+  시각화 (3)  ※ assets/diagrams/ 만 소유 — 콘텐츠 HTML 미접촉
+  ├─ V1  ch04·ch05 다이어그램 22개 (인터랙티브 3종)  ← ★ 최우선
+  ├─ V2  ch06–ch10 다이어그램 27개                  ← ★
+  └─ V3  나머지 34개 (개념·케이스·치트시트·CCDAK 전용)
 
-Wave 2 · 문제은행             [병렬]              6 agents
-  ├─ B1  기본개념 확인문제 110
-  ├─ B2  CCDAK 도메인 연습 150
-  ├─ B3  CCAAK 도메인 연습 120
-  ├─ B4  CCDAK 모의고사 2세트 120
-  ├─ B5  CCAAK 모의고사 2세트 120
-  └─ B6  문제은행 매니페스트 · 중복 제거
+Wave 2 · 문제은행             [병렬 5 → 순차 1]   6 agents
+  ├─ B1  기본개념 확인문제 120
+  ├─ B2  CCDAK 도메인 연습 318                ← ★ 최대 분량
+  ├─ B3  CCDAK 모의고사 4세트 240             ← ★
+  ├─ B4  CCDAK 진단 30 + 플래시카드 데이터    ← ★
+  ├─ B5  CCAAK 도메인 84 + 모의고사 1세트 60
+  └─ B6  매니페스트 · 중복 감사 · 커버리지 감사   [B1–B5 완료 후 단독]
 
-Wave 3 · 검증 (적대적)        [병렬]              4 agents
+Wave 3 · 검증 (적대적)        [병렬]              5 agents
   ├─ C1  기술 정확도 검증 (Kafka 4.3 공식 문서 대조)
-  ├─ C2  문제 정답·해설 검증 (오답 색출)
-  ├─ C3  링크·스키마·빌드 검증 (tools/validate.mjs)
-  └─ C4  UI/UX·접근성·반응형·다크모드 검증
+  ├─ C2  문제 정답·해설 검증                  ← ★ CCDAK 문항 전수 검증
+  ├─ C3  링크·스키마·다이어그램·빌드 검증
+  ├─ C4  UI/UX·접근성·반응형·다크모드 검증
+  └─ C5  시각화 검증 (다이어그램 83개 정확성·일관성·다크모드)  ← 신규
 
 Wave 4 · 통합                 [단독, 순차]        1 agent
-  └─ 검색 인덱스 · TOC 생성 · 홈 대시보드 · 상호 링크 연결 · 최종 스모크 테스트
+  └─ 다이어그램 정적 인라인 · 검색 인덱스 · TOC · 홈 대시보드 · 스모크 테스트
 ```
 
-**총 20 에이전트 / 5 Wave.** 예상 소요: Wave당 1회 실행 기준, 순차 5단계.
+**총 24 에이전트 / 5 Wave.**
+
+### 시각화 트랙을 분리한 이유
+
+다이어그램을 콘텐츠 페이지에 인라인하면 시각화 에이전트와 콘텐츠 에이전트가 **같은 파일을 다투게 된다.** 그래서 소유권을 분리했다.
+
+- 콘텐츠 에이전트: **플레이스홀더만** 삽입 → `<figure class="diagram" data-diagram="D-030">`
+- 시각화 에이전트: **독립 SVG 파일만** 생성 → `assets/diagrams/D-030-*.svg`
+- Wave 4: `tools/inline-diagrams.mjs`로 **정적 치환**
+
+`app.js`가 런타임 fetch 폴백을 제공하므로 개발 중에도 확인된다. 상세는 `docs/DIAGRAM_CATALOG.md` §1.
+
+> ⚠️ **Wave 4의 인라인 스텝을 빠뜨리면 다이어그램이 빈 칸으로 배포된다.**
+> `validate.mjs`가 미치환 플레이스홀더와 미사용 SVG를 양방향으로 잡는다.
 
 ### 실행 방법
 `docs/agent-prompts/` 아래 프롬프트를 Wave 순서대로 사용한다.
@@ -375,23 +477,30 @@ Wave 4 · 통합                 [단독, 순차]        1 agent
 
 | 에이전트 | 배타 소유 경로 |
 |---|---|
-| Wave0 | `assets/**`, `docs/CONTENT_STYLE_GUIDE.md`, `docs/QUESTION_SCHEMA.md`, `tools/**`, `basics/ch01.html`(샘플) |
+| Wave0 | `assets/css/**`, `assets/js/**`, `tools/**`, `basics/ch01.html`(레퍼런스), `quiz/**`, `data/questions/basics-ch01.json` |
 | A1 | `basics/ch02.html`–`ch04.html` |
 | A2 | `basics/ch05.html`–`ch08.html` |
 | A3 | `basics/ch09.html`–`ch11.html`, `basics/appendix-legacy.html` |
 | A4 | `practice/**` |
 | A5 | `cases/**` |
 | A6 | `cheatsheet/**` |
-| A7 | `ccdak/**` |
+| A7 | `ccdak/**` (index, domain-*, exam-tips, flashcards, cram, traps) |
 | A8 | `ccaak/**` |
-| B1 | `data/questions/basics-ch*.json` |
-| B2 | `data/questions/ccdak-{domain}.json` |
-| B3 | `data/questions/ccaak-{domain}.json` |
-| B4 | `data/questions/ccdak-mock-{1,2}.json` |
-| B5 | `data/questions/ccaak-mock-{1,2}.json` |
+| **V1** | `assets/diagrams/D-012,D-013,D-030`–`D-047*.svg` |
+| **V2** | `assets/diagrams/D-050`–`D-096*.svg` |
+| **V3** | `assets/diagrams/D-001`–`D-011, D-014, D-020`–`D-022, D-100`–`D-134*.svg` |
+| B1 | `data/questions/basics-ch*.json`, `basics-appendix-legacy.json` |
+| B2 | `data/questions/ccdak-{domain}.json` (6개) |
+| B3 | `data/questions/ccdak-mock-{1..4}.json` |
+| B4 | `data/questions/ccdak-diagnostic.json`, `data/flashcards/*.json` |
+| B5 | `data/questions/ccaak-{domain}.json`, `ccaak-mock-1.json` |
 | B6 | `data/questions/manifest.json` |
-| C1–C4 | **읽기 전용** — 발견 사항을 리포트로만 반환 |
-| Wave4 | `index.html`, `data/toc.json`, `data/search-index.json`, `quiz/**` 최종 조정 |
+| C1–C5 | **읽기 전용** — 발견 사항을 리포트로만 반환 |
+| Wave4 | `index.html`, `data/toc.json`, `data/search-index.json`, 다이어그램 인라인 치환, `README.md`, `.github/**` |
+
+> **시각화 에이전트(V1–V3)는 HTML을 절대 수정하지 않는다.** `assets/diagrams/` 아래 SVG만 만든다.
+> 반대로 **콘텐츠 에이전트(A1–A8)는 `assets/diagrams/`에 파일을 만들지 않는다.** 플레이스홀더만 넣는다.
+> 이 두 규칙이 Wave 1의 11개 에이전트를 충돌 없이 병렬 실행시키는 근거다.
 
 ---
 
@@ -409,6 +518,22 @@ Wave 4 · 통합                 [단독, 순차]        1 agent
 - [ ] `docs/CCDAK_TOPIC_CHECKLIST.md`의 24개 토픽이 본문·문항 모두에서 커버된다
 - [ ] `kafka_2.13-4.3.0`의 2.13이 Scala 버전임이 ch01·부록·CLI 치트시트에 명시된다
 - [ ] 버전에 따라 동작이 다른 항목에 `.note--version` 병기가 되어 있다
+
+### 시각화 (신규)
+- [ ] 카탈로그 83개 다이어그램이 전부 존재하고, 참조하는 플레이스홀더도 전부 존재한다 (양방향 일치)
+- [ ] `tools/inline-diagrams.mjs` 실행 후 미치환 플레이스홀더 0건
+- [ ] SVG에 하드코딩된 색(`#000`, `#fff`, `black`, `white`) 0건 — 전부 `--dg-*` 토큰
+- [ ] 모든 SVG에 `role="img"` + `<title>` + `<desc>` 존재
+- [ ] 인터랙티브 다이어그램 8종이 키보드만으로 조작 가능하고 `prefers-reduced-motion`을 존중한다
+- [ ] 360px에서 다이어그램 텍스트가 읽힌다 (최소 13px 상당)
+
+### CCDAK 우선 목표 (신규)
+- [ ] CCDAK 문항이 전체의 60% 이상, 도메인 가중치대로 배분되었다
+- [ ] Application Development(90) + Fundamentals(74) = 164문항이 확보되었다
+- [ ] CCDAK 모의고사 4세트가 서로 중복 없이 각 60문항이다
+- [ ] 진단 테스트 30문항이 6개 도메인 × 5문항이고, 결과가 학습 순서를 생성한다
+- [ ] 플래시카드·벼락치기·함정 사전이 동작한다
+- [ ] CCDAK ★★★ 다이어그램 38개가 전부 완성되었다
 
 ---
 

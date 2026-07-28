@@ -9,6 +9,25 @@
 ```
 ## Wave 1 공통 지침
 
+### 최우선 목표: CCDAK 합격
+PLAN.md 최상단 우선순위 표를 먼저 읽으세요.
+CCDAK의 Application Development(28%) + Fundamentals(23%) = 51%입니다.
+ch04·ch05·ch06(App Dev)와 ch02·ch07·ch08(Fundamentals)이 시험의 절반을 담당합니다.
+당신 담당이 여기 걸리면 **가장 높은 완성도**를 요구받습니다. 분량을 아끼지 마세요.
+반대로 CCAAK 전용 내용(ch03, ch11 일부)은 정확하되 밀도는 그보다 낮아도 됩니다.
+
+### 시험 포인트 박스를 적극적으로 쓰세요
+CCDAK 출제 지점마다 `.note--exam`을 삽입하고 **어느 도메인인지 명시**하세요.
+```html
+<aside class="note note--exam">
+  <strong>시험 포인트 · Application Development</strong>
+  <code>enable.idempotence=true</code>일 때
+  <code>max.in.flight.requests.per.connection</code>은 5 이하여야 합니다.
+  6 이상으로 설정하면 <code>ConfigException</code>이 발생합니다.
+</aside>
+```
+독자가 이 박스만 훑어도 시험 대비가 되어야 합니다. 챕터당 최소 4개.
+
 먼저 basics/ch01.html 을 **전체 읽으세요.** 이것이 레퍼런스 페이지입니다.
 당신이 만드는 모든 페이지는 이 파일의 구조·클래스·톤을 그대로 복제해야 합니다.
 assets/css/main.css 에 정의된 컴포넌트 클래스만 사용하세요. 새 클래스를 만들지 마세요.
@@ -20,9 +39,27 @@ CSS 파일을 수정하지 마세요 (Wave 0 소유).
 - .breadcrumb, .page__header(eyebrow/h1/lead), .pager
 - 모든 h2/h3에 영문 kebab-case id
 - 최소 3개의 내부 상호 링크 (CONTENT_STYLE_GUIDE §4)
-- 최소 1개의 인라인 SVG 다이어그램 (currentColor/토큰 사용, role="img"+aria-label)
 - 최소 1개의 표
 - 마지막에 "공식 문서 출처" 섹션 (실제 URL)
+
+### ⚠️ 다이어그램: SVG를 그리지 마세요 — 플레이스홀더만
+
+시각화 전담 에이전트 3명(V1–V3)이 지금 **동시에** 다이어그램 83개를 만들고 있습니다.
+당신이 SVG를 직접 그리면 중복·스타일 불일치가 생깁니다.
+
+```html
+<figure class="diagram" data-diagram="D-030">
+  <figcaption>Producer 전송 파이프라인 — <code>send()</code>부터 콜백까지</figcaption>
+</figure>
+```
+
+- `data-diagram` ID는 **`docs/DIAGRAM_CATALOG.md`에 있는 것만** 사용. 임의 생성 금지.
+- `<figcaption>`은 당신이 씁니다. 다이어그램이 무엇을 보여주는지 한 문장으로.
+- 카탈로그에서 **당신 담당 챕터에 배정된 모든 ID를 빠짐없이 참조**하세요.
+  참조되지 않은 SVG는 고아 파일로 Wave 3에서 잡힙니다.
+- 카탈로그에 없는데 꼭 필요한 다이어그램이 있으면, **플레이스홀더를 넣지 말고**
+  반환 리포트에 "신규 다이어그램 요청: 제목 + 내용"으로 적으세요.
+- 개발 중에는 다이어그램이 빈 칸으로 보입니다. 정상입니다. Wave 4가 채웁니다.
 
 사실 확인:
 설정명·기본값·CLI 옵션·클래스명은 WebFetch로 kafka.apache.org 공식 문서에서
@@ -433,10 +470,21 @@ Broker / Topic / Producer / Consumer / Streams / Connect 6개 표.
 
 ---
 
-## A7 — CCDAK 챕터 (ccdak/)
+## A7 — CCDAK 챕터 (ccdak/) ★★★ 최우선 에이전트
 
 ```
-소유 파일: ccdak/index.html, ccdak/domain-*.html, ccdak/exam-tips.html
+## 당신이 이 프로젝트에서 가장 중요한 에이전트입니다
+
+프로젝트 1순위 목표가 **CCDAK 합격**이고, 당신이 그 목표의 중심 산출물을 만듭니다.
+다른 에이전트보다 더 많은 분량과 더 높은 완성도를 요구받습니다.
+
+소유 파일:
+  ccdak/index.html
+  ccdak/domain-{app-development,fundamentals,connect,observability,streams,testing}.html
+  ccdak/exam-tips.html
+  ccdak/flashcards.html   ← 신규
+  ccdak/cram.html         ← 신규
+  ccdak/traps.html        ← 신규
 
 ### 사전 조사 (필수)
 WebFetch로 아래를 조사해 도메인 구성을 확정하세요:
@@ -483,10 +531,86 @@ slug: app-development, fundamentals, connect, observability, streams, testing
 ### ccdak/exam-tips.html
 - 시험 당일 체크리스트 (프록터링 환경 준비)
 - 문제 유형 패턴 분석: 설정값 묻기 / 시나리오 판단 / 코드 판독 / 계산
-- **헷갈리는 설정값 비교표 모음** (이 페이지의 핵심)
-- 시간 배분 전략
+- 시간 배분 전략 (90분 / 문항당 배분 / 표시하고 넘어가는 기준)
 - 오답 유도 패턴: 어떤 선택지가 함정으로 자주 나오는가
-- 최종 점검 30문항 링크
+- 진단 테스트(quiz/diagnostic.html)와 모의고사 4세트로 이어지는 링크
+
+### ccdak/traps.html — 함정 사전 (신규, 핵심 산출물)
+
+**헷갈리는 개념 쌍 40개**를 좌우 비교표로 정리합니다.
+독자가 시험 3일 전에 이 페이지만 반복해서 볼 수 있어야 합니다.
+
+각 항목 형식: 
+| | A | B |
+|---|---|---|
+| 무엇인가 | | |
+| 어디 설정인가 | 프로듀서/컨슈머/브로커/토픽 | |
+| 언제 발동하는가 | | |
+| 혼동 시 결과 | | |
+| 시험에서의 출제 형태 | | |
+
+필수 포함 쌍 (최소 이 25개 + 15개 추가):
+1. session.timeout.ms vs max.poll.interval.ms
+2. acks vs min.insync.replicas
+3. retention vs compaction (cleanup.policy)
+4. assign() vs subscribe()
+5. 멱등 프로듀서 vs 트랜잭션
+6. at-least-once vs exactly-once
+7. read_uncommitted vs read_committed
+8. high watermark vs LEO vs committed offset
+9. map vs mapValues (리파티션 유발 여부)
+10. KStream vs KTable
+11. KTable vs GlobalKTable
+12. eager vs cooperative 리밸런스
+13. Range vs RoundRobin vs Sticky vs CooperativeSticky
+14. BACKWARD vs FORWARD 호환성 (배포 순서!)
+15. TRANSITIVE vs 비-TRANSITIVE
+16. source vs sink 커넥터의 오프셋 저장 위치
+17. standalone vs distributed Connect
+18. SMT vs Kafka Streams (어디까지 SMT로 할 것인가)
+19. max.request.size vs message.max.bytes vs fetch.max.bytes
+20. request.timeout.ms vs delivery.timeout.ms
+21. retries vs delivery.timeout.ms (4.x에서 실질 상한은 무엇인가)
+22. auto.offset.reset earliest vs latest vs none
+23. SASL_PLAINTEXT vs SASL_SSL
+24. 인증(authentication) vs 인가(authorization/ACL)
+25. tumbling vs hopping vs sliding vs session 윈도우
+
+그리고 **오답 유도 패턴 분석** 섹션:
+- "가장 적절한"류 문항에서 함정 선택지의 특징
+- 절대적 표현("항상", "절대", "모든")이 들어간 선택지
+- 설정을 프로듀서/컨슈머 소속을 바꿔놓은 선택지
+- 기본값을 미묘하게 바꿔놓은 선택지
+- 버전에 따라 답이 달라지는 문항 식별법
+
+다이어그램 플레이스홀더: D-134 (헷갈리는 설정 쌍 비교)
+
+### ccdak/cram.html — 벼락치기 (신규)
+
+**시험 D-1에 이 한 페이지만 읽으면 되는 단일 페이지 요약.**
+- 페이지 내 목차 (긴 페이지이므로 필수)
+- 도메인별 순서로 배치, 각 도메인 상단에 가중치 표기
+- 형식은 **밀도 최우선**: 짧은 불릿 + 표. 서술형 문장 최소화
+- 반드시 외워야 할 설정 기본값 표 (한 곳에 모아서)
+- 반드시 외워야 할 숫자: message.max.bytes 1MB, in-flight 5,
+  컨트롤러 쿼럼 3/5, 기본 파티션 수 등
+- API 호출 순서: 트랜잭션 / Streams / Connect REST
+- 다이어그램 플레이스홀더: D-133 (설정값 관계도) — 이 페이지의 핵심
+- **`@media print` 대응**: 인쇄해서 볼 수 있어야 합니다.
+  사이드바·버튼 숨김, 페이지 나눔이 표 중간에서 끊기지 않게
+
+### ccdak/flashcards.html — 암기 카드 (신규)
+
+`assets/js/flashcard.js`(Wave 0이 구현)와 `data/flashcards/*.json`(B4가 생성)을 씁니다.
+당신은 **UI 페이지만** 만듭니다. 카드 데이터는 만들지 마세요.
+
+- 덱 선택 UI: 도메인별 6덱 + "설정 기본값" 덱 + "예외 클래스" 덱
+- 진행 상황 표시 (전체 / 학습 중 / 졸업)
+- 조작 안내 (Space 뒤집기, 1 몰랐음, 2 알았음, → 다음)
+- 카드 컨테이너 마크업: `<div id="flashcard-app" data-deck="ccdak-configs">`
+  → flashcard.js가 이 요소를 찾아 렌더링합니다.
+     Wave 0이 정한 실제 규약을 assets/js/flashcard.js에서 읽어 맞추세요.
+- 데이터가 아직 없을 때 에러 없이 안내 표시
 ```
 
 ---

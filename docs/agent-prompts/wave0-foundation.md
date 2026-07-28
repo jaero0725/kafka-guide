@@ -13,14 +13,19 @@
 당신의 임무는 Kafka Guide 사이트의 **기반 시스템 전체**를 구축하는 것입니다.
 당신이 만든 것을 이후 19개 에이전트가 복제합니다. 완성도가 사이트 전체 품질을 결정합니다.
 
+**이 프로젝트의 1순위 목표는 CCDAK 합격입니다.** PLAN.md 최상단 우선순위 표를 먼저 읽으세요.
+퀴즈 엔진과 진단·플래시카드 기능이 그 목표를 직접 지탱하므로, 이 Wave의 산출물 중
+**퀴즈 엔진 > 시각화 기반 > 디자인 시스템** 순으로 중요합니다.
+
 ## 소유 경로 (이 밖의 파일은 만들지도, 수정하지도 마세요)
-- assets/css/tokens.css, assets/css/main.css, assets/css/code.css
-- assets/js/app.js, assets/js/quiz.js, assets/js/progress.js, assets/js/highlight.js
-- tools/build-index.mjs, tools/validate.mjs
+- assets/css/tokens.css, main.css, **viz.css**, code.css
+- assets/js/app.js, quiz.js, progress.js, **viz.js**, **flashcard.js**, highlight.js
+- tools/build-index.mjs, tools/validate.mjs, **tools/inline-diagrams.mjs**
 - basics/ch01.html  ← 레퍼런스 샘플 페이지 (완성본)
 - data/questions/basics-ch01.json ← 샘플 문제 10문항
 - data/toc.json ← 초기 스켈레톤만 (Wave 4가 최종 생성)
-- quiz/index.html, quiz/review.html, quiz/result.html
+- quiz/index.html, quiz/**diagnostic.html**, quiz/review.html, quiz/result.html
+- **assets/diagrams/D-012-offset-anatomy.svg** ← 레퍼런스 다이어그램 1개 (아래 §11)
 - index.html ← 최소 스텁만 (Wave 4가 대시보드로 완성)
 
 ## 1. 디자인 시스템 (assets/css/tokens.css)
@@ -61,6 +66,57 @@ CSS 커스텀 프로퍼티로 토큰을 정의합니다.
 - 완벽할 필요 없습니다. 주석·문자열·키워드·숫자만 구분되어도 충분합니다.
 - **정규식 치환 전 반드시 HTML 이스케이프.** XSS·마크업 깨짐 방지.
 - 100줄 코드블록 20개가 있는 페이지에서 체감 지연이 없어야 합니다.
+
+## 3-B. 다이어그램 기반 (assets/css/viz.css + assets/js/viz.js) — 신규, 중요
+
+**docs/DIAGRAM_CATALOG.md 를 먼저 전부 읽으세요.** 시각화 에이전트 3명(V1–V3)이
+83개 다이어그램을 만드는데, 그들이 쓸 토큰과 프리미티브를 당신이 정의합니다.
+여기서 정의를 부실하게 하면 83개 다이어그램의 스타일이 전부 갈라집니다.
+
+### assets/css/viz.css — 다이어그램 토큰
+```
+--dg-stroke      기본 선/테두리
+--dg-fill        노드 배경
+--dg-fill-alt    보조 노드 배경 (강조 대비용)
+--dg-accent      강조 (핵심 경로)
+--dg-muted       비활성/배경 요소
+--dg-danger      실패·유실 지점
+--dg-ok          성공·정상 경로
+--dg-warn        주의
+--dg-text        다이어그램 내 텍스트
+--dg-sw-1        1.5  (얇은 선)
+--dg-sw-2        2.5  (굵은 선)
+```
+- 라이트/다크 **양쪽에 정의**. `prefers-color-scheme` + `[data-theme]` 오버라이드 모두.
+- 텍스트 크기 유틸리티 클래스: `.dg-fs-sm`(13) `.dg-fs-md`(15) `.dg-fs-lg`(18)
+  → SVG `<text class="dg-fs-sm">` 로 쓰게 함. font-family는 상속.
+- `.kg-diagram` 컨테이너: `max-width:100%`, `height:auto`, `overflow-x:auto` 래퍼
+- 인터랙티브 컨트롤 스타일: `.dg-controls`, `.dg-btn`, `.dg-slider`, `.dg-legend`
+- `@media (prefers-reduced-motion: reduce)` 에서 transition/animation 제거
+
+### assets/js/viz.js — 인터랙티브 프리미티브
+카탈로그의 인터랙티브 8종(D-012, D-034, D-040, D-046, D-062, D-064, D-072, D-133)이
+공통으로 쓸 최소 API를 제공합니다. 과하게 만들지 말고 **정말 공통인 것만**:
+
+- `registerViz(id, initFn)` — SVG가 DOM에 삽입된 뒤 초기화 훅 등록.
+  다이어그램 SVG 파일 안에 `<script>`를 넣을 수 없으므로(인라인 시 CSP·중복 실행 문제),
+  **인터랙티브 로직은 viz.js에 id별로 등록**하고 SVG는 마크업+`data-*` 훅만 갖습니다.
+  → V1–V3 에이전트가 이 규약을 따라야 하므로, **DIAGRAM_CATALOG.md에 없는 내용이면
+     당신이 정한 규약을 반환 리포트에 명확히 적어 주세요.**
+- `setNodeState(svg, selector, state)` — 노드에 `data-state`를 부여해 CSS로 스타일링
+- `animateAlong(svg, pathSelector, opts)` — 경로 따라 이동 (reduced-motion 시 즉시 이동)
+- `bindControls(container, spec)` — 버튼/슬라이더/셀렉트를 만들고 변경 시 콜백.
+  **키보드 접근 가능한 실제 `<button>`/`<input>`만 생성.** div+click 금지.
+- `announce(container, text)` — `aria-live` 영역에 상태 변화 안내
+
+### 플레이스홀더 주입 (app.js와 연동)
+`app.js`가 `<figure class="diagram" data-diagram="D-030">`을 찾으면:
+1. `assets/diagrams/` 에서 해당 ID로 시작하는 파일을 fetch (매니페스트로 ID→파일명 해석)
+2. SVG를 `<figcaption>` **앞에** 인라인 삽입
+3. `registerViz`로 등록된 초기화 함수가 있으면 실행
+4. fetch 실패 시(file:// 등) 조용히 안내 메시지 표시 — 콘솔 에러로 죽지 않게
+→ ID→파일명 매핑을 위해 `assets/diagrams/index.json` 을 Wave 4가 생성합니다.
+   당신은 그 형식을 정하고, 없을 때의 폴백(디렉터리 추정)을 구현하세요.
 
 ## 4. 사이트 셸 (assets/js/app.js)
 
@@ -106,6 +162,32 @@ kg:settings        → { theme, fontSize }
 | domain | 특정 domain만 필터, 문항 수 선택(10/20/전체) |
 | review | kg:progress:quiz에서 오답 문항만 추출. **3회 연속 정답 시 졸업 처리** |
 | random | 전체 은행에서 N문항 무작위 |
+| **diagnostic** | ★ 30문항(6도메인×5) → 도메인별 정답률 → **개인별 학습 순서 생성**. 아래 상세 |
+| **weakness** | ★ 정답률 80% 미달 도메인에서만 출제. 가중치 큰 도메인을 먼저 |
+
+### ★ 진단 모드 (quiz/diagnostic.html) — CCDAK 합격에 직결
+
+`data/questions/ccdak-diagnostic.json`(B4가 생성)의 30문항을 풀면:
+1. 도메인별 정답률 계산 (6개 도메인 × 5문항)
+2. 도메인을 3그룹으로 분류
+   - **집중 학습** (< 60%): 해당 챕터 전체 + 도메인 연습 전량
+   - **보강** (60~80%): 함정 사전 + 도메인 연습 절반
+   - **유지** (≥ 80%): 모의고사에서만 점검
+3. **학습 순서를 자동 생성해 표시** — 가중치가 큰 도메인
+   (Application Development 28%, Fundamentals 23%)이 약하면 최상단에 배치.
+   가중치 × 부족분으로 정렬하는 것이 합리적입니다.
+4. 결과를 `kg:progress:diagnostic`에 저장 → 홈 대시보드와 weakness 모드가 참조
+5. 생성된 학습 순서는 실제 페이지 링크 목록으로 렌더링 (클릭하면 바로 학습 시작)
+
+### ★ 플래시카드 (assets/js/flashcard.js)
+
+`data/flashcards/*.json`(B4 생성) 소비. 형식은 당신이 정하고 반환 리포트에 명시하세요.
+권장: `{ id, deck, front, back, tags, chapter }`
+- 앞면(설정명·개념) → 뒤집기 → 뒷면(기본값·정의)
+- 사용자가 "알았음/몰랐음" 선택 → **3회 연속 알았음이면 졸업**
+- 덱 선택, 셔플, 졸업 카드 제외 토글
+- 진도는 `kg:progress:cards`에 저장
+- 키보드: Space 뒤집기, 1 몰랐음, 2 알았음, → 다음
 
 ### 요구사항
 - `type: "multiple"`은 체크박스, `single`은 라디오. **부분 정답 없음** (전부 맞아야 정답)
@@ -131,13 +213,35 @@ node tools/validate.mjs [--links] [--questions] [--html] [--all]
      모든 오답에 distractorNotes 존재, refs 도메인 화이트리스트,
      difficulty 비율, 정답 분포 편중 경고
 - `--html`: CDN 참조 검출(치명), 인라인 style/script 검출, 이미지 alt 누락,
-  `--zookeeper` 문자열 검출(치명), h2/h3 id 누락
+  `--zookeeper` 문자열 검출(치명 — basics/appendix-legacy.html 은 예외), h2/h3 id 누락
+- `--diagrams`: **양방향 일치 검증**
+  → HTML의 모든 `data-diagram` ID에 대응하는 `assets/diagrams/{ID}-*.svg` 존재 여부
+  → 반대로 SVG 파일 중 아무 HTML도 참조하지 않는 고아 파일
+  → SVG 내 하드코딩 색(`#000`,`#fff`,`black`,`white`, `fill="#`) 검출 (치명)
+  → SVG에 `role="img"` / `<title>` / `<desc>` 누락
+  → `width=`/`height=` 하드코딩, `viewBox` 누락
+  → DIAGRAM_CATALOG.md에 없는 ID 사용
+  → **배포 전 검사**: 인라인되지 않은 채 남은 플레이스홀더 (Wave 4에서 실행)
 - 종료 코드: 오류 있으면 1. 파일:라인 형식으로 출력.
 
 ### tools/build-index.mjs
 - 모든 HTML을 스캔해 `data/toc.json`, `data/search-index.json` 생성
+- `assets/diagrams/index.json` 생성 (ID → 파일명 매핑)
 - search-index: { path, title, section, headings[], text (본문 텍스트, 태그 제거, 압축) }
+  → **다이어그램의 `<title>`/`<desc>` 텍스트도 인덱스에 포함**시키세요.
+     "리밸런스 시뮬레이터"로 검색해서 찾을 수 있어야 합니다.
 - 인덱스 크기가 1.5MB 넘으면 본문 텍스트를 페이지당 앞 3000자로 절삭하고 경고 출력
+
+### tools/inline-diagrams.mjs — 배포 필수 스텝
+- 모든 HTML의 `<figure class="diagram" data-diagram="D-030">` 를 찾아
+  해당 SVG 파일 내용을 `<figcaption>` **앞에 정적 삽입**
+- **멱등성**: 이미 인라인된 figure(`<svg>`가 이미 있음)는 건너뛰거나 교체.
+  두 번 실행해도 SVG가 중복되지 않아야 합니다.
+- `--check` 모드: 치환하지 않고 누락만 보고 (CI용)
+- SVG의 `id` 속성이 페이지 내에서 충돌할 수 있으므로 **ID 접두어를 부여**해
+  네임스페이스를 분리하세요 (`<title id="d030-title">` → 그대로 유지 가능하도록
+  다이어그램 ID 기반 접두어 규약을 쓰게 되어 있으나, 같은 페이지에 같은 다이어그램이
+  두 번 들어가는 경우를 대비해 순번을 붙일 것)
 
 ## 8. 레퍼런스 샘플 페이지 (basics/ch01.html) — 매우 중요
 
@@ -147,10 +251,11 @@ node tools/validate.mjs [--links] [--questions] [--html] [--all]
 
 내용 구성:
 - 학습 목표 4개
-- 왜 Kafka인가: 전통적 메시지 큐 vs 분산 커밋 로그 (비교표)
-- 핵심 추상: 이벤트, 토픽, 파티션, 오프셋 (SVG 다이어그램 1개 이상)
-- Kafka 생태계 지도: Broker / Producer / Consumer / Connect / Streams /
-  Schema Registry / ksqlDB (SVG 다이어그램)
+- 왜 Kafka인가: 전통적 메시지 큐 vs 분산 커밋 로그 (비교표 + 플레이스홀더 D-001)
+- 핵심 추상: 이벤트, 토픽, 파티션, 오프셋
+- Kafka 생태계 지도 (플레이스홀더 D-002)
+- **Kafka 버전 표기 읽는 법** — `kafka_2.13-4.3.0`의 2.13은 Scala 버전
+  (.note 박스 + 플레이스홀더 D-003). docs/VERSION_POLICY.md §1 참조
 - 대표 사용 사례 4가지
 - Kafka 4.x가 이전과 다른 점 (KRaft, KIP-848, Share Groups) — .note--version 사용
 - 흔한 오해 3개 — .note--warn 사용
@@ -158,6 +263,14 @@ node tools/validate.mjs [--links] [--questions] [--html] [--all]
 - 관련 링크 (다른 챕터·치트시트)
 - `<div class="quiz-embed" data-set="basics-ch01" data-count="10"></div>`
 - 공식 문서 출처
+
+**다이어그램은 플레이스홀더로만 넣으세요** (V3 에이전트가 D-001/002/003을 만듭니다):
+```html
+<figure class="diagram" data-diagram="D-002">
+  <figcaption>Kafka 생태계 — 각 구성 요소의 역할과 연결</figcaption>
+</figure>
+```
+단 §11의 D-012는 예외적으로 당신이 직접 만듭니다 (레퍼런스용).
 
 내용의 사실 관계는 WebFetch로 kafka.apache.org에서 확인하세요.
 
@@ -171,17 +284,47 @@ Wave 2 에이전트의 품질 레퍼런스가 됩니다. 대충 만들지 마세
   (아직 없는 페이지도 항목으로 넣되 `"exists": false` 표시)
 - quiz/index.html, quiz/review.html, quiz/result.html: 엔진과 연결된 실동작 페이지
 
+## 11. 레퍼런스 다이어그램 1개 (assets/diagrams/D-012-offset-anatomy.svg)
+
+**V1–V3 세 에이전트가 83개 다이어그램을 만들 때 이 파일을 열어 기준으로 삼습니다.**
+카탈로그에서 가장 까다로운 것 중 하나를 골랐습니다 (인터랙티브 + 핵심 개념).
+
+D-012 — **오프셋 4종 구분** (★★★, 인터랙티브)
+- 하나의 파티션 로그를 가로 막대로 표현
+- 4개 지점 표시: `log-start-offset` / `committed offset` / `high watermark` / `LEO`
+- 각 지점의 의미 레이블 + 구간의 의미(아직 안 읽음 / 아직 복제 안 됨)
+- 리더/팔로워 복제 진행에 따라 HW가 결정되는 것을 보여줌
+- **인터랙티브**: 슬라이더 2개(컨슈머 진행, 팔로워 복제 진행)로 4개 지점이 어떻게
+  벌어지는지 조작. `viz.js`의 `registerViz('D-012', fn)` 규약 사용
+- DIAGRAM_CATALOG.md §2의 모든 규칙 준수 (토큰만, role/title/desc, viewBox 720)
+
+**이 다이어그램이 잘 나오면 나머지 82개의 품질이 따라옵니다. 공들이세요.**
+그리고 basics/ch01.html 이 아니라 basics/ch02.html이 이걸 참조하므로,
+당신은 SVG 파일만 만들고 참조는 A1 에이전트가 넣습니다. 대신 quiz/index.html 이나
+ch01에 "다이어그램 예시" 섹션을 만들어 렌더링을 직접 검증하세요.
+
 ## 완료 조건 (자가 검증)
 작업을 마치기 전 다음을 직접 실행해 통과시키세요:
 1. `node tools/validate.mjs --all` → 오류 0
 2. `node tools/build-index.mjs` → 정상 생성
-3. basics/ch01.html 을 Playwright(Chromium, /opt/pw-browsers)로 열어
+3. `node tools/inline-diagrams.mjs --check` → 정상 동작 (미치환 보고)
+4. `node tools/inline-diagrams.mjs` 두 번 연속 실행 → **SVG가 중복되지 않음**(멱등성)
+5. basics/ch01.html 을 Playwright(Chromium, /opt/pw-browsers)로 열어
    - 라이트/다크 모두 스크린샷 (데스크톱 1280px, 모바일 360px)
    - 인라인 퀴즈에서 1문항 실제로 풀어 채점 동작 확인
    - 콘솔 에러 0건 확인
-4. quiz/index.html 에서 exam 모드 진입 → 타이머 동작 확인
+6. D-012 다이어그램을 렌더링해 라이트/다크 스크린샷 + 슬라이더 조작 확인
+   - **다크모드에서 선과 텍스트가 보이는지** 반드시 눈으로 확인
+   - 360px에서 텍스트가 읽히는지 확인
+7. quiz/index.html 에서 exam 모드 진입 → 타이머 동작 확인
+8. quiz/diagnostic.html 진입 → 문항이 없어도(B4 미실행) 에러 없이 안내 표시
 
-반환 시 스크린샷 파일 경로와 위 4개 항목의 결과를 명시하세요.
+반환 시 스크린샷 파일 경로와 위 8개 항목의 결과를 명시하세요.
+그리고 **V1–V3 에이전트에게 전달할 규약**을 명확히 정리해 주세요:
+- viz.js의 `registerViz` 시그니처와 인터랙티브 SVG가 지켜야 할 마크업 규약
+- viz.css 토큰 최종 목록
+- SVG 파일명 규칙 (`{ID}-{slug}.svg`)
+- assets/diagrams/index.json 형식
 ```
 
 ---
